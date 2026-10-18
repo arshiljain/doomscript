@@ -1,0 +1,44 @@
+longitudinal_study = [
+    {"week": 1, "score": 25.0, "cohort": "Treatment"},
+    {"week": 2, "score": 38.5, "cohort": "Treatment"},
+    {"week": 3, "score": 55.2, "cohort": "Treatment"},
+    {"week": 4, "score": 72.0, "cohort": "Treatment"},
+    {"week": 1, "score": 24.5, "cohort": "Control"},
+    {"week": 2, "score": 28.0, "cohort": "Control"},
+    {"week": 3, "score": 31.2, "cohort": "Control"},
+    {"week": 4, "score": 33.1, "cohort": "Control"}
+]
+
+chart "Clinical Trial Cognitive Recovery Trajectory" from longitudinal_study into clinical_fig:
+    map week to x
+    map score to y
+    map cohort to color
+
+    draw line
+    draw points with size=3, alpha=0.9
+    draw smooth line for trend
+
+    facet by cohort
+
+    labels:
+        x: "Post-Intervention Time (Weeks)"
+        y: "Standardized Cognitive Score (0-100)"
+        caption: "N=240, Double-blind Controlled Trial"
+
+    theme: minimal
+    scale color as palette "viridis"
+
+spec = clinical_fig.spec()
+say "Multi-layer total layer count:", count of spec's layers
+say "First layer geom:", spec's layers[0]'s geom
+say "Second layer geom:", spec's layers[1]'s geom
+say "Third layer geom:", spec's layers[2]'s geom
+say "Facet variable:", spec's facet's facets
+say "Caption text:", spec's labels's caption
+
+verify that count of spec's layers equals 3 otherwise "Must have 3 layers"
+verify that spec's layers[0]'s geom equals "line" otherwise "first layer must be line"
+verify that spec's layers[1]'s geom equals "point" otherwise "second layer must be point"
+verify that spec's layers[2]'s geom equals "smooth" otherwise "third layer must be smooth"
+verify that spec's facet's facets equals "cohort" otherwise "facet must be cohort"
+verify that spec's labels's caption equals "N=240, Double-blind Controlled Trial" otherwise "caption must match"

@@ -1,0 +1,25 @@
+experimental_trials = [
+    {"algorithm": "QuickSort", "time_sec": 0.012},
+    {"algorithm": "QuickSort", "time_sec": 0.014},
+    {"algorithm": "QuickSort", "time_sec": 0.013},
+    {"algorithm": "MergeSort", "time_sec": 0.018},
+    {"algorithm": "MergeSort", "time_sec": 0.019},
+    {"algorithm": "MergeSort", "time_sec": 0.017}
+]
+
+plot experimental_trials as boxplot into sort_comparison:
+    x: algorithm
+    y: time_sec
+    color: algorithm
+    title: "Sorting Algorithm Runtime Comparison"
+    theme: bw
+
+spec = sort_comparison.spec()
+say "Boxplot geom:", spec's layers[0]'s geom
+say "Boxplot y metric:", spec's mapping's y
+say "Boxplot theme:", spec's theme's name
+
+verify that spec's layers[0]'s geom equals "boxplot" otherwise "geom must be boxplot"
+verify that spec's mapping's y equals "time_sec" otherwise "y must be time_sec"
+verify that spec's mapping's x equals "algorithm" otherwise "x must be algorithm"
+verify that spec's theme's name equals "bw" otherwise "theme must be bw"

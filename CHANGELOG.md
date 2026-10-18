@@ -2,6 +2,29 @@
 
 All notable changes to DoomScript are documented in this file.
 
+## [1.2.0] - 2026-10-19 - Grammar-of-Graphics Visualization Engine (Lets-Plot)
+### Added
+- **Three-Level English Visualization Language (`src/doomscript/viz/`)**:
+  - **Level 1 (Explore)**: `explore <dataset> [to understand <focus>] into <var>` autonomous Exploratory Data Analysis diagnosing data types, cardinalities, and missingness, synthesizing tailored Grammar-of-Graphics figures with plain-English rationales.
+  - **Level 2 (Describe)**: Everyday concise visualizations via single-line sentences (`plot sales as scatter with x="temp", y="sales", color="city" into p`) and clean indented property blocks (`plot sales as line into rev_plot: x: month, y: revenue, title: "..."`).
+  - **Level 3 (Compose)**: Declarative multi-layer Grammar of Graphics (`chart "<title>" from <data> into <var>:`) with aesthetic mappings (`map`), composable layers (`draw`), facets (`facet by`), labels (`labels:`), themes, and custom palettes.
+- **Typed Plot Specification IR (`PlotSpec` in `spec.py`)**:
+  - Decoupled pure-Python dataclasses (`AestheticMapping`, `LayerSpec`, `FacetSpec`, `ThemeSpec`, `ScaleSpec`, `LabelSpec`, `PlotSpec`).
+  - Enables full testability, validation, and serialization in headless environments without requiring GUI displays or `lets-plot` imports.
+- **Data-Aware Exploration Engine (`explorer.py`)**:
+  - Schema inspection, null ratio quantification, and data-driven rule engine recommending temporal lines, numeric correlation scatters, categorical comparisons, and distribution histograms.
+- **Lets-Plot Backend Renderer (`renderer.py`)**:
+  - Lazy `lets_plot` bridge compiling `PlotSpec` into active visualizations.
+  - Export to standalone interactive HTML, PNG, SVG, and PDF with explicit `width`, `height`, and `dpi` arguments.
+  - Actionable error reporting when optional static export dependencies are missing (`pip install pypng`).
+- **Native Python Code Exporter (`exporter.py`)**:
+  - `doom export` converts DoomScript visual blocks into clean, idiomatic Python code utilizing `lets_plot.ggplot(...) + geom_...()` without `eval()`.
+- **All 11 Core Visualization Geometries Supported**:
+  - Scatter/Point, Line, Bar (with automatic count vs identity rules), Histogram, Density, Boxplot, Violin, Tile/Heatmap, Pie, Area, and Smooth trend line.
+- **10-Program Visual Corpus & Benchmark Suite (`run_viz_capability.py`)**:
+  - 10 automated benchmark scripts achieving a 100.0% pass rate.
+  - Packaging extra `doomscript[viz]` with `lets-plot`, `pypng`, and `palettable`.
+
 ## [1.1.0] - 2026-10-19 - Postgraduate & PhD Research Extension
 ### Added
 - **Pure-Standard-Library Scientific Research Engine (`src/doomscript/research/`)**:

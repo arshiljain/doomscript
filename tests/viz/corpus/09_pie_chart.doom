@@ -1,0 +1,23 @@
+browser_shares = [
+    {"browser": "Chrome", "share": 65},
+    {"browser": "Safari", "share": 20},
+    {"browser": "Firefox", "share": 10},
+    {"browser": "Edge", "share": 5}
+]
+
+chart "Global Desktop Browser Market Share" from browser_shares into browser_pie:
+    map browser to slice
+    map share to value
+
+    draw pie
+    theme: void
+
+spec = browser_pie.spec()
+say "Pie chart geom:", spec's layers[0]'s geom
+say "Pie slice mapping:", spec's mapping's slice
+say "Pie value mapping:", spec's mapping's value
+
+verify that spec's layers[0]'s geom equals "pie" otherwise "geom must be pie"
+verify that spec's mapping's slice equals "browser" otherwise "slice must be browser"
+verify that spec's mapping's value equals "share" otherwise "value must be share"
+verify that spec's theme's name equals "void" otherwise "theme must be void"

@@ -11,7 +11,7 @@ from doomscript.runtime import (
     time_future, time_past, ask_input
 )
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 __all__ = [
     "compile_to_ast", "transpile", "execute", "Record", "sleep", "percent_of",
     "write_file", "append_file", "read_file", "count_of", "beep", "play_sound",

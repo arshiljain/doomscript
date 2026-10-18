@@ -1,0 +1,20 @@
+orders = [
+    {"status": "Shipped"},
+    {"status": "Delivered"},
+    {"status": "Shipped"},
+    {"status": "Pending"},
+    {"status": "Delivered"},
+    {"status": "Delivered"}
+]
+
+plot orders as bar into status_counts:
+    x: status
+    title: "Order Status Counts"
+    theme: minimal
+
+spec = status_counts.spec()
+say "Bar chart stat:", spec's layers[0]'s stat
+say "Bar chart x mapping:", spec's mapping's x
+
+verify that spec's mapping's x equals "status" otherwise "x must be status"
+verify that spec's layers[0]'s stat equals "count" otherwise "stat must be count"

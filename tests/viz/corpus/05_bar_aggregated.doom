@@ -1,0 +1,22 @@
+department_spend = [
+    {"dept": "Engineering", "budget": 850000},
+    {"dept": "Research", "budget": 620000},
+    {"dept": "Design", "budget": 310000},
+    {"dept": "Operations", "budget": 450000}
+]
+
+plot department_spend as bar into dept_budget_plot:
+    x: dept
+    y: budget
+    fill: dept
+    title: "Annual Departmental Allocation"
+    theme: classic
+
+spec = dept_budget_plot.spec()
+say "Aggregated bar stat:", spec's layers[0]'s stat
+say "Aggregated bar y:", spec's mapping's y
+
+verify that spec's layers[0]'s stat equals "identity" otherwise "stat must be identity"
+verify that spec's mapping's x equals "dept" otherwise "x must be dept"
+verify that spec's mapping's y equals "budget" otherwise "y must be budget"
+verify that spec's mapping's fill equals "dept" otherwise "fill must be dept"

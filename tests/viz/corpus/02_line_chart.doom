@@ -1,0 +1,22 @@
+monthly_sales = [
+    {"month": "Jan", "revenue": 12000},
+    {"month": "Feb", "revenue": 14500},
+    {"month": "Mar", "revenue": 13800},
+    {"month": "Apr", "revenue": 16200},
+    {"month": "May", "revenue": 18900}
+]
+
+plot monthly_sales as line into rev_trend:
+    x: month
+    y: revenue
+    title: "FY2026 Monthly Revenue Growth"
+    theme: minimal
+
+spec = rev_trend.spec()
+say "Line plot x aesthetic:", spec's mapping's x
+say "Line plot y aesthetic:", spec's mapping's y
+say "Line plot layer geom:", spec's layers[0]'s geom
+
+verify that spec's mapping's x equals "month" otherwise "x must be month"
+verify that spec's mapping's y equals "revenue" otherwise "y must be revenue"
+verify that spec's layers[0]'s geom equals "line" otherwise "geom must be line"

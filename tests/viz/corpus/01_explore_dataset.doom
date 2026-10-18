@@ -1,0 +1,16 @@
+data = [
+    {"date": "2026-01-01", "region": "North", "sales": 100, "profit": 20},
+    {"date": "2026-01-02", "region": "South", "sales": 150, "profit": 35},
+    {"date": "2026-01-03", "region": "North", "sales": 120, "profit": 25},
+    {"date": "2026-01-04", "region": "South", "sales": 170, "profit": 40}
+]
+
+explore data to understand sales by date into report
+
+rec_count = count of report's recommendations
+say "Exploration recommendations generated:", rec_count
+verify that rec_count is at least 2 otherwise "Expected at least 2 recommendations"
+
+first_rec = report's recommendations[0]
+say "First recommendation rationale:", first_rec's rationale
+verify that first_rec's rationale contains "sales" otherwise "Rationale should mention sales"

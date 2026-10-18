@@ -1,0 +1,24 @@
+response_times = [
+    {"latency_ms": 42.1},
+    {"latency_ms": 45.3},
+    {"latency_ms": 50.2},
+    {"latency_ms": 51.0},
+    {"latency_ms": 48.7},
+    {"latency_ms": 65.4},
+    {"latency_ms": 49.1},
+    {"latency_ms": 53.2}
+]
+
+plot response_times as histogram into latency_dist:
+    x: latency_ms
+    title: "Server Request Latency Distribution"
+    theme: minimal
+
+spec = latency_dist.spec()
+say "Histogram layer geom:", spec's layers[0]'s geom
+say "Histogram stat:", spec's layers[0]'s stat
+say "Histogram x axis:", spec's mapping's x
+
+verify that spec's layers[0]'s geom equals "histogram" otherwise "geom must be histogram"
+verify that spec's layers[0]'s stat equals "bin" otherwise "stat must be bin"
+verify that spec's mapping's x equals "latency_ms" otherwise "x must be latency_ms"

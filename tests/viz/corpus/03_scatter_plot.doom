@@ -1,0 +1,19 @@
+measurements = [
+    {"temp": 15.2, "sales": 210, "city": "London"},
+    {"temp": 18.5, "sales": 290, "city": "Paris"},
+    {"temp": 24.1, "sales": 420, "city": "Rome"},
+    {"temp": 12.0, "sales": 180, "city": "Berlin"},
+    {"temp": 26.8, "sales": 490, "city": "Madrid"}
+]
+
+plot measurements as scatter with x="temp", y="sales", color="city" into temp_scatter
+
+spec = temp_scatter.spec()
+say "Scatter plot mapped x:", spec's mapping's x
+say "Scatter plot mapped y:", spec's mapping's y
+say "Scatter plot mapped color:", spec's mapping's color
+
+verify that spec's mapping's x equals "temp" otherwise "x must be temp"
+verify that spec's mapping's y equals "sales" otherwise "y must be sales"
+verify that spec's mapping's color equals "city" otherwise "color must be city"
+verify that spec's layers[0]'s geom equals "point" otherwise "geom must be point"

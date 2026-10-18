@@ -1,0 +1,24 @@
+correlation_matrix = [
+    {"var1": "Price", "var2": "Price", "corr": 1.0},
+    {"var1": "Price", "var2": "Units", "corr": -0.75},
+    {"var1": "Units", "var2": "Price", "corr": -0.75},
+    {"var1": "Units", "var2": "Units", "corr": 1.0}
+]
+
+chart "Variable Correlation Heatmap" from correlation_matrix into corr_heatmap:
+    map var1 to x
+    map var2 to y
+    map corr to fill
+
+    draw tile
+    theme: minimal
+    scale fill as palette "viridis"
+
+spec = corr_heatmap.spec()
+say "Heatmap layer geom:", spec's layers[0]'s geom
+say "Heatmap fill mapping:", spec's mapping's fill
+say "Heatmap scale palette:", spec's scales[0]'s palette_name
+
+verify that spec's layers[0]'s geom equals "tile" otherwise "geom must be tile"
+verify that spec's mapping's fill equals "corr" otherwise "fill must be corr"
+verify that spec's scales[0]'s palette_name equals "viridis" otherwise "palette must be viridis"
