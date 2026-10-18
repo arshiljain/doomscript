@@ -520,19 +520,54 @@ def display_colored(text, color_name):
     print(f"{color_code}{text}{_ANSI_RESET}")
 
 
+def ask_input(prompt: str = "") -> str:
+    """Reads input from user or piped stdin gracefully without EOFError."""
+    try:
+        if sys.stdin is None:
+            return ""
+        if hasattr(sys.stdin, "isatty") and sys.stdin.isatty():
+            try:
+                return input(prompt)
+            except (EOFError, OSError):
+                return ""
+        else:
+            # Piped / redirected input (stdin is pipe/file)
+            line = sys.stdin.readline()
+            if not line:
+                return ""
+            return line.rstrip("\r\n")
+    except (EOFError, OSError, ValueError):
+        return ""
+
+
 def pause_terminal():
-    """Pause until user presses enter."""
-    input("Press Enter to continue...")
+    """Waits for user Enter key without raising EOFError on piped input."""
+    ask_input("Press Enter to continue...")
 
 
-def ask_choice(prompt, options):
-    """Interactive prompt offering numbered choices from options."""
+def ask_choice(prompt: str, options: list):
+    """Interactive prompt offering numbered choices from options, safe on piped input."""
+    if not options:
+        return ""
+    if not (sys.stdin and hasattr(sys.stdin, "isatty") and sys.stdin.isatty()):
+        raw = ask_input("").strip()
+        if raw.isdigit():
+            idx = int(raw) - 1
+            if 0 <= idx < len(options):
+                return options[idx]
+        for opt in options:
+            if str(opt).lower() == raw.lower():
+                return opt
+        return options[0]
+
     print(prompt)
     for idx, opt in enumerate(options, 1):
         print(f"  [{idx}] {opt}")
     while True:
         try:
-            sel = input("Enter choice number: ").strip()
+            sel = ask_input("Enter choice number: ").strip()
+            if not sel:
+                return options[0]
             sel_idx = int(sel) - 1
             if 0 <= sel_idx < len(options):
                 return options[sel_idx]
@@ -556,20 +591,20 @@ def math_clamp(value, min_val, max_val):
 # Phase 2 English Standard Library Helpers
 # ---------------------------------------------------------------------------
 
-def ask_number(prompt: str):
-    """Prompts the user for numeric input (int or float)."""
-    raw = input(prompt).strip()
+def ask_number(prompt: str = ""):
+    """Prompts the user for numeric input (int or float) without EOFError."""
+    raw = ask_input(prompt).strip()
     try:
         if "." in raw:
             return float(raw)
         return int(raw)
-    except ValueError:
+    except (ValueError, TypeError):
         return 0
 
 
-def ask_boolean(prompt: str) -> bool:
-    """Prompts the user for yes/no confirmation."""
-    raw = input(prompt).strip().lower()
+def ask_boolean(prompt: str = "") -> bool:
+    """Prompts the user for yes/no confirmation without EOFError."""
+    raw = ask_input(prompt).strip().lower()
     return raw in ("y", "yes", "true", "1")
 
 

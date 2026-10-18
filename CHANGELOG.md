@@ -2,6 +2,25 @@
 
 All notable changes to DoomScript are documented in this file.
 
+## [1.0.1] - 2026-10-18 - Critical Bug Fixes
+### Fixed
+- **Compound Interest Rate Normalization & Compounding Frequency**:
+  - Fixed percent rates like `5%` causing astronomical results (`1.4e21`). Rates are now normalized automatically whether specified as `5%`, `0.05`, or `5`.
+  - Default compounding frequency is now documented and mathematically standard annual compounding ($n=1$, $1000 \times 1.05^{10} = 1628.89$).
+  - Added full support for custom compounding frequencies: `compounded monthly` ($n=12$), `compounded quarterly` ($n=4$), `compounded semi-annually` ($n=2$), and `compounded daily` ($n=365$).
+- **Semantic Knowledge Index & Embedding Relevance**:
+  - Replaced naive whole-string SHA-256 hash embeddings with deterministic token-level feature hashing (unigram + bigram hashing trick) and BM25 / TF-IDF term scoring.
+  - Queries like `"my cat purrs"` now reliably rank relevant documents first rather than producing pseudo-random avalanche results.
+  - Added support for natural synonyms: `add document ... with text ... to ...` alongside `index document ... text ... into ...`.
+- **C Foreign Function Interface (FFI) Argument Unpacking & Cross-Platform Libc**:
+  - Fixed `call_c_function` crashing on list arguments like `with args [-5]`. Single list/tuple arguments are now automatically unpacked and converted for the C ABI.
+  - Added transparent cross-platform standard C library resolution (`libc.so.6`, `libc`, `c` mapping to `msvcrt` on Windows and dynamic `find_library` on Linux/macOS).
+  - Calling `call c library "libc.so.6" function "abs" with args [-5]` now returns `5` across all platforms.
+- **Piped Stdin & Graceful EOF Handling in `ask`**:
+  - Replaced raw Python `input()` call in `ask_input`, `ask_number`, `ask_boolean`, and `ask_choice` with pipe-aware stream reading.
+  - Automatically suppresses prompt output during piped stdin redirection (`echo Bob | doom run script.doom`), reads lines directly from stdin, and safely returns empty string `""` on EOF instead of raising uncaught `EOFError`.
+  - Prevented infinite loops on EOF in `ask_choice`.
+
 ## [1.0.0] - 2026-10-18 - Phases 26-100: Complete Language Milestone (10 Thematic Clusters)
 ### Added
 - **Cluster 1 (Phases 26–32: Systems, OS, Processes & Signals)**:

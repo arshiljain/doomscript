@@ -108,6 +108,7 @@ def execute(source: Any, custom_globals: dict = None) -> dict:
         "stop_server": runtime.stop_server,
         "display_colored": runtime.display_colored,
         "pause_terminal": runtime.pause_terminal,
+        "ask_input": runtime.ask_input,
         "ask_choice": runtime.ask_choice,
         "math_round": runtime.math_round,
         "math_clamp": runtime.math_clamp,

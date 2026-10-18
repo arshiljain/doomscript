@@ -929,11 +929,16 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     if p_med_m:
         masked = f"set {p_med_m.group(2)} to stats_median({p_med_m.group(1).strip()})"
 
-    p_comp_m = re.match(r"^compound\s+interest\s+on\s+(.+?)\s+at\s+(.+?)%?\s+for\s+(.+?)\s+years?\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    p_comp_m = re.match(
+        r"^compound\s+interest\s+on\s+(.+?)\s+at\s+(.+?)(?:%|\s*percent)?\s+for\s+(.+?)\s+years?(?:\s+compounded\s+(\w+))?\s+into\s+([A-Za-z_]\w*)$",
+        masked,
+        re.IGNORECASE
+    )
     if p_comp_m:
-        masked = f"set {p_comp_m.group(4)} to calc_compound_interest({p_comp_m.group(1).strip()}, {p_comp_m.group(2).strip()}, {p_comp_m.group(3).strip()})"
+        freq = f'"{p_comp_m.group(4).strip()}"' if p_comp_m.group(4) else "1"
+        masked = f"set {p_comp_m.group(5)} to calc_compound_interest({p_comp_m.group(1).strip()}, {p_comp_m.group(2).strip()}, {p_comp_m.group(3).strip()}, {freq})"
 
-    p_loan_m = re.match(r"^loan\s+payment\s+for\s+principal\s+(.+?)\s+rate\s+(.+?)%?\s+months\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    p_loan_m = re.match(r"^loan\s+payment\s+for\s+principal\s+(.+?)\s+rate\s+(.+?)(?:%|\s*percent)?\s+months\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
     if p_loan_m:
         masked = f"set {p_loan_m.group(4)} to calc_loan_payment({p_loan_m.group(1).strip()}, {p_loan_m.group(2).strip()}, {p_loan_m.group(3).strip()})"
 
@@ -988,11 +993,11 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     if p_idx_m:
         masked = f"set {p_idx_m.group(1)} to knowledge_index_create()"
 
-    p_doc_idx_m = re.match(r"^index\s+document\s+(.+?)\s+text\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    p_doc_idx_m = re.match(r"^(?:index|add)\s+document\s+(.+?)\s+(?:with\s+)?text\s+(.+?)\s+(?:into|to)\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
     if p_doc_idx_m:
         masked = f"knowledge_index_add({p_doc_idx_m.group(3)}, {p_doc_idx_m.group(1).strip()}, {p_doc_idx_m.group(2).strip()})"
 
-    p_q_idx_m = re.match(r"^search\s+knowledge\s+index\s+([A-Za-z_]\w*)\s+for\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    p_q_idx_m = re.match(r"^search\s+(?:knowledge\s+index\s+)?([A-Za-z_]\w*)\s+for\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
     if p_q_idx_m:
         masked = f"set {p_q_idx_m.group(3)} to knowledge_index_query({p_q_idx_m.group(1)}, {p_q_idx_m.group(2).strip()})"
 

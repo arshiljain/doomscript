@@ -37,6 +37,7 @@ import queue
 import itertools
 import statistics
 import ctypes
+import ctypes.util
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Callable
@@ -302,15 +303,48 @@ def stats_percentile(data: List[float], p: float) -> float:
     idx = int((len(sorted_d) - 1) * (p / 100.0))
     return round(sorted_d[idx], 4)
 
-def calc_compound_interest(principal: float, annual_rate: float, years: float, times_per_year: int = 12) -> float:
-    """Phase 51: Compound interest future value."""
-    p, r, t, n = float(principal), float(annual_rate), float(years), int(times_per_year)
+def _normalize_rate(rate: Any) -> float:
+    """Normalizes an interest rate to decimal form (e.g. 5, 5.0, '5%' -> 0.05; 0.05 -> 0.05)."""
+    if isinstance(rate, str):
+        rate_str = rate.strip()
+        if rate_str.endswith("%"):
+            return float(rate_str[:-1].strip()) / 100.0
+        r = float(rate_str)
+    else:
+        r = float(rate)
+    if abs(r) >= 1.0:
+        return r / 100.0
+    return r
+
+COMPOUNDING_PERIODS = {
+    "annually": 1,
+    "annual": 1,
+    "yearly": 1,
+    "semi-annually": 2,
+    "semiannually": 2,
+    "quarterly": 4,
+    "monthly": 12,
+    "daily": 365,
+}
+
+def calc_compound_interest(principal: float, annual_rate: Any, years: float, compounding: Any = 1) -> float:
+    """Phase 51: Compound interest future value.
+    Defaults to annual compounding (1 time per year).
+    Can specify compounding frequency as integer or string ('annually', 'quarterly', 'monthly', 'daily').
+    """
+    p = float(principal)
+    r = _normalize_rate(annual_rate)
+    t = float(years)
+    if isinstance(compounding, str):
+        n = COMPOUNDING_PERIODS.get(compounding.strip().lower(), 1)
+    else:
+        n = int(compounding) if compounding else 1
     return round(p * ((1 + (r / n)) ** (n * t)), 2)
 
-def calc_loan_payment(principal: float, annual_rate: float, months: float) -> float:
+def calc_loan_payment(principal: float, annual_rate: Any, months: float) -> float:
     """Phase 51: Monthly amortization payment for given number of months."""
     p = float(principal)
-    r = (float(annual_rate) / 100.0) / 12.0
+    r = _normalize_rate(annual_rate) / 12.0
     n = float(months)
     if r == 0:
         return round(p / n, 2)
@@ -429,26 +463,69 @@ def cosine_similarity(v1: List[float], v2: List[float]) -> float:
         return 0.0
     return round(dot / (m1 * m2), 4)
 
-def mock_embedding(text: str, dim: int = 8) -> List[float]:
-    """Phase 75: Deterministic semantic embedding."""
-    h = hashlib.sha256(text.encode("utf-8")).digest()
-    vec = [float((b / 255.0) * 2 - 1) for b in h[:dim]]
-    mag = vector_magnitude(vec)
+_SEMANTIC_STOP_WORDS = {
+    "a", "an", "the", "and", "or", "is", "are", "was", "were", "in", "on", "at",
+    "to", "for", "with", "by", "of", "from", "it", "this", "that", "these", "those"
+}
+
+def _stem_word(word: str) -> str:
+    w = word.lower()
+    for sfx in ("edly", "ingly", "ing", "ed", "es", "s", "ly"):
+        if len(w) > len(sfx) + 2 and w.endswith(sfx):
+            return w[:-len(sfx)]
+    return w
+
+def _tokenize_semantic(text: str) -> List[str]:
+    raw = re.findall(r"\b[a-zA-Z0-9_]+\b", text.lower())
+    return [_stem_word(w) for w in raw if len(w) > 1]
+
+def mock_embedding(text: str, dim: int = 16) -> List[float]:
+    """Phase 75: Deterministic semantic feature embedding using token hashing."""
+    tokens = _tokenize_semantic(text)
+    if not tokens:
+        return [0.0] * dim
+    vec = [0.0] * dim
+    for i, tok in enumerate(tokens):
+        w = 0.2 if tok in _SEMANTIC_STOP_WORDS else 1.0
+        h = int(hashlib.md5(tok.encode("utf-8")).hexdigest()[:8], 16)
+        idx = h % dim
+        sign = 1.0 if (h & 0x100) else -1.0
+        vec[idx] += sign * w
+        if i < len(tokens) - 1:
+            bigram = f"{tok}_{tokens[i+1]}"
+            hb = int(hashlib.md5(bigram.encode("utf-8")).hexdigest()[:8], 16)
+            b_idx = hb % dim
+            b_sign = 1.0 if (hb & 0x100) else -1.0
+            vec[b_idx] += b_sign * 0.5
+    mag = math.sqrt(sum(x * x for x in vec))
+    if mag == 0:
+        return [0.0] * dim
     return [round(x / mag, 4) for x in vec]
 
 class SemanticKnowledgeIndex:
-    """Phase 76: In-memory RAG vector index."""
+    """Phase 76: In-memory RAG vector index with semantic token relevance scoring."""
     def __init__(self):
         self.documents: List[Record] = []
     def add(self, text: str, doc_id: str = "", metadata: Any = None):
         emb = mock_embedding(text)
-        self.documents.append(Record(id=doc_id, text=text, embedding=emb, metadata=metadata))
+        tokens = _tokenize_semantic(text)
+        self.documents.append(Record(id=doc_id, text=text, embedding=emb, tokens=tokens, metadata=metadata))
     def search(self, query: str, top_k: int = 3) -> List[Record]:
+        q_tokens = _tokenize_semantic(query)
         q_emb = mock_embedding(query)
         scored = []
         for doc in self.documents:
             sim = cosine_similarity(q_emb, doc.embedding)
-            scored.append((sim, doc))
+            doc_tokens = doc.get("tokens", [])
+            overlap = 0.0
+            for qt in q_tokens:
+                if qt in _SEMANTIC_STOP_WORDS:
+                    continue
+                tf = doc_tokens.count(qt)
+                if tf > 0:
+                    overlap += 2.0 * (1.0 + math.log(tf))
+            total_score = overlap + sim
+            scored.append((total_score, doc))
         scored.sort(key=lambda x: x[0], reverse=True)
         return [item[1] for item in scored[:top_k]]
 
@@ -584,12 +661,51 @@ def metrics_export_prometheus() -> str:
 
 def call_c_function(lib_name: str, func_name: str, *args):
     """Phase 97: Pure ctypes Foreign Function Interface (FFI)."""
+    # Unpack args if passed as a single list or tuple, e.g. [-5]
+    if len(args) == 1 and isinstance(args[0], (list, tuple)):
+        args = tuple(args[0])
+
+    is_libc = lib_name.lower().strip() in (
+        "libc", "libc.so", "libc.so.6", "c", "msvcrt", "msvcrt.dll", "libsystem.b.dylib"
+    )
+    lib = None
+    if is_libc:
+        if os.name == "nt":
+            lib = ctypes.cdll.msvcrt
+        else:
+            try:
+                lib = ctypes.CDLL(lib_name)
+            except Exception:
+                try:
+                    found = ctypes.util.find_library("c")
+                    if found:
+                        lib = ctypes.CDLL(found)
+                except Exception:
+                    pass
+    else:
+        try:
+            lib = ctypes.CDLL(lib_name)
+        except Exception:
+            try:
+                found = ctypes.util.find_library(lib_name)
+                if found:
+                    lib = ctypes.CDLL(found)
+            except Exception:
+                pass
+
+    if not lib or not hasattr(lib, func_name):
+        return 0
+
+    func = getattr(lib, func_name)
+    c_args = []
+    for a in args:
+        if isinstance(a, str):
+            c_args.append(a.encode("utf-8"))
+        else:
+            c_args.append(a)
+
     try:
-        lib = ctypes.CDLL(lib_name) if hasattr(ctypes, "CDLL") else None
-        if not lib or not hasattr(lib, func_name):
-            return 0
-        func = getattr(lib, func_name)
-        return func(*args)
+        return func(*c_args)
     except Exception:
         return 0
 

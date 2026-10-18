@@ -101,9 +101,10 @@ call it final_price
 ---
 
 ## 3. How do I get user input?
-Prompt users for text, validated numbers, or yes/no booleans:
+Prompt users for text, validated numbers, or yes/no booleans. DoomScript automatically handles interactive terminals as well as piped stdin or shell redirection (`echo data | doom run script.doom`), suppressing prompts during piping and safely returning `""` on EOF without raising errors:
 ```doomscript
 ask "Enter your name: " into user_name
+ask into piped_data                     # reads line from piped stdin
 ask number "Enter your age: " into user_age
 ask boolean "Do you wish to proceed? " into is_confirmed
 ```
@@ -980,7 +981,10 @@ variance of sample into var_res
 median of sample into median_val
 
 # Financial Mathematics
+# Rate can be written as 7%, 0.07, or 7. Compounding defaults to annual:
 compound interest on 5000 at 7% for 5 years into future_value
+# Or specify compounding frequency (annually, semi-annually, quarterly, monthly, daily):
+compound interest on 5000 at 7% for 5 years compounded monthly into monthly_fv
 loan payment for principal 250000 rate 6.5% months 360 into monthly_mortgage
 ```
 
@@ -1035,10 +1039,10 @@ say "Removed fields: {patch_diff.removed}"
 ## 53. How do I build AI Agents, RAG indexes & conversation memory? (Phases 73–80)
 Local vector retrieval-augmented generation and conversational history:
 ```doomscript
-# Semantic Knowledge Index (Local Vector RAG)
+# Semantic Knowledge Index (Local Vector RAG with token BM25 scoring)
 create knowledge index into brain_index
 index document "doc1" text "DoomScript transpiles to Python AST" into brain_index
-index document "doc2" text "All standard libraries are self-contained" into brain_index
+add document "doc2" with text "All standard libraries are self-contained" to brain_index
 search knowledge index brain_index for "Python transpiler" into matches
 
 # Vector Cosine Similarity
@@ -1089,9 +1093,10 @@ export prometheus metrics into prometheus_scrape_data
 ---
 
 ## 56. How do I invoke C libraries (FFI) & minify DoomScript source? (Phases 96–100)
-Low-level Foreign Function Interface and source optimization:
+Low-level Foreign Function Interface with cross-platform libc resolution:
 ```doomscript
-# Ctypes Foreign Function Interface
+# Ctypes Foreign Function Interface (cross-platform libc support)
+call c library "libc.so.6" function "abs" with args [-5] into abs_val
 call c library "msvcrt" function "puts" with args ["Hello from C runtime!"] into result
 
 # AST Minifier

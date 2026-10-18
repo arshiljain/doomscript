@@ -67,9 +67,13 @@ class DoomToPython(Transformer):
         return ast.AugAssign(target=target, op=ast.Sub(), value=val)
 
     def ask_input(self, args):
-        prompt, target = args
+        if len(args) == 2:
+            prompt, target = args
+        else:
+            target = args[0]
+            prompt = ast.Constant(value="")
         call = ast.Call(
-            func=ast.Name(id='input', ctx=ast.Load()),
+            func=ast.Name(id='ask_input', ctx=ast.Load()),
             args=[prompt],
             keywords=[]
         )
