@@ -625,8 +625,10 @@ def ask_choice(prompt: str, options: list):
 
 
 # Math & Number Primitives
-def math_round(value, decimals):
+def math_round(value, decimals=0):
     """Round a number to specified decimal places."""
+    if decimals == 0:
+        return round(float(value))
     return round(float(value), int(decimals))
 
 
@@ -650,6 +652,47 @@ def math_median(collection):
     if not collection:
         return 0
     return statistics.median(collection)
+
+
+def ds_mean(xs):
+    """Compute arithmetic mean of a sequence or collection."""
+    if hasattr(xs, "mean") and callable(getattr(xs, "mean")):
+        return float(xs.mean())
+    items = list(xs)
+    if not items:
+        return 0.0
+    return float(sum(items) / len(items))
+
+
+def ds_median(xs):
+    """Compute median of a sequence or collection."""
+    if hasattr(xs, "median") and callable(getattr(xs, "median")):
+        return xs.median()
+    items = list(xs)
+    if not items:
+        return 0.0
+    return statistics.median(items)
+
+
+def ds_variance(xs):
+    """Compute sample variance of a sequence or collection."""
+    if hasattr(xs, "var") and callable(getattr(xs, "var")):
+        return float(xs.var())
+    items = list(xs)
+    if len(items) <= 1:
+        return 0.0
+    return float(statistics.variance(items))
+
+
+def ds_std_dev(xs):
+    """Compute standard deviation of a sequence or collection."""
+    if hasattr(xs, "std") and callable(getattr(xs, "std")):
+        return float(xs.std())
+    items = list(xs)
+    if len(items) <= 1:
+        return 0.0
+    return float(statistics.stdev(items))
+
 
 
 def get_field(obj, attr):

@@ -2,6 +2,32 @@
 
 All notable changes to DoomScript are documented in this file.
 
+## [1.0.6] - 2026-10-19 - Phase 4: Comprehensions, Lambdas, Generators, and Math Builtins
+### Added
+- **List, Dict, and Set Comprehensions**:
+  - Python-style list comprehensions: `[x * x for x in range(5)]`, `[x for x in xs if x > 0]`.
+  - Python-style dict comprehensions: `{k: v for k, v in pairs}`, `{x: x * x for x in range(4)}`.
+  - Python-style set comprehensions: `{x * 2 for x in [1, 2, 2, 3]}`.
+  - English comprehensions:
+    - `each x * x for x in range(5)`
+    - `each x in xs where x > 0`
+    - `each x * 2 for x in xs where x % 2 == 0`
+- **Anonymous Functions (Lambdas)**:
+  - English phrasing: `a function of x giving x + 1`, `a function of a, b giving a + b`.
+  - Python-style lambdas: `lambda x: x + 1`, `lambda x, y: x * y`, `lambda: 42`.
+  - First-class higher-order function support (e.g. `pairs.sort(key=a function of p giving p[1])`).
+- **Generators and Yield**:
+  - `yield expr` statement and `(yield expr)` expression support.
+  - Generator functions with loop yields (e.g. `to count_up with n:`).
+- **Math & Statistics Global Builtins**:
+  - `mean(xs)`, `median(xs)`, `std_dev(xs)`, `variance(xs)`.
+  - Universal support for `min(xs)`, `max(xs)`, `sum(xs)` across collections.
+  - Math constants: `PI`, `E`, `INF`.
+- **Coursework Algorithms & Tests**:
+  - Sieve of Eratosthenes using set difference and range.
+  - QuickSort implementation using recursive list comprehensions.
+  - Linear Regression from scratch using `mean`, `sum`, and variance calculations.
+
 ## [1.0.5] - 2026-10-19 - Phase 3: Classes — English-First OOP (CS2 Core)
 ### Added
 - **Design Document**:

@@ -783,6 +783,14 @@ class DoomToPython(Transformer):
         val = args[0] if args else None
         return ast.Return(value=val)
 
+    def yield_val(self, args):
+        val = to_load(args[0]) if args and args[0] is not None else None
+        return ast.Expr(value=ast.Yield(value=val))
+
+    def yield_expr(self, args):
+        val = to_load(args[0]) if args and args[0] is not None else None
+        return ast.Yield(value=val)
+
     def stop_stmt(self, _):
         return ast.Break()
 
@@ -1528,3 +1536,54 @@ class DoomToPython(Transformer):
         else:
             elts = [item[1] for item in items]
             return ast.Set(elts=elts)
+
+    def comp_clause(self, args):
+        target = args[0]
+        iter_expr = args[1]
+        cond_expr = args[2] if len(args) > 2 and args[2] is not None else None
+        ifs = [to_load(cond_expr)] if cond_expr is not None else []
+        return ast.comprehension(target=target, iter=to_load(iter_expr), ifs=ifs, is_async=0)
+
+    def list_comp(self, args):
+        elt = to_load(args[0])
+        generators = args[1:]
+        return ast.ListComp(elt=elt, generators=generators)
+
+    def set_comp(self, args):
+        elt = to_load(args[0])
+        generators = args[1:]
+        return ast.SetComp(elt=elt, generators=generators)
+
+    def dict_comp(self, args):
+        key = to_load(args[0])
+        val = to_load(args[1])
+        generators = args[2:]
+        return ast.DictComp(key=key, value=val, generators=generators)
+
+    def lambda_expr(self, args):
+        if len(args) == 2:
+            target, body = args
+        elif len(args) == 1:
+            target, body = None, args[0]
+        else:
+            target, body = None, None
+
+        posargs = []
+        if isinstance(target, ast.Name):
+            posargs = [ast.arg(arg=target.id)]
+        elif isinstance(target, ast.Tuple):
+            posargs = [ast.arg(arg=elt.id) for elt in target.elts if isinstance(elt, ast.Name)]
+        elif isinstance(target, list):
+            posargs = [ast.arg(arg=str(t)) for t in target]
+
+        args_node = ast.arguments(
+            posonlyargs=[],
+            args=posargs,
+            vararg=None,
+            kwonlyargs=[],
+            kw_defaults=[],
+            kwarg=None,
+            defaults=[]
+        )
+        return ast.Lambda(args=args_node, body=to_load(body))
+

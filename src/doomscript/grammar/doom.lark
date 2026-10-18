@@ -81,6 +81,7 @@ start: (_NEWLINE | stmt)*
                  | remove_stmt
                  | wait_stmt
                  | return_stmt
+                 | yield_stmt
                  | stop_stmt
                  | call_stmt
                  | expr_stmt
@@ -185,6 +186,7 @@ add_stmt: "add" expr "to" target -> add_to_list
 remove_stmt: "remove" expr "from" target -> remove_from_list
 wait_stmt: "wait" expr ("seconds" | "second" | "ms" | "milliseconds") -> wait_seconds
 return_stmt: "return" expr? -> return_val
+yield_stmt: "yield" expr? -> yield_val
 stop_stmt: "stop" -> stop_stmt
 
 call_stmt: "call" NAME [atom] ["with" call_arg_list] -> call_stmt
@@ -396,12 +398,21 @@ slice_item: expr ":" [expr] [":" [expr]] -> slice_full
           | "none"         -> const_none
           | list_expr
           | dict_or_set
+          | lambda_expr
           | "(" expr ")"
+          | "(" "yield" expr? ")" -> yield_expr
           | "(" ")"        -> empty_tuple
           | "(" expr "," [expr ("," expr)*] [","] ")" -> tuple_val
 
 list_expr: "[" [expr ("," expr)* [","]] "]" -> list_val
-dict_or_set: "{" [brace_items] "}" -> dict_or_set_val
+         | "[" expr comp_clause+ "]"        -> list_comp
+
+dict_or_set: "{" [brace_items] "}"          -> dict_or_set_val
+           | "{" expr ":" expr comp_clause+ "}" -> dict_comp
+           | "{" expr comp_clause+ "}"      -> set_comp
+
+comp_clause: "for" ["each"] for_target "in" expr [("if" | "where") expr] -> comp_clause
+lambda_expr: "lambda" [for_target] ":" expr -> lambda_expr
 brace_items: brace_item ("," brace_item)* [","]
 brace_item: expr ":" expr -> dict_pair
           | expr          -> set_item

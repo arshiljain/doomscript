@@ -9,6 +9,7 @@ from typing import Any, Union, Dict, Optional
 from lark import Lark
 from lark.indenter import PythonIndenter
 
+import math
 from functools import lru_cache
 from doomscript.compiler.transformer import DoomToPython
 from doomscript.grammar.phrases import normalize, normalize_with_map
@@ -89,6 +90,17 @@ def execute(source: Any, custom_globals: dict = None, filename: str = "<doom>") 
         "agg_first": runtime.agg_first,
         "agg_last": runtime.agg_last,
         "agg_field": runtime.agg_field,
+        "mean": runtime.ds_mean,
+        "median": runtime.ds_median,
+        "std_dev": runtime.ds_std_dev,
+        "stdev": runtime.ds_std_dev,
+        "variance": runtime.ds_variance,
+        "PI": math.pi,
+        "E": math.e,
+        "INF": float("inf"),
+        "min": min,
+        "max": max,
+        "sum": sum,
         "str_replace": runtime.str_replace,
         "str_split": runtime.str_split,
         "str_join": runtime.str_join,

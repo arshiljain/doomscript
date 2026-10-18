@@ -293,6 +293,32 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     )
     masked = re.sub(r"\b(?:my|its)\s+([A-Za-z_]\w*)", r"self.\1", masked, flags=re.IGNORECASE)
 
+    # Phase 4: Lambdas and Comprehensions in English
+    masked = re.sub(
+        r"\ba\s+function\s+of\s+([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*)\s+giving\s+(.+?)(?=[,\n]|\)$|$)",
+        r"(lambda \1: \2)",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"(?<!for\s)\beach\s+([A-Za-z_]\w*)\s+in\s+([^:\n]+?)\s+(?:where|if)\s+(.+?)(?=\s*(?:#|\n|$))",
+        r"[\1 for \1 in \2 if \3]",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"(?<!for\s)\beach\s+(.+?)\s+for\s+([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*)\s+in\s+([^:\n]+?)\s+(?:where|if)\s+(.+?)(?=\s*(?:#|\n|$))",
+        r"[\1 for \2 in \3 if \4]",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"(?<!for\s)\beach\s+(.+?)\s+for\s+([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*)\s+in\s+([^:\n]+?)(?=\s*(?:#|\n|$))",
+        r"[\1 for \2 in \3]",
+        masked,
+        flags=re.IGNORECASE
+    )
+
     # 2. Flexible Assignment Patterns
     for pat, repl in ASSIGNMENT_PATTERNS:
         if pat.match(masked):
@@ -451,10 +477,13 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         )
 
     # Disambiguate reserved words used as standalone variable names
-    masked = re.sub(r"(?<!'s\s)(?<!\.)(?<![\"'])\bcount\b(?![\"'])(?!\s+of\b)", "_var_count", masked)
-    masked = re.sub(r"(?<!'s\s)(?<!\.)(?<![\"'])\bsum\b(?![\"'])(?!\s+of\b)", "_var_sum", masked)
+    masked = re.sub(r"(?<!'s\s)(?<!\.)(?<![\"'])\bcount\b(?![\"'])(?!\s+of\b)(?!\s*\()", "_var_count", masked)
+    masked = re.sub(r"(?<!'s\s)(?<!\.)(?<![\"'])\bsum\b(?![\"'])(?!\s+of\b)(?!\s*\()", "_var_sum", masked)
+    masked = re.sub(r"(?<!'s\s)(?<!\.)(?<![\"'])\badd\b(?![\"'])(?!\s+(?:.+?\s+)?to\b)", "_var_add", masked)
     masked = re.sub(r"(?<!'s\s)(?<!\.)(?<!\bbullet\s)(?<!\ba\s)(?<!\bempty\s)(?<!\bnew\s)(?<![\"'])\blist\b(?![\"'])(?!\s+files\b)(?!\s+of\b)(?!\s*\()", "_var_list", masked)
     masked = re.sub(r"(?<!'s\s)(?<!\.)(?<!\bfind\s)(?<!\btake\s)(?<!\bdrop\s)\bfirst\b(?!\s+(?:\d+|[A-Za-z_]\w*)\s+items?\s+(?:of|from)\b|\s+item\s+of\b|\s+[A-Z]\w*)", "_var_first", masked)
+    masked = re.sub(r"\bround\s*\(", "math_round(", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bsum\s*\(", "agg_sum(", masked, flags=re.IGNORECASE)
 
     # Arithmetic in words
     double_m = re.match(r"^\s*double\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
