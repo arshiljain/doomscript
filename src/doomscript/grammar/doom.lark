@@ -86,7 +86,7 @@ start: (_NEWLINE | stmt)*
                  | expr_stmt
 
 say_stmt: "say" expr ("," expr)* -> say_multi
-assign_stmt: target ("=" | "is") expr -> assign
+assign_stmt: target "=" expr -> assign
 aug_assign_stmt: target "+=" expr -> aug_add
                | target "-=" expr -> aug_sub
                | target "*=" expr -> aug_mul

@@ -221,7 +221,7 @@ class ScopeTracker:
 # Helper regex to detect variable assignment targets
 ASSIGN_VAR_PATTERNS = [
     re.compile(r"^\s*set\s+([A-Za-z_]\w*)\s+to\b", re.IGNORECASE),
-    re.compile(r"^\s*([A-Za-z_]\w*)\s*(?:=|\bis\b)\s*(?!empty\b|not\b|at\b|greater\b|less\b|over\b|under\b|inside\b|in\b)", re.IGNORECASE),
+    re.compile(r"^\s*([A-Za-z_]\w*)\s*=\s*(?!=\s*)"),
     re.compile(r"^\s*increase\s+([A-Za-z_]\w*)\s+by\b", re.IGNORECASE),
     re.compile(r"^\s*decrease\s+([A-Za-z_]\w*)\s+by\b", re.IGNORECASE),
     re.compile(r"\binto\s+([A-Za-z_]\w*)\s*$", re.IGNORECASE),
@@ -283,6 +283,23 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         if pat.match(masked):
             masked = pat.sub(repl, masked)
             break
+
+    # Legacy assignment statement deprecation rewrite: 'target is expr' -> 'target = expr'
+    # Supported during DoomScript 1.x deprecation window; canonical syntax is 'target = expr'.
+    legacy_is_assign = re.match(
+        r"^(?!result\b)(?!the\s+result\b)([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s+is\s+"
+        r"(?!even\b|odd\b|positive\b|negative\b|zero\b|blank\b|empty\b|"
+        r"a\s+(?:number|string|text|boolean|bool|list|record|dictionary|dict|multiple\s+of)\b|"
+        r"an\s+(?:empty\b|integer\b)|not\b|between\b|"
+        r"one\s+of\b|inside\b|in\b|divisible\b|greater\b|less\b|equal\b|more\b|smaller\b|above\b|"
+        r"below\b|at\s+least\b|at\s+most\b|no\s+more\b|no\s+less\b)(.+)$",
+        masked,
+        re.IGNORECASE,
+    )
+    if legacy_is_assign:
+        t_var = legacy_is_assign.group(1).strip()
+        v_expr = legacy_is_assign.group(2).strip()
+        masked = f"{t_var} = {v_expr}"
 
     # 3. Special handling for 'call it <target>'
     call_it_match = re.match(r"^call\s+(?:it|that)\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)

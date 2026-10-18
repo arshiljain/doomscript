@@ -18,7 +18,7 @@ from doomscript.errors import format_syntax_error, find_closest_phrasings, trans
 from doomscript.explainer import explain_source
 from doomscript.formatter import format_code
 from lark.exceptions import UnexpectedToken, UnexpectedCharacters, VisitError
-from doomscript.exceptions import DoomError
+from doomscript.exceptions import DoomError, DoomIndentationError
 
 app = typer.Typer(
     name="doom",
@@ -212,7 +212,12 @@ def fmt(
     with open(file, "r", encoding="utf-8") as f:
         source = f.read()
 
-    formatted = format_code(source)
+    try:
+        formatted = format_code(source)
+    except DoomIndentationError as e:
+        console.print(f"[bold red]Indentation Error:[/bold red] {e}")
+        raise typer.Exit(code=1)
+
     if write:
         with open(file, "w", encoding="utf-8") as f:
             f.write(formatted)

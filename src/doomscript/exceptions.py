@@ -48,6 +48,11 @@ class DoomSyntaxError(DoomError):
     pass
 
 
+class DoomIndentationError(DoomSyntaxError):
+    """Raised when source code contains malformed indentation."""
+    pass
+
+
 class DoomScopeError(DoomError):
     """Raised when variable or pronoun scope resolution fails."""
     pass

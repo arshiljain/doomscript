@@ -11,11 +11,10 @@
 - **Example**: `say "Hello, world!"` / `say "Total:", total, "Status:", status`
 
 ### 2. Assignment
-- **Statements**:
-  - `set <target> to <expr>`
-  - `<target> = <expr>`
-  - `<target> is <expr>`
-- **Example**: `set count to 10` / `total = 500` / `status is "active"`
+- **Canonical Statement**: `<target> = <expr>`
+- **Supported English Alias**: `set <target> to <expr>`
+- **Deprecated Legacy Statement (1.x)**: `<target> is <expr>` (deprecated; use `=`; `is` is reserved for comparisons)
+- **Example**: `total = 500` / `set count to 10` / `status = "active"`
 
 ### 3. Augmented Assignment & Mutation
 - **Statements**:

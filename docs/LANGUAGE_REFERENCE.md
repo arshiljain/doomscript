@@ -77,13 +77,18 @@ say greeting
 ---
 
 ## 2. How do I store and update variables?
-DoomScript accepts several natural assignment phrasings:
+The canonical assignment syntax in DoomScript is `<target> = <expr>`. Natural English aliases (`set ... to`, `let ... be`, `put ... into`) are fully supported and normalize to canonical assignment:
 ```doomscript
-x is 10
+# Canonical assignment
 score = 100
-set total to 500
-let tax be 0.08
+total = 500
+
+# Natural English aliases
+set tax to 0.08
+let attempts be 3
 put 250 into balance
+
+# Note: 'x is 10' is deprecated legacy syntax from 1.0 (use '=' instead; 'is' is reserved for comparisons)
 
 # Arithmetic mutations
 increase score by 25
