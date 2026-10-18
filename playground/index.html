@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DoomScript Playground — The English-First Programming Language</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-base: #0c0e12;
+            --bg-surface: #141820;
+            --bg-elevated: #1b212c;
+            --border: #283244;
+            --accent: #3b82f6;
+            --accent-glow: rgba(59, 130, 246, 0.25);
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --text-dim: #6b7280;
+            --font-code: 'JetBrains Mono', monospace;
+            --font-ui: 'Plus Jakarta Sans', -apple-system, sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            font-family: var(--font-ui);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        /* Header */
+        header {
+            background-color: var(--bg-surface);
+            border-bottom: 1px solid var(--border);
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+
+        .logo-area {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-badge {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            color: #fff;
+            font-weight: 700;
+            font-size: 13px;
+            padding: 4px 10px;
+            border-radius: 6px;
+            letter-spacing: 0.5px;
+            box-shadow: 0 0 12px var(--accent-glow);
+        }
+
+        .logo-title {
+            font-size: 17px;
+            font-weight: 700;
+            letter-spacing: -0.3px;
+        }
+
+        .logo-subtitle {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-left: 6px;
+            display: none;
+        }
+
+        @media (min-width: 768px) {
+            .logo-subtitle { display: inline; }
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        select.example-select {
+            background-color: var(--bg-elevated);
+            color: var(--text-main);
+            border: 1px solid var(--border);
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-family: var(--font-ui);
+            font-weight: 500;
+            cursor: pointer;
+            outline: none;
+            transition: all 0.2s;
+        }
+
+        select.example-select:hover {
+            border-color: var(--accent);
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            font-family: var(--font-ui);
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all 0.15s ease-in-out;
+        }
+
+        .btn-primary {
+            background: #2563eb;
+            color: #ffffff;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+
+        .btn-primary:hover {
+            background: #1d4ed8;
+            box-shadow: 0 0 14px var(--accent-glow);
+        }
+
+        .btn-secondary {
+            background-color: var(--bg-elevated);
+            color: var(--text-muted);
+            border-color: var(--border);
+        }
+
+        .btn-secondary:hover {
+            color: var(--text-main);
+            border-color: #3b465c;
+        }
+
+        /* Main Workspace */
+        main {
+            display: flex;
+            flex: 1;
+            flex-direction: column;
+            padding: 16px;
+            gap: 16px;
+        }
+
+        @media (min-width: 992px) {
+            main {
+                flex-direction: row;
+                height: calc(100vh - 61px);
+                padding: 16px 24px;
+            }
+        }
+
+        .panel {
+            background-color: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            flex: 1;
+        }
+
+        .panel-header {
+            background-color: var(--bg-elevated);
+            border-bottom: 1px solid var(--border);
+            padding: 10px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .panel-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .tab-bar {
+            display: flex;
+            gap: 4px;
+        }
+
+        .tab-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .tab-btn.active {
+            background: rgba(59, 130, 246, 0.15);
+            color: var(--accent);
+        }
+
+        /* Editor Area */
+        .editor-wrapper {
+            position: relative;
+            flex: 1;
+            display: flex;
+        }
+
+        textarea#code-editor {
+            width: 100%;
+            height: 100%;
+            min-height: 380px;
+            background: transparent;
+            color: #f3f4f6;
+            font-family: var(--font-code);
+            font-size: 14px;
+            line-height: 1.6;
+            padding: 16px;
+            border: none;
+            outline: none;
+            resize: none;
+            white-space: pre;
+            tab-size: 4;
+        }
+
+        /* Output Area */
+        .output-wrapper {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            font-family: var(--font-code);
+            font-size: 13px;
+            line-height: 1.6;
+            background-color: #08090d;
+        }
+
+        .output-stdout {
+            color: #34d399;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .output-error {
+            color: #f87171;
+            background-color: rgba(239, 68, 68, 0.08);
+            border-left: 3px solid #ef4444;
+            padding: 12px 14px;
+            border-radius: 0 4px 4px 0;
+            margin-top: 8px;
+            white-space: pre-wrap;
+            font-family: var(--font-code);
+        }
+
+        .output-empty {
+            color: var(--text-dim);
+            font-style: italic;
+        }
+
+        .transpile-view {
+            display: none;
+            color: #93c5fd;
+            white-space: pre-wrap;
+        }
+
+        .explain-view {
+            display: none;
+        }
+
+        .explain-step {
+            padding: 10px 12px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            margin-bottom: 8px;
+        }
+
+        .explain-code {
+            font-family: var(--font-code);
+            color: var(--accent);
+            font-weight: 600;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+
+        .explain-text {
+            color: var(--text-muted);
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        /* Banner Pitch */
+        .pitch-banner {
+            background: linear-gradient(90deg, rgba(37, 99, 235, 0.1), rgba(16, 185, 129, 0.05));
+            border-bottom: 1px solid var(--border);
+            padding: 8px 24px;
+            font-size: 12px;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .pitch-highlight {
+            color: #60a5fa;
+            font-weight: 600;
+        }
+
+        .pitch-link {
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .pitch-link:hover {
+            text-decoration: underline;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success);
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo-area">
+            <span class="logo-badge">DOOM</span>
+            <span class="logo-title">DoomScript Playground</span>
+            <span class="logo-subtitle">&mdash; Turn messy spreadsheets & folders into clean reports</span>
+        </div>
+
+        <div class="header-actions">
+            <select id="exampleSelector" class="example-select" onchange="loadSelectedExample()">
+                <option value="spreadsheet">Job 1: Clean Messy Spreadsheet (5-Step)</option>
+                <option value="daily_report">Job 2: Generate Executive Daily Report</option>
+                <option value="data_pipeline">Job 3: Filter, Sort & Group Pipeline</option>
+                <option value="english_flow">Job 4: Natural English Loops & Math</option>
+                <option value="friendly_errors">Job 5: Friendly Syntax & Error Safety</option>
+            </select>
+
+            <button class="btn btn-secondary" onclick="clearEditor()">Clear</button>
+            <button class="btn btn-primary" onclick="runDoomScript()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                Run Script
+            </button>
+        </div>
+    </header>
+
+    <div class="pitch-banner">
+        <div>
+            <span class="status-dot"></span>
+            <strong>The Core Job:</strong> Turn messy spreadsheets & folders into clean reports in <span class="pitch-highlight">plain English</span>.
+        </div>
+        <div>
+            Install locally: <code>pip install git+https://github.com/arshiljain/doomscript.git</code>
+        </div>
+    </div>
+
+    <main>
+        <!-- Editor Panel -->
+        <div class="panel">
+            <div class="panel-header">
+                <span class="panel-title">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                    DoomScript Editor
+                </span>
+                <span style="font-size: 11px; color: var(--text-dim);">Ctrl + Enter to Run</span>
+            </div>
+            <div class="editor-wrapper">
+                <textarea id="code-editor" spellcheck="false" placeholder="Write DoomScript statements here..."></textarea>
+            </div>
+        </div>
+
+        <!-- Output Panel -->
+        <div class="panel">
+            <div class="panel-header">
+                <div class="tab-bar">
+                    <button id="tabOutput" class="tab-btn active" onclick="switchTab('output')">Console Output</button>
+                    <button id="tabPython" class="tab-btn" onclick="switchTab('python')">Transpiled Python</button>
+                    <button id="tabExplain" class="tab-btn" onclick="switchTab('explain')">Plain Explanation</button>
+                </div>
+                <span id="execTimer" style="font-size: 11px; color: var(--text-dim);">Ready</span>
+            </div>
+
+            <div class="output-wrapper">
+                <div id="outputConsole" class="output-stdout">
+                    <span class="output-empty">Press "Run Script" to execute your program.</span>
+                </div>
+                <div id="pythonView" class="transpile-view"></div>
+                <div id="explainView" class="explain-view"></div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const EXAMPLES = {
+            spreadsheet: `# -------------------------------------------------------------
+# THE CORE PITCH: Clean Messy Spreadsheet into Clean Audit Report
+# In Python: 38 lines of DictReader, DictWriter, lambdas, and try/except
+# In DoomScript: 7 lines of readable plain English.
+# -------------------------------------------------------------
+
+set orders to [
+    {customer: "Alice", status: "paid", amount: 120, region: "North"},
+    {customer: "Bob", status: "pending", amount: 45, region: "West"},
+    {customer: "Charlie", status: "paid", amount: 350, region: "North"},
+    {customer: "Dana", status: "refunded", amount: 90, region: "South"},
+    {customer: "Evan", status: "paid", amount: 210, region: "East"},
+    {customer: "Fiona", status: "paid", amount: 30, region: "South"},
+    {customer: "George", status: "paid", amount: 540, region: "North"}
+]
+
+# 1. Filter valid paid transactions over $50
+orders where status is "paid" into valid_orders
+valid_orders where amount is over 50 into high_value
+
+# 2. Sort by amount descending
+sort high_value by amount descending
+
+# 3. Export audit report
+write csv high_value into file "clean_audit.csv"
+
+# 4. Announce executive summary
+say "=== DAILY AUDIT COMPLETED ==="
+say "Cleaned orders count:", count of high_value
+say "Highest value transaction:", first item of high_value
+say "Total revenue across top orders:", sum of amount in high_value
+`,
+            daily_report: `# Executive Daily Summary Report
+set metrics to {
+    new_signups: 1420,
+    churn_rate: 0.018,
+    active_mrr: 84500,
+    target_mrr: 80000
+}
+
+say "======================================"
+say "   EXECUTIVE PERFORMANCE BRIEFING     "
+say "======================================"
+say "Active MRR: $", metrics's active_mrr
+say "New Signups Today:", metrics's new_signups
+
+if metrics's active_mrr is greater than metrics's target_mrr:
+    say "STATUS: TARGET MET! Bonus pool unlocked."
+otherwise:
+    say "STATUS: Below target. Attention needed."
+`,
+            data_pipeline: `# Data Processing & Aggregation Pipeline
+set scores to [88, 92, 79, 95, 68, 84, 91]
+
+sort scores descending
+say "Ranked Scores:", scores
+say "Highest Score:", highest score in scores
+say "Lowest Score:", lowest score in scores
+say "Average Score:", average of scores
+say "Total Points:", sum of scores
+`,
+            english_flow: `# Natural English Control Flow & Arithmetic
+set balance to 100
+set counter to 5
+
+while counter > 0:
+    balance += 25
+    counter -= 1
+
+say "Final balance:", balance
+
+repeat with i from 1 to 3:
+    say "Processing batch #", i
+`,
+            friendly_errors: `# Friendly Error Demonstration
+# DoomScript provides friendly diagnostics instead of cryptic traces.
+# Try introducing a syntax mistake below to see it in action:
+
+set x to 10
+set y to 20
+
+# Example: say unknown_var
+say "Result:", x + y
+`
+        };
+
+        const editor = document.getElementById("code-editor");
+        const outputConsole = document.getElementById("outputConsole");
+        const pythonView = document.getElementById("pythonView");
+        const explainView = document.getElementById("explainView");
+        const execTimer = document.getElementById("execTimer");
+
+        function loadSelectedExample() {
+            const val = document.getElementById("exampleSelector").value;
+            editor.value = EXAMPLES[val] || "";
+            clearOutput();
+        }
+
+        function clearEditor() {
+            editor.value = "";
+            clearOutput();
+        }
+
+        function clearOutput() {
+            outputConsole.innerHTML = '<span class="output-empty">Press "Run Script" to execute your program.</span>';
+            pythonView.innerText = "";
+            explainView.innerHTML = "";
+            execTimer.innerText = "Ready";
+        }
+
+        function switchTab(tab) {
+            document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+            outputConsole.style.display = "none";
+            pythonView.style.display = "none";
+            explainView.style.display = "none";
+
+            if (tab === "output") {
+                document.getElementById("tabOutput").classList.add("active");
+                outputConsole.style.display = "block";
+            } else if (tab === "python") {
+                document.getElementById("tabPython").classList.add("active");
+                pythonView.style.display = "block";
+                transpileScript();
+            } else if (tab === "explain") {
+                document.getElementById("tabExplain").classList.add("active");
+                explainView.style.display = "block";
+                explainScript();
+            }
+        }
+
+        async function runDoomScript() {
+            const code = editor.value;
+            if (!code.trim()) return;
+
+            outputConsole.innerHTML = '<span style="color: var(--accent);">Running...</span>';
+            execTimer.innerText = "Executing...";
+            const t0 = performance.now();
+
+            try {
+                const res = await fetch("/api/run", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({code: code})
+                });
+
+                if (!res.ok) throw new Error("Server communication error");
+                const data = await res.json();
+                const ms = (performance.now() - t0).toFixed(1);
+                execTimer.innerText = `${ms} ms`;
+
+                let html = "";
+                if (data.output) {
+                    html += `<div class="output-stdout">${escapeHtml(data.output)}</div>`;
+                }
+                if (data.error) {
+                    html += `<div class="output-error">${escapeHtml(data.error)}</div>`;
+                }
+                if (!data.output && !data.error) {
+                    html += `<span class="output-empty">Program completed with no output.</span>`;
+                }
+                outputConsole.innerHTML = html;
+            } catch (err) {
+                // If offline / static hosting, show fallback
+                outputConsole.innerHTML = `<div class="output-error">Local server disconnected.<br>To run scripts, start the playground locally using:<br><code>doom playground</code></div>`;
+                execTimer.innerText = "Offline";
+            }
+        }
+
+        async function transpileScript() {
+            const code = editor.value;
+            if (!code.trim()) return;
+            try {
+                const res = await fetch("/api/transpile", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({code: code})
+                });
+                const data = await res.json();
+                pythonView.innerText = data.python || data.error || "# Unable to transpile";
+            } catch (err) {
+                pythonView.innerText = "# Launch 'doom playground' to inspect live transpiled Python";
+            }
+        }
+
+        async function explainScript() {
+            const code = editor.value;
+            if (!code.trim()) return;
+            try {
+                const res = await fetch("/api/explain", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({code: code})
+                });
+                const data = await res.json();
+                if (data.steps && data.steps.length) {
+                    let html = "";
+                    data.steps.forEach(step => {
+                        html += `
+                            <div class="explain-step">
+                                <div class="explain-code">${escapeHtml(step.statement || "")}</div>
+                                <div class="explain-text">${escapeHtml(step.explanation || "")}</div>
+                            </div>
+                        `;
+                    });
+                    explainView.innerHTML = html;
+                } else {
+                    explainView.innerHTML = '<span class="output-empty">No statements to explain.</span>';
+                }
+            } catch (err) {
+                explainView.innerHTML = '<span class="output-empty">Launch "doom playground" to view step-by-step plain English explanations.</span>';
+            }
+        }
+
+        function escapeHtml(str) {
+            return str
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        // Keyboard shortcut: Ctrl + Enter / Cmd + Enter
+        document.addEventListener("keydown", function(e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+                e.preventDefault();
+                runDoomScript();
+            }
+        });
+
+        // Initialize with default example
+        window.addEventListener("DOMContentLoaded", loadSelectedExample);
+    </script>
+</body>
+</html>

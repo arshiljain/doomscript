@@ -137,49 +137,145 @@ def find_closest_phrasings(broken_line: str, n: int = 3, cutoff: float = 0.5) ->
 def translate_lark_error(err: Exception, source_line: str) -> Tuple[str, Optional[str]]:
     """
     Translates raw Lark exceptions into friendly, plain-English explanations
-    and a helpful suggestion.
+    and actionable suggestions for beginners.
     """
+    clean_line = source_line.strip()
+
+    # 1. Unclosed quotes check
+    dquotes = len(re.findall(r'(?<!\\)"', clean_line))
+    squotes = len(re.findall(r"(?<!\\)'", clean_line))
+    if dquotes % 2 != 0:
+        return (
+            "It looks like an unclosed double quote (\"). Every opening quote needs a matching closing quote.",
+            f'{clean_line}"'
+        )
+    if squotes % 2 != 0:
+        return (
+            "It looks like an unclosed single quote ('). Every opening quote needs a matching closing quote.",
+            f"{clean_line}'"
+        )
+
+    # 2. Unclosed brackets / parentheses
+    if clean_line.count("(") > clean_line.count(")"):
+        return (
+            "Unclosed parenthesis '('. Make sure every '(' has a matching closing ')'.",
+            f"{clean_line})"
+        )
+    if clean_line.count("[") > clean_line.count("]"):
+        return (
+            "Unclosed bracket '['. Make sure every list bracket '[' has a matching closing ']'.",
+            f"{clean_line}]"
+        )
+    if clean_line.count("{") > clean_line.count("}"):
+        return (
+            "Unclosed record brace '{'. Make sure every '{' has a matching closing '}'.",
+            f"{clean_line}}}"
+        )
+
+    # 3. Python-isms
+    if re.match(r"^def\s+([A-Za-z_]\w*)\s*\(", clean_line):
+        fn_match = re.match(r"^def\s+([A-Za-z_]\w*)\s*\((.*?)\):?", clean_line)
+        if fn_match:
+            fn_name = fn_match.group(1)
+            params = fn_match.group(2).strip()
+            param_part = f" with {params}" if params else ""
+            return (
+                "In DoomScript, functions start with 'to', not 'def'.",
+                f"to {fn_name}{param_part}:"
+            )
+        return (
+            "In DoomScript, functions start with 'to', not 'def'.",
+            "to my_function with param1, param2:"
+        )
+
+    if re.match(r"^print\s*\(", clean_line) or re.match(r"^print\s+", clean_line):
+        inner = re.sub(r"^print\s*\(?\s*(.*?)\s*\)?$", r"\1", clean_line)
+        return (
+            "In DoomScript, use 'say' instead of 'print' to display output.",
+            f"say {inner}"
+        )
+
+    if re.match(r"^import\s+([A-Za-z_]\w*)", clean_line):
+        mod_name = re.match(r"^import\s+([A-Za-z_]\w*)", clean_line).group(1)
+        return (
+            f"To import a Python module in DoomScript, use 'use python module {mod_name}'.",
+            f"use python module {mod_name}"
+        )
+
+    if re.search(r"\bfor\s+\w+\s+in\s+range\s*\(", clean_line):
+        return (
+            "In DoomScript, write loops in plain English: 'repeat 5 times:' or 'repeat with i from 1 to 5:'.",
+            "repeat with i from 1 to 5:"
+        )
+
+    # 4. Comparison vs Assignment in conditions
+    if re.match(r"^(?:if|unless|while)\s+.+[^=!<>]=[^=]", clean_line):
+        return (
+            "Single '=' is for setting a variable. To test if two things are equal in a condition, use 'is' or '=='.",
+            clean_line.replace("=", "is", 1)
+        )
+
+    # 5. Missing 'into' destination in common data commands
+    if re.match(r"^read\s+csv\s+(?:file\s+)?(.+?)$", clean_line, re.IGNORECASE) and "into" not in clean_line.lower():
+        return (
+            "A CSV read command needs a destination variable after 'into'.",
+            f'{clean_line} into rows'
+        )
+
+    if re.match(r"^read\s+file\s+(.+?)$", clean_line, re.IGNORECASE) and "into" not in clean_line.lower():
+        return (
+            "A file read command needs a destination variable after 'into'.",
+            f'{clean_line} into content'
+        )
+
+    if re.match(r"^write\s+csv\s+(.+?)$", clean_line, re.IGNORECASE) and "file" not in clean_line.lower():
+        return (
+            "A CSV write command needs an output file specified with 'into file'.",
+            f'{clean_line} into file "report.csv"'
+        )
+
+    if re.match(r"^ask\s+(.+?)$", clean_line, re.IGNORECASE) and "into" not in clean_line.lower():
+        return (
+            "An input prompt needs a destination variable after 'into'.",
+            f'{clean_line} into answer'
+        )
+
+    # 6. Abrupt statement endings (missing value after preposition/operator)
+    if re.search(r"\b(?:set\s+\w+\s+to|increase\s+\w+\s+by|decrease\s+\w+\s+by|add\s+.+\s+to)\s*$", clean_line, re.IGNORECASE):
+        return (
+            "The statement is incomplete. You need to provide a value or variable at the end.",
+            None
+        )
+
+    # 7. Token-specific fallback
     if isinstance(err, UnexpectedToken):
         tok = err.token
         tok_val = getattr(tok, "value", str(tok))
-        expected = getattr(err, "expected", []) or []
 
         if tok_val in ("\n", "_NEWLINE", "\\n"):
             return (
-                "The statement appears incomplete or ended unexpectedly.",
+                "The statement appears incomplete or ended unexpectedly. Check if a line is missing a value or block body.",
                 None
             )
         if tok_val in ("$END", "<END-OF-FILE>"):
             return (
-                "The program ended unexpectedly. Check for unclosed blocks or incomplete statements.",
+                "The program ended unexpectedly. Check for unclosed blocks, quotes, or incomplete statements.",
                 None
             )
         if tok_val in ("_INDENT", "_DEDENT"):
             return (
-                "Indentation error. Check the spacing at the beginning of the line.",
+                "Inconsistent indentation. Check the spaces at the start of this line (DoomScript uses 4 spaces per indent level).",
                 None
             )
-
-        # Common intent patterns
         if tok_val == "=":
             return (
-                "Unexpected '=' here.",
-                "In DoomScript, you can write 'set x to ...' or 'x is ...'."
+                "Unexpected '=' here. In DoomScript, you can write 'set x to ...' or 'x is ...'.",
+                "set x to 10"
             )
         if tok_val == ":":
             return (
-                "Colons ':' are optional in DoomScript blocks, but here it appeared unexpectedly.",
-                "Make sure your block header starts with 'if', 'repeat', 'for each', 'to', etc."
-            )
-        if tok_val in ("print", "echo", "console.log"):
-            return (
-                f"The verb '{tok_val}' is not standard in DoomScript.",
-                f"Use 'say {source_line.split(tok_val, 1)[-1].strip()}' instead."
-            )
-        if "to" in source_line and tok_val == "def":
-            return (
-                "Functions in DoomScript start with 'to', not 'def'.",
-                "to function_name with param1, param2:"
+                "Colons ':' are optional in DoomScript blocks, but here it appeared unexpectedly. Make sure your block header starts with 'if', 'repeat', 'for each', 'to', etc.",
+                None
             )
 
         return (
@@ -190,7 +286,7 @@ def translate_lark_error(err: Exception, source_line: str) -> Tuple[str, Optiona
     elif isinstance(err, UnexpectedCharacters):
         char = source_line[err.column - 1 : err.column] if hasattr(err, "column") and 0 < err.column <= len(source_line) else "character"
         return (
-            f"Unexpected character '{char}'. DoomScript statements should read like plain English.",
+            f"Unexpected character '{char}'. DoomScript statements should read like plain English without special punctuation.",
             None
         )
 

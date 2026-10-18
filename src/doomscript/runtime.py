@@ -783,11 +783,34 @@ def group_by(collection, key_field: str):
     return result
 
 
+def _auto_cast_val(v: Any) -> Any:
+    if not isinstance(v, str):
+        return v
+    s = v.strip()
+    if not s:
+        return s
+    if re.fullmatch(r"[-+]?\d+", s):
+        try:
+            return int(s)
+        except ValueError:
+            pass
+    if re.fullmatch(r"[-+]?\d*\.\d+", s):
+        try:
+            return float(s)
+        except ValueError:
+            pass
+    return v
+
+
 def read_csv(filepath: str):
-    """Reads a CSV file into a list of Record objects."""
+    """Reads a CSV file into a list of Record objects with automatic numeric inference."""
     with open(filepath, "r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
-        return [Record(row) for row in reader]
+        records = []
+        for row in reader:
+            parsed = {k.strip(): _auto_cast_val(v) for k, v in row.items() if k is not None}
+            records.append(Record(parsed))
+        return records
 
 
 def write_csv(filepath: str, rows):

@@ -478,5 +478,15 @@ def pack_cmd(
     pack_script(file, out)
 
 
+@app.command("playground")
+def playground_cmd(
+    port: int = typer.Option(8000, "--port", "-p", help="Port to serve the playground on"),
+    no_browser: bool = typer.Option(False, "--no-browser", help="Do not open browser automatically")
+):
+    """Launch the interactive web playground in your browser."""
+    from doomscript.playground import launch_playground
+    launch_playground(port=port, open_browser=not no_browser)
+
+
 if __name__ == "__main__":
     app()

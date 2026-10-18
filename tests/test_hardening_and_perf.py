@@ -145,3 +145,81 @@ def test_subprocess_security_defaults():
     # Execute a safe command
     output = runtime.run_command([sys.executable, "-c", "print('hello_safe')"])
     assert output == "hello_safe"
+
+
+def test_friendly_syntax_error_diagnostics():
+    """Verify common beginner syntax errors produce plain-English guidance and actionable suggestions."""
+    # 1. Unclosed quote
+    err_msg = format_syntax_error('say "Hello, world', Exception(), file_path="script.doom")
+    assert "unclosed double quote" in err_msg.lower()
+    assert 'say "Hello, world"' in err_msg
+
+    # 2. Unclosed bracket
+    err_bracket = format_syntax_error('items = [1, 2, 3', Exception(), file_path="script.doom")
+    assert "unclosed bracket" in err_bracket.lower()
+
+    # 3. Python-style 'def'
+    err_def = format_syntax_error('def calculate(x, y):', Exception(), file_path="script.doom")
+    assert "functions start with 'to'" in err_def.lower()
+    assert "to calculate with x, y:" in err_def
+
+    # 4. Python-style 'print'
+    err_print = format_syntax_error('print("test")', Exception(), file_path="script.doom")
+    assert "use 'say' instead of 'print'" in err_print.lower()
+
+    # 5. Missing 'into' in read csv
+    err_csv = format_syntax_error('read csv file "sales.csv"', Exception(), file_path="script.doom")
+    assert "destination variable after 'into'" in err_csv.lower()
+
+    # 6. Single '=' in if condition
+    err_eq = format_syntax_error('if score = 100:', Exception(), file_path="script.doom")
+    assert "single '=' is for setting a variable" in err_eq.lower()
+
+
+def test_five_step_spreadsheet_to_report_task(tmp_path):
+    """
+    Core Mission Benchmark:
+    Turn a messy spreadsheet into a clean report in plain English.
+    """
+    raw_csv = tmp_path / "sales_raw.csv"
+    raw_csv.write_text("""customer,status,amount,region
+Alice,paid,120,North
+Bob,pending,45,West
+Charlie,paid,350,North
+Dana,refunded,90,South
+Evan,paid,210,East
+Fiona,paid,30,South
+George,paid,540,North
+""", encoding="utf-8")
+
+    clean_csv = tmp_path / "clean_audit.csv"
+
+    doom_code = f"""
+# 1. Read messy transactions
+read csv file "{str(raw_csv).replace('\\\\', '/')}" into orders
+
+# 2. Filter valid paid transactions over $50
+orders where status is "paid" into valid_orders
+valid_orders where amount is over 50 into high_value
+
+# 3. Sort by amount descending
+sort high_value by amount descending
+
+# 4. Save clean audit report
+write csv high_value into file "{str(clean_csv).replace('\\\\', '/')}"
+
+# 5. Summary metrics
+set total_cleaned to count of high_value
+set top_order to first item of high_value
+"""
+    env = execute(doom_code)
+
+    assert env["total_cleaned"] == 4
+    assert env["top_order"]["customer"] == "George"
+    assert env["top_order"]["amount"] == 540 or env["top_order"]["amount"] == "540"
+
+    # Verify written CSV
+    clean_lines = clean_csv.read_text(encoding="utf-8").strip().splitlines()
+    assert len(clean_lines) == 5  # header + 4 rows
+    assert "George" in clean_lines[1]  # Highest first
+
