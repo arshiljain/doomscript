@@ -293,15 +293,44 @@ def refresh_screen():
     _CANVAS.refresh()
 
 
+def _auto_cast_val(v: Any) -> Any:
+    """Coerce string numerics (integers/floats) to numbers for seamless data manipulation."""
+    if not isinstance(v, str):
+        return v
+    s = v.strip()
+    if not s:
+        return s
+    if re.fullmatch(r"[-+]?\d+", s):
+        try:
+            return int(s)
+        except ValueError:
+            pass
+    if re.fullmatch(r"[-+]?\d*\.\d+", s):
+        try:
+            return float(s)
+        except ValueError:
+            pass
+    return v
+
+
+def _convert_records_auto_cast(obj: Any) -> Any:
+    """Recursively converts dicts into Records and auto-casts string numbers."""
+    if isinstance(obj, dict):
+        return Record({k.strip() if isinstance(k, str) else k: _convert_records_auto_cast(v) for k, v in obj.items() if k is not None})
+    elif isinstance(obj, list):
+        return [_convert_records_auto_cast(x) for x in obj]
+    elif isinstance(obj, str):
+        return _auto_cast_val(obj)
+    return obj
+
+
 # Networking (Fetch & Download)
 def fetch_json(url):
-    """Fetch and decode JSON from a remote URL."""
+    """Fetch and decode JSON from a remote URL with automatic numeric inference."""
     req = urllib.request.Request(str(url), headers={"User-Agent": "DoomScript/1.0"})
     with urllib.request.urlopen(req, timeout=10) as resp:
         data = json.loads(resp.read().decode("utf-8"))
-        if isinstance(data, dict):
-            return Record(data)
-        return data
+        return _convert_records_auto_cast(data)
 
 
 def fetch_text(url):
@@ -783,24 +812,6 @@ def group_by(collection, key_field: str):
     return result
 
 
-def _auto_cast_val(v: Any) -> Any:
-    if not isinstance(v, str):
-        return v
-    s = v.strip()
-    if not s:
-        return s
-    if re.fullmatch(r"[-+]?\d+", s):
-        try:
-            return int(s)
-        except ValueError:
-            pass
-    if re.fullmatch(r"[-+]?\d*\.\d+", s):
-        try:
-            return float(s)
-        except ValueError:
-            pass
-    return v
-
 
 def read_csv(filepath: str):
     """Reads a CSV file into a list of Record objects with automatic numeric inference."""
@@ -840,13 +851,9 @@ def append_csv(filepath: str, row):
 
 
 def parse_json(raw_text: str):
-    """Parses JSON text into a Record or list of Records."""
+    """Parses JSON text into a Record or list of Records with automatic numeric inference."""
     data = json.loads(raw_text)
-    if isinstance(data, dict):
-        return Record(data)
-    elif isinstance(data, list):
-        return [Record(x) if isinstance(x, dict) else x for x in data]
-    return data
+    return _convert_records_auto_cast(data)
 
 
 def stringify_json(obj, indent: int = 2):

@@ -1089,6 +1089,44 @@ class DoomToPython(Transformer):
     def agg_last(self, args):
         return ast.Call(func=ast.Name(id='agg_last', ctx=ast.Load()), args=[args[0]], keywords=[])
 
+    def expr_uppercase(self, args):
+        return ast.Call(func=ast.Name(id='str_uppercase', ctx=ast.Load()), args=[args[0]], keywords=[])
+
+    def expr_lowercase(self, args):
+        return ast.Call(func=ast.Name(id='str_lowercase', ctx=ast.Load()), args=[args[0]], keywords=[])
+
+    def expr_trim(self, args):
+        return ast.Call(func=ast.Name(id='str_trim', ctx=ast.Load()), args=[args[0]], keywords=[])
+
+    def expr_title(self, args):
+        return ast.Call(func=ast.Name(id='str_title', ctx=ast.Load()), args=[args[0]], keywords=[])
+
+    def expr_sorted(self, args):
+        return ast.Call(func=ast.Name(id='sorted_list', ctx=ast.Load()), args=[args[0]], keywords=[])
+
+    def expr_reversed(self, args):
+        return ast.Call(func=ast.Name(id='reversed_list', ctx=ast.Load()), args=[args[0]], keywords=[])
+
+    def expr_unique(self, args):
+        return ast.Call(func=ast.Name(id='unique_items', ctx=ast.Load()), args=[args[0]], keywords=[])
+
+    def expr_round(self, args):
+        return ast.Call(func=ast.Name(id='math_round', ctx=ast.Load()), args=[args[0]], keywords=[])
+
+    def expr_round_dec(self, args):
+        return ast.Call(func=ast.Name(id='math_round', ctx=ast.Load()), args=[args[0], args[1]], keywords=[])
+
+    def expr_cast(self, args):
+        val, type_tok = args
+        t_str = str(type_tok).lower()
+        if t_str == 'number':
+            return ast.Call(func=ast.Name(id='to_number', ctx=ast.Load()), args=[val], keywords=[])
+        elif t_str in ('text', 'string'):
+            return ast.Call(func=ast.Name(id='to_text', ctx=ast.Load()), args=[val], keywords=[])
+        elif t_str in ('boolean', 'bool'):
+            return ast.Call(func=ast.Name(id='bool', ctx=ast.Load()), args=[val], keywords=[])
+        return val
+
     def field_total(self, args):
         field, coll = args
         elt = ast.Attribute(value=ast.Name(id='_x', ctx=ast.Load()), attr=str(field), ctx=ast.Load())

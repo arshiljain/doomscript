@@ -308,6 +308,7 @@ CMP_OP: "<="
 ?factor: "-" factor -> neg
        | file_exists_expr
        | aggregate_expr
+       | data_op_expr
        | relative_time_expr
        | percent_expr
        | possessive_expr
@@ -315,6 +316,18 @@ CMP_OP: "<="
        | math_fn_expr
        | date_fn_expr
        | atom
+
+data_op_expr: "uppercase" "of" factor                     -> expr_uppercase
+            | "lowercase" "of" factor                     -> expr_lowercase
+            | ("trim" | "trimmed") "of" factor            -> expr_trim
+            | "sorted" "of" factor                        -> expr_sorted
+            | "reversed" "of" factor                      -> expr_reversed
+            | "unique" ["items"] "of" factor              -> expr_unique
+            | ("round" | "rounded") "of" factor "to" factor "decimals"  -> expr_round_dec
+            | ("round" | "rounded") "of" factor                         -> expr_round
+            | (atom | possessive_expr) "as" TYPE_COERCE   -> expr_cast
+
+TYPE_COERCE.3: "number" | "text" | "string" | "boolean" | "bool"
 
 file_exists_expr: "file" atom "exists" -> file_exists_factor
 

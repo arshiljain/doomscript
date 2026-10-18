@@ -122,13 +122,53 @@ pip install git+https://github.com/arshiljain/doomscript.git
 
 ---
 
+## The Predictability Guarantee: Avoiding the AppleScript Trap
+
+English-like languages historically fail when users can phrase things twenty different ways, cannot predict which ways work, and the language feels random. DoomScript solves this with four non-negotiable principles:
+
+1. **A Guaranteed 30-Form Core**: A rock-solid, fully specified subset (~30 forms) that is guaranteed to always work identically across every version and platform. See [docs/CORE_SPEC.md](docs/CORE_SPEC.md).
+2. **Dual-Form Consistency**: Every data operation is available as **both** a statement and an expression:
+   - Statement: `trim raw_name into cleaned` $\leftrightarrow$ Expression: `say trim of raw_name`
+   - Statement: `uppercase name into upper` $\leftrightarrow$ Expression: `set upper to uppercase of name`
+   - Statement: `sort items` $\leftrightarrow$ Expression: `for each x in sorted of items:`
+   - Statement: `reverse items` $\leftrightarrow$ Expression: `say reversed of items`
+   - Statement: `unique items of list into u` $\leftrightarrow$ Expression: `say unique of list`
+3. **Auto-Coerced CSV & JSON Numerics**: Numerical columns and fields in spreadsheets and JSON APIs auto-coerce to integers and floats without manual parsing boilerplate, with explicit `<val> as number` casting available when needed.
+4. **Actionable Suggestions for Everything Outside Core**: When you make a typo or use an unsupported phrasing, DoomScript uses edit-distance matching to suggest the exact documented command.
+
+---
+
 ## Friendly Errors: Built for Humans, Not Compilers
 
 A beginner's first failure is almost always a syntax error. Cryptic parser traces discourage newcomers. DoomScript translates syntax errors and runtime failures into clear, plain-English guidance with caret pointers and actionable suggestions.
 
-### Syntax Diagnostics
-Instead of cryptic parser output (`UnexpectedCharacters: No terminal matches '\n'`), DoomScript tells you exactly what went wrong:
+### 1. Typo & Keyword Suggestions
+Did you mistype a command or keyword? DoomScript uses Levenshtein edit-distance to guide you:
 
+```text
+DoomScript Syntax Error at script.doom:1:1
+
+   1 | sya "Hello, world!"
+       ^
+
+Problem: I didn't recognize the command 'sya'. Did you mean 'say'?
+Did you mean: say "Hello, world!"
+```
+
+### 2. Keyword-Collision Prevention
+Accidentally named a variable after a language keyword? DoomScript explains the conflict instead of throwing a generic parser error:
+
+```text
+DoomScript Syntax Error at script.doom:1:1
+
+   1 | to = 5
+       ^
+
+Problem: 'to' is a reserved keyword in DoomScript used to define functions ('to my_function with x:'). It cannot be used as a variable name.
+Did you mean: set my_to to 5
+```
+
+### 3. Syntax Diagnostics & Missing Destinations
 ```text
 DoomScript Syntax Error at report.doom:3:18
 
@@ -149,7 +189,7 @@ Problem: It looks like an unclosed double quote ("). Every opening quote needs a
 Did you mean: say "Total revenue:"
 ```
 
-### Runtime Diagnostics
+### 4. Runtime Diagnostics
 When a variable isn't found or an operation fails, DoomScript explains the fix in plain English:
 
 ```text

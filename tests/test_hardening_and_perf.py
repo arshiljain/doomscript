@@ -223,3 +223,83 @@ set top_order to first item of high_value
     assert len(clean_lines) == 5  # header + 4 rows
     assert "George" in clean_lines[1]  # Highest first
 
+
+def test_expression_data_operations_and_casting():
+    """Verify data operations are available as expressions alongside their statement forms."""
+    code = """
+set raw_name to "   Jane Doe   "
+set clean_name to trim of raw_name
+set upper_name to uppercase of clean_name
+set lower_name to lowercase of clean_name
+set nums to [5, 2, 8, 1, 9, 2]
+set sorted_nums to sorted of nums
+set rev_nums to reversed of nums
+set uniq_nums to unique of nums
+set str_val to "125.75"
+set num_val to str_val as number
+set rounded_val to round of num_val to 1 decimals
+"""
+    env = execute(code)
+    assert env["clean_name"] == "Jane Doe"
+    assert env["upper_name"] == "JANE DOE"
+    assert env["lower_name"] == "jane doe"
+    assert env["sorted_nums"] == [1, 2, 2, 5, 8, 9]
+    assert env["rev_nums"] == [2, 9, 1, 8, 2, 5]
+    assert env["uniq_nums"] == [5, 2, 8, 1, 9]
+    assert env["num_val"] == 125.75
+    assert env["rounded_val"] == 125.8
+
+
+def test_json_numeric_coercion():
+    """Verify JSON auto-coerces string numerics in dicts and lists into numbers."""
+    from doomscript.runtime import parse_json
+    raw = '[{"item": "book", "price": "19.95", "qty": "3"}]'
+    res = parse_json(raw)
+    assert res[0]["price"] == 19.95
+    assert res[0]["qty"] == 3
+
+
+def test_keyword_collision_and_typo_diagnostics():
+    """Verify reserved keyword assignments and misspelled command verbs produce clear guidance."""
+    # Keyword collision: 'to = 5'
+    err_to = format_syntax_error("to = 5", Exception(), file_path="test.doom")
+    assert "reserved keyword in DoomScript" in err_to
+    assert "set my_to to 5" in err_to
+
+    # Keyword collision: 'set while to 10'
+    err_while = format_syntax_error("set while to 10", Exception(), file_path="test.doom")
+    assert "reserved keyword in DoomScript" in err_while
+    assert "set my_while to 10" in err_while
+
+    # Edit distance suggestion: 'sya "hello"' -> 'say "hello"'
+    err_sya = format_syntax_error('sya "hello"', Exception(), file_path="test.doom")
+    assert "Did you mean 'say'?" in err_sya
+    assert 'say "hello"' in err_sya
+
+    # Edit distance suggestion: 'repeta 5 times:' -> 'repeat 5 times:'
+    err_repeta = format_syntax_error("repeta 5 times:", Exception(), file_path="test.doom")
+    assert "Did you mean 'repeat'?" in err_repeta
+    assert "repeat 5 times:" in err_repeta
+
+    # Missing into for trim statement
+    err_trim = format_syntax_error("trim name", Exception(), file_path="test.doom")
+    assert "destination variable" in err_trim
+    assert "trim name into cleaned" in err_trim
+
+
+def test_number_predicates():
+    """Verify numeric literals and expressions work with parity/sign predicates."""
+    env = execute("""
+set a to 4 is even
+set b to 7 is odd
+set c to 15 is positive
+set d to -3 is negative
+set e to 0 is zero
+""")
+    assert env["a"] is True
+    assert env["b"] is True
+    assert env["c"] is True
+    assert env["d"] is True
+    assert env["e"] is True
+
+

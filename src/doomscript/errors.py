@@ -134,6 +134,52 @@ def find_closest_phrasings(broken_line: str, n: int = 3, cutoff: float = 0.5) ->
     return matches
 
 
+RESERVED_KEYWORDS = {
+    "to": "used to define functions ('to my_function with x:').",
+    "say": "used to display output ('say \"hello\"').",
+    "show": "used to display output ('show \"hello\"').",
+    "ask": "used to prompt for user input ('ask \"Name?\" into name').",
+    "read": "used to read files or CSV data ('read file \"f.txt\" into content').",
+    "write": "used to write files or CSV data ('write text into file \"f.txt\"').",
+    "set": "used to assign variables ('set x to 5').",
+    "if": "used for conditional branches ('if x > 5:').",
+    "else": "used for alternative conditional branches ('else:').",
+    "elif": "used for chained conditionals ('elif x > 2:').",
+    "unless": "used for negative conditionals ('unless x > 5:').",
+    "repeat": "used for loops ('repeat 5 times:').",
+    "while": "used for while loops ('repeat while x > 0:').",
+    "until": "used for until loops ('repeat until x is 10:').",
+    "for": "used for iteration loops ('for each item in list:').",
+    "each": "used in 'for each' iteration loops.",
+    "try": "used for error handling ('try: ... if it fails: ...').",
+    "attempt": "used for error handling ('attempt: ... if it fails: ...').",
+    "match": "used for pattern matching ('match value:').",
+    "when": "used for pattern matching branches ('when 1:').",
+    "return": "used to return values from functions ('return result').",
+    "verify": "used for assertions ('verify condition otherwise \"error\"').",
+    "require": "used for preconditions ('require x > 0').",
+    "ensure": "used for postconditions ('ensure result > 0').",
+    "where": "used for filtering collections ('items where amount > 50').",
+    "is": "used for comparisons and assignments ('x is 5').",
+    "into": "used to specify destination variables ('read file ... into content')."
+}
+
+CORE_COMMAND_VERBS = [
+    "say", "show", "display",
+    "set", "make", "create", "let",
+    "if", "unless", "else", "elif",
+    "repeat", "while", "until", "for",
+    "to", "return", "ask", "read", "write", "append",
+    "sort", "reverse", "group", "filter",
+    "trim", "uppercase", "lowercase", "capitalize",
+    "round", "clamp", "convert",
+    "try", "attempt", "verify", "require", "ensure",
+    "fetch", "download", "post", "send",
+    "spawn", "wait", "start", "stop", "pause",
+    "match", "when", "unpack"
+]
+
+
 def translate_lark_error(err: Exception, source_line: str) -> Tuple[str, Optional[str]]:
     """
     Translates raw Lark exceptions into friendly, plain-English explanations
@@ -208,7 +254,59 @@ def translate_lark_error(err: Exception, source_line: str) -> Tuple[str, Optiona
             "repeat with i from 1 to 5:"
         )
 
-    # 4. Comparison vs Assignment in conditions
+    # 4. Keyword-Collision checks (assigning to reserved words)
+    kw_assign_m = re.match(r"^(?:set\s+)?([a-z_]+)\s*(?:=|is\b|to\b|\+=|-=|\*=)\s*(.+)$", clean_line, re.IGNORECASE)
+    if kw_assign_m:
+        kw = kw_assign_m.group(1).lower()
+        if kw in RESERVED_KEYWORDS:
+            explanation = RESERVED_KEYWORDS[kw]
+            val_part = kw_assign_m.group(2).strip()
+            return (
+                f"'{kw}' is a reserved keyword in DoomScript {explanation} It cannot be used as a variable name.",
+                f"set my_{kw} to {val_part}"
+            )
+
+    # 5. Incomplete data verbs (trim/uppercase/lowercase/filter missing into or destination)
+    if re.match(r"^trim\s+(.+)$", clean_line, re.IGNORECASE) and "into" not in clean_line.lower() and "of" not in clean_line.lower():
+        target_expr = re.match(r"^trim\s+(.+)$", clean_line, re.IGNORECASE).group(1).strip()
+        return (
+            "In DoomScript, data transformations require a destination variable: 'trim <text> into <variable>' or expression form 'say trim of <text>'.",
+            f"trim {target_expr} into cleaned"
+        )
+    if re.match(r"^uppercase\s+(.+)$", clean_line, re.IGNORECASE) and "into" not in clean_line.lower() and "of" not in clean_line.lower():
+        target_expr = re.match(r"^uppercase\s+(.+)$", clean_line, re.IGNORECASE).group(1).strip()
+        return (
+            "In DoomScript, data transformations require a destination variable: 'uppercase <text> into <variable>' or expression form 'say uppercase of <text>'.",
+            f"uppercase {target_expr} into upper_text"
+        )
+    if re.match(r"^lowercase\s+(.+)$", clean_line, re.IGNORECASE) and "into" not in clean_line.lower() and "of" not in clean_line.lower():
+        target_expr = re.match(r"^lowercase\s+(.+)$", clean_line, re.IGNORECASE).group(1).strip()
+        return (
+            "In DoomScript, data transformations require a destination variable: 'lowercase <text> into <variable>' or expression form 'say lowercase of <text>'.",
+            f"lowercase {target_expr} into lower_text"
+        )
+    filt_m = re.match(r"^filter\s+(.+?)\s+where\s+(.+)$", clean_line, re.IGNORECASE)
+    if filt_m:
+        return (
+            "In DoomScript, write filters as '<collection> where <condition> into <target>'.",
+            f"{filt_m.group(1).strip()} where {filt_m.group(2).strip()} into filtered_items"
+        )
+
+    # 6. Typo / Edit-distance keyword suggestions (e.g. 'sya' -> 'say', 'repeta' -> 'repeat', 'whlie' -> 'while')
+    first_token_m = re.match(r"^([A-Za-z_]\w*)", clean_line)
+    if first_token_m:
+        first_word = first_token_m.group(1).lower()
+        if first_word not in CORE_COMMAND_VERBS and not re.search(r"^[A-Za-z_]\w*\s*(?:=|is\b|\+=|-=|\*=)", clean_line):
+            close_verbs = difflib.get_close_matches(first_word, CORE_COMMAND_VERBS, n=1, cutoff=0.6)
+            if close_verbs:
+                match_verb = close_verbs[0]
+                rest = clean_line[len(first_word):].strip()
+                return (
+                    f"I didn't recognize the command '{first_word}'. Did you mean '{match_verb}'?",
+                    f"{match_verb} {rest}".strip()
+                )
+
+    # 7. Comparison vs Assignment in conditions
     if re.match(r"^(?:if|unless|while)\s+.+[^=!<>]=[^=]", clean_line):
         return (
             "Single '=' is for setting a variable. To test if two things are equal in a condition, use 'is' or '=='.",
