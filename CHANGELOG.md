@@ -2,6 +2,32 @@
 
 All notable changes to DoomScript are documented in this file.
 
+## [1.0.4] - 2026-10-19 - Phase 2: Indexing, Slicing, Tuples, and Essential Operators (CS1 Core)
+### Added
+- **Subscripting & Slicing**:
+  - Python-standard 0-based subscripts: `xs[0]`, `m[1][0]`, `d["key"]`, negative indices `xs[-1]`.
+  - Full slicing syntax: `xs[1:4]`, `xs[:3]`, `xs[3:]`, `xs[::2]`, `xs[1:5:2]`, `xs[:-1]`.
+  - Subscript assignments and augmented assignments: `xs[i] = v`, `freq[w] += 1`, `grid[r][c] = total`.
+- **English Coexistence**:
+  - `set item 2 of xs to 99` (1-based natural English) seamlessly coexists with `xs[1] = 99` (0-based).
+  - List mutation functions `pop(st)`, supporting statement forms `pop st`, `pop from st`, `remove last from st`, and expression forms `val = pop st`, `say pop st`.
+- **Tuples & Multi-Assignment**:
+  - Tuple packing, unpacking, and variable swap: `a, b = b, a`, `t = (1, 2)`, `t = ()`, `t = (5,)`.
+  - Multi-target loops: `for i, f in enumerate(fruits):` and `for each i, f in enumerate(fruits):`.
+- **Sets & Dictionaries**:
+  - Set literals `{1, 2, 3}` alongside dictionary literals `{"a": 1, "b": 2}` and `{a: 1}`.
+  - Set / bitwise operators: union `a | b`, intersection `a & b`, difference `a - b`, symmetric difference `a ^ b`.
+- **Symbol Operators**:
+  - Floor division `//` and augmented `//=` (e.g. `mid = (lo + hi) // 2`).
+  - Modulo `%` and augmented `%=` (e.g. `7 % 2`), coexisting with `mod` and `remainder of`.
+  - Exponentiation `**` (e.g. `2 ** 3`), coexisting with `to the power of`.
+  - Python-style `not in` and `in` comparisons (e.g. `if w not in freq:`).
+- **CS1 Algorithm Acceptance Tests**:
+  - Bubble sort with `a, b = b, a` swap.
+  - Word-frequency counter using a dict (`freq[w] += 1`).
+  - Binary search with `mid = (lo + hi) // 2`.
+  - 2D matrix multiply with nested lists `A[i][k] * B[k][j]`.
+
 ## [1.0.3] - 2026-10-19 - Phase 1: Dotted Calls & Full Python Interop
 ### Added
 - **Dotted Calls & Attribute Access**:

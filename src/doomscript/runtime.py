@@ -731,6 +731,20 @@ def item_of(index, collection):
     return collection[idx]
 
 
+def set_item(index, collection, value):
+    """Mutate item in collection using natural 1-based indexing."""
+    idx = int(index)
+    if idx > 0:
+        collection[idx - 1] = value
+    else:
+        collection[idx] = value
+
+
+def pop(collection):
+    """Pop and return last item from collection."""
+    return collection.pop()
+
+
 def first_n_items(n, collection):
     """Returns the first N items of a list."""
     return collection[:int(n)]

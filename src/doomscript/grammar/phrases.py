@@ -413,6 +413,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"\b(?:lowest|minimum)\s+([A-Za-z_]\w*)\s+in\s+([A-Za-z_]\w*)", r'agg_field("min", "\1", \2)', masked, flags=re.IGNORECASE)
 
     # List operations
+    masked = re.sub(r"^\s*set\s+item\s+(.+?)\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s+to\s+(.+)$", r"set_item(\1, \2, \3)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bitem\s+(\d+|[A-Za-z_]\w*)\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"item_of(\1, \2)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bfirst\s+(\d+|[A-Za-z_]\w*)\s+items\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"first_n_items(\1, \2)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\blast\s+(\d+|[A-Za-z_]\w*)\s+items\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"last_n_items(\1, \2)", masked, flags=re.IGNORECASE)
@@ -421,6 +422,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         masked = f"{unique_into_m.group(2)} = unique_items({unique_into_m.group(1).strip()})"
 
     masked = re.sub(r"\bunique\s+(?:items\s+)?(?:of\s+)?(\[[^\]]*\]|[A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"unique_items(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bsorted\s*\((.+?)\)", r"sorted_list(\1)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bsorted\s+(?:of\s+)?(\[[^\]]*\]|[A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"sorted_list(\1)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\breversed\s+(?:of\s+)?(\[[^\]]*\]|[A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"reversed_list(\1)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\b(?:title|titlecase)\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"str_title(\1)", masked, flags=re.IGNORECASE)
@@ -436,7 +438,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     # Disambiguate reserved words used as standalone variable names
     masked = re.sub(r"(?<!'s\s)(?<!\.)(?<![\"'])\bcount\b(?![\"'])(?!\s+of\b)", "_var_count", masked)
     masked = re.sub(r"(?<!'s\s)(?<!\.)(?<![\"'])\bsum\b(?![\"'])(?!\s+of\b)", "_var_sum", masked)
-    masked = re.sub(r"(?<!'s\s)(?<!\.)(?<!\bbullet\s)(?<!\ba\s)(?<!\bempty\s)(?<!\bnew\s)(?<![\"'])\blist\b(?![\"'])(?!\s+files\b)(?!\s+of\b)", "_var_list", masked)
+    masked = re.sub(r"(?<!'s\s)(?<!\.)(?<!\bbullet\s)(?<!\ba\s)(?<!\bempty\s)(?<!\bnew\s)(?<![\"'])\blist\b(?![\"'])(?!\s+files\b)(?!\s+of\b)(?!\s*\()", "_var_list", masked)
     masked = re.sub(r"(?<!'s\s)(?<!\.)(?<!\bfind\s)(?<!\btake\s)(?<!\bdrop\s)\bfirst\b(?!\s+(?:\d+|[A-Za-z_]\w*)\s+items?\s+(?:of|from)\b|\s+item\s+of\b|\s+[A-Z]\w*)", "_var_first", masked)
 
     # Arithmetic in words
@@ -445,6 +447,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         var = double_m.group(1)
         masked = f"set {var} to {var} * 2"
 
+    masked = re.sub(r"(\d+(?:\.\d+)?)\s*%\s+of\s+([A-Za-z_]\w*|\d+(?:\.\d+)?|\([^)]+\))", r"percent_of(\1, \2)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"(\b\w+|\))\s+to\s+(?:the\s+)?power\s+of\s+(\b\w+|\()", r"math_pow(\1, \2)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"(\b\w+|\))\s+squared\b", r"math_pow(\1, 2)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"(\b\w+|\))\s+mod\s+(\b\w+|\()", r"math_mod(\1, \2)", masked, flags=re.IGNORECASE)
@@ -473,11 +476,13 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"^\s*append\s+(.+?)\s+to\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s*$", r"add \1 to \2", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*push\s+(.+?)\s+(?:to|into)\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s*$", r"add \1 to \2", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*discard\s+(.+?)\s+from\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s*$", r"remove \1 from \2", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"^\s*pop\s+from\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s*$", r"remove (last item of \1) from \1", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*(?:pop\s+(?:from\s+)?|remove\s+last\s+(?:item\s+)?from\s+)([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s*$", r"pop(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"(?<!def\s)(?<!to\s)\bpop\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\b", r"pop(\1)", masked, flags=re.IGNORECASE)
 
     # Loop Controls & Flow
     masked = re.sub(r"^\s*for\s+(?:all|each\s+of\s+the|every)\s+([A-Za-z_]\w*)\s+in\b", r"for each \1 in", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*for\s+each\s+([A-Za-z_]\w*)\s+of\b", r"for each \1 in", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*for\s+(?!each\b)(.+?)\s+in\b", r"for each \1 in", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*loop\s+(?:through|over)\s+(.+?)\s+as\s+([A-Za-z_]\w*):", r"for each \2 in \1:", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*as\s+long\s+as\s+(.+?):", r"while \1:", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*until\s+(.+?):", r"while not (\1):", masked, flags=re.IGNORECASE)
@@ -512,7 +517,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s+is\s+outside\s+(.+?)\s+and\s+([^\s;,\n]+)", r"not (\1 is between \2 and \3)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s+is\s+neither\s+(.+?)\s+nor\s+([^\s;,\n]+)", r"not (\1 is \2 or \1 is \3)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"(\b\w+(?:'s\s+[A-Za-z_]\w*)?|\))\s+is\s+inside\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?|\[[^\]]*\])", r"\1 is inside \2", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"(\b\w+(?:'s\s+[A-Za-z_]\w*)?|\))\s+is\s+not\s+(?:inside|in)\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?|\[[^\]]*\])", r"\1 is not inside \2", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"(\b\w+(?:'s\s+[A-Za-z_]\w*)?|\))\s+(?:is\s+)?not\s+(?:inside|in)\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?|\[[^\]]*\])", r"\1 is not inside \2", masked, flags=re.IGNORECASE)
     masked = re.sub(r"(\b\w+(?:'s\s+[A-Za-z_]\w*)?|\))\s+is\s+not\s+one\s+of\s+([\[A-Za-z_].*?)(?=\s+and\b|\s+or\b|:|\n|$)", r"not (\1 is one of \2)", masked, flags=re.IGNORECASE)
 
     # Fractions and Multiples

@@ -86,12 +86,16 @@ start: (_NEWLINE | stmt)*
                  | expr_stmt
 
 say_stmt: "say" expr ("," expr)* -> say_multi
-assign_stmt: target "=" expr -> assign
+assign_stmt: target_list "=" expr_list -> assign
 aug_assign_stmt: target "+=" expr -> aug_add
                | target "-=" expr -> aug_sub
                | target "*=" expr -> aug_mul
                | target "/=" expr -> aug_div
+               | target "//=" expr -> aug_floor_div
                | target "%=" expr -> aug_mod
+
+target_list: target ("," target)* [","]
+expr_list: expr ("," expr)* [","]
 set_stmt: "set" target "to" expr -> set_var
 increase_stmt: "increase" target "by" expr -> increase_var
 decrease_stmt: "decrease" target "by" expr -> decrease_var
@@ -113,7 +117,7 @@ sort_stmt: "sort" target "by" NAME [DESCENDING_ORDER] -> sort_records
 reverse_stmt: "reverse" target                        -> reverse_list_stmt
 group_stmt: "group" expr "by" NAME "into" target -> group_by_stmt
 filter_stmt: expr "where" NAME CMP_OP expr "into" target -> filter_records_stmt
-comp_assign_stmt: target ("is" | "=") ["the"] NAME "of" "each" NAME "in" expr -> comp_assign
+comp_assign_stmt: target_list ("is" | "=") ["the"] NAME "of" "each" NAME "in" expr -> comp_assign
 dotted_name: (NAME | STRING) ("." (NAME | STRING))* -> dotted_name
 import_alias: (NAME | STRING) ["as" NAME] -> import_alias
 
@@ -214,8 +218,9 @@ repeat_while_stmt: "repeat" "while" expr ":"? _NEWLINE suite -> repeat_while_stm
 repeat_until_stmt: "repeat" "until" expr ":"? _NEWLINE suite -> repeat_until_stmt
 while_stmt: "while" expr ":"? _NEWLINE suite -> repeat_while_stmt
 until_stmt: "until" expr ":"? _NEWLINE suite -> repeat_until_stmt
-for_where_stmt: "for" "each" NAME "in" expr "where" expr ":"? _NEWLINE suite -> for_where_stmt
-for_stmt: "for" "each" NAME "in" expr ":"? _NEWLINE suite -> for_stmt
+for_target: NAME ("," NAME)* -> for_target_names
+for_where_stmt: "for" "each" for_target "in" expr "where" expr ":"? _NEWLINE suite -> for_where_stmt
+for_stmt: "for" "each" for_target "in" expr ":"? _NEWLINE suite -> for_stmt
 attempt_stmt: "attempt" ":"? _NEWLINE suite "if" "it" "fails" ":"? _NEWLINE suite -> attempt_stmt
 func_def: "to" NAME [NAME ["with" param_list] | "with" param_list] ":"? _NEWLINE suite -> func_def
 
@@ -240,10 +245,10 @@ call_arg_list: call_arg ("," call_arg)*
 
 ?compare_expr: compare_expr IS_EMPTY -> is_empty
              | compare_expr IS_NOT_EMPTY -> is_not_empty
-             | compare_expr STARTS_WITH sum_expr -> str_starts_with
-             | compare_expr ENDS_WITH sum_expr -> str_ends_with
-             | compare_expr MATCHES_PATTERN sum_expr -> str_matches_pattern
-             | compare_expr IS_BETWEEN sum_expr "and" sum_expr -> is_between
+             | compare_expr STARTS_WITH bitwise_or -> str_starts_with
+             | compare_expr ENDS_WITH bitwise_or -> str_ends_with
+             | compare_expr MATCHES_PATTERN bitwise_or -> str_matches_pattern
+             | compare_expr IS_BETWEEN bitwise_or "and" bitwise_or -> is_between
              | compare_expr IS_ONE_OF factor -> is_one_of
              | compare_expr IS_NUMBER -> is_type_number
              | compare_expr IS_NOT_NUMBER -> is_type_not_number
@@ -255,9 +260,9 @@ call_arg_list: call_arg ("," call_arg)*
              | compare_expr IS_NOT_LIST -> is_type_not_list
              | compare_expr IS_RECORD -> is_type_record
              | compare_expr IS_NOT_RECORD -> is_type_not_record
-             | compare_expr "contains" sum_expr -> contains
-             | compare_expr CMP_OP sum_expr -> compare
-             | sum_expr
+             | compare_expr "contains" bitwise_or -> contains
+             | compare_expr CMP_OP bitwise_or -> compare
+             | bitwise_or
 
 IS_EMPTY.3: "is empty"
 IS_NOT_EMPTY.3: "is not empty"
@@ -300,20 +305,33 @@ CMP_OP: "<="
       | "is in"            // in
       | "is"               // ==
 
+?bitwise_or: bitwise_or "|" bitwise_xor -> bitor
+           | bitwise_xor
+
+?bitwise_xor: bitwise_xor "^" bitwise_and -> bitxor
+            | bitwise_and
+
+?bitwise_and: bitwise_and "&" sum_expr -> bitand
+            | sum_expr
+
 ?sum_expr: sum_expr "+" term -> add
          | sum_expr "-" term -> sub
          | term
 
-?term: term "*" factor -> mul
-     | term "/" factor -> div
-     | factor
+?term: term "*" power -> mul
+     | term "/" power -> div
+     | term "//" power -> floor_div
+     | term "%" power -> mod_op
+     | power
+
+?power: atom "**" power -> pow
+      | factor
 
 ?factor: "-" factor -> neg
        | file_exists_expr
        | aggregate_expr
        | data_op_expr
        | relative_time_expr
-       | percent_expr
        | count_expr
        | math_fn_expr
        | date_fn_expr
@@ -352,15 +370,19 @@ relative_time_expr: atom TIME_UNIT "from" "now" -> time_future
 TIME_UNIT: "days" | "day" | "hours" | "hour" | "minutes" | "minute" | "seconds" | "second"
 
 count_expr: ("count" | "length") "of" factor -> count_of
-percent_expr: NUMBER "%" "of" factor -> percent_of
 
 call_expr: atom "(" [call_arg_list] ")" -> call_expr
 
 ?atom: atom "." NAME -> attr_access
      | atom "'s" NAME -> possessive
      | call_expr
-     | atom "[" expr "]" -> subscript_expr
+     | atom "[" subscript_index "]" -> subscript_expr
      | base_atom
+
+subscript_index: slice_item ("," slice_item)* -> subscript_indices
+slice_item: expr ":" [expr] [":" [expr]] -> slice_full
+          | ":" [expr] [":" [expr]]      -> slice_lead
+          | expr                         -> index_expr
 
 ?base_atom: NAME           -> var
           | NUMBER         -> num
@@ -370,17 +392,21 @@ call_expr: atom "(" [call_arg_list] ")" -> call_expr
           | "nothing"      -> const_none
           | "none"         -> const_none
           | list_expr
-          | dict_expr
+          | dict_or_set
           | "(" expr ")"
+          | "(" ")"        -> empty_tuple
+          | "(" expr "," [expr ("," expr)*] [","] ")" -> tuple_val
 
-list_expr: "[" [expr ("," expr)*] "]" -> list_val
-dict_expr: "{" [dict_pair ("," dict_pair)*] "}" -> dict_val
-dict_pair: (STRING | NAME) ":" expr
+list_expr: "[" [expr ("," expr)* [","]] "]" -> list_val
+dict_or_set: "{" [brace_items] "}" -> dict_or_set_val
+brace_items: brace_item ("," brace_item)* [","]
+brace_item: expr ":" expr -> dict_pair
+          | expr          -> set_item
 
 ?target: NAME             -> target_var
        | atom "." NAME    -> target_attr
        | atom "'s" NAME   -> target_attr
-       | atom "[" expr "]" -> target_subscript
+       | atom "[" subscript_index "]" -> target_subscript
 
 // Lexer & Whitespace rules
 _NEWLINE: ( /\r?\n[\t ]*/ | COMMENT )+

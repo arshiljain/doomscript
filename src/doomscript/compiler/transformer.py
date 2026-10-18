@@ -14,6 +14,8 @@ def to_load(node):
         return ast.Attribute(value=to_load(node.value), attr=f"{node.attr}", ctx=ast.Load())
     elif isinstance(node, ast.Subscript):
         return ast.Subscript(value=to_load(node.value), slice=node.slice, ctx=ast.Load())
+    elif isinstance(node, ast.Tuple):
+        return ast.Tuple(elts=[to_load(e) for e in node.elts], ctx=ast.Load())
     return node
 
 class DoomToPython(Transformer):
@@ -79,8 +81,28 @@ class DoomToPython(Transformer):
         )
         return ast.Expr(value=call)
 
+    def target_list(self, args):
+        return [a for a in args if a is not None]
+
+    def expr_list(self, args):
+        return [a for a in args if a is not None]
+
     def assign(self, args):
-        target, val = args
+        targets, exprs = args
+        if isinstance(targets, list) and len(targets) > 1:
+            target = ast.Tuple(elts=targets, ctx=ast.Store())
+        elif isinstance(targets, list) and len(targets) == 1:
+            target = targets[0]
+        else:
+            target = targets
+
+        if isinstance(exprs, list) and len(exprs) > 1:
+            val = ast.Tuple(elts=exprs, ctx=ast.Load())
+        elif isinstance(exprs, list) and len(exprs) == 1:
+            val = exprs[0]
+        else:
+            val = exprs
+
         return ast.Assign(targets=[target], value=val)
 
     def set_var(self, args):
@@ -110,6 +132,10 @@ class DoomToPython(Transformer):
     def aug_div(self, args):
         target, val = args
         return ast.AugAssign(target=target, op=ast.Div(), value=val)
+
+    def aug_floor_div(self, args):
+        target, val = args
+        return ast.AugAssign(target=target, op=ast.FloorDiv(), value=val)
 
     def aug_mod(self, args):
         target, val = args
@@ -292,6 +318,8 @@ class DoomToPython(Transformer):
 
     def comp_assign(self, args):
         target, prop_name, var_name, collection = args
+        if isinstance(target, list):
+            target = target[0]
         prop_str = str(prop_name)
         var_str = str(var_name)
         elt = ast.Attribute(value=ast.Name(id=var_str, ctx=ast.Load()), attr=prop_str, ctx=ast.Load())
@@ -857,10 +885,18 @@ class DoomToPython(Transformer):
         )
         return ast.For(target=ast.Name(id=f"{var_name}", ctx=ast.Store()), iter=call, body=suite, orelse=[])
 
+    def for_target_names(self, args):
+        names = [str(a) for a in args if a is not None]
+        if len(names) == 1:
+            return ast.Name(id=names[0], ctx=ast.Store())
+        return ast.Tuple(elts=[ast.Name(id=n, ctx=ast.Store()) for n in names], ctx=ast.Store())
+
     def for_where_stmt(self, args):
-        var_name, collection, condition, suite = args
+        target, collection, condition, suite = args
+        if isinstance(target, str):
+            target = ast.Name(id=target, ctx=ast.Store())
         if_node = ast.If(test=condition, body=suite, orelse=[])
-        return ast.For(target=ast.Name(id=f"{var_name}", ctx=ast.Store()), iter=collection, body=[if_node], orelse=[])
+        return ast.For(target=target, iter=collection, body=[if_node], orelse=[])
 
     def repeat_stmt(self, args):
         times, body = args
@@ -886,9 +922,11 @@ class DoomToPython(Transformer):
         return ast.While(test=not_test, body=body, orelse=[])
 
     def for_stmt(self, args):
-        var_name, iterable, body = args
+        target, iterable, body = args
+        if isinstance(target, str):
+            target = ast.Name(id=target, ctx=ast.Store())
         return ast.For(
-            target=ast.Name(id=str(var_name), ctx=ast.Store()),
+            target=target,
             iter=iterable,
             body=body,
             orelse=[]
@@ -1338,6 +1376,59 @@ class DoomToPython(Transformer):
         elts = [a for a in args if a is not None]
         return ast.List(elts=elts, ctx=ast.Load())
 
+    def bitor(self, args):
+        return ast.BinOp(left=to_load(args[0]), op=ast.BitOr(), right=to_load(args[1]))
+
+    def bitxor(self, args):
+        return ast.BinOp(left=to_load(args[0]), op=ast.BitXor(), right=to_load(args[1]))
+
+    def bitand(self, args):
+        return ast.BinOp(left=to_load(args[0]), op=ast.BitAnd(), right=to_load(args[1]))
+
+    def floor_div(self, args):
+        return ast.BinOp(left=to_load(args[0]), op=ast.FloorDiv(), right=to_load(args[1]))
+
+    def mod_op(self, args):
+        return ast.BinOp(left=to_load(args[0]), op=ast.Mod(), right=to_load(args[1]))
+
+    def pow(self, args):
+        return ast.BinOp(left=to_load(args[0]), op=ast.Pow(), right=to_load(args[1]))
+
+    def empty_tuple(self, _):
+        return ast.Tuple(elts=[], ctx=ast.Load())
+
+    def tuple_val(self, args):
+        elts = [to_load(a) for a in args if a is not None]
+        return ast.Tuple(elts=elts, ctx=ast.Load())
+
+    def slice_full(self, args):
+        lower = args[0]
+        upper = args[1] if len(args) > 1 else None
+        step = args[2] if len(args) > 2 else None
+        return ast.Slice(
+            lower=to_load(lower) if lower is not None else None,
+            upper=to_load(upper) if upper is not None else None,
+            step=to_load(step) if step is not None else None
+        )
+
+    def slice_lead(self, args):
+        upper = args[0] if len(args) > 0 else None
+        step = args[1] if len(args) > 1 else None
+        return ast.Slice(
+            lower=None,
+            upper=to_load(upper) if upper is not None else None,
+            step=to_load(step) if step is not None else None
+        )
+
+    def index_expr(self, args):
+        return args[0]
+
+    def subscript_indices(self, args):
+        items = [a for a in args if a is not None]
+        if len(items) == 1:
+            return items[0]
+        return ast.Tuple(elts=[to_load(i) for i in items], ctx=ast.Load())
+
     def dict_val(self, args):
         pairs = [p for p in args if p is not None]
         keys = [k for k, _ in pairs]
@@ -1351,5 +1442,39 @@ class DoomToPython(Transformer):
 
     def dict_pair(self, args):
         k, v = args
-        key_node = ast.Constant(value=str(k)[1:-1] if str(k).startswith(('"', "'")) else str(k))
-        return (key_node, v)
+        if isinstance(k, ast.Name):
+            key_node = ast.Constant(value=k.id)
+        elif isinstance(k, str):
+            key_node = ast.Constant(value=k[1:-1] if k.startswith(('"', "'")) else k)
+        elif isinstance(k, ast.Constant):
+            key_node = k
+        else:
+            key_node = to_load(k)
+        return ("dict", key_node, to_load(v))
+
+    def set_item(self, args):
+        return ("set", to_load(args[0]))
+
+    def brace_items(self, args):
+        return [a for a in args if a is not None]
+
+    def dict_or_set_val(self, args):
+        items = args[0] if args and args[0] is not None else []
+        if not items:
+            return ast.Call(
+                func=ast.Name(id='Record', ctx=ast.Load()),
+                args=[ast.Dict(keys=[], values=[])],
+                keywords=[]
+            )
+        if items[0][0] == "dict":
+            keys = [item[1] for item in items]
+            vals = [item[2] for item in items]
+            raw_dict = ast.Dict(keys=keys, values=vals)
+            return ast.Call(
+                func=ast.Name(id='Record', ctx=ast.Load()),
+                args=[raw_dict],
+                keywords=[]
+            )
+        else:
+            elts = [item[1] for item in items]
+            return ast.Set(elts=elts)
