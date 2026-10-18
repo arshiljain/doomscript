@@ -23,6 +23,9 @@ import smtplib
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import datetime, timedelta, date
 from pathlib import Path
+import sys
+import statistics
+from typing import Any, Dict, List, Optional, Tuple, Callable, Union
 
 class Record(dict):
     """
@@ -117,14 +120,26 @@ def agg_avg(items):
 
 def agg_field(op: str, field: str, collection):
     """Aggregate a specific field across a collection of records/dicts."""
-    vals = [item[field] if isinstance(item, dict) else getattr(item, field, item) for item in collection]
-    if op == "sum":
+    def _coerce_num(v):
+        if isinstance(v, (int, float)):
+            return v
+        if isinstance(v, str):
+            s = v.strip()
+            try:
+                return float(s) if "." in s else int(s)
+            except (ValueError, TypeError):
+                pass
+        return v
+
+    raw_vals = [item[field] if isinstance(item, dict) else getattr(item, field, item) for item in collection]
+    vals = [_coerce_num(v) for v in raw_vals]
+    if op in ("sum", "_var_sum"):
         return sum(vals)
-    elif op == "avg":
+    elif op in ("avg", "_var_avg"):
         return sum(vals) / len(vals) if vals else 0.0
-    elif op == "max":
+    elif op in ("max", "_var_max"):
         return max(vals) if vals else 0
-    elif op == "min":
+    elif op in ("min", "_var_min"):
         return min(vals) if vals else 0
     return vals
 
@@ -532,6 +547,10 @@ def ask_input(prompt: str = "") -> str:
                 return ""
         else:
             # Piped / redirected input (stdin is pipe/file)
+            if prompt and hasattr(sys.stdout, "write"):
+                sys.stdout.write(prompt)
+                if hasattr(sys.stdout, "flush"):
+                    sys.stdout.flush()
             line = sys.stdin.readline()
             if not line:
                 return ""
@@ -585,6 +604,32 @@ def math_round(value, decimals):
 def math_clamp(value, min_val, max_val):
     """Clamp a number between minimum and maximum bounds."""
     return max(float(min_val), min(float(max_val), float(value)))
+
+
+def math_mod(a, b):
+    """Calculate modulo of two numbers: a mod b."""
+    return a % b
+
+
+def math_pow(base, exp):
+    """Calculate base to the power of exp: base ** exp."""
+    return base ** exp
+
+
+def math_median(collection):
+    """Calculate the median of a numeric collection."""
+    if not collection:
+        return 0
+    return statistics.median(collection)
+
+
+def get_field(obj, attr):
+    """Safely access a field on a Record, dictionary, or object."""
+    if obj is None:
+        return None
+    if isinstance(obj, dict):
+        return obj.get(str(attr))
+    return getattr(obj, str(attr), None)
 
 
 # ---------------------------------------------------------------------------
@@ -668,9 +713,17 @@ def range_inclusive(start, stop, step=1):
 def sort_records(collection, field: str, descending: bool = False):
     """Sorts a list of dicts/Records in-place by field."""
     def key_fn(item):
-        if isinstance(item, dict):
-            return item.get(field, 0)
-        return getattr(item, field, 0)
+        val = item.get(field, 0) if isinstance(item, dict) else getattr(item, field, 0)
+        if isinstance(val, (int, float)):
+            return (0, val)
+        if isinstance(val, str):
+            s = val.strip()
+            try:
+                num = float(s) if "." in s else int(s)
+                return (0, num)
+            except (ValueError, TypeError):
+                return (1, val)
+        return (2, str(val))
     collection.sort(key=key_fn, reverse=descending)
     return collection
 

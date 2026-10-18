@@ -54,11 +54,25 @@ COMPARISON_SYNONYMS: List[Tuple[str, str]] = [
     ("exceeds", "is greater than"),
     ("is smaller than", "is less than"),
     ("is lower than", "is less than"),
+    ("is above", "is greater than"),
+    ("is below", "is less than"),
     ("is equal to", "equals"),
     ("is the same as", "equals"),
     ("is not equal to", "is not"),
     ("is different from", "is not"),
 ]
+
+# Statement starting keywords for sentence style case-normalization
+STATEMENT_START_KEYWORDS = {
+    "say", "show", "print", "display", "tell",
+    "set", "let", "make", "put", "increase", "decrease", "double",
+    "if", "unless", "while", "until", "repeat", "for",
+    "try", "attempt", "return", "give", "hand", "yield",
+    "to", "require", "verify", "match", "when", "otherwise", "else", "elif",
+    "write", "read", "append", "delete", "copy", "create",
+    "ask", "call", "import", "unpack", "trim", "replace", "split", "join",
+    "capitalize", "convert", "sort", "round", "combine", "fetch", "post", "download"
+}
 
 # Patterns for flexible assignments
 # Format: (regex_pattern, replacement_template)
@@ -104,7 +118,7 @@ TYPE_CONTRACT_MAP: Dict[str, str] = {
 # STRING & COMMENT MASKING UTILITIES
 # ---------------------------------------------------------------------------
 
-STRING_REGEX = re.compile(r'("""[\s\S]*?"""|\'\'\'[\s\S]*?\'\'\'|"(?:[^"\\]|\\.)*"|\'(?:[^\'\\]|\\.)*\')')
+STRING_REGEX = re.compile(r'("""[\s\S]*?"""|\'\'\'[\s\S]*?\'\'\'|"(?:[^"\\]|\\.)*"|(?<!\w)\'(?:[^\'\\]|\\.)*\')')
 
 def mask_strings(text: str) -> Tuple[str, List[str]]:
     """Replaces string literals with placeholders to preserve their exact content."""
@@ -210,6 +224,18 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         if pattern.match(masked):
             masked = pattern.sub("", masked)
             break
+
+    # Sentence-style keyword case normalization (e.g. Say, Set, Let, Make, If, Repeat, For, While, Attempt, Try)
+    first_word_m = re.match(r"^([A-Za-z_]\w*)(\s+.*|$)", masked)
+    if first_word_m:
+        w1 = first_word_m.group(1)
+        w1_lower = w1.lower()
+        if w1_lower in STATEMENT_START_KEYWORDS and w1 != w1_lower:
+            masked = w1_lower + first_word_m.group(2)
+
+    # Normalize 'attempt' to 'try'
+    if re.match(r"^attempt\b", masked, re.IGNORECASE):
+        masked = re.sub(r"^attempt\b", "try", masked, flags=re.IGNORECASE)
 
     # If condition ending in 'then' -> replace with ':'
     if re.match(r"^if\s+.+\s+then$", masked, re.IGNORECASE):
@@ -337,9 +363,64 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"\bitem\s+(\d+|[A-Za-z_]\w*)\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"item_of(\1, \2)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bfirst\s+(\d+|[A-Za-z_]\w*)\s+items\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"first_n_items(\1, \2)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\blast\s+(\d+|[A-Za-z_]\w*)\s+items\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"last_n_items(\1, \2)", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\bunique\s+items\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"unique_items(\1)", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\bsorted\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"sorted_list(\1)", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\breversed\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"reversed_list(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bunique\s+items\s+of\s+(\[[^\]]*\]|[A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"unique_items(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bsorted\s+(\[[^\]]*\]|[A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"sorted_list(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\breversed\s+(\[[^\]]*\]|[A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"reversed_list(\1)", masked, flags=re.IGNORECASE)
+
+    # Chained possessives: A's B's C -> get_field(get_field(A, "B"), "C")
+    while re.search(r"\b([A-Za-z_]\w*)'s\s+([A-Za-z_]\w*)'s\s+([A-Za-z_]\w*)", masked):
+        masked = re.sub(
+            r"\b([A-Za-z_]\w*)'s\s+([A-Za-z_]\w*)'s\s+([A-Za-z_]\w*)",
+            r'get_field(get_field(\1, "\2"), "\3")',
+            masked
+        )
+
+    # Disambiguate reserved words used as standalone variable names
+    masked = re.sub(r"(?<!'s\s)(?<!\.)(?<![\"'])\bcount\b(?![\"'])(?!\s+of\b)", "_var_count", masked)
+    masked = re.sub(r"(?<!'s\s)(?<!\.)(?<![\"'])\bsum\b(?![\"'])(?!\s+of\b)", "_var_sum", masked)
+    masked = re.sub(r"(?<!'s\s)(?<!\.)(?<!\bbullet\s)(?<!\ba\s)(?<!\bempty\s)(?<!\bnew\s)(?<![\"'])\blist\b(?![\"'])(?!\s+files\b)(?!\s+of\b)", "_var_list", masked)
+    masked = re.sub(r"(?<!'s\s)(?<!\.)(?<!\bfind\s)(?<!\btake\s)(?<!\bdrop\s)(?<![\"'])\bfirst\b(?![\"'])(?!\s+(?:\d+|[A-Za-z_]\w*)\s+items?\s+(?:of|from)\b|\s+item\s+of\b|\s+[A-Z]\w*)", "_var_first", masked)
+
+    # Arithmetic in words
+    double_m = re.match(r"^\s*double\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if double_m:
+        var = double_m.group(1)
+        masked = f"set {var} to {var} * 2"
+
+    masked = re.sub(r"(\b\w+|\))\s+to\s+(?:the\s+)?power\s+of\s+(\b\w+|\()", r"math_pow(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"(\b\w+|\))\s+squared\b", r"math_pow(\1, 2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"(\b\w+|\))\s+mod\s+(\b\w+|\()", r"math_mod(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"(\b\w+|\))\s+plus\s+(\b\w+|\()", r"\1 + \2", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"(\b\w+|\))\s+minus\s+(\b\w+|\()", r"\1 - \2", masked, flags=re.IGNORECASE)
+    if not re.match(r"^\s*repeat\b", masked, re.IGNORECASE):
+        masked = re.sub(r"(\b\w+|\))\s+times\s+(\b\w+|\()", r"\1 * \2", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"(\b\w+|\))\s+multiplied\s+by\s+(\b\w+|\()", r"\1 * \2", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"(\b\w+|\))\s+divided\s+by\s+(\b\w+|\()", r"\1 / \2", masked, flags=re.IGNORECASE)
+
+    # Conditions & Parity
+    masked = re.sub(r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s+is\s+even\b", r"math_mod(\1, 2) is 0", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s+is\s+odd\b", r"math_mod(\1, 2) is not 0", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s+is\s+not\s+one\s+of\s+([\[A-Za-z_].*?)(?=\s+and\b|\s+or\b|:|\n|$)", r"not (\1 is one of \2)", masked, flags=re.IGNORECASE)
+
+    # Loops
+    masked = re.sub(r"^\s*for\s+every\b", "for each", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\brepeat\s+with\s+([A-Za-z_]\w*)\s+from\s+(.+?)\s+down\s+to\s+(.+?)(?=:|\n|$)", r"repeat with \1 from \2 to \3 by -1", masked, flags=re.IGNORECASE)
+
+    # Lists, Text, and Aggregates
+    masked = re.sub(r"\bhow\s+many\s+items\s+are\s+in\s+([A-Za-z_]\w*)", r"count of \1", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\buppercase\s+of\s+(.+?)(?=\s+and\s+then|\s+into\b|\s*$)", r"str_uppercase(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\blowercase\s+of\s+(.+?)(?=\s+and\s+then|\s+into\b|\s*$)", r"str_lowercase(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\btotal\s+of\s+([A-Za-z_]\w*)(?!\s+in\b)", r"sum of \1", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bmaximum\s+of\s+([A-Za-z_]\w*)", r"highest in \1", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bminimum\s+of\s+([A-Za-z_]\w*)", r"lowest in \1", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bmedian\s+of\s+([A-Za-z_]\w+)\b(?!\s+into\b)", r"math_median(\1)", masked, flags=re.IGNORECASE)
+
+    # Call statement without 'call' keyword: e.g. greet "Bob"
+    call_no_kw_m = re.match(r"^\s*([A-Za-z_]\w*)\s+(__STR_LITERAL_\d+__|[\"'].*?[\"']|\d+|\[.*?\])\s*$", masked)
+    if call_no_kw_m:
+        func_word = call_no_kw_m.group(1).lower()
+        if func_word not in STATEMENT_START_KEYWORDS:
+            masked = f"{call_no_kw_m.group(1)}({call_no_kw_m.group(2)})"
 
     # Phase 4 Table Joins
     masked = re.sub(
@@ -1282,6 +1363,19 @@ def normalize(source: str) -> str:
             type_cond = TYPE_CONTRACT_MAP[v_type]
             code = f'set {v_name} to {v_expr} and then verify that {v_name} {type_cond} otherwise "Variable \'{v_name}\' must be {v_type}"'
 
+        # Single-line 'if ... then ...' split: e.g. 'if x is 5 then say "five"'
+        if_then_m = re.match(r"^if\s+(.+?)\s+then\s+([^\s].*)$", code, re.IGNORECASE)
+        if if_then_m:
+            cond = if_then_m.group(1).strip()
+            then_stmt = if_then_m.group(2).strip()
+            norm_cond = normalize_statement_text(f"if {cond}", scope, line_idx)
+            norm_then = normalize_statement_text(then_stmt, scope, line_idx)
+            if not norm_cond.endswith(":"):
+                norm_cond += ":"
+            output_lines.append(f"{indent}{norm_cond}")
+            output_lines.append(f"{indent}    {norm_then}")
+            continue
+
         # Mask strings for statement splitting
         masked_code, code_strings = mask_strings(code)
 
@@ -1292,8 +1386,7 @@ def normalize(source: str) -> str:
         for part in chain_parts:
             # 2. Period sentence ending: split on period followed by space
             # e.g., 'set x to 5. say x.'
-            # Only match '.' preceded by non-digit and followed by whitespace
-            dot_parts = re.split(r"(?<=[^\d\s])\.\s+", part)
+            dot_parts = re.split(r"\.\s+", part)
             for dp in dot_parts:
                 cleaned = dp.strip()
                 # Strip trailing period at end of statement

@@ -1,0 +1,71 @@
+# API Automation & Service Health Monitor in DoomScript
+# Demonstrates: JSON parsing, error resilience, fallback handling, transformation, and report generation
+
+say "=== Automated API & Microservice Health Monitor ==="
+
+# 1. Simulated microservice health endpoints response
+api_payloads = [
+    '{"service": "auth-gateway", "status": "UP", "latency_ms": 42, "uptime": 0.999}',
+    '{"service": "payment-api", "status": "DEGRADED", "latency_ms": 320, "uptime": 0.985}',
+    '{"service": "inventory-db", "status": "UP", "latency_ms": 18, "uptime": 0.9995}',
+    'MALFORMED_JSON_PAYLOAD_TEST',
+    '{"service": "notifications", "status": "DOWN", "latency_ms": 1200, "uptime": 0.920}'
+]
+
+active_services = []
+failed_count = 0
+
+say "Querying cluster endpoints..."
+
+for each payload in api_payloads
+    attempt
+        parse json payload into service_info
+        name = service_info.service
+        st = service_info.status
+        lat = service_info.latency_ms
+        say "Endpoint checked:", name, "-> Status:", st, "| Latency:", lat, "ms"
+        add service_info to active_services
+    if that fails as err
+        say "WARNING: Malformed payload encountered. Applying recovery protocol."
+        failed_count = failed_count + 1
+    always
+        say "Handshake finished."
+
+say ""
+total_inspected = the count of active_services
+say "Successfully inspected {total_inspected} services ({failed_count} payloads dropped)."
+
+# 2. Analyze health and filter degraded services
+flagged = []
+for each s in active_services
+    if s.status is not "UP"
+        add s to flagged
+
+flagged_count = the count of flagged
+say "Flagged {flagged_count} services requiring attention."
+
+# 3. Compute aggregate latency across healthy services
+healthy = active_services where status is "UP"
+avg_latency is average of latency_ms in healthy
+say "Average Healthy Service Latency: {avg_latency} ms"
+
+# 4. Generate Markdown incident & audit report
+current_timestamp = now
+report = """# Automated API Health & Diagnostics Report
+
+Generated: {current_timestamp}
+
+## Cluster Summary
+- Active Services: {total_inspected}
+- Incident Count: {flagged_count}
+- Average Latency (Healthy): {avg_latency} ms
+
+## Flagged Incidents
+"""
+
+for each item in flagged
+    report = report + "- **{item.service}**: Status {item.status} ({item.latency_ms} ms)\n"
+
+write report into file "api_health_report.md"
+say ""
+say "Diagnostics exported to api_health_report.md."

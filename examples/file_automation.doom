@@ -1,0 +1,84 @@
+# Enterprise File Automation & Workspace Organizer in DoomScript
+# Demonstrates: Directory management, file scanning, duplicate inspection, categorization, and audit logging
+
+say "=== DoomScript Intelligent Workspace Organizer ==="
+
+# Configuration
+dry_run = false
+base_dir = "workspace_staging"
+
+# 1. Setup sample staging environment with varied files
+create directory base_dir
+create directory base_dir + "/archive"
+create directory base_dir + "/reports"
+create directory base_dir + "/data"
+
+say "Setting up sample files in", base_dir
+
+write "Q1 Financial Summary: Revenue target achieved." into file base_dir + "/q1_financials.txt"
+write "Q2 Financial Draft: Projected 15% growth." into file base_dir + "/q2_draft.txt"
+write "id,name,role\n1,Alice,Dev\n2,Bob,SecOps" into file base_dir + "/team_roster.csv"
+write "id,price,qty\n10,99,5\n11,150,2" into file base_dir + "/inventory.csv"
+write "Q1 Financial Summary: Revenue target achieved." into file base_dir + "/q1_financials_backup.txt"
+
+# 2. Scan workspace directory
+list files in base_dir into scanned_files
+total_found is the count of scanned_files
+say ""
+say "Discovered {total_found} entries in {base_dir}."
+
+# 3. Categorize, deduplicate, and organize files
+organized_count = 0
+duplicates_detected = 0
+seen_contents = []
+
+for each filename in scanned_files
+    file_path = base_dir + "/" + filename
+    
+    # Process only documents and datasets
+    if filename ends with ".txt" or filename ends with ".csv"
+        read file file_path into file_content
+        
+        if file_content is one of seen_contents
+            duplicates_detected = duplicates_detected + 1
+            say "[DUPLICATE] Duplicate content detected in:", filename
+            if not dry_run
+                copy file file_path to base_dir + "/archive/" + filename
+                delete file file_path
+                say "             Archived duplicate to archive/", filename
+        otherwise
+            add file_content to seen_contents
+            
+            # Organize by file extension
+            if filename ends with ".txt"
+                say "[DOC]       Moving text report:", filename
+                if not dry_run
+                    copy file file_path to base_dir + "/reports/" + filename
+                    delete file file_path
+                organized_count = organized_count + 1
+            otherwise if filename ends with ".csv"
+                say "[DATA]      Moving tabular dataset:", filename
+                if not dry_run
+                    copy file file_path to base_dir + "/data/" + filename
+                    delete file file_path
+                organized_count = organized_count + 1
+
+# 4. Generate structured JSON audit manifest
+audit_manifest = {
+    workspace: base_dir,
+    dry_run: dry_run,
+    total_files_scanned: total_found,
+    unique_files_organized: organized_count,
+    duplicates_archived: duplicates_detected,
+    status: "COMPLETE"
+}
+
+convert audit_manifest to json into audit_json
+write audit_json into file "workspace_audit.json"
+
+say ""
+say "--- Organization Audit Summary ---"
+say "Scanned Files:       {total_found}"
+say "Unique Organized:    {organized_count}"
+say "Duplicates Handled:  {duplicates_detected}"
+say "Audit manifest recorded in workspace_audit.json."

@@ -1,0 +1,1204 @@
+;; ===========================================================================
+;; DoomScript "coding in English" corpus  -  200 cases
+;; ===========================================================================
+;; FORMAT (one case per block, blocks may be separated by blank lines)
+;;
+;;   ## category name        starts a category (applies to the cases below it)
+;;   @ D                     starts a case. Tier: D = documented syntax
+;;                           (README / LANGUAGE_REFERENCE), N = natural English
+;;                           the docs do NOT promise (the "can a normal person
+;;                           just write this?" test).
+;;   <source lines>          the DoomScript program, indentation preserved
+;;   << text                 (optional) one line of stdin for the program
+;;   => text                 one line of expected stdout (repeat for more lines)
+;;   =>> text                expected stdout must END with this (used when a
+;;                           prompt is echoed before the answer)
+;;
+;;   Lines starting with ';;' are corpus comments. '#' is NOT a comment here,
+;;   because it is a DoomScript comment and belongs to the source.
+;;   Numbers compare numerically (3 matches 3.0). Keep expected output to
+;;   numbers / plain text; avoid printing lists of strings (repr is ambiguous).
+;; ===========================================================================
+
+## assignment
+@ D
+x = 5
+say x
+=> 5
+
+@ D
+x is 5
+say x
+=> 5
+
+@ D
+set x to 5
+say x
+=> 5
+
+@ D
+let x be 5
+say x
+=> 5
+
+@ D
+make x 5
+say x
+=> 5
+
+@ D
+put 5 into x
+say x
+=> 5
+
+@ D
+a = 1
+b = 2
+c = a + b
+say c
+=> 3
+
+@ D
+score = 0
+set score to score + 10
+say score
+=> 10
+
+## reserved words as variable names
+@ N
+count = 3
+say count
+=> 3
+
+@ N
+list = [1, 2]
+say list
+=> [1, 2]
+
+@ N
+sum = 10
+say sum
+=> 10
+
+@ N
+first = "a"
+say first
+=> a
+
+@ N
+items = [1, 2, 3]
+say items
+=> [1, 2, 3]
+
+@ N
+text = "hello"
+say text
+=> hello
+
+@ N
+number = 7
+say number
+=> 7
+
+## output
+@ D
+say "hello"
+=> hello
+
+@ D
+show "hello"
+=> hello
+
+@ D
+print "hello"
+=> hello
+
+@ D
+display "hello"
+=> hello
+
+@ D
+tell "hello"
+=> hello
+
+@ D
+say "Total:", 5
+=> Total: 5
+
+@ D
+name = "Ada"
+say "Hello {name}"
+=> Hello Ada
+
+@ D
+p = {name: "Ada", age: 36}
+say "{p's name} is {p's age}"
+=> Ada is 36
+
+@ N
+say "Line one"
+say "Line two"
+=> Line one
+=> Line two
+
+## sentence style (capitals and full stops)
+@ N
+Say "hello"
+=> hello
+
+@ N
+Show "hello"
+=> hello
+
+@ N
+SAY "hello"
+=> hello
+
+@ D
+set x to 10.
+say x.
+=> 10
+
+@ N
+Set x to 5.
+Say x.
+=> 5
+
+@ N
+Let x be 5.
+Show x.
+=> 5
+
+@ N
+Make total 3.
+Increase total by 4.
+Say total.
+=> 7
+
+@ N
+Set the score to 50.
+Say the score.
+=> 50
+
+@ N
+Let the total be 12.
+Show the total.
+=> 12
+
+@ N
+If 3 is over 2
+    Say "yes"
+=> yes
+
+@ N
+Repeat 2 times
+    Say "go"
+=> go
+=> go
+
+## arithmetic in words
+@ N
+say 3 plus 4
+=> 7
+
+@ N
+say 9 minus 4
+=> 5
+
+@ N
+say 3 times 4
+=> 12
+
+@ N
+say 3 multiplied by 4
+=> 12
+
+@ N
+say 12 divided by 4
+=> 3
+
+@ N
+say 7 divided by 2
+=> 3.5
+
+@ N
+say 7 mod 2
+=> 1
+
+@ N
+say 2 to the power of 3
+=> 8
+
+@ N
+say 5 squared
+=> 25
+
+@ D
+say (1 + 2) * 3
+=> 9
+
+@ D
+say 10 - 2 * 3
+=> 4
+
+@ D
+say 15% of 200
+=> 30
+
+@ N
+x = 4
+double x
+say x
+=> 8
+
+## comparisons
+@ D
+x = 5
+if x is 5
+    say "yes"
+=> yes
+
+@ D
+x = 5
+if x equals 5
+    say "yes"
+=> yes
+
+@ D
+x = 5
+if x is greater than 3
+    say "yes"
+=> yes
+
+@ D
+x = 5
+if x is bigger than 3
+    say "yes"
+=> yes
+
+@ D
+x = 5
+if x is over 3
+    say "yes"
+=> yes
+
+@ D
+x = 5
+if x exceeds 3
+    say "yes"
+=> yes
+
+@ D
+x = 5
+if x is at least 5
+    say "yes"
+=> yes
+
+@ N
+x = 5
+if x is above 3
+    say "yes"
+=> yes
+
+@ D
+x = 5
+if x is less than 9
+    say "yes"
+=> yes
+
+@ D
+x = 5
+if x is under 9
+    say "yes"
+=> yes
+
+@ D
+x = 5
+if x is at most 5
+    say "yes"
+=> yes
+
+@ D
+x = 5
+if x is not 4
+    say "yes"
+=> yes
+
+@ D
+x = 5
+if x is between 1 and 10
+    say "yes"
+=> yes
+
+@ D
+x = 5
+if x is one of [1, 5, 9]
+    say "yes"
+=> yes
+
+## conditions
+@ D
+x = 1
+if x is 2
+    say "yes"
+otherwise
+    say "no"
+=> no
+
+@ D
+x = 2
+if x is 1
+    say "a"
+otherwise if x is 2
+    say "b"
+otherwise
+    say "c"
+=> b
+
+@ N
+x = 2
+if x is 1
+    say "a"
+else
+    say "c"
+=> c
+
+@ D
+x = 1
+if x is 2:
+    say "a"
+else:
+    say "b"
+=> b
+
+@ N
+x = 5
+if x is 5 then say "five"
+=> five
+
+@ D
+x = 5
+say "big" if x is over 3
+=> big
+
+@ D
+x = 5
+unless x is 4
+    say "not four"
+=> not four
+
+@ D
+x = 5
+if x is over 1
+    if x is under 10
+        say "mid"
+=> mid
+
+@ N
+x = 6
+if x is 5
+    say "five"
+else if x is 6
+    say "six"
+=> six
+
+@ N
+x = 3
+if x is odd
+    say "odd"
+=> odd
+
+## boolean logic
+@ D
+a = 5
+if a is over 1 and a is under 10
+    say "in"
+=> in
+
+@ D
+a = 5
+if a is over 100 or a is under 10
+    say "yes"
+=> yes
+
+@ D
+a = 5
+if not a is 3
+    say "not three"
+=> not three
+
+@ D
+a = 5
+if a is not 3 and a is not 4
+    say "neither"
+=> neither
+
+@ D
+flag = true
+if flag
+    say "on"
+=> on
+
+@ D
+flag = false
+if not flag
+    say "off"
+=> off
+
+@ N
+a = 5
+if a is not one of [1, 2]
+    say "other"
+=> other
+
+## loops
+@ D
+repeat 3 times
+    say "x"
+=> x
+=> x
+=> x
+
+@ D
+repeat with i from 1 to 3
+    say i
+=> 1
+=> 2
+=> 3
+
+@ D
+repeat with i from 1 to 10 by 3
+    say i
+=> 1
+=> 4
+=> 7
+=> 10
+
+@ D
+for each n in [1, 2, 3]
+    say n
+=> 1
+=> 2
+=> 3
+
+@ N
+for every n in [1, 2, 3]
+    say n
+=> 1
+=> 2
+=> 3
+
+@ D
+for each n in [1, 2, 3] where n is over 1
+    say n
+=> 2
+=> 3
+
+@ D
+x = 0
+repeat while x is under 3
+    increase x by 1
+say x
+=> 3
+
+@ D
+x = 0
+repeat until x is 3
+    increase x by 1
+say x
+=> 3
+
+@ N
+x = 0
+while x is under 3
+    increase x by 1
+say x
+=> 3
+
+@ D
+for each n in [1, 2, 3, 4]
+    if n is 3
+        stop
+    say n
+=> 1
+=> 2
+
+@ D
+for each n in [1, 2, 3]
+    if n is 2
+        skip
+    say n
+=> 1
+=> 3
+
+@ N
+repeat 2 times
+    repeat 2 times
+        say "x"
+=> x
+=> x
+=> x
+=> x
+
+@ N
+for each letter in "abc"
+    say letter
+=> a
+=> b
+=> c
+
+@ D
+total = 0
+for each n in [1, 2, 3]
+    increase total by n
+say total
+=> 6
+
+## lists
+@ D
+xs = a list of 1, 2, 3
+say xs
+=> [1, 2, 3]
+
+@ D
+xs = [1, 2]
+add 3 to xs
+say xs
+=> [1, 2, 3]
+
+@ D
+xs = [1, 2, 3]
+remove 2 from xs
+say xs
+=> [1, 3]
+
+@ D
+xs = an empty list
+add 1 to xs
+say xs
+=> [1]
+
+@ D
+xs = [5, 6, 7]
+say item 2 of xs
+=> 6
+
+@ D
+xs = [5, 6, 7]
+say first item of xs
+=> 5
+
+@ D
+xs = [5, 6, 7]
+say last item of xs
+=> 7
+
+@ D
+xs = [1, 2, 3]
+say the length of xs
+=> 3
+
+@ D
+xs = [1, 2, 3]
+say count of xs
+=> 3
+
+@ N
+xs = [1, 2, 3]
+say how many items are in xs
+=> 3
+
+@ D
+xs = [3, 1, 2]
+say sorted xs
+=> [1, 2, 3]
+
+@ D
+xs = [1, 2, 3]
+say reversed xs
+=> [3, 2, 1]
+
+@ D
+u = unique items of [1, 2, 2, 3, 1]
+say u
+=> [1, 2, 3]
+
+@ D
+xs = [1, 2]
+if xs contains 2
+    say "yes"
+=> yes
+
+@ D
+xs = an empty list
+if xs is empty
+    say "empty"
+=> empty
+
+@ D
+xs = [1]
+if xs is not empty
+    say "has items"
+=> has items
+
+## records and possessives
+@ D
+hero = {name: "Slayer", hp: 100}
+say hero's hp
+=> 100
+
+@ D
+hero = {name: "Slayer", hp: 100}
+increase hero's hp by 50
+say hero's hp
+=> 150
+
+@ D
+hero = {name: "Slayer", hp: 100}
+set hero's hp to 10
+say hero's hp
+=> 10
+
+@ D
+hero = {name: "Slayer", hp: 100}
+say "HP: {hero's hp}"
+=> HP: 100
+
+@ N
+game = {player: {hp: 5}}
+say game's player's hp
+=> 5
+
+@ D
+people = [{name: "A", age: 20}, {name: "B", age: 15}]
+adults = people where age is over 18
+say count of adults
+=> 1
+
+@ D
+people = [{name: "A", age: 20}, {name: "B", age: 15}]
+names = the name of each person in people
+say count of names
+=> 2
+
+@ D
+people = [{name: "A", age: 20}, {name: "B", age: 15}]
+sort people by age
+youngest = item 1 of people
+say youngest's name
+=> B
+
+@ D
+hero = {name: "Slayer", hp: 100}
+say hero.name
+=> Slayer
+
+## text
+@ D
+raw = "  Hello World  "
+trim raw into cleaned
+say cleaned
+=> Hello World
+
+@ D
+replace "World" with "Doom" in "Hello World" into t
+say t
+=> Hello Doom
+
+@ D
+split "a b c" by " " into words
+say count of words
+=> 3
+
+@ D
+words = ["a", "b"]
+join words with "-" into slug
+say slug
+=> a-b
+
+@ D
+convert "abc" to uppercase into u
+say u
+=> ABC
+
+@ D
+capitalize "doom" into c
+say c
+=> Doom
+
+@ D
+if "hello" starts with "he"
+    say "yes"
+=> yes
+
+@ D
+if "hello" ends with "lo"
+    say "yes"
+=> yes
+
+@ D
+if "hello" contains "ell"
+    say "yes"
+=> yes
+
+@ D
+say the length of "hello"
+=> 5
+
+@ D
+name = "Ada"
+say "Hello, " + name + "!"
+=> Hello, Ada!
+
+@ N
+say uppercase of "abc"
+=> ABC
+
+## functions
+@ D
+to greet name
+    say "Hi {name}"
+call greet with "Bob"
+=> Hi Bob
+
+@ D
+to greet name
+    say "Hi {name}"
+greet("Bob")
+=> Hi Bob
+
+@ D
+to greet with name
+    say "Hi {name}"
+call greet with "Bob"
+=> Hi Bob
+
+@ D
+to plus_one n
+    return n + 1
+say plus_one(4)
+=> 5
+
+@ D
+to plus_one n
+    give back n + 1
+say plus_one(4)
+=> 5
+
+@ D
+to greet person with greeting "Hello"
+    return "{greeting}, {person}!"
+say greet("Alice")
+=> Hello, Alice!
+
+@ D
+to tax on price
+    return price * 0.08
+subtotal = 200
+tax_due is the result of tax on subtotal
+say tax_due
+=> 16
+
+@ D
+to fact n
+    if n is at most 1
+        return 1
+    return n * fact(n - 1)
+say fact(5)
+=> 120
+
+@ D
+to hello
+    say "hello"
+call hello
+=> hello
+
+@ N
+to greet name
+    say "Hi {name}"
+greet "Bob"
+=> Hi Bob
+
+@ N
+to check n
+    if n is even
+        return "even"
+    return "odd"
+say check(4)
+=> even
+
+## aggregates and math
+@ D
+scores = [10, 20, 30]
+say sum of scores
+=> 60
+
+@ D
+scores = [10, 20, 30]
+say average of scores
+=> 20
+
+@ D
+scores = [10, 20, 30]
+say highest in scores
+=> 30
+
+@ D
+scores = [10, 20, 30]
+say lowest in scores
+=> 10
+
+@ N
+scores = [10, 20, 30]
+say total of scores
+=> 60
+
+@ N
+scores = [10, 20, 30]
+say maximum of scores
+=> 30
+
+@ N
+scores = [10, 20, 30]
+say median of scores
+=> 20
+
+@ D
+round 3.14159 to 2 places into y
+say y
+=> 3.14
+
+@ D
+say absolute value of -5
+=> 5
+
+@ D
+say square root of 16
+=> 4
+
+## error handling
+@ D
+attempt
+    say 1 / 0
+if it fails
+    say "caught"
+=> caught
+
+@ D
+try
+    say 1 / 0
+if that fails
+    say "oops"
+always
+    say "done"
+=> oops
+=> done
+
+@ D
+x = -1
+attempt
+    require x is over 0 otherwise "x must be positive"
+if it fails
+    say "contract failed"
+=> contract failed
+
+@ D
+attempt
+    read file "nope.txt" into t
+if it fails
+    say "missing"
+=> missing
+
+@ D
+try
+    say 1 / 0
+if that fails as problem
+    say "Failed:", problem
+=> Failed: division by zero
+
+@ N
+attempt
+    say 1 / 0
+if it fails as problem
+    say "Failed:", problem
+=> Failed: division by zero
+
+@ D
+attempt
+    say undefined_name
+if it fails
+    say "undefined"
+=> undefined
+
+## files
+@ D
+write "hi" into file "a.txt"
+read file "a.txt" into t
+say t
+=> hi
+
+@ D
+write "a" into file "b.txt"
+append "b" to file "b.txt"
+read file "b.txt" into t
+say t
+=> ab
+
+@ D
+write "x" into file "e.txt"
+if file "e.txt" exists
+    say "found"
+=> found
+
+@ N
+write "x" into file "t.txt"
+delete file "t.txt"
+if file "t.txt" exists
+    say "still"
+otherwise
+    say "gone"
+=> gone
+
+@ D
+append csv {n: "a", v: 1} to file "d.csv"
+append csv {n: "b", v: 2} to file "d.csv"
+read csv file "d.csv" into rows
+say count of rows
+=> 2
+
+@ D
+rows = [{a: 1}, {a: 2}]
+write csv rows into file "o.csv"
+read csv file "o.csv" into back
+say count of back
+=> 2
+
+## pronouns and chaining
+@ D
+total = 100
+increase it by 25
+say total
+=> 125
+
+@ D
+set x to 10 and then say x
+=> 10
+
+@ D
+total = 100
+call it grand_total
+say grand_total
+=> 100
+
+@ N
+total = 4
+say it
+=> 4
+
+@ N
+price = 8
+decrease it by 3
+say it
+=> 5
+
+## politeness and filler words
+@ D
+please say "hi"
+=> hi
+
+@ D
+kindly say "hi"
+=> hi
+
+@ D
+just say "hi"
+=> hi
+
+@ D
+simply say "hi"
+=> hi
+
+@ D
+xs = [1]
+please add 5 to xs
+say xs
+=> [1, 5]
+
+@ D
+total = 4
+say the total
+=> 4
+
+## type checks and contracts
+@ D
+if 5 is a number
+    say "num"
+=> num
+
+@ D
+if "a" is text
+    say "text"
+=> text
+
+@ D
+if [1] is a list
+    say "list"
+=> list
+
+@ D
+x = {a: 1}
+if x is a record
+    say "record"
+=> record
+
+@ D
+if 5 is not text
+    say "not text"
+=> not text
+
+@ D
+set score as number to 100
+say score
+=> 100
+
+@ D
+to twice with n as number:
+    return n * 2
+say twice(4)
+=> 8
+
+## pattern matching
+@ D
+x = 5
+match x:
+    when 5:
+        say "five"
+    otherwise:
+        say "other"
+=> five
+
+@ D
+x = 70
+match x:
+    when over 50:
+        say "high"
+    otherwise:
+        say "low"
+=> high
+
+@ D
+x = 5
+match x:
+    when between 1 and 10:
+        say "small"
+    otherwise:
+        say "big"
+=> small
+
+@ D
+x = 2
+match x:
+    when 1 or 2:
+        say "low"
+    otherwise:
+        say "other"
+=> low
+
+@ D
+unpack a, b from [1, 2]
+say a + b
+=> 3
+
+@ D
+first item into head, remaining items into tail from [10, 20, 30]
+say head
+=> 10
+
+## small everyday programs
+@ D
+total = 0
+repeat with i from 1 to 10
+    increase total by i
+say total
+=> 55
+
+@ D
+result = 1
+repeat with i from 1 to 5
+    set result to result * i
+say result
+=> 120
+
+@ D
+score = 85
+if score is at least 90
+    say "A"
+otherwise if score is at least 80
+    say "B"
+otherwise
+    say "C"
+=> B
+
+@ D
+nums = [3, 9, 2]
+biggest = 0
+for each n in nums
+    if n is over biggest
+        set biggest to n
+say biggest
+=> 9
+
+@ D
+cart = [{item: "pen", price: 2}, {item: "book", price: 10}]
+say total of price in cart
+=> 12
+
+@ D
+c = 100
+f = c * 9 / 5 + 32
+say f
+=> 212
+
+@ D
+a = 0
+b = 1
+repeat 5 times
+    t = a + b
+    set a to b
+    set b to t
+say a
+=> 5
+
+@ D
+split "the quick brown fox" by " " into words
+say count of words
+=> 4
+
+@ N
+repeat with i from 3 down to 1
+    say i
+say "Liftoff"
+=> 3
+=> 2
+=> 1
+=> Liftoff
+
+## asking the user (stdin)
+@ D
+<< Ada
+ask "Name? " into n
+say "Hi {n}"
+=>> Hi Ada
+
+@ D
+<< 20
+ask number "Age? " into age
+say age + 1
+=>> 21
+
+@ D
+<< yes
+ask boolean "Proceed? " into ok
+if ok
+    say "go"
+=>> go

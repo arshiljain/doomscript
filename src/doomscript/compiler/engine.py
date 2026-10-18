@@ -131,6 +131,8 @@ def execute(source: Any, custom_globals: dict = None) -> dict:
         "stringify_json": runtime.stringify_json,
         "date_today": runtime.date_today,
         "date_now": runtime.date_now,
+        "today": runtime.date_today,
+        "now": runtime.date_now,
         "math_abs": runtime.math_abs,
         "math_sqrt": runtime.math_sqrt,
         "get_env_var": runtime.get_env_var,

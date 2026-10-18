@@ -1,0 +1,62 @@
+# Data Pipeline Showcase in DoomScript
+# Demonstrates: CSV ingestion, record filtering, field aggregates, sorting, and reporting
+
+say "=== DoomScript Data Processing Pipeline ==="
+
+# 1. Prepare sample sales transactions dataset
+transactions = [
+    {id: "TX-101", region: "North", category: "Hardware", amount: 450, status: "completed"},
+    {id: "TX-102", region: "South", category: "Software", amount: 1200, status: "completed"},
+    {id: "TX-103", region: "North", category: "Services", amount: 300, status: "pending"},
+    {id: "TX-104", region: "East",  category: "Software", amount: 2500, status: "completed"},
+    {id: "TX-105", region: "West",  category: "Hardware", amount: 850, status: "completed"},
+    {id: "TX-106", region: "South", category: "Hardware", amount: 150, status: "cancelled"},
+    {id: "TX-107", region: "East",  category: "Services", amount: 1750, status: "completed"},
+    {id: "TX-108", region: "West",  category: "Software", amount: 3100, status: "completed"}
+]
+
+write csv transactions into file "transactions.csv"
+say "Ingested transactions into transactions.csv."
+
+# 2. Ingest CSV data back
+read csv file "transactions.csv" into loaded_data
+raw_count is the count of loaded_data
+say "Loaded {raw_count} transactions from disk."
+
+# 3. Filter valid completed transactions
+valid_txns = loaded_data where status is "completed"
+valid_count is the count of valid_txns
+say "Filtered to {valid_count} completed transactions."
+
+# 4. Compute pipeline metrics and aggregates
+total_volume is total of amount in valid_txns
+average_volume is average of amount in valid_txns
+top_volume is highest amount in valid_txns
+lowest_volume is lowest amount in valid_txns
+
+say ""
+say "--- Financial Metrics Summary ---"
+say "Total Processed Volume:   ${total_volume}"
+say "Average Transaction Size: ${average_volume}"
+say "Peak Transaction:         ${top_volume}"
+say "Lowest Transaction:       ${lowest_volume}"
+
+# 5. Sort transactions by amount descending
+sort valid_txns by amount descending
+top_txn = item 1 of valid_txns
+say ""
+say "Top Transaction:", top_txn.id, "-", top_txn.category, "in", top_txn.region, "(${top_txn.amount})"
+
+# 6. Export aggregated summary to CSV
+summary_records = [
+    {metric: "Total Transactions Ingested", value: raw_count},
+    {metric: "Completed Transactions", value: valid_count},
+    {metric: "Total Processed Volume", value: total_volume},
+    {metric: "Average Transaction Size", value: average_volume},
+    {metric: "Max Transaction Size", value: top_volume},
+    {metric: "Min Transaction Size", value: lowest_volume}
+]
+
+write csv summary_records into file "pipeline_summary.csv"
+say ""
+say "Pipeline execution succeeded. Summary report saved to pipeline_summary.csv."
