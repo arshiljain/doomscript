@@ -1,0 +1,4 @@
+# Mini script for binary compilation
+say "DoomScript Standalone Binary Running!"
+repeat 3 times
+    say "Systems Operational: 100%"

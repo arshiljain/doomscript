@@ -1,0 +1,70 @@
+# DoomScript Advanced Capabilities Showcase (Phases 9 - 13)
+# Demonstrates pattern matching, destructuring, background concurrency, CLI options, and tests.
+
+# 1. English Pattern Matching
+to classify_member with user_role:
+    match user_role:
+        when "admin":
+            return "Administrator with full system privileges"
+        when "guest" or "visitor":
+            return "Guest with read-only access"
+        when a number where it is greater than 1000:
+            return "VIP Account ID: {user_role}"
+        when over 100:
+            return "Standard Account ID: {user_role}"
+        otherwise:
+            return "Unrecognized Member: {user_role}"
+
+say "--- Pattern Matching ---"
+say classify_member("admin")
+say classify_member("guest")
+say classify_member(5000)
+say classify_member(250)
+say classify_member("contractor")
+
+# 2. English Destructuring & Unpacking
+say ""
+say "--- English Destructuring ---"
+set coords to [100, 200, 300]
+unpack x, y, z from coords
+say "Unpacked coordinates: x={x}, y={y}, z={z}"
+
+set user_record to {"username": "cyber_knight", "score": 9950, "rank": "Master"}
+unpack username, score, rank from user_record
+say "Unpacked record: user={username}, score={score}, rank={rank}"
+
+set inventory to ["bfg9000", "plasma_rifle", "super_shotgun", "chainsaw"]
+first item into primary_weapon, remaining items into backup_weapons from inventory
+say "Primary weapon: {primary_weapon}"
+say "Backup arsenal: {backup_weapons}"
+
+# 3. Background Concurrency & Timers
+say ""
+say "--- Background Concurrency ---"
+to compute_hash with label, factor:
+    set total to 0
+    repeat with i from 1 to factor:
+        increase total by i
+    return "Finished {label}: total = {total}"
+
+run in background compute_hash("Worker A", 5000) into task_a
+run in background compute_hash("Worker B", 3000) into task_b
+
+wait for all [task_a, task_b] into task_results
+say "Background task results: {task_results}"
+
+timeout 1.0 seconds for compute_hash("Quick Task", 1000) into quick_res
+say "Timed call outcome: {quick_res}"
+
+# 4. Declarative CLI Definition
+say ""
+say "--- Declarative CLI Setup ---"
+program description "DoomScript Advanced Automation Suite"
+option input_path with default "data/input.csv" and description "Path to source data"
+flag dry_run with description "Simulate execution without modifications"
+parse arguments into options
+
+say "Parsed CLI Options -> input_path: {options.input_path}, dry_run: {options.dry_run}"
+
+say ""
+say "DoomScript Advanced Showcase Completed Successfully!"

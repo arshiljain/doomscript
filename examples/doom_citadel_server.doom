@@ -1,0 +1,57 @@
+# DoomScript Citadel Online Server & Command Post
+# Demonstrates English Web Server, Concurrency, Text Processing, and Telemetry
+
+say "========================================"
+say "   DOOM CITADEL COMMAND SYSTEM (ONLINE)  "
+say "========================================"
+
+# 1. English String Transformations
+raw_intel = "recon:phobos-base:cyberdemon:critical"
+split raw_intel by ":" into tokens
+channel = first item of tokens
+base_id = last item of tokens
+
+replace "cyberdemon" with "ARCHVILE" in raw_intel into upgraded_intel
+convert channel to uppercase into loud_channel
+
+say "Channel: {loud_channel}"
+say "Telemetry Intel: {upgraded_intel}"
+
+verify that loud_channel starts with "RECON" otherwise "Channel invalid!"
+
+# 2. Concurrency: Background Worker Spawning
+combat_log = []
+
+to background_telemetry_scanner with target_name
+    add "Scanned zone for {target_name}" to combat_log
+    add "Threat level verified" to combat_log
+
+spawn background_telemetry_scanner with "Cyberdemon Alpha" into scanner_thread
+wait for scanner_thread
+
+log_count = count of combat_log
+say "Scanner results count: {log_count}"
+
+# 3. English Micro Web Server
+to serve_home
+    return "<h1>Doom Citadel Terminal</h1><p>Status: All defenses operational.</p>"
+
+to serve_api
+    return {citadel: "Phobos", status: "online", threat_level: 0}
+
+route GET "/" to serve_home
+route GET "/api/status" to serve_api
+
+start server on port 8088 in background into citadel_server
+say "Citadel HTTP Server running on http://localhost:8088"
+
+# 4. Math Clamping & Assertions
+armor = 140
+clamp armor between 0 and 100 into actual_armor
+say "Clamped armor: {actual_armor}"
+verify actual_armor is at most 100 otherwise "Armor overflow!"
+
+# Stop the server cleanly after verification
+stop server citadel_server
+say "Citadel Server stopped cleanly."
+say "All systems verified in conversational English!"

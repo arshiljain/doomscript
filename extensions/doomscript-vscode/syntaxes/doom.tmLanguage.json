@@ -1,0 +1,133 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "DoomScript",
+  "scopeName": "source.doom",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#keywords" },
+    { "include": "#verbs" },
+    { "include": "#comparisons" },
+    { "include": "#possessives" },
+    { "include": "#units" },
+    { "include": "#functions" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.number-sign.doom",
+          "match": "#.*$"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.doom",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.doom",
+              "match": "\\\\."
+            },
+            {
+              "name": "meta.embedded.line.doom",
+              "begin": "\\{",
+              "end": "\\}",
+              "beginCaptures": { "0": { "name": "punctuation.definition.template-expression.begin.doom" } },
+              "endCaptures": { "0": { "name": "punctuation.definition.template-expression.end.doom" } },
+              "patterns": [
+                { "include": "$self" }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.doom",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {
+              "name": "constant.character.escape.doom",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.doom",
+          "match": "\\b\\d+(\\.\\d+)?%?\\b"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.doom",
+          "match": "\\b(if|otherwise if|otherwise|else if|else|elif|unless|repeat with|repeat while|repeat until|repeat|times|time|for each|where|in|return|give back|hand back|stop|skip|try|if that fails|if it fails|as problem|as|always|attempt|to|with|and then|and|or|not|verify that|verify|use python module|from python module|use)\\b"
+        },
+        {
+          "name": "constant.language.doom",
+          "match": "\\b(true|false|nothing|none|today|now|current time)\\b"
+        }
+      ]
+    },
+    "verbs": {
+      "patterns": [
+        {
+          "name": "keyword.other.verb.doom",
+          "match": "\\b(say|show|print|tell|display|set|let|make|put|call it|call that|increase|decrease|by|to|ask choice|ask number|ask boolean|ask|into|read csv file|read csv|write csv|append csv|parse json|convert to json|read file|write|append|copy file|delete file|create directory|list files in|check if file|file|exists|replace|split|join|convert|to uppercase|to lowercase|capitalize|trim|environment variable|run command|round|decimals|places|absolute value of|square root of|spawn|wait for|route|start server|stop server|display colored|pause|clamp|fetch json from|fetch text from|download|roll|pick random from|shuffle|save record|into database|table|load records from database|group|by|sort|descending|desc|total of|average of|sum of|highest in|highest of|maximum of|lowest in|lowest of|minimum of|first item of|last item of|unique items of|sorted|reversed|item of|add|remove|from|wait|call|count of|length of)\\b"
+        }
+      ]
+    },
+    "comparisons": {
+      "patterns": [
+        {
+          "name": "keyword.operator.comparison.doom",
+          "match": "\\b(is between|is one of|is a number|is number|is text|is a string|is string|is at least|is at most|is greater than|is bigger than|is more than|exceeds|is over|is less than|is smaller than|is under|is not empty|is empty|is not|isn't|is equal to|equals|contains|is inside|is in|starts with|ends with|matches pattern|is)\\b"
+        }
+      ]
+    },
+    "possessives": {
+      "patterns": [
+        {
+          "match": "([a-zA-Z_]\\w*)('s)\\b",
+          "captures": {
+            "1": { "name": "variable.other.doom" },
+            "2": { "name": "keyword.operator.accessor.doom" }
+          }
+        }
+      ]
+    },
+    "units": {
+      "patterns": [
+        {
+          "name": "keyword.other.unit.doom",
+          "match": "\\b(seconds|second|minutes|minute|hours|hour|days|day|ms|milliseconds|hz|hertz|from now|ago)\\b"
+        }
+      ]
+    },
+    "functions": {
+      "patterns": [
+        {
+          "match": "\\bto\\s+([a-zA-Z_]\\w*)",
+          "captures": {
+            "1": { "name": "entity.name.function.doom" }
+          }
+        },
+        {
+          "match": "\\b([a-zA-Z_]\\w*)\\s*(?=\\()",
+          "captures": {
+            "1": { "name": "entity.name.function.call.doom" }
+          }
+        }
+      ]
+    }
+  }
+}

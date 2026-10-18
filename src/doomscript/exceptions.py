@@ -1,0 +1,58 @@
+"""
+DoomScript Exception Hierarchy
+Provides structured, user-friendly exception types with file, line, and suggestion support.
+"""
+
+from typing import Optional
+
+
+class DoomError(Exception):
+    """Base exception for all DoomScript compiler and runtime errors."""
+
+    def __init__(
+        self,
+        message: str,
+        line: Optional[int] = None,
+        column: Optional[int] = None,
+        source_line: Optional[str] = None,
+        suggestion: Optional[str] = None,
+        file_path: Optional[str] = None,
+    ):
+        super().__init__(message)
+        self.message = message
+        self.line = line
+        self.column = column
+        self.source_line = source_line
+        self.suggestion = suggestion
+        self.file_path = file_path
+
+    def __str__(self) -> str:
+        loc = ""
+        if self.file_path or self.line:
+            fp = self.file_path or "<source>"
+            ln = f":{self.line}" if self.line is not None else ""
+            col = f":{self.column}" if self.column is not None else ""
+            loc = f" at {fp}{ln}{col}"
+        msg = f"{self.message}{loc}"
+        if self.source_line and self.column:
+            prefix = "    "
+            pointer = " " * (self.column - 1) + "^"
+            msg += f"\n{prefix}{self.source_line}\n{prefix}{pointer}"
+        if self.suggestion:
+            msg += f"\nDid you mean: {self.suggestion}?"
+        return msg
+
+
+class DoomSyntaxError(DoomError):
+    """Raised when source code cannot be parsed or normalized."""
+    pass
+
+
+class DoomScopeError(DoomError):
+    """Raised when variable or pronoun scope resolution fails."""
+    pass
+
+
+class DoomAmbiguityError(DoomError):
+    """Raised when a sentence has ambiguous meaning."""
+    pass

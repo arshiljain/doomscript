@@ -1,0 +1,33 @@
+# DoomScript Contracts & Gradual Safety Demo (Phase 8)
+
+# 1. Function with typed parameter contracts and explicit pre/post-conditions
+to process_order with customer as text, total as number, is_vip as boolean:
+    require total is greater than 0 otherwise "Order total must be positive"
+    require customer is not empty otherwise "Customer name cannot be empty"
+    
+    set discount to 0
+    if is_vip:
+        set discount to total * 0.1
+    
+    set final_price to total - discount
+    ensure final_price is at least 0
+    return final_price
+
+# 2. Typed variables
+set base_amount as number to 250
+set buyer as text to "Doom Slayer"
+set vip_status as boolean to true
+
+# 3. Invoking the function
+set total_owed to process_order(buyer, base_amount, vip_status)
+say "Customer: " + buyer
+say "Final Owed: {total_owed}"
+
+# 4. Type comparisons
+if total_owed is a number:
+    say "Validated: Total owed is a valid number."
+
+if buyer is text and buyer is not a list:
+    say "Validated: Buyer name is clean text."
+
+say "Phase 8 Type Contracts Demonstration Completed Successfully!"

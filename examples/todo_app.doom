@@ -1,0 +1,40 @@
+# Todo Application in DoomScript
+# Demonstrates: records, lists, mutations, filtering, and JSON persistence
+
+say "=== DoomScript Task Manager ==="
+
+# Initialize task list
+tasks = [
+    {title: "Write project proposal", done: false, priority: "High"},
+    {title: "Review pull requests", done: true, priority: "Medium"},
+    {title: "Update documentation", done: false, priority: "Low"}
+]
+
+# Add a new task
+new_task = {title: "Prepare team demo", done: false, priority: "High"}
+add new_task to tasks
+
+# Display all tasks
+total_tasks is the count of tasks
+say "Total tasks:", total_tasks
+
+for each task in tasks
+    status = "[ ]"
+    if task.done
+        status = "[X]"
+    say status, task.priority, "-", task.title
+
+# Filter active tasks
+active_tasks = tasks where done is false into pending_tasks
+pending_count is the count of pending_tasks
+say ""
+say "Pending tasks remaining:", pending_count
+
+# Serialize to JSON
+convert tasks to json into tasks_json
+say "Serialized tasks to JSON preview:"
+say tasks_json
+
+# Save to disk
+write tasks_json into file "tasks_backup.json"
+say "Tasks saved to tasks_backup.json."

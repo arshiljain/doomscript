@@ -1,0 +1,53 @@
+# CSV Sales Reporter in DoomScript
+# Demonstrates: CSV reading/writing, field aggregates, grouping, and sorting
+
+say "=== Department Sales Summary Generator ==="
+
+# Sample dataset
+sales_data = [
+    {dept: "Engineering", rep: "Alice", revenue: 12000},
+    {dept: "Marketing", rep: "Bob", revenue: 8500},
+    {dept: "Engineering", rep: "Charlie", revenue: 15400},
+    {dept: "Sales", rep: "Dana", revenue: 22000},
+    {dept: "Marketing", rep: "Evan", revenue: 9100},
+    {dept: "Sales", rep: "Fiona", revenue: 18500}
+]
+
+# Write initial CSV
+write csv sales_data into file "sales_q1.csv"
+say "Wrote raw data to sales_q1.csv."
+
+# Read back from CSV
+read csv file "sales_q1.csv" into loaded_sales
+total_records is the count of loaded_sales
+say "Loaded {total_records} sales records."
+
+# Calculate overall metrics
+total_rev is total of revenue in sales_data
+avg_rev is average of revenue in sales_data
+max_rev is highest revenue in sales_data
+min_rev is lowest revenue in sales_data
+
+say "Total Revenue: ${total_rev}"
+say "Average Deal:  ${avg_rev}"
+say "Largest Deal:  ${max_rev}"
+say "Smallest Deal: ${min_rev}"
+
+# Group by department
+group sales_data by dept into by_dept
+
+# Sort by revenue descending
+sort sales_data by revenue descending
+say ""
+say "Top deals sorted descending:"
+top_deal = item 1 of sales_data
+say "Top Rep:", top_deal.rep, "from", top_deal.dept, "with ${top_deal.revenue}"
+
+# Build summary rows
+summary_rows = [
+    {metric: "Total Revenue", value: total_rev},
+    {metric: "Average Revenue", value: avg_rev},
+    {metric: "Peak Deal", value: max_rev}
+]
+write csv summary_rows into file "sales_summary.csv"
+say "Summary exported to sales_summary.csv."

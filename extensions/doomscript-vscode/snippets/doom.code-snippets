@@ -1,0 +1,93 @@
+{
+  "If-Otherwise": {
+    "prefix": "if",
+    "body": [
+      "if ${1:condition}:",
+      "    ${2:say \"True!\"}",
+      "otherwise if ${3:condition2}:",
+      "    ${4:say \"Condition 2\"}",
+      "otherwise:",
+      "    ${5:say \"Fallback\"}"
+    ],
+    "description": "If-Otherwise conditional block"
+  },
+  "Unless Block": {
+    "prefix": "unless",
+    "body": [
+      "unless ${1:condition}:",
+      "    ${2:# code executed when false}"
+    ],
+    "description": "Unless conditional block"
+  },
+  "Repeat Range Loop": {
+    "prefix": "repeat",
+    "body": [
+      "repeat with ${1:i} from ${2:1} to ${3:10}:",
+      "    ${4:say $1}"
+    ],
+    "description": "Repeat loop with index variable"
+  },
+  "For Each Where Loop": {
+    "prefix": "for",
+    "body": [
+      "for each ${1:item} in ${2:collection} where ${3:condition}:",
+      "    ${4:say $1}"
+    ],
+    "description": "Filtered for-each loop"
+  },
+  "Function Definition": {
+    "prefix": "to",
+    "body": [
+      "to ${1:function_name} with ${2:param1}, ${3:param2}:",
+      "    ${4:return $2}"
+    ],
+    "description": "Define a DoomScript function"
+  },
+  "Try-If Fails Block": {
+    "prefix": "try",
+    "body": [
+      "try:",
+      "    ${1:# protected actions}",
+      "if that fails as ${2:problem}:",
+      "    ${3:say \"Error:\", $2}",
+      "always:",
+      "    ${4:# cleanup code}"
+    ],
+    "description": "Try-If that fails-Always error handling block"
+  },
+  "Read CSV File": {
+    "prefix": "read csv",
+    "body": [
+      "read csv file \"${1:data.csv}\" into ${2:rows}"
+    ],
+    "description": "Read records from a CSV file"
+  },
+  "Write CSV File": {
+    "prefix": "write csv",
+    "body": [
+      "write csv ${1:records} into file \"${2:output.csv}\""
+    ],
+    "description": "Export records to a CSV file"
+  },
+  "Parse JSON": {
+    "prefix": "parse json",
+    "body": [
+      "parse json ${1:raw_text} into ${2:data_record}"
+    ],
+    "description": "Parse a JSON string into structured record"
+  },
+  "Record Filter": {
+    "prefix": "filter",
+    "body": [
+      "${1:collection} where ${2:field} is over ${3:threshold} into ${4:results}"
+    ],
+    "description": "Filter a collection of records"
+  },
+  "Group By": {
+    "prefix": "group",
+    "body": [
+      "group ${1:collection} by ${2:field} into ${3:grouped_data}"
+    ],
+    "description": "Group records by key field"
+  }
+}

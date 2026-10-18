@@ -1,0 +1,353 @@
+// DoomScript Formal EBNF Grammar (Lark)
+
+start: (_NEWLINE | stmt)*
+
+?stmt: simple_stmt _NEWLINE
+     | compound_stmt
+
+?simple_stmt: base_simple_stmt
+            | base_simple_stmt "if" expr -> post_if
+            | base_simple_stmt "unless" expr -> post_unless
+
+?base_simple_stmt: say_stmt
+                 | assign_stmt
+                 | set_stmt
+                 | increase_stmt
+                 | decrease_stmt
+                 | ask_stmt
+                 | ask_choice_stmt
+                 | ask_number_stmt
+                 | ask_bool_stmt
+                 | read_csv_stmt
+                 | write_csv_stmt
+                 | append_csv_stmt
+                 | json_parse_stmt
+                 | json_stringify_stmt
+                 | env_var_stmt
+                 | run_cmd_stmt
+                 | insert_stmt
+                 | sort_stmt
+                 | group_stmt
+                 | filter_stmt
+                 | comp_assign_stmt
+                 | use_py_stmt
+                 | from_py_stmt
+                 | use_doom_stmt
+                 | skip_stmt
+                 | write_file_stmt
+                 | append_file_stmt
+                 | read_file_stmt
+                 | copy_file_stmt
+                 | delete_file_stmt
+                 | create_dir_stmt
+                 | list_files_stmt
+                 | check_file_stmt
+                 | string_replace_stmt
+                 | string_split_stmt
+                 | string_join_stmt
+                 | string_upper_stmt
+                 | string_lower_stmt
+                 | string_capitalize_stmt
+                 | string_trim_stmt
+                 | spawn_stmt
+                 | wait_thread_stmt
+                 | route_stmt
+                 | start_server_stmt
+                 | stop_server_stmt
+                 | display_colored_stmt
+                 | pause_stmt
+                 | math_round_stmt
+                 | math_clamp_stmt
+                 | verify_stmt
+                 | fetch_json_stmt
+                 | fetch_text_stmt
+                 | download_file_stmt
+                 | random_roll_stmt
+                 | pick_random_stmt
+                 | shuffle_stmt
+                 | db_save_stmt
+                 | db_load_stmt
+                 | beep_stmt
+                 | play_sound_stmt
+                 | open_window_stmt
+                 | draw_circle_stmt
+                 | draw_rect_stmt
+                 | draw_text_stmt
+                 | clear_screen_stmt
+                 | refresh_screen_stmt
+                 | add_stmt
+                 | remove_stmt
+                 | wait_stmt
+                 | return_stmt
+                 | stop_stmt
+                 | call_stmt
+                 | expr_stmt
+
+say_stmt: "say" expr ("," expr)* -> say_multi
+assign_stmt: target ("=" | "is") expr -> assign
+set_stmt: "set" target "to" expr -> set_var
+increase_stmt: "increase" target "by" expr -> increase_var
+decrease_stmt: "decrease" target "by" expr -> decrease_var
+ask_stmt: "ask" expr "into" target -> ask_input
+ask_choice_stmt: "ask" "choice" expr "from" expr "into" target -> ask_choice
+ask_number_stmt: "ask" "number" expr "into" target -> ask_number
+ask_bool_stmt: "ask" "boolean" expr "into" target -> ask_boolean
+read_csv_stmt: "read" "csv" "file" expr "into" target -> read_csv
+write_csv_stmt: "write" "csv" expr "into" "file" expr -> write_csv
+append_csv_stmt: "append" "csv" expr "to" "file" expr -> append_csv
+json_parse_stmt: "parse" "json" expr "into" target -> parse_json
+json_stringify_stmt: "convert" expr "to" "json" "into" target -> stringify_json
+env_var_stmt: "environment" "variable" expr "into" target -> get_env_var
+run_cmd_stmt: "run" "command" expr "into" target -> run_cmd
+insert_stmt: "insert" expr "at" expr "in" target -> insert_list
+sort_stmt: "sort" target "by" NAME [DESCENDING_ORDER] -> sort_records
+group_stmt: "group" expr "by" NAME "into" target -> group_by_stmt
+filter_stmt: expr "where" NAME CMP_OP expr "into" target -> filter_records_stmt
+comp_assign_stmt: target ("is" | "=") ["the"] NAME "of" "each" NAME "in" expr -> comp_assign
+use_py_stmt: "use" "python" "module" NAME -> import_module
+from_py_stmt: "from" "python" "module" NAME "use" NAME ("," NAME)* -> import_from_module
+use_doom_stmt: "use" expr -> import_doom_file
+skip_stmt: "skip" -> skip_stmt
+
+write_file_stmt: "write" expr ("into" | "to") "file" expr -> write_file
+append_file_stmt: "append" expr "to" "file" expr -> append_file
+read_file_stmt: "read" "file" expr "into" target -> read_file
+copy_file_stmt: "copy" "file" expr "to" expr -> copy_file
+delete_file_stmt: "delete" "file" expr -> delete_file
+create_dir_stmt: "create" "directory" expr -> create_dir
+list_files_stmt: "list" "files" "in" expr "into" target -> list_files
+check_file_stmt: "check" "if" "file" expr "exists" "into" target -> check_file_exists
+
+string_replace_stmt: "replace" expr "with" expr "in" expr "into" target -> string_replace
+string_split_stmt: "split" expr "by" expr "into" target -> string_split
+string_join_stmt: "join" expr "with" expr "into" target -> string_join
+string_upper_stmt: "convert" expr "to" "uppercase" "into" target -> string_uppercase
+string_lower_stmt: "convert" expr "to" "lowercase" "into" target -> string_lowercase
+string_capitalize_stmt: "capitalize" expr "into" target -> string_capitalize
+string_trim_stmt: "trim" expr "into" target -> string_trim
+
+spawn_stmt: "spawn" NAME "with" arg_list "into" target -> spawn_thread_args
+          | "spawn" NAME "into" target               -> spawn_thread_noargs
+wait_thread_stmt: "wait" "for" atom -> wait_for_thread
+
+route_stmt: "route" NAME expr "to" NAME -> add_route
+start_server_stmt: "start" "server" "on" "port" expr "in" "background" "into" target -> start_server_bg
+                 | "start" "server" "on" "port" expr -> start_server_fg
+stop_server_stmt: "stop" "server" atom -> stop_server
+
+display_colored_stmt: "display" "colored" expr "in" expr -> display_colored
+pause_stmt: "pause" ["until" "enter" "pressed"] -> pause_terminal
+
+math_round_stmt: "round" expr "to" expr "decimals" "into" target -> math_round
+math_clamp_stmt: "clamp" expr "between" sum_expr "and" sum_expr "into" target -> math_clamp
+
+verify_stmt: "verify" ["that"] expr "otherwise" expr -> verify_assertion
+
+fetch_json_stmt: "fetch" "json" "from" expr "into" target -> fetch_json
+fetch_text_stmt: "fetch" "text" "from" expr "into" target -> fetch_text
+download_file_stmt: "download" expr ("into" | "to") "file" expr -> download_file
+
+random_roll_stmt: ("roll" | "random" "number") ("between" | "from") sum_expr ("and" | "to") sum_expr "into" target -> random_range
+pick_random_stmt: "pick" "random" "from" expr "into" target -> pick_random
+shuffle_stmt: "shuffle" target -> shuffle_list
+
+db_save_stmt: "save" "record" expr "into" "database" expr "table" expr -> db_save
+db_load_stmt: "load" "records" "from" "database" expr "table" expr "into" target -> db_load
+
+beep_stmt: "beep" expr ("hz" | "hertz") "for" expr ("seconds" | "second" | "ms" | "milliseconds") -> beep_action
+play_sound_stmt: "play" "sound" expr -> play_sound_action
+
+open_window_stmt: "open" "window" expr "with" "width" expr [","] "height" expr -> open_window
+draw_circle_stmt: "draw" "circle" "at" expr "," expr "with" "radius" expr [","] "color" expr -> draw_circle
+draw_rect_stmt: "draw" "rectangle" "at" expr "," expr "with" "width" expr [","] "height" expr [","] "color" expr -> draw_rect
+draw_text_stmt: "draw" "text" expr "at" expr "," expr "with" "size" expr [","] "color" expr -> draw_text
+clear_screen_stmt: "clear" "screen" -> clear_screen
+refresh_screen_stmt: "refresh" "screen" -> refresh_screen
+
+add_stmt: "add" expr "to" target -> add_to_list
+remove_stmt: "remove" expr "from" target -> remove_from_list
+wait_stmt: "wait" expr ("seconds" | "second" | "ms" | "milliseconds") -> wait_seconds
+return_stmt: "return" expr? -> return_val
+stop_stmt: "stop" -> stop_stmt
+
+call_stmt: "call" NAME [atom] ["with" call_arg_list] -> call_stmt
+expr_stmt: func_call -> expr_stmt
+
+?compound_stmt: if_stmt
+              | unless_stmt
+              | try_stmt
+              | repeat_stmt
+              | repeat_range_stmt
+              | repeat_while_stmt
+              | repeat_until_stmt
+              | for_where_stmt
+              | for_stmt
+              | while_stmt
+              | until_stmt
+              | attempt_stmt
+              | func_def
+
+if_stmt: "if" expr ":"? _NEWLINE suite elif_clause* else_clause? -> if_stmt
+elif_clause: "elif" expr ":"? _NEWLINE suite
+else_clause: "else" ":"? _NEWLINE suite
+
+unless_stmt: "unless" expr ":"? _NEWLINE suite else_clause? -> unless_stmt
+
+try_stmt: "try" ":"? _NEWLINE suite "if" "it" "fails" ["as" NAME] ":"? _NEWLINE suite ["always" ":"? _NEWLINE suite] -> try_stmt
+
+repeat_stmt: "repeat" expr ("times" | "time") ":"? _NEWLINE suite -> repeat_stmt
+repeat_range_stmt: "repeat" "with" NAME "from" expr "to" expr ["by" expr] ":"? _NEWLINE suite -> repeat_range_stmt
+repeat_while_stmt: "repeat" "while" expr ":"? _NEWLINE suite -> repeat_while_stmt
+repeat_until_stmt: "repeat" "until" expr ":"? _NEWLINE suite -> repeat_until_stmt
+while_stmt: "while" expr ":"? _NEWLINE suite -> repeat_while_stmt
+until_stmt: "until" expr ":"? _NEWLINE suite -> repeat_until_stmt
+for_where_stmt: "for" "each" NAME "in" expr "where" expr ":"? _NEWLINE suite -> for_where_stmt
+for_stmt: "for" "each" NAME "in" expr ":"? _NEWLINE suite -> for_stmt
+attempt_stmt: "attempt" ":"? _NEWLINE suite "if" "it" "fails" ":"? _NEWLINE suite -> attempt_stmt
+func_def: "to" NAME [NAME ["with" param_list] | "with" param_list] ":"? _NEWLINE suite -> func_def
+
+suite: _INDENT stmt+ _DEDENT
+
+param_item: NAME ["=" atom | atom]
+param_list: param_item ("," param_item)*
+arg_list: expr ("," expr)*
+call_arg: [NAME "="] expr
+call_arg_list: call_arg ("," call_arg)*
+
+?expr: logic_or
+
+?logic_or: logic_or "or" logic_and -> logic_or
+         | logic_and
+
+?logic_and: logic_and "and" logic_not -> logic_and
+          | logic_not
+
+?logic_not: "not" logic_not -> logic_not
+          | compare_expr
+
+?compare_expr: compare_expr IS_EMPTY -> is_empty
+             | compare_expr IS_NOT_EMPTY -> is_not_empty
+             | compare_expr STARTS_WITH sum_expr -> str_starts_with
+             | compare_expr ENDS_WITH sum_expr -> str_ends_with
+             | compare_expr MATCHES_PATTERN sum_expr -> str_matches_pattern
+             | compare_expr IS_BETWEEN sum_expr "and" sum_expr -> is_between
+             | compare_expr IS_ONE_OF factor -> is_one_of
+             | compare_expr IS_NUMBER -> is_type_number
+             | compare_expr IS_NOT_NUMBER -> is_type_not_number
+             | compare_expr IS_TEXT -> is_type_text
+             | compare_expr IS_NOT_TEXT -> is_type_not_text
+             | compare_expr IS_BOOLEAN -> is_type_boolean
+             | compare_expr IS_NOT_BOOLEAN -> is_type_not_boolean
+             | compare_expr IS_LIST -> is_type_list
+             | compare_expr IS_NOT_LIST -> is_type_not_list
+             | compare_expr IS_RECORD -> is_type_record
+             | compare_expr IS_NOT_RECORD -> is_type_not_record
+             | compare_expr "contains" sum_expr -> contains
+             | compare_expr CMP_OP sum_expr -> compare
+             | sum_expr
+
+IS_EMPTY.3: "is empty"
+IS_NOT_EMPTY.3: "is not empty"
+IS_BETWEEN.3: "is between"
+IS_ONE_OF.3: "is one of"
+IS_NUMBER.3: "is a number" | "is number"
+IS_NOT_NUMBER.3: "is not a number" | "is not number"
+IS_TEXT.3: "is text" | "is a string" | "is string"
+IS_NOT_TEXT.3: "is not text" | "is not a string" | "is not string"
+IS_BOOLEAN.3: "is a boolean" | "is boolean" | "is a bool" | "is bool"
+IS_NOT_BOOLEAN.3: "is not a boolean" | "is not boolean" | "is not a bool" | "is not bool"
+IS_LIST.3: "is a list" | "is list"
+IS_NOT_LIST.3: "is not a list" | "is not list"
+IS_RECORD.3: "is a record" | "is record" | "is a dictionary" | "is dictionary"
+IS_NOT_RECORD.3: "is not a record" | "is not record" | "is not a dictionary" | "is not dictionary"
+STARTS_WITH.3: "starts with"
+ENDS_WITH.3: "ends with"
+MATCHES_PATTERN.3: "matches pattern"
+DESCENDING_ORDER.3: "descending"
+
+CMP_OP: "is at least"      // >=
+      | "is at most"       // <=
+      | "is greater than"  // >
+      | "is over"          // >
+      | "is less than"     // <
+      | "is under"         // <
+      | "is not"           // !=
+      | "isn't"            // !=
+      | "equals"           // ==
+      | "is inside"        // in
+      | "is in"            // in
+      | "is"               // ==
+
+?sum_expr: sum_expr "+" term -> add
+         | sum_expr "-" term -> sub
+         | term
+
+?term: term "*" factor -> mul
+     | term "/" factor -> div
+     | factor
+
+?factor: "-" factor -> neg
+       | file_exists_expr
+       | aggregate_expr
+       | relative_time_expr
+       | percent_expr
+       | possessive_expr
+       | count_expr
+       | math_fn_expr
+       | date_fn_expr
+       | atom
+
+file_exists_expr: "file" atom "exists" -> file_exists_factor
+
+aggregate_expr: "sum" "of" factor -> agg_sum
+              | "average" "of" factor -> agg_avg
+              | ("highest" | "maximum") ("in" | "of") factor -> agg_max
+              | ("lowest" | "minimum") ("in" | "of") factor -> agg_min
+              | "first" "item" "of" factor -> agg_first
+              | "last" "item" "of" factor -> agg_last
+
+math_fn_expr: "absolute" "value" "of" factor -> math_abs
+            | "square" "root" "of" factor -> math_sqrt
+
+date_fn_expr: "today" -> date_today
+            | ("now" | "current" "time") -> date_now
+
+relative_time_expr: atom TIME_UNIT "from" "now" -> time_future
+                  | atom TIME_UNIT "ago"        -> time_past
+
+TIME_UNIT: "days" | "day" | "hours" | "hour" | "minutes" | "minute" | "seconds" | "second"
+
+count_expr: ("count" | "length") "of" factor -> count_of
+percent_expr: NUMBER "%" "of" factor -> percent_of
+possessive_expr: atom "'s" NAME -> possessive
+
+?atom: func_call
+     | NAME           -> var
+     | NUMBER         -> num
+     | STRING         -> str
+     | "true"         -> const_true
+     | "false"        -> const_false
+     | "nothing"      -> const_none
+     | "none"         -> const_none
+     | list_expr
+     | dict_expr
+     | "(" expr ")"
+
+func_call: NAME "(" [call_arg_list] ")" -> standard_call
+list_expr: "[" [expr ("," expr)*] "]" -> list_val
+dict_expr: "{" [dict_pair ("," dict_pair)*] "}" -> dict_val
+dict_pair: (STRING | NAME) ":" expr
+
+?target: NAME             -> target_var
+       | atom "'s" NAME   -> target_attr
+
+// Lexer & Whitespace rules
+_NEWLINE: ( /\r?\n[\t ]*/ | COMMENT )+
+%ignore /[\t \f]+/
+%ignore COMMENT
+%declare _INDENT _DEDENT
+
+NAME: /[^\W\d]\w*/
+COMMENT: /#[^\n]*/
+NUMBER: /\d+(\.\d+)?/
+STRING: /"""[\s\S]*?"""|'''[\s\S]*?'''|"([^"\\]|\\.)*"|'([^'\\]|\\.)*'/

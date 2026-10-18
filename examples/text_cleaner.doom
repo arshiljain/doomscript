@@ -1,0 +1,35 @@
+# Text Processing and Cleaner in DoomScript
+# Demonstrates: string verbs, case conversion, splitting, unique items, and word counts
+
+say "=== DoomScript Text Normalizer and Word Frequency ==="
+
+raw_passage = "  The quick brown fox jumps over the lazy dog. Fox was quick and clever!  "
+
+# Trim whitespace
+trim raw_passage into trimmed_text
+say "Trimmed:", trimmed_text
+
+# Replace words
+replace "lazy" with "energetic" in trimmed_text into updated_text
+say "Updated:", updated_text
+
+# Convert to lowercase
+convert updated_text to lowercase into lower_text
+
+# Split text into words by space
+split lower_text by " " into words
+total_word_count is the count of words
+say "Total words:", total_word_count
+
+# Extract unique words
+unique_words = unique items of words
+unique_count is the count of unique_words
+say "Unique words:", unique_count
+
+# Display first 5 words
+sample_words = first 5 items of words
+say "Sample words:", sample_words
+
+# Save cleaned output
+write updated_text into file "cleaned_output.txt"
+say "Saved cleaned output to cleaned_output.txt."

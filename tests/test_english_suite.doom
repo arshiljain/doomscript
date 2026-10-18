@@ -1,0 +1,24 @@
+# Native DoomScript Test Suite
+# Executed via `doom test`
+
+test "basic arithmetic in english":
+    set a to 100
+    set b to 25
+    expect a + b to equal 125
+    expect a - b to equal 75
+    expect a * 2 to equal 200
+
+test "data structure contracts":
+    set payload to {"service": "gateway", "active": true, "status_code": 200}
+    expect payload to be a record
+    expect payload.service to be text
+    expect payload.active to be a boolean
+    expect payload.status_code to be a number
+    expect payload.status_code to be at least 200
+    expect payload.status_code to be less than 300
+
+test "list manipulation expectations":
+    set squad to ["marine", "sergeant", "commander"]
+    expect squad to be a list
+    expect squad to contain "marine"
+    expect squad to contain "commander"

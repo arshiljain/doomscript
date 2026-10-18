@@ -1,0 +1,32 @@
+# Automated File Organizer in DoomScript
+# Demonstrates: filesystem actions, directory creation, string predicates, and loops
+
+say "=== Automated Workspace File Organizer ==="
+
+# Set up staging area
+create directory "staging"
+create directory "staging/organized"
+create directory "staging/organized/documents"
+create directory "staging/organized/data"
+
+# Create dummy sample files
+write "Annual report notes" into file "staging/annual_report.txt"
+write "Q1 Budget details" into file "staging/budget_2026.txt"
+write "id,name\n1,Alpha" into file "staging/metrics.csv"
+write "id,name\n2,Beta" into file "staging/users.csv"
+
+# List files in folder
+list files in "staging" into found_files
+file_count is the count of found_files
+say "Found {file_count} items in staging directory."
+
+# Iterate and organize by extension
+for each filename in found_files
+    if filename ends with ".txt"
+        say "Organizing text doc:", filename
+        copy file "staging/" + filename to "staging/organized/documents/" + filename
+    otherwise if filename ends with ".csv"
+        say "Organizing dataset:", filename
+        copy file "staging/" + filename to "staging/organized/data/" + filename
+
+say "Organization complete!"

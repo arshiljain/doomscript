@@ -1,0 +1,43 @@
+<!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
+<idea-plugin>
+    <id>com.doomscript.studio</id>
+    <name>DoomScript Studio</name>
+    <vendor url="https://github.com/doomscript/doomscript">DoomScript Project</vendor>
+
+    <description><![CDATA[
+    <h1>DoomScript Studio - Professional Edition</h1>
+    <p>Official language support and professional IDE toolchain for <b>DoomScript</b> (<code>.doom</code>).</p>
+    <ul>
+        <li><b>English-First Syntax Highlighting:</b> Colorized verbs, keywords, possessives, and aggregates.</li>
+        <li><b>One-Click Execution:</b> Native runner integration directly in PyCharm and IntelliJ.</li>
+        <li><b>Database & SQLite Tooling:</b> Built-in data table visualization.</li>
+        <li><b>Standalone Binary Builder:</b> Compile scripts into native <code>.exe</code> binaries.</li>
+    </ul>
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <!-- File Type Registration -->
+        <fileType
+                name="DoomScript File"
+                implementationClass="com.doomscript.idea.DoomFileType"
+                fieldName="INSTANCE"
+                language="DoomScript"
+                extensions="doom"/>
+
+        <!-- Syntax Highlighter -->
+        <syntaxHighlighter
+                key="DoomScript"
+                implementationClass="com.doomscript.idea.DoomSyntaxHighlighter"/>
+
+        <!-- Run Configuration -->
+        <configurationType implementation="com.doomscript.idea.run.DoomRunConfigurationType"/>
+        <runConfigurationProducer implementation="com.doomscript.idea.run.DoomRunConfigurationProducer"/>
+
+        <!-- Tool Windows -->
+        <toolWindow id="DoomScript REPL" anchor="bottom"
+                    factoryClass="com.doomscript.idea.toolwindow.DoomReplToolWindowFactory"
+                    icon="/icons/doom.svg"/>
+    </extensions>
+</idea-plugin>

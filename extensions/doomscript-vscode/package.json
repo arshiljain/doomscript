@@ -1,0 +1,61 @@
+{
+  "name": "doomscript-vscode",
+  "displayName": "DoomScript Language Support",
+  "description": "Official syntax highlighting, snippets, and diagnostics for DoomScript (.doom)",
+  "version": "0.4.0",
+  "publisher": "doomscript",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Snippets"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "doom",
+        "aliases": [
+          "DoomScript",
+          "doom"
+        ],
+        "extensions": [
+          ".doom"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "doom",
+        "scopeName": "source.doom",
+        "path": "./syntaxes/doom.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "doom",
+        "path": "./snippets/doom.code-snippets"
+      }
+    ],
+    "problemMatchers": [
+      {
+        "name": "doomscript",
+        "owner": "doomscript",
+        "fileLocation": ["relative", "${workspaceFolder}"],
+        "pattern": [
+          {
+            "regexp": "^DoomScript Syntax Error at (.*):(\\d+):(\\d+)$",
+            "file": 1,
+            "line": 2,
+            "column": 3
+          },
+          {
+            "regexp": "^Problem:\\s*(.*)$",
+            "message": 1
+          }
+        ]
+      }
+    ]
+  }
+}

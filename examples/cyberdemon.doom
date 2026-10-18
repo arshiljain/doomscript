@@ -1,0 +1,45 @@
+# DoomScript Example: The Cyberdemon Encounter (English Edition)
+
+to strike target with amount
+    decrease target's health by amount
+    say "Direct hit! Target took {amount} damage."
+
+player = {name: "Doom Slayer", health: 100, shield: 50}
+boss = {name: "Cyberdemon", health: 500}
+weapons = ["Super Shotgun", "Plasma Rifle"]
+
+add "BFG 9000" to weapons
+
+say "A wild {boss's name} appears before {player's name}!"
+
+if weapons contains "BFG 9000"
+    say "BFG 9000 is primed and ready!"
+
+weapon_count = count of weapons
+say "Total weapons equipped: {weapon_count}"
+
+strike(boss, 150)
+strike(boss, 200)
+
+if boss's health is under 200
+    say "{boss's name} is enraged!"
+    enraged_damage = 80
+    damage_blocked = 25% of enraged_damage
+    decrease player's health by damage_blocked
+    say "Player absorbed part of the blow! Current HP: {player's health}"
+
+say "Arsenal inspection:"
+for each weapon in weapons
+    say weapon
+
+say "Finishing battle..."
+repeat 3 times
+    say "FIRE!"
+
+set boss's health to 0
+if boss's health is 0
+    say "Victory! {boss's name} has fallen."
+
+write "The Cyberdemon was slain in glorious battle." into file "victory_log.txt"
+read file "victory_log.txt" into recorded_log
+say "Record: {recorded_log}"

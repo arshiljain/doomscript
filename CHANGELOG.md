@@ -1,0 +1,196 @@
+# DoomScript Changelog
+
+All notable changes to DoomScript are documented in this file.
+
+## [0.8.0] - 2026-10-18 - Phases 14-25: AI Primitives, ORM, DocGen, Markdown, Cryptography, Streaming, Config, Benchmarking & Packager
+### Added
+- **Phase 14: English AI & LLM Primitives**:
+  - `ask ai <prompt> into <var>`: Plain-English AI query using standard library HTTP with support for Gemini, OpenAI, Ollama, and offline simulation fallback.
+  - `ask ai <prompt> as json into <var>`: Structured JSON decoding directly into a DoomScript Record.
+  - `ask ai <prompt> with model <name> into <var>`: Explicit model selection.
+- **Phase 15: Declarative English Database ORM & Migrations**:
+  - `define entity <Name> with <fields>`: In-memory & SQLite-backed relational schema definitions.
+  - `save new <Entity> with <fields> into <var>`: Auto-increment primary key generation and record persistence.
+  - `find all <Entities> into <var>` and `find first <Entity> into <var>`.
+- **Phase 16: Automated Documentation Generator (`doom doc`)**:
+  - Static HTML documentation generation inspecting functions, entities, CLI flags, routes, and comments across all `.doom` files.
+- **Phase 17: English Markdown & Rich Document Generator**:
+  - Code-based document construction: `create markdown document`, `add heading`, `add paragraph`, `add table`, `add bullet list`.
+  - Output formats: `render document as markdown`, `render document as html`, and `save document to file`.
+- **Phase 18: File Watching & Live Reload Daemon (`doom watch`)**:
+  - `doom watch <path> [--action run|test]`: Pure stdlib modification monitoring that automatically recompiles and runs upon file save.
+- **Phase 19: English Cron & Event Scheduling**:
+  - `schedule every <N> seconds <function>` and `run scheduler for <N> seconds`.
+- **Phase 20: Secure English Cryptography & Secrets**:
+  - `hash text <txt> with algorithm "sha256"|"md5"|"sha512" into <var>`.
+  - `generate secure token of length <N> into <var>`.
+  - `encode text as base64` / `decode base64`.
+  - `encrypt text <txt> with secret <key>` and `decrypt text <cipher> with secret <key>`.
+- **Phase 21: Streaming Data & Pipeline Operators**:
+  - `pipe <val> into <fn1>, <fn2> into <var>`: Function composition pipelines.
+  - `take first <N> items from <list>` and `drop first <N> items from <list>`.
+  - `batch <list> by <N> into <var>`: Chunked array splitting.
+- **Phase 22: Binary & Hex Data Serialization**:
+  - `convert number <n> to hex` and `convert hex <h> to number`.
+  - `pack numbers <list> as <format>` and `unpack binary <format> from buffer <buf>`.
+  - `size of buffer <buf> in bytes into <var>`.
+- **Phase 23: English Configuration Manager**:
+  - Unified configuration loader supporting `.ini`, `.json`, and environment variables.
+  - `load config from <file>`, `get config <key> [with default <val>]`, `set config <key> to <val>`, `save config to file`.
+- **Phase 24: Visual Benchmark & Latency Profiler (`doom bench`)**:
+  - Language level: `benchmark <name> with <N> iterations for <fn> into <var>`.
+  - CLI command: `doom bench <file.doom> [--iterations N]`: Reports min/max/avg latency, throughput (runs/sec), and peak memory consumption.
+- **Phase 25: Standalone Packager (`doom pack`)**:
+  - `doom pack <file.doom> [--output app.pyz]`: Bundles a DoomScript script and runtime into a single portable zipapp executable anywhere with Python 3.10+ without installing DoomScript.
+- **Automated Test Coverage**:
+  - Added `tests/test_phase14_to_25.py` (12 comprehensive tests). Total test suite expanded to 105 tests, 100% passing.
+
+## [0.7.0] - 2026-10-18 - Phases 9-13: Pattern Matching, Testing, CLI Builder, Concurrency & Declarative Web
+### Added
+- **Phase 9: English Pattern Matching & Destructuring**:
+  - Multi-branch pattern matching: `match <expr>:` with `when <literal>`, `when <type>`, `when over/under/at least/at most/between`, `when a or b`, and `otherwise:`.
+  - Type-guarded numeric matching to ensure safe evaluation across mixed data types without runtime TypeErrors.
+  - Tuple, list, and dictionary destructuring: `unpack a, b, c from data`.
+  - Head/tail list decomposition: `first item into head, remaining items into tail from list`.
+- **Phase 10: Native English Test Runner**:
+  - Test suite declaration: `test "name":` blocks.
+  - Fluent English expectations: `expect a + b to equal c`, `expect val to be a number|text|boolean|list|record`, `expect val to be greater than|at least|less than|at most`, and `expect collection to contain item`.
+  - Standalone CLI command: `doom test [path]` with discovery of `test_*.doom` or files in `tests/`, formatted ANSI checkmarks/crosses, and execution duration reporting.
+- **Phase 11: Declarative CLI App Builder**:
+  - Declarative program definition: `program description "..."`.
+  - Command-line option definition: `option name [as type] with default <val> and description "..."`.
+  - Boolean flag definition: `flag name with description "..."`.
+  - Automatic parsing into structured records: `parse arguments into cli_args` with automatic `--help` flag handling.
+- **Phase 12: Background Concurrency & Timers**:
+  - ThreadPool worker dispatch: `run in background fn(args) into task`.
+  - Single and multi-task synchronization: `wait for task into res` and `wait for all [tasks] into results`.
+  - Execution timeouts: `timeout N seconds for fn(args) into result` returning None upon timeout.
+- **Phase 13: Declarative Web Microservices**:
+  - English HTTP route handlers: `on get|post|put|delete "/path":` with `reply with json ...` and `reply with "..."`.
+  - Pure Python stdlib HTTP microservice server: `serve on port <port>`.
+  - Multi-route deferred registration ensuring reliable routing execution.
+- **Complete Test Coverage**:
+  - Added `tests/test_phase9_to_13_advanced.py`. Total test suite expanded to 93 unit tests, 100% passing.
+
+## [0.6.0] - 2026-10-18 - Phases 4-8: Automation, LSP, REPL/Kernel, Package Management & English Type Contracts
+### Added
+- **Phase 4: Automation & Data Stdlib**:
+  - Relational joins without SQL: `combine table_a and table_b on "key" with style "inner|left|right|outer" into target`.
+  - HTML scraping: `extract text from html html_str into text_var`, `extract links from html html_str into links_var`.
+  - HTTP requests & downloads: `fetch url ... into ...`, `post json ... to ... into ...`, `download ... to file ...`.
+  - Email sending: `send email to "..." with subject "..." and body "..."`.
+  - Timezones & business days: `now in "UTC"`, `next business day from "..."`, `today is weekend`.
+  - Multi-line triple-quoted string literals (`"""` and `'''`) in grammar and compiler.
+- **Phase 5: Language Server Protocol (LSP)**:
+  - Pure Python stdlib JSON-RPC Language Server (`src/doomscript/lsp/server.py`).
+  - Diagnostic reporting, keyword/identifier hovers, English completions, and function definition navigation.
+  - CLI command: `doom lsp` for integration with VS Code, PyCharm, and other editors.
+- **Phase 6: Multi-line REPL & Interactive Kernel**:
+  - Multi-line block buffering (`... ` prompt) for loops, conditions, and functions in `doom repl`.
+  - Interactive cell execution and Jupyter kernel specification generator (`src/doomscript/kernel.py`).
+  - CLI command: `doom kernel install` for native Jupyter notebook integration.
+- **Phase 7: Package Management & Project Manifest**:
+  - `doom.toml` project manifest engine (`src/doomscript/package.py`).
+  - CLI commands: `doom init`, `doom add <package> [--dev]`, and `doom install`.
+- **Phase 8: English Type Contracts & Gradual Safety**:
+  - Full type comparisons: `is a number`, `is text`, `is a boolean`, `is a list`, `is a record`, plus negative forms (`is not text`, `is not a number`, etc.).
+  - Preconditions and postconditions: `require <cond> [otherwise <msg>]` and `ensure <cond> [otherwise <msg>]`.
+  - Typed function parameter signatures: `to func with arg1 as number, arg2 as text:` desugaring to leading body type assertions.
+  - Typed variable assignments: `set score as number to 100`.
+  - Static contract analyzer (`src/doomscript/contracts.py`).
+  - CLI flag: `doom check --strict` to verify literal contracts and constant argument types statically at check time.
+  - Complete test coverage across 86 unit tests, 100% passing.
+
+## [0.5.0] - Phase 3: Learning & Error Experience
+### Added
+- **Human-Centric Error Experience (`src/doomscript/errors.py`)**:
+  - Eliminated raw Lark error messages from user output.
+  - Every syntax error displays: source file, line number, column, caret `^` pointing directly under the error token, and a clear plain-English explanation.
+  - `difflib`-powered "Did you mean: <closest valid sentence>?" engine comparing user input against canonical sentence templates.
+  - Optional `--theatrical` villain mode for humorous, retro compiler feedback while defaulting to polite, clear English.
+- **Code Explainer Engine (`src/doomscript/explainer.py` & `doom explain`)**:
+  - `doom explain <file.doom>` prints a side-by-side rich table displaying the original DoomScript line, its transpiled Python AST equivalent, and a plain-English explanation of its runtime behavior.
+- **Interactive Phrasing Suggester (`doom suggest`)**:
+  - `doom suggest "<sentence>"` validates sentences and suggests the closest 3 canonical alternatives if syntax is unrecognized.
+- **Canonical Code Formatter (`src/doomscript/formatter.py` & `doom fmt`)**:
+  - `doom fmt <file.doom> [--write]` normalizes code to standard 4-space indentation, canonical verbs, standardized comparisons, and stripped filler words.
+- **Starter Project Generator (`doom new`)**:
+  - `doom new <project_name>` scaffolds an automation project with `main.doom`, `README.md`, and sample CSV data.
+- **Runtime Traceback Line Mapping**:
+  - Runtime errors in `doom run` now locate the active frame and print the corresponding `.doom` source line with caret indicator.
+- **VS Code Extension Upgrade (`extensions/doomscript-vscode/`)**:
+  - Upgraded to v0.4.0 with expanded keyword highlighting, rich code snippets for all constructs, and `doom check` problem matcher diagnostics.
+- **Complete Test Coverage**:
+  - Added `tests/test_phase3_experience.py` (8 tests). Test suite expanded to 65 tests, 100% passing.
+
+## [0.4.0] - Phase 2: Everyday Programming in English
+### Added
+- **Everyday I/O & String Interpolation**:
+  - `say` with multiple comma-separated expressions (e.g. `say "Player:", name, "Level:", level`).
+  - Native string interpolation with `{variable}`, `{record.field}`, and `{record's field}` compiling directly to Python AST `JoinedStr`.
+  - Type-safe user input: `ask number "Age?" into age`, `ask boolean "Proceed?" into confirmed`.
+- **List & Record Manipulation**:
+  - Natural list constructors: `a list of 1, 2, 3`, `an empty list`, `[]`.
+  - List indexing and slicing: `item 2 of list` (1-based English indexing), `first 3 items of list`, `last 3 items of list`.
+  - In-place mutation: `insert x at 1 in list`, `add x to list`, `remove x from list`.
+  - Non-destructive list transformations: `sorted list`, `reversed list`, `unique items of list`.
+  - Collection predicates: `list is empty`, `list is not empty`, `list contains x`.
+- **English Data Operations & Queries**:
+  - Comprehensions: `names is the name of each person in people`.
+  - Record filtering: `people where age is over 18 into adults` and `adults = people where age is over 18`.
+  - Grouping: `group orders by customer into customer_orders` (yields grouped dictionary of lists).
+  - Record sorting: `sort orders by amount descending` and `sort orders by amount`.
+  - Field aggregates: `total of price in orders`, `average of price in orders`, `highest price in orders`, `lowest price in orders`.
+- **Extended Conditions & Control Flow**:
+  - Range conditions: `val is between 10 and 20` (inclusive chaining).
+  - Membership conditions: `val is one of options`.
+  - Type checking: `val is a number`, `val is text`.
+  - Control flow: `otherwise if` (`elif`), `otherwise` (`else`), postfix and block `unless <cond>`.
+  - Loops: `repeat with i from 1 to 10 by 2`, `for each item in items where item is over 5`, `while <cond>`, `until <cond>`.
+  - Loop controls: `stop` (`break`), `skip` (`continue`).
+- **Functions with Defaults & Expressions**:
+  - Default arguments: `to greet person with greeting "Hello":`.
+  - Keyword arguments and function calls in expressions: `result of tax on price`.
+  - Natural phrasing: `to tax on price` -> `to tax with price`.
+- **Error Handling**:
+  - `try ... if that fails [as problem] ... always ...` desugaring to Python `try/except/finally`.
+- **Pure Standard Library Runtime Helpers**:
+  - CSV files: `read csv file "..." into rows`, `write csv rows into file "..."`, `append csv row to file "..."`.
+  - JSON serialization: `parse json text into obj`, `convert obj to json into text`.
+  - Date & Time: `today`, `now` / `current time`.
+  - Math & System: `round x to 2 places into y`, `absolute value of x`, `square root of x`, `environment variable "NAME" into val`, `run command "..." into output`.
+  - Python interop: `use python module math`, `from python module math use ceil, floor`, dot notation `math.pi` / `math's pi`.
+  - DoomScript module interop: `use "helpers.doom"`.
+- **Test Suite**:
+  - Added `tests/test_phase2_everyday.py` with 14 comprehensive tests covering all Phase 2 features. 100% of all 57 tests passing.
+
+## [0.3.0] - Phase 1: Normalization & Phrase Layer
+### Added
+- **Data-Driven Phrase Layer (`src/doomscript/grammar/phrases.py`)**:
+  - Implemented pre-parser preprocessing pipeline driven entirely by data tables.
+  - Adding new synonyms or fillers no longer requires editing grammar or CST/AST transformers.
+- **Filler Word Stripping**:
+  - Polite prefixes: `please`, `kindly` (e.g., `please add 5 to the list`).
+  - Adverbs & fillers: `just`, `simply`, `then`.
+  - Articles: `the` before nouns/identifiers without affecting strings or variable names.
+- **Synonym Tables**:
+  - Output verbs: `show`, `print`, `tell`, `display` (non-colored) canonicalize to `say`.
+  - Return verbs: `give back`, `hand back`, `yield back` canonicalize to `return`.
+  - Comparisons: `is bigger than`, `is more than`, `exceeds`, `is higher than` -> `is greater than` (`>`); `is no less than`, `is greater than or equal to` -> `is at least` (`>=`); `is smaller than`, `is lower than` -> `is less than` (`<`); `is no more than`, `is less than or equal to` -> `is at most` (`<=`); `is equal to`, `is the same as` -> `equals` (`==`); `is different from`, `is not equal to` -> `is not` (`!=`).
+- **Flexible Assignment**:
+  - `x is 5`, `x = 5`, `set x to 5`, `let x be 5`, `make x 5`, `make x be 5`, `put 5 into x`.
+  - `call it <target>` / `call that <target>`: Aliases the last evaluated/assigned value to a new identifier.
+- **Pronoun Tracking (`it` / `that`)**:
+  - Lexical scope tracking of the most recently assigned variable name.
+  - Resolves pronouns in sequential statements (e.g. `total = 100 \n increase it by 25`).
+  - Strict scope safety: Raises descriptive `DoomScopeError` if pronoun is referenced before any variable is assigned.
+  - Context preservation: Protects grammar keywords like `verify that` and `if (it|that) fails` from accidental pronoun replacement.
+- **Sentence Endings & Statement Chaining**:
+  - Statements can end in period `.` (e.g., `set x to 10.`).
+  - Multiple statements on a single line separated by `.` or `and then` are cleanly split while preserving block indentation.
+- **Articles & Possessives**:
+  - Normalized `the length of x`, `length of x`, `x's length`, and `x's count` into `count of x`.
+- **Protected String Literals**:
+  - String contents are masked during preprocessing and unmasked faithfully so text contents are never altered.
+- **Test Suite**:
+  - Added `tests/test_phrases.py` with 12 comprehensive tests. Total test count increased to 43 passing tests.

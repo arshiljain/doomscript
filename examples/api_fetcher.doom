@@ -1,0 +1,35 @@
+# API Data Processor in DoomScript
+# Demonstrates: JSON parsing, error handling (try/if that fails), and data shaping
+
+say "=== Weather and Server Metric Fetcher ==="
+
+# Mock raw API response payload
+raw_api_payload = '{"service": "DoomCloud", "status": "ONLINE", "temperature_c": 21.5, "humidity": 45}'
+
+try
+    parse json raw_api_payload into sensor_reading
+    service_name = sensor_reading.service
+    temp = sensor_reading.temperature_c
+    say "Service:", service_name, "- Current Temp:", temp, "C"
+
+    # Evaluate comfortable temperature range
+    if temp is between 18 and 25
+        say "Climate status: Optimal"
+    otherwise
+        say "Climate status: Outside comfortable bounds"
+if that fails as problem
+    say "Failed to parse sensor API payload."
+always
+    say "API diagnostic cycle complete."
+
+# Build outgoing telemetry packet
+telemetry = {
+    client: "Station-Alpha",
+    timestamp: now,
+    ping_ok: true
+}
+
+convert telemetry to json into outgoing_packet
+say ""
+say "Generated telemetry payload:"
+say outgoing_packet

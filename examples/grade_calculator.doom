@@ -1,0 +1,41 @@
+# Student Grade Calculator in DoomScript
+# Demonstrates: functions with formulas, conditionals, aggregates, and ranking
+
+say "=== Academic Grade and Performance Calculator ==="
+
+# Function to assign letter grade based on percentage
+to compute_grade with score
+    if score is at least 90
+        return "A"
+    otherwise if score is at least 80
+        return "B"
+    otherwise if score is at least 70
+        return "C"
+    otherwise if score is at least 60
+        return "D"
+    otherwise
+        return "F"
+
+# Roster of students with exam scores
+roster = [
+    {name: "Alexander", midterm: 88, final: 94},
+    {name: "Beatrice", midterm: 72, final: 81},
+    {name: "Cassandra", midterm: 95, final: 98},
+    {name: "Damian", midterm: 60, final: 65},
+    {name: "Elena", midterm: 84, final: 86}
+]
+
+# Process results
+say "Student Report Card:"
+say "----------------------------------------"
+
+for each student in roster
+    # Weighted score: 40% midterm, 60% final
+    mid_part = 40% of student.midterm
+    fin_part = 60% of student.final
+    total_grade = mid_part + fin_part
+    letter = compute_grade(total_grade)
+    say student.name, "Final Score:", total_grade, "Grade:", letter
+
+say "----------------------------------------"
+say "Class summary complete."

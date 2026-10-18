@@ -1,0 +1,1071 @@
+"""
+DoomScript Normalization and Phrase Layer
+Driven by data tables (synonyms, filler words, flexible assignments, pronouns, possessives).
+Adding a synonym here requires NO grammar edits.
+"""
+
+import re
+from typing import Optional, List, Tuple, Dict, Any
+from doomscript.exceptions import DoomScopeError, DoomSyntaxError
+
+
+# ---------------------------------------------------------------------------
+# DATA TABLES
+# ---------------------------------------------------------------------------
+
+# Filler words that can precede statements or verbs
+LEADING_FILLERS = [
+    "please",
+    "kindly",
+    "just",
+    "simply",
+    "then",
+]
+
+# Articles that can precede nouns/identifiers outside strings
+IGNORABLE_ARTICLES = [
+    "the",
+]
+
+# Verb synonyms mapping to canonical DoomScript verbs
+VERB_SYNONYMS: Dict[str, str] = {
+    "show": "say",
+    "print": "say",
+    "tell": "say",
+    "give back": "return",
+    "hand back": "return",
+    "yield back": "return",
+}
+
+# Comparison synonyms mapping to canonical Lark operators
+# Longest match first to prevent prefix shadowing
+COMPARISON_SYNONYMS: List[Tuple[str, str]] = [
+    ("is strictly greater than", "is greater than"),
+    ("is greater than or equal to", "is at least"),
+    ("is strictly less than", "is less than"),
+    ("is less than or equal to", "is at most"),
+    ("is no greater than", "is at most"),
+    ("is no less than", "is at least"),
+    ("is no more than", "is at most"),
+    ("is no smaller than", "is at least"),
+    ("is bigger than", "is greater than"),
+    ("is more than", "is greater than"),
+    ("is higher than", "is greater than"),
+    ("exceeds", "is greater than"),
+    ("is smaller than", "is less than"),
+    ("is lower than", "is less than"),
+    ("is equal to", "equals"),
+    ("is the same as", "equals"),
+    ("is not equal to", "is not"),
+    ("is different from", "is not"),
+]
+
+# Patterns for flexible assignments
+# Format: (regex_pattern, replacement_template)
+ASSIGNMENT_PATTERNS: List[Tuple[re.Pattern, str]] = [
+    # put <expr> into <target>  -> set <target> to <expr>
+    (re.compile(r"^\s*put\s+(.+?)\s+into\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s*$", re.IGNORECASE), r"set \2 to \1"),
+    # let <target> be <expr>     -> set <target> to <expr>
+    (re.compile(r"^\s*let\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s+be\s+(.+)$", re.IGNORECASE), r"set \1 to \2"),
+    # make <target> be <expr>   -> set <target> to <expr>
+    (re.compile(r"^\s*make\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s+be\s+(.+)$", re.IGNORECASE), r"set \1 to \2"),
+    # make <target> <expr>      -> set <target> to <expr> (e.g. make x 5)
+    (re.compile(r"^\s*make\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s+([^\s].*)$", re.IGNORECASE), r"set \1 to \2"),
+]
+
+# Regex patterns for possessives and article counts
+# e.g., name's length, name's count -> count of name
+# the length of name -> count of name
+POSSESSIVE_REWRITES: List[Tuple[re.Pattern, str]] = [
+    (re.compile(r"\b([A-Za-z_]\w*)'s\s+(?:length|count|size)\b", re.IGNORECASE), r"count of \1"),
+    (re.compile(r"\bthe\s+(?:length|count|size)\s+of\s+([A-Za-z_]\w*)\b", re.IGNORECASE), r"count of \1"),
+    (re.compile(r"\b(?:length|size)\s+of\s+([A-Za-z_]\w*)\b", re.IGNORECASE), r"count of \1"),
+]
+
+
+# Patterns for Phase 8 type contracts
+TYPE_CONTRACT_MAP: Dict[str, str] = {
+    "number": "is a number",
+    "int": "is a number",
+    "float": "is a number",
+    "text": "is text",
+    "string": "is text",
+    "str": "is text",
+    "boolean": "is a boolean",
+    "bool": "is a boolean",
+    "list": "is a list",
+    "record": "is a record",
+    "dictionary": "is a record",
+    "dict": "is a record",
+}
+
+
+# ---------------------------------------------------------------------------
+# STRING & COMMENT MASKING UTILITIES
+# ---------------------------------------------------------------------------
+
+STRING_REGEX = re.compile(r'("""[\s\S]*?"""|\'\'\'[\s\S]*?\'\'\'|"(?:[^"\\]|\\.)*"|\'(?:[^\'\\]|\\.)*\')')
+
+def mask_strings(text: str) -> Tuple[str, List[str]]:
+    """Replaces string literals with placeholders to preserve their exact content."""
+    strings = []
+    def repl(m):
+        idx = len(strings)
+        strings.append(m.group(0))
+        return f"__STR_LITERAL_{idx}__"
+    masked = STRING_REGEX.sub(repl, text)
+    return masked, strings
+
+def unmask_strings(text: str, strings: List[str]) -> str:
+    """Restores masked string literals."""
+    for idx, s in enumerate(strings):
+        text = text.replace(f"__STR_LITERAL_{idx}__", s)
+    return text
+
+
+def split_comment(line: str) -> Tuple[str, str]:
+    """Splits a line into code and comment (#...) while respecting string literals."""
+    masked, strings = mask_strings(line)
+    if "#" in masked:
+        idx = masked.index("#")
+        code_part = masked[:idx]
+        comment_part = masked[idx:]
+        return unmask_strings(code_part, strings), unmask_strings(comment_part, strings)
+    return line, ""
+
+
+# ---------------------------------------------------------------------------
+# SCOPE & PRONOUN TRACKER
+# ---------------------------------------------------------------------------
+
+class ScopeTracker:
+    """
+    Maintains a stack of lexical scopes to track the most recently assigned
+    variable for resolving the pronouns 'it' and 'that'.
+    """
+    def __init__(self):
+        # Stack of indent levels and their last assigned variable
+        # [(indent_level, last_var)]
+        self.scopes: List[Dict[str, Any]] = [{"indent": 0, "last_var": None, "diverged": False}]
+
+    def update_indent(self, indent: int):
+        # If indent decreased, pop deeper scopes
+        while len(self.scopes) > 1 and self.scopes[-1]["indent"] > indent:
+            popped = self.scopes.pop()
+            # If the current parent had no last_var, inherit if not diverged
+            if self.scopes[-1]["last_var"] is None and not popped["diverged"]:
+                self.scopes[-1]["last_var"] = popped["last_var"]
+
+        # If indent increased, push new scope inheriting current last_var
+        if indent > self.scopes[-1]["indent"]:
+            self.scopes.append({"indent": indent, "last_var": self.scopes[-1]["last_var"], "diverged": False})
+
+    def record_assignment(self, var_name: str):
+        self.scopes[-1]["last_var"] = var_name
+
+    def mark_diverged(self):
+        self.scopes[-1]["diverged"] = True
+        self.scopes[-1]["last_var"] = None
+
+    def get_last_var(self) -> Optional[str]:
+        return self.scopes[-1]["last_var"]
+
+
+# Helper regex to detect variable assignment targets
+ASSIGN_VAR_PATTERNS = [
+    re.compile(r"^\s*set\s+([A-Za-z_]\w*)\s+to\b", re.IGNORECASE),
+    re.compile(r"^\s*([A-Za-z_]\w*)\s*(?:=|\bis\b)\s*(?!empty\b|not\b|at\b|greater\b|less\b|over\b|under\b|inside\b|in\b)", re.IGNORECASE),
+    re.compile(r"^\s*increase\s+([A-Za-z_]\w*)\s+by\b", re.IGNORECASE),
+    re.compile(r"^\s*decrease\s+([A-Za-z_]\w*)\s+by\b", re.IGNORECASE),
+    re.compile(r"\binto\s+([A-Za-z_]\w*)\s*$", re.IGNORECASE),
+    re.compile(r"^\s*for\s+each\s+([A-Za-z_]\w*)\s+in\b", re.IGNORECASE),
+]
+
+def extract_assigned_var(code: str) -> Optional[str]:
+    for pat in ASSIGN_VAR_PATTERNS:
+        m = pat.search(code)
+        if m:
+            target = m.group(1)
+            if target.lower() not in ("it", "that"):
+                return target
+    return None
+
+
+# ---------------------------------------------------------------------------
+# STATEMENT NORMALIZATION PIPELINE
+# ---------------------------------------------------------------------------
+
+def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> str:
+    """Normalizes a single statement (without comments or leading indent)."""
+    text = stmt.strip()
+    if not text:
+        return ""
+
+    # Mask strings
+    masked, strings = mask_strings(text)
+
+    # 1. Strip leading filler words (please, kindly, just, simply, then)
+    for filler in LEADING_FILLERS:
+        pattern = re.compile(rf"^{filler}\s+", re.IGNORECASE)
+        if pattern.match(masked):
+            masked = pattern.sub("", masked)
+            break
+
+    # If condition ending in 'then' -> replace with ':'
+    if re.match(r"^if\s+.+\s+then$", masked, re.IGNORECASE):
+        masked = re.sub(r"\s+then$", ":", masked, flags=re.IGNORECASE)
+
+    # 2. Flexible Assignment Patterns
+    for pat, repl in ASSIGNMENT_PATTERNS:
+        if pat.match(masked):
+            masked = pat.sub(repl, masked)
+            break
+
+    # 3. Special handling for 'call it <target>'
+    call_it_match = re.match(r"^call\s+(?:it|that)\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if call_it_match:
+        target = call_it_match.group(1)
+        last_var = scope.get_last_var()
+        if not last_var:
+            raise DoomScopeError(
+                f"Cannot resolve 'call it {target}' on line {line_num}: no preceding variable assigned in scope.",
+                line=line_num,
+                source_line=stmt
+            )
+        masked = f"set {target} to {last_var}"
+        scope.record_assignment(target)
+        return unmask_strings(masked, strings)
+
+    # 4. Pronoun Resolution ('it' / 'that')
+    # Temporarily protect grammar keywords that contain 'that' or 'it'
+    masked = re.sub(r"\bverify\s+that\b", "__VERIFY_THAT__", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bif\s+(?:it|that)\s+fails\b", "__IF_FAILS__", masked, flags=re.IGNORECASE)
+
+    pronoun_match = re.search(r"\b(it|that)\b", masked, re.IGNORECASE)
+    if pronoun_match:
+        last_var = scope.get_last_var()
+        if not last_var:
+            raise DoomScopeError(
+                f"Cannot resolve pronoun '{pronoun_match.group(1)}' on line {line_num}: no preceding variable assigned in scope.",
+                line=line_num,
+                source_line=stmt,
+                suggestion="assign a variable first or use an explicit variable name"
+            )
+        masked = re.sub(r"\b(it|that)\b", last_var, masked, flags=re.IGNORECASE)
+
+    # Restore protected keywords (also normalizes 'if that fails' to 'if it fails')
+    masked = masked.replace("__VERIFY_THAT__", "verify that")
+    masked = masked.replace("__IF_FAILS__", "if it fails")
+
+    # 5. Verb Synonyms
+    # Handle display vs display colored
+    if re.match(r"^display\s+colored\b", masked, re.IGNORECASE):
+        pass  # Keep legacy display colored
+    elif re.match(r"^display\b", masked, re.IGNORECASE):
+        masked = re.sub(r"^display\b", "say", masked, flags=re.IGNORECASE)
+
+    for syn, canonical in VERB_SYNONYMS.items():
+        pattern = re.compile(rf"^{syn}\b", re.IGNORECASE)
+        if pattern.match(masked):
+            masked = pattern.sub(canonical, masked)
+            break
+
+    # 6. Possessives and Article Rewrites
+    for pat, repl in POSSESSIVE_REWRITES:
+        masked = pat.sub(repl, masked)
+
+    # 7. Comparison Synonyms
+    for syn, canonical in COMPARISON_SYNONYMS:
+        # Replace whole phrase
+        pattern = re.compile(rf"\b{re.escape(syn)}\b", re.IGNORECASE)
+        if pattern.search(masked):
+            masked = pattern.sub(canonical, masked)
+
+    # 8. Ignorable Articles before identifiers
+    # E.g. "say the total" -> "say total"
+    # "add 5 to the list" -> "add 5 to list"
+    for art in IGNORABLE_ARTICLES:
+        # 'the' followed by an identifier or word
+        masked = re.sub(rf"\b{art}\s+([A-Za-z_]\w*)", r"\1", masked, flags=re.IGNORECASE)
+
+    # 9. Phase 2 Everyday Programming Rewrites
+    masked = re.sub(r"^\s*(?:otherwise\s+if|else\s+if)\b", "elif", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*otherwise\b", "else", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bask\s+(?:for\s+)?number\b", "ask number", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bask\s+(?:for\s+)?(?:boolean|yes/no|confirmation)\b", "ask boolean", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bread\s+csv\s+(?!file\b)", "read csv file ", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bwrite\s+csv\s+(.+?)\s+to\s+file\b", r"write csv \1 into file", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bwrite\s+csv\s+(.+?)\s+to\s+(?!file\b)", r"write csv \1 into file ", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bjson\s+parse\b", "parse json", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bjson\s+stringify\s+(.+?)\s+into\b", r"convert \1 to json into", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bget\s+environment\s+variable\b", "environment variable", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bround\s+(.+?)\s+to\s+(.+?)\s+places\s+into\b", r"round \1 to \2 decimals into", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bsort\s+(.+?)\s+by\s+([A-Za-z_]\w*)\s+\((?:descending|desc)\)", r"sort \1 by \2 descending", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bsort\s+(.+?)\s+by\s+([A-Za-z_]\w*)\s+desc\b", r"sort \1 by \2 descending", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\binsert\s+(.+?)\s+at\s+(?:index|position)\s+(.+?)\s+in\b", r"insert \1 at \2 in", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bunique\s+items\s+in\b", "unique items of", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(?:an\s+empty\s+list|a\s+new\s+list)\b", "[]", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(?:a\s+list\s+of|list\s+of)\s+([^;\n]+)$", r"[\1]", masked, flags=re.IGNORECASE)
+
+    # Function definition with 'on': 'to tax on price' -> 'to tax with price'
+    masked = re.sub(r"^\s*to\s+([A-Za-z_]\w*)\s+on\s+([A-Za-z_]\w*)\b", r"to \1 with \2", masked, flags=re.IGNORECASE)
+
+    # Filter statements with assignment or into
+    filter_into_m = re.match(r"^\s*([A-Za-z_]\w*)\s*=\s*(.+?)\s+where\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if filter_into_m:
+        masked = f"{filter_into_m.group(2)} where {filter_into_m.group(3)} into {filter_into_m.group(4)}"
+    else:
+        filter_assign_m = re.match(r"^\s*([A-Za-z_]\w*)\s*=\s*(.+?)\s+where\s+(.+?)$", masked, re.IGNORECASE)
+        if filter_assign_m:
+            masked = f"{filter_assign_m.group(2)} where {filter_assign_m.group(3)} into {filter_assign_m.group(1)}"
+
+    # Dot notation rewrites (e.g. math.pi -> math's pi)
+    while re.search(r"\b([A-Za-z_]\w*)\.([A-Za-z_]\w*)\b", masked):
+        masked = re.sub(r"\b([A-Za-z_]\w*)\.([A-Za-z_]\w*)\b", r"\1's \2", masked)
+
+    # Result of function calls in expressions
+    masked = re.sub(r"\b(?:the\s+)?result\s+of\s+([A-Za-z_]\w*)\s+on\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"\1(\2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(?:the\s+)?result\s+of\s+([A-Za-z_]\w*)\s+with\s+(.+?)(?=\s+and\s+then|\s+into\b|\s+otherwise\b|\s*$)", r"\1(\2)", masked, flags=re.IGNORECASE)
+
+    # Field aggregates
+    masked = re.sub(r"\b(?:total|sum)\s+of\s+([A-Za-z_]\w*)\s+in\s+([A-Za-z_]\w*)", r'agg_field("sum", "\1", \2)', masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\baverage\s+of\s+([A-Za-z_]\w*)\s+in\s+([A-Za-z_]\w*)", r'agg_field("avg", "\1", \2)', masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(?:highest|maximum)\s+([A-Za-z_]\w*)\s+in\s+([A-Za-z_]\w*)", r'agg_field("max", "\1", \2)', masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(?:lowest|minimum)\s+([A-Za-z_]\w*)\s+in\s+([A-Za-z_]\w*)", r'agg_field("min", "\1", \2)', masked, flags=re.IGNORECASE)
+
+    # List operations
+    masked = re.sub(r"\bitem\s+(\d+|[A-Za-z_]\w*)\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"item_of(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bfirst\s+(\d+|[A-Za-z_]\w*)\s+items\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"first_n_items(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\blast\s+(\d+|[A-Za-z_]\w*)\s+items\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"last_n_items(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bunique\s+items\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"unique_items(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bsorted\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"sorted_list(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\breversed\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"reversed_list(\1)", masked, flags=re.IGNORECASE)
+
+    # Phase 4 Table Joins
+    masked = re.sub(
+        r"\bcombine\s+(.+?)\s+and\s+(.+?)\s+on\s+(.+?)\s+with\s+style\s+(.+?)\s+into\s+([A-Za-z_]\w*)",
+        r"\5 = combine_tables(\1, \2, \3, \4)",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"\bcombine\s+(.+?)\s+and\s+(.+?)\s+on\s+(.+?)\s+into\s+([A-Za-z_]\w*)",
+        r"\4 = combine_tables(\1, \2, \3)",
+        masked,
+        flags=re.IGNORECASE
+    )
+
+    # Phase 4 HTML Extraction
+    masked = re.sub(
+        r"\bextract\s+text\s+from\s+html\s+(.+?)\s+into\s+([A-Za-z_]\w*)",
+        r"\2 = extract_html_text(\1)",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"\bextract\s+links\s+from\s+html\s+(.+?)\s+into\s+([A-Za-z_]\w*)",
+        r"\2 = extract_html_links(\1)",
+        masked,
+        flags=re.IGNORECASE
+    )
+
+    # Phase 4 HTTP Requests
+    masked = re.sub(
+        r"\bfetch\s+url\s+(.+?)\s+with\s+headers\s+(.+?)\s+into\s+([A-Za-z_]\w*)",
+        r"\3 = fetch_url(\1, headers=\2)",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"\bfetch\s+url\s+(.+?)\s+into\s+([A-Za-z_]\w*)",
+        r"\2 = fetch_url(\1)",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"\bpost\s+json\s+(.+?)\s+to\s+(.+?)\s+with\s+headers\s+(.+?)\s+into\s+([A-Za-z_]\w*)",
+        r"\4 = fetch_url(\2, method='POST', headers=\3, json_body=\1)",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"\bpost\s+json\s+(.+?)\s+to\s+(.+?)\s+into\s+([A-Za-z_]\w*)",
+        r"\3 = fetch_url(\2, method='POST', json_body=\1)",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"\bdownload\s+(.+?)\s+to\s+file\s+(.+?)$",
+        r"download_file_url(\1, \2)",
+        masked,
+        flags=re.IGNORECASE
+    )
+
+    # Phase 4 Email Sending
+    masked = re.sub(
+        r"\bsend\s+email\s+to\s+(.+?)\s+with\s+subject\s+(.+?)\s+and\s+body\s+(.+?)\s+into\s+([A-Za-z_]\w*)",
+        r"\4 = send_email(\1, \2, \3)",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"\bsend\s+email\s+to\s+(.+?)\s+with\s+subject\s+(.+?)\s+and\s+body\s+(.+?)$",
+        r"send_email(\1, \2, \3)",
+        masked,
+        flags=re.IGNORECASE
+    )
+
+    # Phase 4 Date & Timezones
+    masked = re.sub(r"\bnow\s+in\s+([^\s;,\n]+)", r"date_now_in(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bnext\s+business\s+day\s+from\s+([^\s;,\n]+)", r"next_business_day(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(?:today\s+)?is\s+weekend\b", r"is_weekend()", masked, flags=re.IGNORECASE)
+
+    # Phase 8 Contracts: require and ensure
+    req_otherwise_m = re.match(r"^require\s+(.+?)\s+otherwise\s+(.+)$", masked, re.IGNORECASE)
+    if req_otherwise_m:
+        cond_part = req_otherwise_m.group(1).strip()
+        msg_part = req_otherwise_m.group(2).strip()
+        masked = f"verify that {cond_part} otherwise {msg_part}"
+    else:
+        req_m = re.match(r"^require\s+(.+)$", masked, re.IGNORECASE)
+        if req_m:
+            cond_part = req_m.group(1).strip()
+            orig_cond_text = unmask_strings(cond_part, strings)
+            safe_cond = orig_cond_text.replace('"', "'")
+            msg_literal = f'"Requirement failed: {safe_cond}"'
+            msg_idx = len(strings)
+            strings.append(msg_literal)
+            masked = f"verify that {cond_part} otherwise __STR_LITERAL_{msg_idx}__"
+
+    ens_otherwise_m = re.match(r"^ensure\s+(.+?)\s+otherwise\s+(.+)$", masked, re.IGNORECASE)
+    if ens_otherwise_m:
+        cond_part = ens_otherwise_m.group(1).strip()
+        msg_part = ens_otherwise_m.group(2).strip()
+        masked = f"verify that {cond_part} otherwise {msg_part}"
+    else:
+        ens_m = re.match(r"^ensure\s+(.+)$", masked, re.IGNORECASE)
+        if ens_m:
+            cond_part = ens_m.group(1).strip()
+            orig_cond_text = unmask_strings(cond_part, strings)
+            safe_cond = orig_cond_text.replace('"', "'")
+            msg_literal = f'"Postcondition failed: {safe_cond}"'
+            msg_idx = len(strings)
+            strings.append(msg_literal)
+            masked = f"verify that {cond_part} otherwise __STR_LITERAL_{msg_idx}__"
+
+    # Phase 9: Destructuring
+    head_tail_m = re.match(r"^first\s+item\s+into\s+([A-Za-z_]\w*)\s*,\s*remaining\s+items\s+into\s+([A-Za-z_]\w*)\s+from\s+(.+)$", masked, re.IGNORECASE)
+    if head_tail_m:
+        h_var = head_tail_m.group(1)
+        t_var = head_tail_m.group(2)
+        c_expr = head_tail_m.group(3).strip()
+        masked = f"set {h_var} to head_of({c_expr}) and then set {t_var} to tail_of({c_expr})"
+
+    unpack_m = re.match(r"^unpack\s+(?!binary\b)(.+?)\s+from\s+(.+)$", masked, re.IGNORECASE)
+    if unpack_m:
+        targets_raw = [t.strip() for t in unpack_m.group(1).split(",")]
+        c_expr = unpack_m.group(2).strip()
+        quoted_keys = "[" + ", ".join(f'"{t}"' for t in targets_raw) + "]"
+        tmp_unp = f"__unp_{line_num}"
+        unp_stmts = [f"set {tmp_unp} to unpack_values({quoted_keys}, {c_expr})"]
+        for idx, t in enumerate(targets_raw, 1):
+            unp_stmts.append(f"set {t} to item {idx} of {tmp_unp}")
+        masked = " and then ".join(unp_stmts)
+
+    # Phase 10: Testing Assertions (expect ... to ...)
+    exp_eq_m = re.match(r"^expect\s+(.+?)\s+to\s+equal\s+(.+)$", masked, re.IGNORECASE)
+    if exp_eq_m:
+        e_expr = exp_eq_m.group(1).strip()
+        e_exp = exp_eq_m.group(2).strip()
+        masked = f'verify that {e_expr} equals {e_exp} otherwise "Expectation failed: equality check"'
+
+    exp_num_m = re.match(r"^expect\s+(.+?)\s+to\s+be\s+(?:a\s+)?number$", masked, re.IGNORECASE)
+    if exp_num_m:
+        e_expr = exp_num_m.group(1).strip()
+        masked = f'verify that {e_expr} is a number otherwise "Expectation failed: value is not a number"'
+
+    exp_txt_m = re.match(r"^expect\s+(.+?)\s+to\s+be\s+(?:a\s+)?(?:text|string)$", masked, re.IGNORECASE)
+    if exp_txt_m:
+        e_expr = exp_txt_m.group(1).strip()
+        masked = f'verify that {e_expr} is text otherwise "Expectation failed: value is not text"'
+
+    exp_bool_m = re.match(r"^expect\s+(.+?)\s+to\s+be\s+(?:a\s+)?(?:boolean|bool)$", masked, re.IGNORECASE)
+    if exp_bool_m:
+        e_expr = exp_bool_m.group(1).strip()
+        masked = f'verify that {e_expr} is a boolean otherwise "Expectation failed: value is not a boolean"'
+
+    exp_list_m = re.match(r"^expect\s+(.+?)\s+to\s+be\s+(?:a\s+)?list$", masked, re.IGNORECASE)
+    if exp_list_m:
+        e_expr = exp_list_m.group(1).strip()
+        masked = f'verify that {e_expr} is a list otherwise "Expectation failed: value is not a list"'
+
+    exp_rec_m = re.match(r"^expect\s+(.+?)\s+to\s+be\s+(?:a\s+)?(?:record|dictionary|dict)$", masked, re.IGNORECASE)
+    if exp_rec_m:
+        e_expr = exp_rec_m.group(1).strip()
+        masked = f'verify that {e_expr} is a record otherwise "Expectation failed: value is not a record"'
+
+    exp_gt_m = re.match(r"^expect\s+(.+?)\s+to\s+be\s+(?:greater\s+than|over)\s+(.+)$", masked, re.IGNORECASE)
+    if exp_gt_m:
+        e_expr = exp_gt_m.group(1).strip()
+        e_val = exp_gt_m.group(2).strip()
+        masked = f'verify that {e_expr} is greater than {e_val} otherwise "Expectation failed: value not greater"'
+
+    exp_ge_m = re.match(r"^expect\s+(.+?)\s+to\s+be\s+(?:at\s+least|no\s+less\s+than)\s+(.+)$", masked, re.IGNORECASE)
+    if exp_ge_m:
+        e_expr = exp_ge_m.group(1).strip()
+        e_val = exp_ge_m.group(2).strip()
+        masked = f'verify that {e_expr} is at least {e_val} otherwise "Expectation failed: value not at least"'
+
+    exp_lt_m = re.match(r"^expect\s+(.+?)\s+to\s+be\s+(?:less\s+than|under)\s+(.+)$", masked, re.IGNORECASE)
+    if exp_lt_m:
+        e_expr = exp_lt_m.group(1).strip()
+        e_val = exp_lt_m.group(2).strip()
+        masked = f'verify that {e_expr} is less than {e_val} otherwise "Expectation failed: value not less"'
+
+    exp_le_m = re.match(r"^expect\s+(.+?)\s+to\s+be\s+(?:at\s+most|no\s+more\s+than)\s+(.+)$", masked, re.IGNORECASE)
+    if exp_le_m:
+        e_expr = exp_le_m.group(1).strip()
+        e_val = exp_le_m.group(2).strip()
+        masked = f'verify that {e_expr} is at most {e_val} otherwise "Expectation failed: value not at most"'
+
+    exp_cont_m = re.match(r"^expect\s+(.+?)\s+to\s+contain\s+(.+)$", masked, re.IGNORECASE)
+    if exp_cont_m:
+        e_expr = exp_cont_m.group(1).strip()
+        e_val = exp_cont_m.group(2).strip()
+        masked = f'verify that {e_expr} contains {e_val} otherwise "Expectation failed: value does not contain item"'
+
+    # Phase 11: CLI Builder
+    cli_desc_m = re.match(r"^program\s+description\s+(.+)$", masked, re.IGNORECASE)
+    if cli_desc_m:
+        masked = f"cli_set_description({cli_desc_m.group(1).strip()})"
+
+    cli_opt_type_m = re.match(r"^option\s+([A-Za-z_]\w*)\s+as\s+([A-Za-z_]\w+)\s+with\s+default\s+(.+?)\s+and\s+description\s+(.+)$", masked, re.IGNORECASE)
+    if cli_opt_type_m:
+        o_name = cli_opt_type_m.group(1)
+        o_type = cli_opt_type_m.group(2).lower()
+        o_def = cli_opt_type_m.group(3).strip()
+        o_desc = cli_opt_type_m.group(4).strip()
+        masked = f'cli_add_option("{o_name}", default={o_def}, opt_type="{o_type}", help_text={o_desc})'
+    else:
+        cli_opt_m = re.match(r"^option\s+([A-Za-z_]\w*)\s+with\s+default\s+(.+?)\s+and\s+description\s+(.+)$", masked, re.IGNORECASE)
+        if cli_opt_m:
+            o_name = cli_opt_m.group(1)
+            o_def = cli_opt_m.group(2).strip()
+            o_desc = cli_opt_m.group(3).strip()
+            masked = f'cli_add_option("{o_name}", default={o_def}, help_text={o_desc})'
+
+    cli_flag_m = re.match(r"^flag\s+([A-Za-z_]\w*)\s+with\s+description\s+(.+)$", masked, re.IGNORECASE)
+    if cli_flag_m:
+        f_name = cli_flag_m.group(1)
+        f_desc = cli_flag_m.group(2).strip()
+        masked = f'cli_add_flag("{f_name}", help_text={f_desc})'
+
+    cli_parse_m = re.match(r"^parse\s+arguments\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if cli_parse_m:
+        t_var = cli_parse_m.group(1)
+        masked = f"set {t_var} to cli_parse_arguments()"
+
+    # Phase 12: Concurrency & Timers
+    bg_m = re.match(r"^run\s+in\s+background\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if bg_m:
+        fn_call = bg_m.group(1).strip()
+        t_var = bg_m.group(2)
+        fn_call_m = re.match(r"^([A-Za-z_]\w*)\((.*)\)$", fn_call)
+        if fn_call_m:
+            fn_name = fn_call_m.group(1)
+            fn_args = fn_call_m.group(2).strip()
+            if fn_args:
+                masked = f"set {t_var} to spawn_background_task({fn_name}, {fn_args})"
+            else:
+                masked = f"set {t_var} to spawn_background_task({fn_name})"
+        else:
+            masked = f"set {t_var} to spawn_background_task({fn_call})"
+
+    wait_all_m = re.match(r"^wait\s+for\s+all\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if wait_all_m:
+        t_list = wait_all_m.group(1).strip()
+        t_var = wait_all_m.group(2)
+        masked = f"set {t_var} to wait_all_background_tasks({t_list})"
+    else:
+        wait_one_m = re.match(r"^wait\s+for\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+        if wait_one_m:
+            t_task = wait_one_m.group(1)
+            t_var = wait_one_m.group(2)
+            masked = f"set {t_var} to wait_background_task({t_task})"
+
+    timeout_m = re.match(r"^timeout\s+(.+?)\s+seconds\s+for\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if timeout_m:
+        sec = timeout_m.group(1).strip()
+        fn_call = timeout_m.group(2).strip()
+        t_var = timeout_m.group(3)
+        fn_call_m = re.match(r"^([A-Za-z_]\w*)\((.*)\)$", fn_call)
+        if fn_call_m:
+            fn_name = fn_call_m.group(1)
+            fn_args = fn_call_m.group(2).strip()
+            if fn_args:
+                masked = f"set {t_var} to timeout_call({sec}, {fn_name}, {fn_args})"
+            else:
+                masked = f"set {t_var} to timeout_call({sec}, {fn_name})"
+        else:
+            masked = f"set {t_var} to timeout_call({sec}, {fn_call})"
+
+    # Phase 13: Web Server High-Level Verbs
+    masked = re.sub(r"^reply\s+with\s+json\s+(.+)$", r"return \1", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^reply\s+with\s+(.+)$", r"return \1", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^serve\s+on\s+port\s+(.+?)\s+in\s+background\s+into\s+([A-Za-z_]\w*)$", r"start server on port \1 in background into \2", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^serve\s+on\s+port\s+(.+)$", r"start server on port \1", masked, flags=re.IGNORECASE)
+
+    # Phase 14: AI / LLM
+    ai_json_m = re.match(r"^ask\s+ai\s+(.+?)\s+as\s+json\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if ai_json_m:
+        masked = f"set {ai_json_m.group(2)} to ask_ai_json({ai_json_m.group(1).strip()})"
+    else:
+        ai_model_m = re.match(r"^ask\s+ai\s+(.+?)\s+with\s+model\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+        if ai_model_m:
+            masked = f"set {ai_model_m.group(3)} to ask_ai_model({ai_model_m.group(1).strip()}, {ai_model_m.group(2).strip()})"
+        else:
+            ai_simple_m = re.match(r"^ask\s+ai\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+            if ai_simple_m:
+                masked = f"set {ai_simple_m.group(2)} to ask_ai({ai_simple_m.group(1).strip()})"
+
+    # Phase 15: Declarative English Database ORM
+    orm_def_m = re.match(r"^define\s+entity\s+([A-Za-z_]\w*)\s+with\s+(.+)$", masked, re.IGNORECASE)
+    if orm_def_m:
+        ename = orm_def_m.group(1)
+        f_str = orm_def_m.group(2)
+        field_parts = [f.strip() for f in f_str.split(",")]
+        kwargs = []
+        for fp in field_parts:
+            m_f = re.match(r"^([A-Za-z_]\w*)\s+as\s+([A-Za-z_]\w+)$", fp, re.IGNORECASE)
+            if m_f:
+                kwargs.append(f'{m_f.group(1)}="{m_f.group(2).lower()}"')
+        masked = f'orm_define("{ename}", {", ".join(kwargs)})'
+
+    orm_save_m = re.match(r"^save\s+new\s+([A-Za-z_]\w*)\s+with\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if orm_save_m:
+        ename = orm_save_m.group(1)
+        vals_str = orm_save_m.group(2)
+        target = orm_save_m.group(3)
+        val_pairs = [v.strip() for v in re.split(r",\s*", vals_str)]
+        kwargs = []
+        for vp in val_pairs:
+            m_vp = re.match(r"^([A-Za-z_]\w*)[:\s]+(.+)$", vp)
+            if m_vp:
+                kwargs.append(f'{m_vp.group(1)}={m_vp.group(2).strip()}')
+        masked = f'set {target} to orm_save("{ename}", {", ".join(kwargs)})'
+
+    orm_find_all_m = re.match(r"^find\s+all\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if orm_find_all_m:
+        ename = orm_find_all_m.group(1)
+        singular = ename[:-1] if ename.endswith("s") else ename
+        masked = f'set {orm_find_all_m.group(2)} to orm_find_all("{singular}")'
+
+    orm_find_one_m = re.match(r"^find\s+first\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if orm_find_one_m:
+        ename = orm_find_one_m.group(1)
+        singular = ename[:-1] if ename.endswith("s") else ename
+        masked = f'set {orm_find_one_m.group(2)} to orm_find_first("{singular}")'
+
+    # Phase 17: English Markdown & Rich Document Generator
+    doc_create_m = re.match(r"^create\s+(?:markdown\s+)?document\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if doc_create_m:
+        masked = f"set {doc_create_m.group(1)} to doc_create()"
+
+    doc_head_lvl_m = re.match(r"^add\s+heading\s+(.+?)\s+at\s+level\s+(\d+)\s+to\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if doc_head_lvl_m:
+        masked = f"doc_add_heading({doc_head_lvl_m.group(3)}, {doc_head_lvl_m.group(1).strip()}, {doc_head_lvl_m.group(2)})"
+    else:
+        doc_head_m = re.match(r"^add\s+heading\s+(.+?)\s+to\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+        if doc_head_m:
+            masked = f"doc_add_heading({doc_head_m.group(2)}, {doc_head_m.group(1).strip()}, 1)"
+
+    doc_p_m = re.match(r"^add\s+paragraph\s+(.+?)\s+to\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if doc_p_m:
+        masked = f"doc_add_paragraph({doc_p_m.group(2)}, {doc_p_m.group(1).strip()})"
+
+    doc_tbl_m = re.match(r"^add\s+table\s+with\s+headers\s+(.+?)\s+and\s+rows\s+(.+?)\s+to\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if doc_tbl_m:
+        masked = f"doc_add_table({doc_tbl_m.group(3)}, {doc_tbl_m.group(1).strip()}, {doc_tbl_m.group(2).strip()})"
+
+    doc_list_m = re.match(r"^add\s+bullet\s+list\s+(.+?)\s+to\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if doc_list_m:
+        masked = f"doc_add_list({doc_list_m.group(2)}, {doc_list_m.group(1).strip()})"
+
+    doc_save_m = re.match(r"^save\s+document\s+([A-Za-z_]\w*)\s+to\s+file\s+(.+)$", masked, re.IGNORECASE)
+    if doc_save_m:
+        masked = f"doc_save({doc_save_m.group(1)}, {doc_save_m.group(2).strip()})"
+
+    doc_rndr_md_m = re.match(r"^render\s+document\s+([A-Za-z_]\w*)\s+as\s+markdown\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if doc_rndr_md_m:
+        masked = f"set {doc_rndr_md_m.group(2)} to doc_render_markdown({doc_rndr_md_m.group(1)})"
+
+    doc_rndr_html_m = re.match(r"^render\s+document\s+([A-Za-z_]\w*)\s+as\s+html\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if doc_rndr_html_m:
+        masked = f"set {doc_rndr_html_m.group(2)} to doc_render_html({doc_rndr_html_m.group(1)})"
+
+    # Phase 19: English Cron & Event Scheduling
+    sched_every_m = re.match(r"^schedule\s+every\s+(.+?)\s+seconds?\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if sched_every_m:
+        masked = f"schedule_every_seconds({sched_every_m.group(1).strip()}, {sched_every_m.group(2)})"
+
+    sched_run_m = re.match(r"^run\s+scheduler\s+for\s+(.+?)\s+seconds?$", masked, re.IGNORECASE)
+    if sched_run_m:
+        masked = f"run_scheduler_for({sched_run_m.group(1).strip()})"
+
+    # Phase 20: Cryptography & Secrets
+    hash_algo_m = re.match(r"^hash\s+text\s+(.+?)\s+with\s+algorithm\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if hash_algo_m:
+        masked = f"set {hash_algo_m.group(3)} to crypto_hash({hash_algo_m.group(1).strip()}, {hash_algo_m.group(2).strip()})"
+    else:
+        hash_m = re.match(r"^hash\s+text\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+        if hash_m:
+            masked = f"set {hash_m.group(2)} to crypto_hash({hash_m.group(1).strip()})"
+
+    token_m = re.match(r"^generate\s+secure\s+token\s+of\s+length\s+(\d+)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if token_m:
+        masked = f"set {token_m.group(2)} to crypto_token({token_m.group(1)})"
+
+    b64_enc_m = re.match(r"^encode\s+text\s+(.+?)\s+as\s+base64\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if b64_enc_m:
+        masked = f"set {b64_enc_m.group(2)} to crypto_base64_encode({b64_enc_m.group(1).strip()})"
+
+    b64_dec_m = re.match(r"^decode\s+base64\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if b64_dec_m:
+        masked = f"set {b64_dec_m.group(2)} to crypto_base64_decode({b64_dec_m.group(1).strip()})"
+
+    enc_m = re.match(r"^encrypt\s+text\s+(.+?)\s+with\s+secret\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if enc_m:
+        masked = f"set {enc_m.group(3)} to crypto_encrypt({enc_m.group(1).strip()}, {enc_m.group(2).strip()})"
+
+    dec_m = re.match(r"^decrypt\s+text\s+(.+?)\s+with\s+secret\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if dec_m:
+        masked = f"set {dec_m.group(3)} to crypto_decrypt({dec_m.group(1).strip()}, {dec_m.group(2).strip()})"
+
+    # Phase 21: Streaming Data & Pipeline Operators
+    pipe_m = re.match(r"^pipe\s+(.+?)\s+into\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if pipe_m:
+        masked = f"set {pipe_m.group(3)} to pipe_pipeline({pipe_m.group(1).strip()}, {pipe_m.group(2).strip()})"
+
+    take_m = re.match(r"^take\s+first\s+(\d+)\s+items\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if take_m:
+        masked = f"set {take_m.group(3)} to take_first_n({take_m.group(2).strip()}, {take_m.group(1)})"
+
+    drop_m = re.match(r"^drop\s+first\s+(\d+)\s+items\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if drop_m:
+        masked = f"set {drop_m.group(3)} to drop_first_n({drop_m.group(2).strip()}, {drop_m.group(1)})"
+
+    batch_m = re.match(r"^batch\s+(.+?)\s+by\s+(\d+)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if batch_m:
+        masked = f"set {batch_m.group(3)} to batch_items({batch_m.group(1).strip()}, {batch_m.group(2)})"
+
+    # Phase 22: Binary & Hex
+    n2h_m = re.match(r"^convert\s+number\s+(.+?)\s+to\s+hex\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if n2h_m:
+        masked = f"set {n2h_m.group(2)} to num_to_hex({n2h_m.group(1).strip()})"
+
+    h2n_m = re.match(r"^convert\s+hex\s+(.+?)\s+to\s+number\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if h2n_m:
+        masked = f"set {h2n_m.group(2)} to hex_to_num({h2n_m.group(1).strip()})"
+
+    pack_m = re.match(r"^pack\s+numbers\s+(.+?)\s+as\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if pack_m:
+        masked = f"set {pack_m.group(3)} to pack_numbers({pack_m.group(1).strip()}, {pack_m.group(2).strip()})"
+
+    unpack_bin_m = re.match(r"^unpack\s+binary\s+(.+?)\s+from\s+(?:buffer\s+)?(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if unpack_bin_m:
+        masked = f"set {unpack_bin_m.group(3)} to unpack_numbers({unpack_bin_m.group(2).strip()}, {unpack_bin_m.group(1).strip()})"
+
+    buf_len_m = re.match(r"^(?:size|length|count)\s+of\s+(?:buffer\s+)?(.+?)\s+in\s+bytes\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if buf_len_m:
+        masked = f"set {buf_len_m.group(2)} to bytes_length({buf_len_m.group(1).strip()})"
+
+    # Phase 23: Configuration Manager
+    cfg_load_m = re.match(r"^load\s+config\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if cfg_load_m:
+        masked = f"set {cfg_load_m.group(2)} to config_load({cfg_load_m.group(1).strip()})"
+
+    cfg_get_def_m = re.match(r"^get\s+config\s+(.+?)\s+with\s+default\s+(.+?)\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if cfg_get_def_m:
+        masked = f"set {cfg_get_def_m.group(4)} to config_get({cfg_get_def_m.group(3).strip()}, {cfg_get_def_m.group(1).strip()}, {cfg_get_def_m.group(2).strip()})"
+    else:
+        cfg_get_m = re.match(r"^get\s+config\s+(.+?)\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+        if cfg_get_m:
+            masked = f"set {cfg_get_m.group(3)} to config_get({cfg_get_m.group(2).strip()}, {cfg_get_m.group(1).strip()})"
+
+    cfg_set_m = re.match(r"^set\s+config\s+(.+?)\s+to\s+(.+?)\s+in\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if cfg_set_m:
+        masked = f"config_set({cfg_set_m.group(3)}, {cfg_set_m.group(1).strip()}, {cfg_set_m.group(2).strip()})"
+
+    cfg_save_m = re.match(r"^save\s+config\s+([A-Za-z_]\w*)\s+to\s+file\s+(.+)$", masked, re.IGNORECASE)
+    if cfg_save_m:
+        masked = f"config_save({cfg_save_m.group(1)}, {cfg_save_m.group(2).strip()})"
+
+    # Phase 24: Benchmarking
+    bench_m = re.match(r"^benchmark\s+(.+?)\s+with\s+(\d+)\s+iterations\s+for\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if bench_m:
+        masked = f"set {bench_m.group(4)} to benchmark_block({bench_m.group(1).strip()}, {bench_m.group(2)}, {bench_m.group(3)})"
+
+    # Restore strings
+    normalized = unmask_strings(masked, strings)
+
+    # Check for assignments to update scope tracker
+    assigned = extract_assigned_var(normalized)
+    if assigned:
+        scope.record_assignment(assigned)
+
+    return normalized
+
+
+# ---------------------------------------------------------------------------
+# MAIN NORMALIZATION FUNCTION
+# ---------------------------------------------------------------------------
+
+def normalize(source: str) -> str:
+    """
+    Preprocesses DoomScript source into canonical DoomScript.
+    - Preserves indentation
+    - Splits 'and then' into sequential statements
+    - Splits sentence-ending periods (outside strings/numbers) into separate statements
+    - Normalizes filler words, verb synonyms, comparison synonyms, possessives, and pronouns
+    - Desugars typed function parameters and contracts into assertions
+    - Desugars match/when pattern matching, tests, and web route handlers
+    """
+    lines = source.splitlines()
+    output_lines: List[str] = []
+    scope = ScopeTracker()
+    pending_injections: List[Tuple[int, List[str]]] = []
+    pending_routes: List[Tuple[int, str]] = []
+    match_stack: List[Dict[str, Any]] = []
+
+    for line_idx, raw_line in enumerate(lines, start=1):
+        if not raw_line.strip():
+            output_lines.append("")
+            continue
+
+        # Extract leading indentation
+        indent_len = len(raw_line) - len(raw_line.lstrip(" "))
+        indent = " " * indent_len
+        scope.update_indent(indent_len)
+
+        # Pop match_stack if indentation returned to parent level
+        while match_stack and indent_len <= match_stack[-1]["match_indent"]:
+            match_stack.pop()
+
+        # Check pending deferred routes if indentation returned to parent level
+        while pending_routes and indent_len <= pending_routes[-1][0]:
+            _, r_stmt = pending_routes.pop()
+            output_lines.append(r_stmt)
+
+        # Check pending injections from a function header
+        if pending_injections and raw_line.strip():
+            top_indent, assertions = pending_injections[-1]
+            if indent_len > top_indent:
+                for inj in assertions:
+                    output_lines.append(f"{indent}{inj}")
+                pending_injections.pop()
+
+        # Split comment
+        code, comment = split_comment(raw_line.strip())
+        if not code:
+            # Comment-only line
+            output_lines.append(raw_line)
+            continue
+
+        # Phase 10: 'test "name":'
+        test_m = re.match(r"^test\s+(.+?):?$", code, re.IGNORECASE)
+        if test_m:
+            test_name = test_m.group(1).strip()
+            output_lines.append(f"{indent}if true:  # Test: {test_name}")
+            continue
+
+        # Phase 9: 'match <expr>:'
+        match_m = re.match(r"^match\s+(.+?):?$", code, re.IGNORECASE)
+        if match_m:
+            target_expr = match_m.group(1).strip()
+            match_var = f"__match_val_{len(match_stack)}_{line_idx}"
+            output_lines.append(f"{indent}set {match_var} to {target_expr}")
+            match_stack.append({"match_indent": indent_len, "when_indent": None, "var": match_var, "is_first": True})
+            continue
+
+        # Phase 9: inside match block
+        if match_stack and indent_len > match_stack[-1]["match_indent"]:
+            cur_match = match_stack[-1]
+            when_m = re.match(r"^when\s+(.+?):?$", code, re.IGNORECASE)
+            if when_m:
+                if cur_match["when_indent"] is None:
+                    cur_match["when_indent"] = indent_len
+                pat = when_m.group(1).strip()
+                m_var = cur_match["var"]
+
+                if re.match(r"^(?:over|greater\s+than)\s+", pat, re.IGNORECASE):
+                    val_rest = re.sub(r"^(?:over|greater\s+than)\s+", "", pat, flags=re.IGNORECASE)
+                    cond = f"({m_var} is a number) and ({m_var} is greater than {val_rest})"
+                elif re.match(r"^(?:under|less\s+than)\s+", pat, re.IGNORECASE):
+                    val_rest = re.sub(r"^(?:under|less\s+than)\s+", "", pat, flags=re.IGNORECASE)
+                    cond = f"({m_var} is a number) and ({m_var} is less than {val_rest})"
+                elif re.match(r"^at\s+least\s+", pat, re.IGNORECASE):
+                    val_rest = re.sub(r"^at\s+least\s+", "", pat, flags=re.IGNORECASE)
+                    cond = f"({m_var} is a number) and ({m_var} is at least {val_rest})"
+                elif re.match(r"^at\s+most\s+", pat, re.IGNORECASE):
+                    val_rest = re.sub(r"^at\s+most\s+", "", pat, flags=re.IGNORECASE)
+                    cond = f"({m_var} is a number) and ({m_var} is at most {val_rest})"
+                elif re.match(r"^between\s+(.+?)\s+and\s+(.+)$", pat, re.IGNORECASE):
+                    b_m = re.match(r"^between\s+(.+?)\s+and\s+(.+)$", pat, re.IGNORECASE)
+                    cond = f"({m_var} is a number) and ({m_var} is between {b_m.group(1)} and {b_m.group(2)})"
+                elif pat.lower() in ("a number", "number"):
+                    cond = f"{m_var} is a number"
+                elif pat.lower() in ("text", "a string", "string"):
+                    cond = f"{m_var} is text"
+                elif pat.lower() in ("a boolean", "boolean", "bool", "a bool"):
+                    cond = f"{m_var} is a boolean"
+                elif pat.lower() in ("a list", "list"):
+                    cond = f"{m_var} is a list"
+                elif pat.lower() in ("a record", "record", "a dictionary", "dict"):
+                    cond = f"{m_var} is a record"
+                elif re.match(r"^(?:a\s+)?number\s+where\s+it\s+(.+)$", pat, re.IGNORECASE):
+                    w_cond = re.match(r"^(?:a\s+)?number\s+where\s+it\s+(.+)$", pat, re.IGNORECASE).group(1)
+                    cond = f"({m_var} is a number) and ({m_var} {w_cond})"
+                elif " or " in pat:
+                    choices = [c.strip() for c in pat.split(" or ")]
+                    cond = f"{m_var} is one of [{', '.join(choices)}]"
+                else:
+                    cond = f"{m_var} equals {pat}"
+
+                branch_keyword = "if" if cur_match["is_first"] else "elif"
+                cur_match["is_first"] = False
+                output_lines.append(f"{' ' * cur_match['match_indent']}{branch_keyword} {cond}:")
+                continue
+
+            otherwise_m = re.match(r"^(?:otherwise|else):?$", code, re.IGNORECASE)
+            if otherwise_m:
+                output_lines.append(f"{' ' * cur_match['match_indent']}else:")
+                continue
+
+            # Body lines inside a when branch: unindent by shift
+            if cur_match["when_indent"] is not None:
+                shift = cur_match["when_indent"] - cur_match["match_indent"]
+                new_indent_len = max(indent_len - shift, cur_match["match_indent"] + 4)
+                indent = " " * new_indent_len
+
+        # Phase 13: 'on get|post|put|delete <path>:'
+        route_m = re.match(r"^on\s+(get|post|put|delete)\s+(.+?):?$", code, re.IGNORECASE)
+        if route_m:
+            method = route_m.group(1).upper()
+            path_expr = route_m.group(2).strip()
+            slug = re.sub(r"\W+", "_", path_expr.strip('"\'')).strip("_") or "root"
+            fn_name = f"__route_{method.lower()}_{slug}_{line_idx}"
+            output_lines.append(f"{indent}to {fn_name}:")
+            pending_routes.append((indent_len, f"{indent}route {method} {path_expr} to {fn_name}"))
+            continue
+
+        # Check for function definition with typed parameters: 'to ... with ...'
+        func_m = re.match(r"^to\s+(.+?)\s+with\s+(.+?)(:?)$", code, re.IGNORECASE)
+        if func_m and re.search(r"\bas\b", func_m.group(2), re.IGNORECASE):
+            func_prefix = func_m.group(1).strip()
+            param_str = func_m.group(2).strip()
+            colon = func_m.group(3) or ":"
+
+            p_masked, p_strings = mask_strings(param_str)
+            raw_params = [p.strip() for p in p_masked.split(",")]
+            cleaned_params = []
+            assertions = []
+
+            for p in raw_params:
+                param_m = re.match(r"^([A-Za-z_]\w*)\s+as\s+([A-Za-z_]\w+)(.*)$", p, re.IGNORECASE)
+                if param_m:
+                    p_name = param_m.group(1)
+                    p_type = param_m.group(2).lower()
+                    p_rest = param_m.group(3).strip()
+
+                    type_cond = TYPE_CONTRACT_MAP.get(p_type)
+                    if type_cond:
+                        assertions.append(f'verify that {p_name} {type_cond} otherwise "Argument \'{p_name}\' must be {p_type}"')
+
+                    if p_rest:
+                        cleaned_params.append(f"{p_name} {p_rest}".strip())
+                    else:
+                        cleaned_params.append(p_name)
+                else:
+                    cleaned_params.append(p)
+
+            if assertions:
+                cleaned_param_str = unmask_strings(", ".join(cleaned_params), p_strings)
+                new_header = f"to {func_prefix} with {cleaned_param_str}{colon}"
+                output_lines.append(f"{indent}{new_header}")
+                pending_injections.append((indent_len, assertions))
+                continue
+
+        # Phase 9: Destructuring (split via 'and then')
+        head_tail_m = re.match(r"^first\s+item\s+into\s+([A-Za-z_]\w*)\s*,\s*remaining\s+items\s+into\s+([A-Za-z_]\w*)\s+from\s+(.+)$", code, re.IGNORECASE)
+        if head_tail_m:
+            h_var = head_tail_m.group(1)
+            t_var = head_tail_m.group(2)
+            c_expr = head_tail_m.group(3).strip()
+            code = f"set {h_var} to head_of({c_expr}) and then set {t_var} to tail_of({c_expr})"
+
+        unpack_m = re.match(r"^unpack\s+(?!binary\b)(.+?)\s+from\s+(.+)$", code, re.IGNORECASE)
+        if unpack_m:
+            targets_raw = [t.strip() for t in unpack_m.group(1).split(",")]
+            c_expr = unpack_m.group(2).strip()
+            quoted_keys = "[" + ", ".join(f'"{t}"' for t in targets_raw) + "]"
+            tmp_unp = f"__unp_{line_idx}"
+            unp_stmts = [f"set {tmp_unp} to unpack_values({quoted_keys}, {c_expr})"]
+            for idx, t in enumerate(targets_raw, 1):
+                unp_stmts.append(f"set {t} to item {idx} of {tmp_unp}")
+            code = " and then ".join(unp_stmts)
+
+        # Check for typed variable assignments: 'set x as number to 5' / 'x as number = 5'
+        var_typed_m = re.match(r"^(?:set\s+)?([A-Za-z_]\w*)\s+as\s+([A-Za-z_]\w+)\s+(?:to|=)\s+(.+)$", code, re.IGNORECASE)
+        if var_typed_m and var_typed_m.group(2).lower() in TYPE_CONTRACT_MAP:
+            v_name = var_typed_m.group(1)
+            v_type = var_typed_m.group(2).lower()
+            v_expr = var_typed_m.group(3).strip()
+            type_cond = TYPE_CONTRACT_MAP[v_type]
+            code = f'set {v_name} to {v_expr} and then verify that {v_name} {type_cond} otherwise "Variable \'{v_name}\' must be {v_type}"'
+
+        # Mask strings for statement splitting
+        masked_code, code_strings = mask_strings(code)
+
+        # 1. Statement chaining via 'and then'
+        chain_parts = re.split(r"\s+and\s+then\s+", masked_code, flags=re.IGNORECASE)
+
+        sub_statements: List[str] = []
+        for part in chain_parts:
+            # 2. Period sentence ending: split on period followed by space
+            # e.g., 'set x to 5. say x.'
+            # Only match '.' preceded by non-digit and followed by whitespace
+            dot_parts = re.split(r"(?<=[^\d\s])\.\s+", part)
+            for dp in dot_parts:
+                cleaned = dp.strip()
+                # Strip trailing period at end of statement
+                if cleaned.endswith("."):
+                    cleaned = cleaned[:-1].rstrip()
+                if cleaned:
+                    sub_statements.append(cleaned)
+
+        # Process each statement
+        for s in sub_statements:
+            unmasked_s = unmask_strings(s, code_strings)
+            norm_s = normalize_statement_text(unmasked_s, scope, line_idx)
+            if norm_s:
+                output_lines.append(f"{indent}{norm_s}")
+
+    while pending_injections:
+        top_indent, assertions = pending_injections.pop(0)
+        body_indent = " " * (top_indent + 4)
+        for inj in assertions:
+            output_lines.append(f"{body_indent}{inj}")
+
+    while pending_routes:
+        _, r_stmt = pending_routes.pop(0)
+        output_lines.append(r_stmt)
+
+    return "\n".join(output_lines) + ("\n" if source.endswith("\n") else "")
+
+
+def explain_normalization(source: str) -> List[Tuple[str, str]]:
+    """Returns pairs of (original, normalized) lines for inspection."""
+    orig_lines = source.splitlines()
+    norm_source = normalize(source)
+    norm_lines = norm_source.splitlines()
+    return list(zip(orig_lines, norm_lines))

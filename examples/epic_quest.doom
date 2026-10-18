@@ -1,0 +1,54 @@
+# ====================================================================
+# DoomScript Epic Quest: The Full Pillars Demonstration (.doom)
+# ====================================================================
+
+to strike target with amount
+    decrease target's health by amount
+    say "Direct hit! {target's name} lost {amount} HP."
+
+# 1. State setup with dot-accessible records
+hero = {name: "Doom Slayer", health: 100, mana: 50}
+boss = {name: "Baron of Hell", health: 300}
+inventory = ["Super Shotgun", "Plasma Gun"]
+
+# 2. English collection actions
+add "BFG 9000" to inventory
+total_weapons = count of inventory
+say "{hero's name} enters the arena with {total_weapons} weapons!"
+
+# 3. Post-condition check (English inversion)
+say "Warning: Low mana reserves!" if hero's mana is under 60
+
+# 4. Multi-word natural function invocations
+call strike with boss, 100
+call strike boss with 100
+
+# 5. Native HolyC Audio & Visual Primitives
+beep 520 hz for 0.1 seconds
+open window "Doom Arena 2D" with width 400, height 300
+draw rectangle at 20, 20 with width 360, height 260, color "darkred"
+draw circle at 200, 150 with radius 40, color "orange"
+draw text "BATTLE ARENA" at 200, 50 with size 16, color "white"
+refresh screen
+
+# 6. Natural Loops: repeat while / until
+say "Engaging continuous fire..."
+repeat while boss's health is over 50
+    decrease boss's health by 25
+    say "Sustained blast! Boss HP remaining: {boss's health}"
+
+repeat until boss's health is 0
+    decrease boss's health by 25
+    say "Finishing blow! Boss HP: {boss's health}"
+
+# 7. Post-condition victory check
+say "Victory! The Baron has been vanquished." if boss's health is 0
+
+# 8. English Relative Time
+quest_expiry = 7 days from now
+say "Next dimensional rift opens in 7 days from now."
+
+# 9. Direct File I/O
+write "Quest Complete: Baron of Hell defeated." into file "quest_log.txt"
+read file "quest_log.txt" into final_log
+say "Archived record: {final_log}"

@@ -1,0 +1,66 @@
+# ====================================================================
+# DoomScript Mini Game: Dungeon Crawler (.doom)
+# Features: Combat, Random Rolls, Database Highscores, Audio, & Handling
+# ====================================================================
+
+to strike target with amount
+    decrease target's hp by amount
+    say "Weapon strike! {target's name} lost {amount} HP."
+
+# Setup Hero State
+hero = {name: "Doom Slayer", hp: 100, gold: 50, kills: 0}
+monsters = ["Imp", "Hell Knight", "Cacodemon"]
+damage_log = []
+
+say "Welcome to the Doom Dungeon, {hero's name}!"
+
+# Pick a random encounter
+pick random from monsters into monster_name
+roll between 40 and 80 into monster_hp
+boss = {name: monster_name, hp: monster_hp}
+
+say "A ferocious {boss's name} ambushes you with {boss's hp} HP!"
+
+# Battle Loop
+repeat while boss's hp is over 0
+    # Roll a 20-sided die
+    roll between 15 and 35 into strike_damage
+    add strike_damage to damage_log
+    
+    call strike with boss, strike_damage
+    say "Critical hit!" if strike_damage is at least 30
+    
+    # Sound tone on every hit
+    beep 500 hz for 0.05 seconds
+    
+    if boss's hp is under 20
+        say "The {boss's name} is staggering!"
+
+# Post-battle rewards
+increase hero's kills by 1
+increase hero's gold by 100
+
+say "The {boss's name} was defeated!"
+say "Gold collected: {hero's gold} gold."
+
+# Battle Statistics using aggregates
+total_damage_dealt = sum of damage_log
+best_hit = highest in damage_log
+average_strike = average of damage_log
+
+say "Battle Summary:"
+say "- Total Damage Dealt: {total_damage_dealt}"
+say "- Maximum Single Hit: {best_hit}"
+say "- Average Strike: {average_strike}"
+
+# Save high score to SQLite database
+say "Recording heroics in the Hall of Fame..."
+attempt
+    save record hero into database "dungeon_records.db" table "champions"
+    load records from database "dungeon_records.db" table "champions" into champions
+    record_count = count of champions
+    say "Successfully recorded in Hall of Fame! Total champions logged: {record_count}"
+if it fails
+    say "Database recording skipped."
+
+say "Dungeon cleared. The Slayer rests until tomorrow."
