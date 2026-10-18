@@ -3,4 +3,5 @@ Pre-flight: Interfaces scanned; dependencies follow Task 1 (backend) -> Task 2 (
 Task 1: complete (commit 0c3fab5, tests: python -m pytest tests/research/test_backend.py -> 4/4 pass)
 Task 2: complete (commit 7c045eb, tests: python -m pytest tests/research/test_distributions.py -> 5/5 pass)
 Task 3: complete (commit a0e2732, tests: python -m pytest tests/research/test_stats.py -> 8/8 pass)
-Task 4: complete (tests: python -m pytest tests/research/test_graph_algorithms.py -> 8/8 pass)
+Task 4: complete (commit 1ccbe42, tests: python -m pytest tests/research/test_graph_algorithms.py -> 8/8 pass)
+Task 5: complete (tests: python -m pytest tests/research/test_autograd_optim.py -> 6/6 pass)
