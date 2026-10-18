@@ -1980,3 +1980,32 @@ from doomscript.research.algorithms import (
 from doomscript.research.autograd import Scalar, check_grad
 from doomscript.research.tensor import Tensor
 from doomscript.research.optim import Adam, SGDMomentum
+
+# ---------------------------------------------------------------------------
+# Grammar of Graphics Visualization Integration
+# ---------------------------------------------------------------------------
+from doomscript.viz import (
+    PlotSpec,
+    AestheticMapping,
+    LayerSpec,
+    FacetSpec,
+    ThemeSpec,
+    ScaleSpec,
+    LabelSpec,
+    PlotBuilder,
+    explore_dataset,
+    ExplorationReport,
+)
+
+def show_plot(obj):
+    """Displays a plot or exploration report, or prints the object."""
+    if hasattr(obj, "show"):
+        return obj.show()
+    print(obj)
+
+def save_plot(obj, path, width=None, height=None, dpi=None):
+    """Saves a plot or exploration report to HTML, PNG, SVG, or PDF."""
+    if hasattr(obj, "save"):
+        return obj.save(path, width=width, height=height, dpi=dpi)
+    raise TypeError(f"Object of type {type(obj).__name__} does not support save().")
+

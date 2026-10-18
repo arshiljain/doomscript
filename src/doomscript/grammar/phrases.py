@@ -1477,6 +1477,7 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
     pending_injections: List[Tuple[int, List[str], int]] = []
     pending_routes: List[Tuple[int, str, int]] = []
     match_stack: List[Dict[str, Any]] = []
+    plot_stack: List[Dict[str, Any]] = []
     in_research_mode: bool = False
 
     for line_idx, raw_line in enumerate(lines, start=1):
@@ -1488,6 +1489,12 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
         indent_len = len(raw_line) - len(raw_line.lstrip(" "))
         indent = " " * indent_len
         scope.update_indent(indent_len)
+
+        # Pop plot_stack if indentation returned to parent level
+        while plot_stack and indent_len <= plot_stack[-1]["indent"]:
+            p_info = plot_stack.pop()
+            if p_info.get("deferred_draw"):
+                emit(f"{p_info['parent_indent']}{p_info['var']}.draw('{p_info['deferred_draw']}')", line_idx)
 
         # Pop match_stack if indentation returned to parent level
         while match_stack and indent_len <= match_stack[-1]["match_indent"]:
@@ -1525,6 +1532,205 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
             norm_res = apply_research_normalization(code)
             if norm_res is not None:
                 code = norm_res
+
+        # Visualization: Inside plot/chart block
+        if plot_stack and indent_len > plot_stack[-1]["indent"]:
+            cur_plot = plot_stack[-1]
+            p_var = cur_plot["var"]
+
+            # Labels sub-block start
+            if re.match(r"^labels\s*:?$", code, re.IGNORECASE):
+                cur_plot["in_labels"] = True
+                cur_plot["labels_indent"] = indent_len
+                emit(f"{indent}if true:  # labels", line_idx)
+                continue
+
+            # Check if dedented out of labels sub-block
+            if cur_plot.get("in_labels"):
+                if cur_plot.get("labels_indent") is not None and indent_len <= cur_plot["labels_indent"]:
+                    cur_plot["in_labels"] = False
+                    cur_plot["labels_indent"] = None
+
+            if cur_plot.get("in_labels"):
+                lab_m = re.match(r"^([A-Za-z_]\w*)\s*:\s*(.+)$", code)
+                if lab_m:
+                    l_key = lab_m.group(1).lower()
+                    l_val = lab_m.group(2).strip()
+                    emit(f"{indent}{p_var}.labels({l_key}={l_val})", line_idx)
+                    continue
+
+            # map <col> to <aes>
+            map_m = re.match(r"^map\s+(.+?)\s+to\s+([A-Za-z_]\w*)$", code, re.IGNORECASE)
+            if map_m:
+                col = map_m.group(1).strip().strip('"\'')
+                aes = map_m.group(2).strip().lower()
+                emit(f'{indent}{p_var}.map("{aes}", "{col}")', line_idx)
+                continue
+
+            # draw <geom> [with <params>]
+            draw_m = re.match(r"^draw\s+(.+)$", code, re.IGNORECASE)
+            if draw_m:
+                d_rest = draw_m.group(1).strip()
+                if "smooth" in d_rest.lower():
+                    emit(f"{indent}{p_var}.draw('smooth')", line_idx)
+                elif " with " in d_rest:
+                    g_part, p_part = d_rest.split(" with ", 1)
+                    emit(f"{indent}{p_var}.draw('{g_part.strip()}', {p_part.strip()})", line_idx)
+                else:
+                    emit(f"{indent}{p_var}.draw('{d_rest}')", line_idx)
+                continue
+
+            # facet by <col>
+            facet_m = re.match(r"^facet\s+by\s+(.+)$", code, re.IGNORECASE)
+            if facet_m:
+                col = facet_m.group(1).strip().strip('"\'')
+                emit(f'{indent}{p_var}.facet("{col}")', line_idx)
+                continue
+
+            # facet grid by row=<r>, col=<c>
+            facet_grid_m = re.match(r"^facet\s+grid\s+by\s+row=(.+?),\s*col=(.+)$", code, re.IGNORECASE)
+            if facet_grid_m:
+                r_val = facet_grid_m.group(1).strip().strip('"\'')
+                c_val = facet_grid_m.group(2).strip().strip('"\'')
+                emit(f'{indent}{p_var}.facet(row="{r_val}", col="{c_val}", type="grid")', line_idx)
+                continue
+
+            # scale color/fill as palette <pal>
+            scale_pal_m = re.match(r"^scale\s+(color|fill)\s+as\s+palette\s+(.+)$", code, re.IGNORECASE)
+            if scale_pal_m:
+                target = scale_pal_m.group(1).lower()
+                pal = scale_pal_m.group(2).strip()
+                emit(f"{indent}{p_var}.scale('{target}', 'palette', palette={pal})", line_idx)
+                continue
+
+            # scale x/y as log/reverse
+            scale_axis_m = re.match(r"^scale\s+([xy])\s+as\s+(log|reverse)$", code, re.IGNORECASE)
+            if scale_axis_m:
+                ax = scale_axis_m.group(1).lower()
+                st = scale_axis_m.group(2).lower()
+                emit(f"{indent}{p_var}.scale('{ax}', '{st}')", line_idx)
+                continue
+
+            # theme: <name>
+            theme_m = re.match(r"^theme\s*:\s*(.+)$", code, re.IGNORECASE)
+            if theme_m:
+                th_name = theme_m.group(1).strip().strip('"\'')
+                emit(f'{indent}{p_var}.theme("{th_name}")', line_idx)
+                continue
+
+            # title: <text>
+            title_m = re.match(r"^title\s*:\s*(.+)$", code, re.IGNORECASE)
+            if title_m:
+                t_val = title_m.group(1).strip()
+                emit(f"{indent}{p_var}.title({t_val})", line_idx)
+                continue
+
+            # Level 2 property mappings: x: col, y: col, color: col, etc.
+            prop_m = re.match(r"^([A-Za-z_]\w*)\s*:\s*(.+)$", code)
+            if prop_m:
+                prop = prop_m.group(1).lower()
+                val = prop_m.group(2).strip().strip('"\'')
+                emit(f'{indent}{p_var}.map("{prop}", "{val}")', line_idx)
+                continue
+
+        # Visualization: Top-level verbs and block headers
+        # 1. Level 1: explore <dataset> [to understand <focus>] [into <target>]
+        exp_m = re.match(
+            r"^explore\s+([A-Za-z_]\w*)(?:\s+to\s+understand\s+(.+?))?(?:\s+into\s+([A-Za-z_]\w*))?$",
+            code,
+            re.IGNORECASE,
+        )
+        if exp_m:
+            dataset = exp_m.group(1)
+            focus_str = exp_m.group(2)
+            target = exp_m.group(3) or "explore_report"
+            if focus_str:
+                emit(f'{indent}set {target} to explore_dataset({dataset}, focus="{focus_str.strip()}")', line_idx)
+            else:
+                emit(f'{indent}set {target} to explore_dataset({dataset})', line_idx)
+            continue
+
+        # 2. show <var>
+        show_m = re.match(r"^show\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*$", code, re.IGNORECASE)
+        if show_m:
+            var_target = show_m.group(1)
+            emit(f"{indent}show_plot({var_target})", line_idx)
+            continue
+
+        # 3. save <plot> to <path> [with ...]
+        save_plot_m = re.match(
+            r"^save\s+([A-Za-z_]\w*)\s+to\s+([\"'][^\"']+[\"'])(?:\s+with\s+(.+))?$",
+            code,
+            re.IGNORECASE,
+        )
+        if save_plot_m:
+            plot_var = save_plot_m.group(1)
+            path_str = save_plot_m.group(2)
+            with_args = save_plot_m.group(3)
+            if with_args:
+                emit(f"{indent}save_plot({plot_var}, {path_str}, {with_args})", line_idx)
+            else:
+                emit(f"{indent}save_plot({plot_var}, {path_str})", line_idx)
+            continue
+
+        # 4. Level 2 single-line: plot <data> as <geom> with <params> [into <target>]
+        plot_single_m = re.match(
+            r"^plot\s+([A-Za-z_]\w*)\s+as\s+([A-Za-z_]\w+)\s+with\s+(.+?)(?:\s+into\s+([A-Za-z_]\w*))?$",
+            code,
+            re.IGNORECASE,
+        )
+        if plot_single_m:
+            dataset = plot_single_m.group(1)
+            geom = plot_single_m.group(2)
+            with_params = plot_single_m.group(3)
+            target = plot_single_m.group(4) or "plot"
+            emit(f'{indent}set {target} to PlotBuilder({dataset}).kind("{geom}", {with_params})', line_idx)
+            continue
+
+        # 5. Level 2 block header: plot <data> as <geom> [into <target>]:
+        plot_block_m = re.match(
+            r"^plot\s+([A-Za-z_]\w*)\s+as\s+([A-Za-z_]\w+)(?:\s+into\s+([A-Za-z_]\w*))?:$",
+            code,
+            re.IGNORECASE,
+        )
+        if plot_block_m:
+            dataset = plot_block_m.group(1)
+            geom = plot_block_m.group(2)
+            target = plot_block_m.group(3) or "plot"
+            emit(f"{indent}set {target} to PlotBuilder({dataset})", line_idx)
+            emit(f"{indent}if true:  # plot block", line_idx)
+            plot_stack.append({
+                "indent": indent_len,
+                "parent_indent": indent,
+                "var": target,
+                "deferred_draw": geom,
+                "in_labels": False,
+                "labels_indent": None,
+            })
+            continue
+
+        # 6. Level 3 chart header: chart <title> from <data> [into <target>]:
+        chart_block_m = re.match(
+            r"^chart\s+(.+?)\s+from\s+([A-Za-z_]\w*)(?:\s+into\s+([A-Za-z_]\w*))?:$",
+            code,
+            re.IGNORECASE,
+        )
+        if chart_block_m:
+            title_expr = chart_block_m.group(1)
+            dataset = chart_block_m.group(2)
+            target = chart_block_m.group(3) or "plot"
+            emit(f"{indent}set {target} to PlotBuilder({dataset}, title={title_expr})", line_idx)
+            emit(f"{indent}if true:  # chart block", line_idx)
+            plot_stack.append({
+                "indent": indent_len,
+                "parent_indent": indent,
+                "var": target,
+                "deferred_draw": None,
+                "in_labels": False,
+                "labels_indent": None,
+            })
+            continue
+
 
         # Phase 10: 'test "name":'
         test_m = re.match(r"^test\s+(.+?):?$", code, re.IGNORECASE)
@@ -1739,6 +1945,11 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
     while pending_routes:
         _, r_stmt, r_line = pending_routes.pop(0)
         emit(r_stmt, r_line)
+
+    while plot_stack:
+        p_info = plot_stack.pop(0)
+        if p_info.get("deferred_draw"):
+            emit(f"{p_info['parent_indent']}{p_info['var']}.draw('{p_info['deferred_draw']}')", len(lines))
 
     res_str = "\n".join(output_lines) + ("\n" if source.endswith("\n") else "")
     return res_str, line_map
