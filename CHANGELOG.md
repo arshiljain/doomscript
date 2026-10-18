@@ -2,6 +2,23 @@
 
 All notable changes to DoomScript are documented in this file.
 
+## [1.0.9] - 2026-10-19 - Phase 7: Capability Benchmark & Python Exporter
+### Added
+- **Python Transpiler & Exporter**:
+  - `export_to_python(source)` in `src/doomscript/compiler/engine.py` compiling any DoomScript source to formatted, clean, standalone Python source code via AST unparsing.
+  - CLI subcommand `doom export <file.doom> -o <file.py>` (or stdout) with clean banners and header comments.
+- **Extended Runtime Math & Statistics Aliases**:
+  - `mean`, `median`, `std_dev`, `variance` as top-level runtime functions for scientific computing.
+  - Constants `PI`, `E`, `INF` directly exported in `src/doomscript/runtime.py`.
+- **40 Undergraduate & Postgraduate CS/Data Science Benchmarks**:
+  - 10 CS1 benchmarks (`tests/capability/cs1/`): Bubble sort, Linear search, Binary search, Palindrome check, Word frequency, Matrix transposition, Flatten nested list, Caesar cipher, Vowel counter, Multiplication table.
+  - 10 CS2 benchmarks (`tests/capability/cs2/`): Stack with min element, Queue FIFO, Singly linked list, Doubly linked list, Binary search tree, Tree traversals (preorder, inorder), Graph BFS, Graph DFS, Recursive Fibonacci with memoization, Tower of Hanoi.
+  - 10 Data Science benchmarks (`tests/capability/datascience/`): CSV load & filter, Missing value imputation, Summary statistics, Group-by aggregation, Column transformation, Outlier filtering, Top-K ranking, Pearson correlation coefficient, Pivot table summary, End-to-end data pipeline.
+  - 10 ML & Numerical Math benchmarks (`tests/capability/ml_math/`): Simple linear regression, Mean squared error, Euclidean distance, K-Nearest Neighbors classifier, Min-Max scaler, Standard scaler (z-score), Matrix multiplication, Vector dot product, Cosine similarity, Single-step gradient descent.
+- **Capability Benchmark Test Suite & Runner**:
+  - `run_capability.py`: automated test harness verifying all 40 benchmark programs compile, execute, assert correctly, and export to valid Python (100.0% pass rate achieved, exceeding the 95.0% target).
+  - Pytest regression coverage in `tests/test_phase7_benchmark_export.py`.
+
 ## [1.0.8] - 2026-10-19 - Phase 6: Friendly Error Experience
 ### Added
 - **Accurate Syntax Error Line Number Tracking**:

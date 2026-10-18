@@ -1,0 +1,18 @@
+# DS-03: Summary Statistics
+series = [12, 15, 18, 20, 22, 25, 28, 30, 35]
+
+s_mean = mean(series)
+s_median = median(series)
+s_std = std_dev(series)
+s_min = min(series)
+s_max = max(series)
+
+say "Mean:", s_mean
+say "Median:", s_median
+say "Std Dev:", s_std
+say "Min:", s_min
+say "Max:", s_max
+
+verify that s_min is 12 otherwise "Min is 12"
+verify that s_max is 35 otherwise "Max is 35"
+verify that s_median is 22 otherwise "Median is 22"

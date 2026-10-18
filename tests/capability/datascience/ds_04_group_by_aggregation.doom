@@ -1,0 +1,17 @@
+# DS-04: Group By Aggregation
+csv_content = """dept,salary
+Engineering,120000
+Sales,70000
+Engineering,140000
+Marketing,80000
+Sales,90000
+Marketing,90000
+"""
+write csv_content into file "employees.csv"
+
+load table "employees.csv" into df
+group df by dept and average salary into dept_salaries
+say "Department Average Salaries:"
+say dept_salaries
+
+verify that count of dept_salaries is 3 otherwise "3 departments"

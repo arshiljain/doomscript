@@ -1,0 +1,34 @@
+# CS2-02: Queue Data Structure
+define a Queue:
+    to start:
+        my elements = []
+
+    to enqueue with val:
+        my elements.append(val)
+
+    to dequeue:
+        if my elements is empty:
+            return None
+        return my elements.pop(0)
+
+    to front:
+        if my elements is empty:
+            return None
+        return my elements[0]
+
+    to get length:
+        return count of my elements
+
+q = Queue()
+q.enqueue("Task1")
+q.enqueue("Task2")
+q.enqueue("Task3")
+
+say "Front:", q.front()
+first_out = q.dequeue()
+say "Dequeued:", first_out
+say "New front:", q.front()
+
+verify that first_out == "Task1" otherwise "First out is Task1"
+verify that q.front() == "Task2" otherwise "Front is Task2"
+verify that count of q is 2 otherwise "Length is 2"

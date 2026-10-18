@@ -1,0 +1,14 @@
+# CS1-02: Linear Search
+to linear_search with items, target:
+    repeat with i from 0 to (count of items) - 1:
+        if items[i] == target:
+            return i
+    return -1
+
+numbers = [10, 20, 30, 40, 50]
+idx1 = linear_search(numbers, 30)
+idx2 = linear_search(numbers, 99)
+say "Found 30 at:", idx1
+say "Found 99 at:", idx2
+verify that idx1 is 2 otherwise "Index should be 2"
+verify that idx2 is -1 otherwise "Index should be -1"

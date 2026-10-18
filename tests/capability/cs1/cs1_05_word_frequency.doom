@@ -1,0 +1,15 @@
+# CS1-05: Word Frequency Counter
+sentence = "apple banana apple orange banana apple"
+words = sentence.split(" ")
+counts = {}
+
+for each w in words:
+    if counts contains w:
+        counts[w] = counts[w] + 1
+    else:
+        counts[w] = 1
+
+say "Word counts:", counts
+verify that counts["apple"] is 3 otherwise "apple count 3"
+verify that counts["banana"] is 2 otherwise "banana count 2"
+verify that counts["orange"] is 1 otherwise "orange count 1"

@@ -1,0 +1,13 @@
+# DS-06: Outlier Filtering (Z-score filter)
+dataset = [10, 12, 11, 13, 12, 11, 12, 10, 11, 12, 10, 12, 11, 100, -80]
+m = mean(dataset)
+s = std_dev(dataset)
+
+# Keep values within 2 standard deviations
+filtered = [x for x in dataset if abs(x - m) <= 2 * s]
+say "Original count:", count of dataset
+say "Filtered count:", count of filtered
+
+verify that (filtered contains 100) is false otherwise "100 is an outlier"
+verify that (filtered contains -80) is false otherwise "-80 is an outlier"
+verify that count of filtered is 13 otherwise "13 valid points"

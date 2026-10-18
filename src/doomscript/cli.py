@@ -13,7 +13,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.syntax import Syntax
 
-from doomscript.compiler.engine import compile_to_ast, transpile, execute
+from doomscript.compiler.engine import compile_to_ast, transpile, export_to_python, execute
 from doomscript.errors import format_syntax_error, find_closest_phrasings, translate_runtime_error
 from doomscript.explainer import explain_source
 from doomscript.formatter import format_code
@@ -97,6 +97,31 @@ def transpile_cmd(
         else:
             syntax = Syntax(py_code, "python", theme="monokai", line_numbers=True)
             console.print(Panel(syntax, title="Transpiled Python", border_style="cyan"))
+    except Exception as e:
+        handle_cli_error(str(file), source, e)
+        raise typer.Exit(code=1)
+
+
+@app.command("export")
+def export_cmd(
+    file: Path = typer.Argument(..., help="Path to .doom script"),
+    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Target .py file path")
+):
+    """Export a DoomScript file to a standalone, runnable Python script."""
+    if not file.exists():
+        console.print(f"[bold red]Error:[/bold red] File '{file}' not found.")
+        raise typer.Exit(code=1)
+
+    target_path = output if output is not None else file.with_suffix(".py")
+
+    with open(file, "r", encoding="utf-8") as f:
+        source = f.read()
+
+    try:
+        py_code = export_to_python(source)
+        with open(target_path, "w", encoding="utf-8") as out_f:
+            out_f.write(py_code)
+        console.print(f"[green]Successfully exported standalone script to[/green] [bold]{target_path}[/bold]")
     except Exception as e:
         handle_cli_error(str(file), source, e)
         raise typer.Exit(code=1)

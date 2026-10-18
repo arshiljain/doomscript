@@ -1,0 +1,26 @@
+# ML-01: Simple Linear Regression
+to fit_linear_regression with xs, ys:
+    n = count of xs
+    mx = mean(xs)
+    my = mean(ys)
+    numerator = sum([(xs[i] - mx) * (ys[i] - my) for i in range(n)])
+    denominator = sum([(xs[i] - mx) ** 2 for i in range(n)])
+    slope = numerator / denominator
+    intercept = my - slope * mx
+    return (slope, intercept)
+
+to predict with slope, intercept, x:
+    return slope * x + intercept
+
+x_train = [1, 2, 3, 4, 5]
+y_train = [3, 5, 7, 9, 11]  # y = 2x + 1
+
+model = fit_linear_regression(x_train, y_train)
+m, b = model
+pred6 = predict(m, b, 6)
+say "Slope:", m, "Intercept:", b
+say "Prediction for 6:", pred6
+
+verify that round(m, 1) == 2.0 otherwise "Slope is 2.0"
+verify that round(b, 1) == 1.0 otherwise "Intercept is 1.0"
+verify that round(pred6, 1) == 13.0 otherwise "Prediction is 13.0"

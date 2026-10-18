@@ -1,0 +1,7 @@
+# CS1-09: Vowel Counter
+text = "The quick brown fox jumps over the lazy dog"
+vowels = "aeiou"
+vowel_count = sum([1 for ch in text.lower() if vowels contains ch])
+
+say "Total vowels:", vowel_count
+verify that vowel_count is 11 otherwise "Expected 11 vowels"

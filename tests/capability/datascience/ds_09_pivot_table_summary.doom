@@ -1,0 +1,21 @@
+# DS-09: Pivot Table / Grouped Summary
+records = [
+    {"region": "North", "rep": "Alice", "sales": 100},
+    {"region": "North", "rep": "Bob", "sales": 150},
+    {"region": "South", "rep": "Charlie", "sales": 200},
+    {"region": "South", "rep": "David", "sales": 250},
+    {"region": "North", "rep": "Alice", "sales": 50}
+]
+
+regional_sales = {}
+for each r in records:
+    reg = r["region"]
+    amt = r["sales"]
+    if regional_sales contains reg:
+        regional_sales[reg] = regional_sales[reg] + amt
+    else:
+        regional_sales[reg] = amt
+
+say "Regional Sales Summary:", regional_sales
+verify that regional_sales["North"] is 300 otherwise "North sales = 300"
+verify that regional_sales["South"] is 450 otherwise "South sales = 450"

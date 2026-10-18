@@ -1,0 +1,19 @@
+# DS-08: Pearson Correlation Coefficient
+to pearson_correlation with xs, ys:
+    n = count of xs
+    mx = mean(xs)
+    my = mean(ys)
+    num = sum([(xs[i] - mx) * (ys[i] - my) for i in range(n)])
+    den_x = sum([(xs[i] - mx) ** 2 for i in range(n)])
+    den_y = sum([(ys[i] - my) ** 2 for i in range(n)])
+    den = math.sqrt(den_x * den_y)
+    if den == 0:
+        return 0.0
+    return num / den
+
+x = [1, 2, 3, 4, 5]
+y = [2, 4, 6, 8, 10]
+r = pearson_correlation(x, y)
+say "Correlation (perfect positive):", r
+
+verify that abs(r - 1.0) < 0.0001 otherwise "r should be 1.0"

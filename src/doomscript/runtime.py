@@ -694,6 +694,16 @@ def ds_std_dev(xs):
     return float(statistics.stdev(items))
 
 
+mean = ds_mean
+median = ds_median
+std_dev = ds_std_dev
+stdev = ds_std_dev
+variance = ds_variance
+PI = math.pi
+E = math.e
+INF = float("inf")
+
+
 
 def get_field(obj, attr):
     """Safely access a field on a Record, dictionary, or object."""

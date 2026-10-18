@@ -1,0 +1,13 @@
+# DS-01: CSV Load & Filter
+csv_content = """id,name,score
+1,Alice,85
+2,Bob,42
+3,Charlie,95
+4,David,58
+"""
+write csv_content into file "students.csv"
+
+load table "students.csv" into df
+filter df where score >= 60 into passing
+say "Passing students count:", count of passing
+verify that count of passing is 2 otherwise "2 students passed"

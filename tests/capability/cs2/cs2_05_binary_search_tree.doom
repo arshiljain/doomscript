@@ -1,0 +1,56 @@
+# CS2-05: Binary Search Tree (BST)
+define a TreeNode:
+    to start with val:
+        my val = val
+        my left = None
+        my right = None
+
+define a BST:
+    to start:
+        my root = None
+
+    to insert with val:
+        if my root is None:
+            my root = TreeNode(val)
+        else:
+            my _insert_node(my root, val)
+
+    to _insert_node with cur, val:
+        if val < cur.val:
+            if cur.left is None:
+                cur.left = TreeNode(val)
+            else:
+                my _insert_node(cur.left, val)
+        else:
+            if cur.right is None:
+                cur.right = TreeNode(val)
+            else:
+                my _insert_node(cur.right, val)
+
+    to contains with val:
+        return my _contains_node(my root, val)
+
+    to _contains_node with cur, val:
+        if cur is None:
+            return false
+        if cur.val == val:
+            return true
+        elif val < cur.val:
+            return my _contains_node(cur.left, val)
+        else:
+            return my _contains_node(cur.right, val)
+
+tree = BST()
+tree.insert(50)
+tree.insert(30)
+tree.insert(70)
+tree.insert(20)
+tree.insert(40)
+
+c30 = tree.contains(30)
+c99 = tree.contains(99)
+say "Tree contains 30:", c30
+say "Tree contains 99:", c99
+
+verify that c30 is true otherwise "Contains 30"
+verify that c99 is false otherwise "Does not contain 99"

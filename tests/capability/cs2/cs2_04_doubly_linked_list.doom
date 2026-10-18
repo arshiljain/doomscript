@@ -1,0 +1,50 @@
+# CS2-04: Doubly Linked List
+define a DNode:
+    to start with val:
+        my val = val
+        my prev = None
+        my next = None
+
+define a DoublyLinkedList:
+    to start:
+        my head = None
+        my tail = None
+
+    to append with val:
+        new_node = DNode(val)
+        if my head is None:
+            my head = new_node
+            my tail = new_node
+        else:
+            my tail.next = new_node
+            new_node.prev = my tail
+            my tail = new_node
+
+    to forward:
+        res = []
+        cur = my head
+        while cur is not None:
+            res.append(cur.val)
+            cur = cur.next
+        return res
+
+    to backward:
+        res = []
+        cur = my tail
+        while cur is not None:
+            res.append(cur.val)
+            cur = cur.prev
+        return res
+
+dll = DoublyLinkedList()
+dll.append(1)
+dll.append(2)
+dll.append(3)
+
+fwd = dll.forward()
+bwd = dll.backward()
+say "Forward:", fwd
+say "Backward:", bwd
+
+verify that fwd == [1, 2, 3] otherwise "Forward matches"
+verify that bwd == [3, 2, 1] otherwise "Backward matches"

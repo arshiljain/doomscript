@@ -1,0 +1,10 @@
+# DS-05: Column Transformation
+temperatures_c = [0.0, 10.0, 20.0, 25.0, 30.0, 100.0]
+temperatures_f = [c * 9.0 / 5.0 + 32.0 for c in temperatures_c]
+
+say "Celsius:", temperatures_c
+say "Fahrenheit:", temperatures_f
+
+verify that temperatures_f[0] == 32.0 otherwise "0 C is 32 F"
+verify that temperatures_f[5] == 212.0 otherwise "100 C is 212 F"
+verify that temperatures_f[2] == 68.0 otherwise "20 C is 68 F"

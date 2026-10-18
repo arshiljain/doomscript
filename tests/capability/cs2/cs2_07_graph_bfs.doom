@@ -1,0 +1,26 @@
+# CS2-07: Graph Breadth-First Search (BFS)
+to bfs with graph, start_node:
+    visited = []
+    queue = [start_node]
+    while queue is not empty:
+        node = queue.pop(0)
+        if node not in visited:
+            visited.append(node)
+            for each neighbor in graph[node]:
+                if neighbor not in visited:
+                    queue.append(neighbor)
+    return visited
+
+graph = {
+    "A": ["B", "C"],
+    "B": ["A", "D", "E"],
+    "C": ["A", "F"],
+    "D": ["B"],
+    "E": ["B", "F"],
+    "F": ["C", "E"]
+}
+
+order = bfs(graph, "A")
+say "BFS Order from A:", order
+verify that order[0] == "A" otherwise "Start node A"
+verify that count of order is 6 otherwise "All 6 nodes visited"

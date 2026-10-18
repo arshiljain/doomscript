@@ -1,0 +1,30 @@
+# ML-10: Gradient Descent Weight Update Step
+to gradient_descent_step with w, b, xs, ys, learning_rate:
+    n = count of xs
+    dw = 0.0
+    db = 0.0
+    repeat with i from 0 to n - 1:
+        y_pred = w * xs[i] + b
+        error = y_pred - ys[i]
+        dw = dw + error * xs[i]
+        db = db + error
+    
+    dw = (2.0 / n) * dw
+    db = (2.0 / n) * db
+    
+    new_w = w - learning_rate * dw
+    new_b = b - learning_rate * db
+    return (new_w, new_b)
+
+xs = [1.0, 2.0, 3.0]
+ys = [2.0, 4.0, 6.0]  # Target: w=2, b=0
+w_init = 0.0
+b_init = 0.0
+lr = 0.1
+
+w1, b1 = gradient_descent_step(w_init, b_init, xs, ys, lr)
+say "Updated w after 1 step:", w1
+say "Updated b after 1 step:", b1
+
+verify that w1 > w_init otherwise "Weight increased towards 2.0"
+verify that b1 >= b_init otherwise "Bias updated"

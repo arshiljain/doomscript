@@ -1,0 +1,13 @@
+# CS1-10: Multiplication Table Generator
+to generate_table with size:
+    grid = []
+    repeat with r from 1 to size:
+        row = [r * c for c in range(1, size + 1)]
+        grid.append(row)
+    return grid
+
+table = generate_table(5)
+say "5x5 Table:", table
+verify that table[0] == [1, 2, 3, 4, 5] otherwise "Row 1 correct"
+verify that table[4] == [5, 10, 15, 20, 25] otherwise "Row 5 correct"
+verify that table[2][3] is 12 otherwise "3 * 4 is 12"

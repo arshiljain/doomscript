@@ -1,0 +1,16 @@
+# DS-02: Missing Value Imputation
+raw_data = [10.0, 20.0, None, 40.0, None, 50.0]
+valid_values = [x for x in raw_data if x is not None]
+avg_val = mean(valid_values)
+imputed = []
+for each x in raw_data:
+    if x is not None:
+        imputed.append(x)
+    else:
+        imputed.append(avg_val)
+say "Original:", raw_data
+say "Imputed:", imputed
+
+verify that avg_val == 30.0 otherwise "Mean is 30.0"
+verify that imputed[2] == 30.0 otherwise "Missing at index 2 replaced"
+verify that imputed[4] == 30.0 otherwise "Missing at index 4 replaced"

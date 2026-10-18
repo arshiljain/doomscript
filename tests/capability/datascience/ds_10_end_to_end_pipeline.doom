@@ -1,0 +1,25 @@
+# DS-10: End-to-End Data Pipeline
+raw_csv = """dept,name,salary,experience
+Eng,Alice,120000,5
+Eng,Bob,85000,2
+Sales,Charlie,95000,4
+Sales,David,65000,1
+Eng,Eva,140000,8
+Sales,Frank,110000,6
+"""
+write raw_csv into file "raw_pipeline.csv"
+
+# 1. Load
+load table "raw_pipeline.csv" into df
+
+# 2. Filter experienced employees (>= 3 years)
+filter df where experience >= 3 into senior
+
+# 3. Group and aggregate
+group senior by dept and average salary into dept_avgs
+
+# 4. Save
+save table dept_avgs into "pipeline_output.csv"
+
+say "Pipeline completed successfully."
+verify that count of dept_avgs is 2 otherwise "2 departments processed"

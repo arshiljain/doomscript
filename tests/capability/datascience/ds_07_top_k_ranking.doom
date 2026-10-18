@@ -1,0 +1,23 @@
+# DS-07: Top K Ranking
+csv_content = """name,score
+Alice,88
+Bob,95
+Charlie,72
+David,91
+Eva,84
+"""
+write csv_content into file "leaderboard.csv"
+
+load table "leaderboard.csv" into df
+sort df by score descending into ranked
+
+# Select top 3 scores
+top3_names = list(ranked["name"][:3])
+top3_scores = list(ranked["score"][:3])
+
+say "Top 3 Names:", top3_names
+say "Top 3 Scores:", top3_scores
+
+verify that top3_names[0] == "Bob" otherwise "1st is Bob"
+verify that top3_names[1] == "David" otherwise "2nd is David"
+verify that top3_names[2] == "Alice" otherwise "3rd is Alice"

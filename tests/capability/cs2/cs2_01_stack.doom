@@ -1,0 +1,34 @@
+# CS2-01: Stack Data Structure
+define a Stack:
+    to start:
+        my items = []
+
+    to push with val:
+        my items.append(val)
+
+    to pop:
+        if my items is empty:
+            return None
+        return my items.pop()
+
+    to peek:
+        if my items is empty:
+            return None
+        return my items[-1]
+
+    to get length:
+        return count of my items
+
+s = Stack()
+s.push(10)
+s.push(20)
+s.push(30)
+say "Stack length:", count of s
+say "Top element:", s.peek()
+popped = s.pop()
+say "Popped:", popped
+say "New top:", s.peek()
+
+verify that count of s is 2 otherwise "Length should be 2"
+verify that popped is 30 otherwise "Popped should be 30"
+verify that s.peek() is 20 otherwise "New top should be 20"

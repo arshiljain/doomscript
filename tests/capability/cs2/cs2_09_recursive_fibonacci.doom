@@ -1,0 +1,17 @@
+# CS2-09: Fibonacci with Memoization
+memo = {0: 0, 1: 1}
+
+to fib with n:
+    if memo contains n:
+        return memo[n]
+    res = fib(n - 1) + fib(n - 2)
+    memo[n] = res
+    return res
+
+f10 = fib(10)
+f20 = fib(20)
+say "Fib(10):", f10
+say "Fib(20):", f20
+
+verify that f10 is 55 otherwise "Fib(10) is 55"
+verify that f20 is 6765 otherwise "Fib(20) is 6765"

@@ -1,0 +1,18 @@
+# CS1-04: Palindrome Check
+to is_palindrome with text:
+    cleaned = text.lower()
+    n = count of cleaned
+    repeat with i from 0 to (n // 2):
+        if cleaned[i] != cleaned[n - 1 - i]:
+            return false
+    return true
+
+p1 = is_palindrome("radar")
+p2 = is_palindrome("Racecar")
+p3 = is_palindrome("doomscript")
+say "radar:", p1
+say "Racecar:", p2
+say "doomscript:", p3
+verify that p1 is true otherwise "radar is palindrome"
+verify that p2 is true otherwise "Racecar is palindrome"
+verify that p3 is false otherwise "doomscript is not palindrome"
