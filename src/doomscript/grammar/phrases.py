@@ -805,6 +805,260 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     if bench_m:
         masked = f"set {bench_m.group(4)} to benchmark_block({bench_m.group(1).strip()}, {bench_m.group(2)}, {bench_m.group(3)})"
 
+    # =======================================================================
+    # PHASES 26 TO 100 PHRASE NORMALIZATIONS
+    # =======================================================================
+
+    # Cluster 1 (Phases 26-32: Systems, OS, Processes & Signals)
+    p_cmd_m = re.match(r"^(?:run\s+command|execute\s+shell)\s+(.+?)\s+(?:piped\s+into|capturing\s+into)\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_cmd_m:
+        masked = f"set {p_cmd_m.group(2)} to run_command_piped({p_cmd_m.group(1).strip()})"
+
+    p_proc_m = re.match(r"^(?:check\s+if\s+)?process\s+(.+?)\s+is\s+running\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_proc_m:
+        masked = f"set {p_proc_m.group(2)} to check_process_running({p_proc_m.group(1).strip()})"
+
+    p_path_m = re.match(r"^(?:add\s+(?:path|directory)\s+(.+?)\s+to\s+system\s+path|extend\s+system\s+path\s+with\s+(.+?))$", masked, re.IGNORECASE)
+    if p_path_m:
+        p_dir = p_path_m.group(1) or p_path_m.group(2)
+        masked = f"add_system_path({p_dir.strip()})"
+
+    p_lock_m = re.match(r"^(?:acquire\s+file\s+lock|lock\s+file)\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_lock_m:
+        masked = f"set {p_lock_m.group(2)} to acquire_file_lock({p_lock_m.group(1).strip()})"
+
+    p_unlock_m = re.match(r"^(?:release\s+file\s+lock|unlock\s+file)\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_unlock_m:
+        masked = f"release_file_lock({p_unlock_m.group(1)})"
+
+    p_disk_m = re.match(r"^(?:get\s+system\s+disk\s+space|check\s+disk\s+space)(?:\s+for\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_disk_m:
+        path = p_disk_m.group(1) or '"."'
+        masked = f"set {p_disk_m.group(2)} to system_disk_space({path})"
+
+    # Cluster 2 (Phases 33-40: Network Protocols & Web)
+    p_dns_m = re.match(r"^(?:resolve\s+dns\s+of|lookup\s+dns\s+for)\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_dns_m:
+        masked = f"set {p_dns_m.group(2)} to resolve_dns({p_dns_m.group(1).strip()})"
+
+    p_ping_m = re.match(r"^(?:ping\s+host|check\s+connection\s+to)\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_ping_m:
+        masked = f"set {p_ping_m.group(2)} to ping_host({p_ping_m.group(1).strip()})"
+
+    p_jar_m = re.match(r"^(?:create|new)\s+cookie\s+jar\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_jar_m:
+        masked = f"set {p_jar_m.group(1)} to cookie_jar_create()"
+
+    p_cset_m = re.match(r"^set\s+cookie\s+(.+?)\s+to\s+(.+?)\s+in\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_cset_m:
+        masked = f"cookie_jar_set({p_cset_m.group(3)}, {p_cset_m.group(1).strip()}, {p_cset_m.group(2).strip()})"
+
+    p_cget_def_m = re.match(r"^get\s+cookie\s+(.+?)\s+with\s+default\s+(.+?)\s+from\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_cget_def_m:
+        masked = f"set {p_cget_def_m.group(4)} to cookie_jar_get({p_cget_def_m.group(3)}, {p_cget_def_m.group(1).strip()}, {p_cget_def_m.group(2).strip()})"
+    else:
+        p_cget_m = re.match(r"^get\s+cookie\s+(.+?)\s+from\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+        if p_cget_m:
+            masked = f"set {p_cget_m.group(3)} to cookie_jar_get({p_cget_m.group(2)}, {p_cget_m.group(1).strip()})"
+
+    # Cluster 3 (Phases 41-48: Data Engineering, Compression & Geolocation)
+    p_gzip_m = re.match(r"^(?:compress\s+text\s+(.+?)\s+with\s+gzip|gzip\s+compress\s+(.+?))\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_gzip_m:
+        txt = p_gzip_m.group(1) or p_gzip_m.group(2)
+        masked = f"set {p_gzip_m.group(3)} to compress_gzip({txt.strip()})"
+
+    p_gunzip_m = re.match(r"^(?:decompress\s+gzip|gzip\s+decompress)\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_gunzip_m:
+        masked = f"set {p_gunzip_m.group(2)} to decompress_gzip({p_gunzip_m.group(1).strip()})"
+
+    p_bz2_m = re.match(r"^(?:compress\s+text\s+(.+?)\s+with\s+bz2|bz2\s+compress\s+(.+?))\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_bz2_m:
+        txt = p_bz2_m.group(1) or p_bz2_m.group(2)
+        masked = f"set {p_bz2_m.group(3)} to compress_bz2({txt.strip()})"
+
+    p_bunzip_m = re.match(r"^(?:decompress\s+bz2|bz2\s+decompress)\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_bunzip_m:
+        masked = f"set {p_bunzip_m.group(2)} to decompress_bz2({p_bunzip_m.group(1).strip()})"
+
+    p_zip_m = re.match(r"^create\s+zip\s+archive\s+(.+?)\s+from\s+files\s+(.+)$", masked, re.IGNORECASE)
+    if p_zip_m:
+        masked = f"create_zip_archive({p_zip_m.group(1).strip()}, {p_zip_m.group(2).strip()})"
+
+    p_unzip_m = re.match(r"^(?:extract\s+zip\s+archive|unzip)\s+(.+?)\s+(?:into\s+folder|to)\s+(.+)$", masked, re.IGNORECASE)
+    if p_unzip_m:
+        masked = f"extract_zip_archive({p_unzip_m.group(1).strip()}, {p_unzip_m.group(2).strip()})"
+
+    p_crc_m = re.match(r"^(?:calculate\s+crc32\s+of|crc32\s+checksum\s+of)\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_crc_m:
+        masked = f"set {p_crc_m.group(2)} to calculate_checksum_crc32({p_crc_m.group(1).strip()})"
+
+    p_adler_m = re.match(r"^(?:calculate\s+adler32\s+of|adler32\s+checksum\s+of)\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_adler_m:
+        masked = f"set {p_adler_m.group(2)} to calculate_checksum_adler32({p_adler_m.group(1).strip()})"
+
+    p_geo_m = re.match(r"^(?:calculate\s+geo\s+distance\s+between|distance\s+between\s+coordinates)\s+(.+?),\s*(.+?)\s+and\s+(.+?),\s*(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_geo_m:
+        masked = f"set {p_geo_m.group(5)} to calculate_geo_distance({p_geo_m.group(1).strip()}, {p_geo_m.group(2).strip()}, {p_geo_m.group(3).strip()}, {p_geo_m.group(4).strip()})"
+
+    # Cluster 4 (Phases 49-56: Mathematics, Linear Algebra, Statistics & Finance)
+    p_dot_m = re.match(r"^(?:vector\s+(.+?)\s+dot\s+vector\s+(.+?)|dot\s+product\s+of\s+(.+?)\s+and\s+(.+?))\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_dot_m:
+        v1 = p_dot_m.group(1) or p_dot_m.group(3)
+        v2 = p_dot_m.group(2) or p_dot_m.group(4)
+        masked = f"set {p_dot_m.group(5)} to vector_dot({v1.strip()}, {v2.strip()})"
+
+    p_vmag_m = re.match(r"^(?:vector\s+magnitude\s+of|magnitude\s+of\s+vector|length\s+of\s+vector)\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_vmag_m:
+        masked = f"set {p_vmag_m.group(2)} to vector_magnitude({p_vmag_m.group(1).strip()})"
+
+    p_matmul_m = re.match(r"^(?:matrix\s+(.+?)\s+multiply\s+matrix\s+(.+?)|multiply\s+matrix\s+(.+?)\s+by\s+(.+?))\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_matmul_m:
+        m1 = p_matmul_m.group(1) or p_matmul_m.group(3)
+        m2 = p_matmul_m.group(2) or p_matmul_m.group(4)
+        masked = f"set {p_matmul_m.group(5)} to matrix_multiply({m1.strip()}, {m2.strip()})"
+
+    p_stdev_m = re.match(r"^(?:standard\s+deviation|stdev)\s+of\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_stdev_m:
+        masked = f"set {p_stdev_m.group(2)} to stats_stdev({p_stdev_m.group(1).strip()})"
+
+    p_var_m = re.match(r"^variance\s+of\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_var_m:
+        masked = f"set {p_var_m.group(2)} to stats_variance({p_var_m.group(1).strip()})"
+
+    p_med_m = re.match(r"^median\s+of\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_med_m:
+        masked = f"set {p_med_m.group(2)} to stats_median({p_med_m.group(1).strip()})"
+
+    p_comp_m = re.match(r"^compound\s+interest\s+on\s+(.+?)\s+at\s+(.+?)%?\s+for\s+(.+?)\s+years?\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_comp_m:
+        masked = f"set {p_comp_m.group(4)} to calc_compound_interest({p_comp_m.group(1).strip()}, {p_comp_m.group(2).strip()}, {p_comp_m.group(3).strip()})"
+
+    p_loan_m = re.match(r"^loan\s+payment\s+for\s+principal\s+(.+?)\s+rate\s+(.+?)%?\s+months\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_loan_m:
+        masked = f"set {p_loan_m.group(4)} to calc_loan_payment({p_loan_m.group(1).strip()}, {p_loan_m.group(2).strip()}, {p_loan_m.group(3).strip()})"
+
+    # Cluster 5 (Phases 57-64: Reactive EventBus, Priority Queues, Circuit Breaker)
+    p_ebus_m = re.match(r"^create\s+event\s+bus\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_ebus_m:
+        masked = f"set {p_ebus_m.group(1)} to EventBus()"
+
+    p_pub_m = re.match(r"^publish\s+event\s+(.+?)\s+with\s+data\s+(.+)$", masked, re.IGNORECASE)
+    if p_pub_m:
+        masked = f"event_publish({p_pub_m.group(1).strip()}, {p_pub_m.group(2).strip()})"
+
+    p_pq_m = re.match(r"^create\s+priority\s+queue\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_pq_m:
+        masked = f"set {p_pq_m.group(1)} to priority_queue_create()"
+
+    p_enq_m = re.match(r"^enqueue\s+(?:task|item)\s+(.+?)\s+with\s+priority\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_enq_m:
+        masked = f"priority_queue_enqueue({p_enq_m.group(3)}, {p_enq_m.group(1).strip()}, {p_enq_m.group(2).strip()})"
+
+    p_deq_m = re.match(r"^dequeue\s+(?:next\s+)?(?:task|item)\s+from\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_deq_m:
+        masked = f"set {p_deq_m.group(2)} to priority_queue_dequeue({p_deq_m.group(1)})"
+
+    p_cb_m = re.match(r"^create\s+circuit\s+breaker\s+named\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_cb_m:
+        masked = f"set {p_cb_m.group(2)} to CircuitBreaker({p_cb_m.group(1).strip()})"
+
+    p_cb_call_m = re.match(r"^call\s+circuit\s+breaker\s+([A-Za-z_]\w*)\s+with\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_cb_call_m:
+        masked = f"set {p_cb_call_m.group(3)} to circuit_breaker_call({p_cb_call_m.group(1)}, {p_cb_call_m.group(2).strip()})"
+
+    # Cluster 6 (Phases 65-72: Modern Web, UI & Components, SVG Canvas)
+    p_svg_m = re.match(r"^create\s+svg\s+canvas\s+width\s+(.+?)\s+height\s+(.+?)\s+with\s+elements\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_svg_m:
+        masked = f"set {p_svg_m.group(4)} to generate_svg_canvas({p_svg_m.group(1).strip()}, {p_svg_m.group(2).strip()}, {p_svg_m.group(3).strip()})"
+
+    p_svg_c_m = re.match(r"^create\s+svg\s+circle\s+at\s+(.+?),\s*(.+?)\s+radius\s+(.+?)\s+fill\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_svg_c_m:
+        masked = f"set {p_svg_c_m.group(5)} to generate_svg_circle({p_svg_c_m.group(1).strip()}, {p_svg_c_m.group(2).strip()}, {p_svg_c_m.group(3).strip()}, {p_svg_c_m.group(4).strip()})"
+
+    p_svg_r_m = re.match(r"^create\s+svg\s+rect\s+at\s+(.+?),\s*(.+?)\s+width\s+(.+?)\s+height\s+(.+?)\s+fill\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_svg_r_m:
+        masked = f"set {p_svg_r_m.group(6)} to generate_svg_rect({p_svg_r_m.group(1).strip()}, {p_svg_r_m.group(2).strip()}, {p_svg_r_m.group(3).strip()}, {p_svg_r_m.group(4).strip()}, {p_svg_r_m.group(5).strip()})"
+
+    p_diff_m = re.match(r"^diff\s+records\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_diff_m:
+        masked = f"set {p_diff_m.group(3)} to diff_records({p_diff_m.group(1).strip()}, {p_diff_m.group(2).strip()})"
+
+    # Cluster 7 (Phases 73-80: AI Agents, RAG & Cognitive Loops)
+    p_idx_m = re.match(r"^create\s+knowledge\s+index\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_idx_m:
+        masked = f"set {p_idx_m.group(1)} to knowledge_index_create()"
+
+    p_doc_idx_m = re.match(r"^index\s+document\s+(.+?)\s+text\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_doc_idx_m:
+        masked = f"knowledge_index_add({p_doc_idx_m.group(3)}, {p_doc_idx_m.group(1).strip()}, {p_doc_idx_m.group(2).strip()})"
+
+    p_q_idx_m = re.match(r"^search\s+knowledge\s+index\s+([A-Za-z_]\w*)\s+for\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_q_idx_m:
+        masked = f"set {p_q_idx_m.group(3)} to knowledge_index_query({p_q_idx_m.group(1)}, {p_q_idx_m.group(2).strip()})"
+
+    p_cos_m = re.match(r"^cosine\s+similarity\s+of\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_cos_m:
+        masked = f"set {p_cos_m.group(3)} to cosine_similarity({p_cos_m.group(1).strip()}, {p_cos_m.group(2).strip()})"
+
+    p_mem_m = re.match(r"^create\s+conversation\s+memory\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_mem_m:
+        masked = f"set {p_mem_m.group(1)} to memory_create()"
+
+    p_rem_m = re.match(r"^remember\s+in\s+memory\s+([A-Za-z_]\w*)\s+role\s+(.+?)\s+content\s+(.+)$", masked, re.IGNORECASE)
+    if p_rem_m:
+        masked = f"memory_remember({p_rem_m.group(1)}, {p_rem_m.group(2).strip()}, {p_rem_m.group(3).strip()})"
+
+    p_rec_m = re.match(r"^(?:get\s+recall\s+history|recall\s+all)\s+from\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_rec_m:
+        masked = f"set {p_rec_m.group(2)} to memory_recall({p_rec_m.group(1)})"
+
+    # Cluster 8 (Phases 81-88: Security, Identity, Auth & Compliance)
+    p_jwt_c_m = re.match(r"^create\s+jwt\s+with\s+payload\s+(.+?)\s+and\s+secret\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_jwt_c_m:
+        masked = f"set {p_jwt_c_m.group(3)} to jwt_create({p_jwt_c_m.group(1).strip()}, {p_jwt_c_m.group(2).strip()})"
+
+    p_jwt_v_m = re.match(r"^verify\s+jwt\s+(.+?)\s+with\s+secret\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_jwt_v_m:
+        masked = f"set {p_jwt_v_m.group(3)} to jwt_verify({p_jwt_v_m.group(1).strip()}, {p_jwt_v_m.group(2).strip()})"
+
+    p_pwd_h_m = re.match(r"^secure\s+hash\s+password\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_pwd_h_m:
+        masked = f"set {p_pwd_h_m.group(2)} to hash_password_secure({p_pwd_h_m.group(1).strip()})"
+
+    p_pwd_v_m = re.match(r"^verify\s+password\s+(.+?)\s+matches\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_pwd_v_m:
+        masked = f"set {p_pwd_v_m.group(3)} to verify_password_secure({p_pwd_v_m.group(1).strip()}, {p_pwd_v_m.group(2).strip()})"
+
+    p_pii_m = re.match(r"^mask\s+pii\s+in\s+text\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_pii_m:
+        masked = f"set {p_pii_m.group(2)} to mask_pii_text({p_pii_m.group(1).strip()})"
+
+    # Cluster 9 (Phases 89-95: Cloud, Containers & Metrics)
+    p_dock_m = re.match(r"^generate\s+dockerfile\s+for\s+entrypoint\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_dock_m:
+        masked = f"set {p_dock_m.group(2)} to generate_dockerfile_content({p_dock_m.group(1).strip()})"
+
+    p_met_inc_m = re.match(r"^(?:increment|increase)\s+metric\s+(.+)$", masked, re.IGNORECASE)
+    if p_met_inc_m:
+        masked = f"metric_increment({p_met_inc_m.group(1).strip()})"
+
+    p_met_set_m = re.match(r"^set\s+metric\s+(.+?)\s+to\s+(.+)$", masked, re.IGNORECASE)
+    if p_met_set_m:
+        masked = f"metric_set({p_met_set_m.group(1).strip()}, {p_met_set_m.group(2).strip()})"
+
+    p_met_exp_m = re.match(r"^export\s+prometheus\s+metrics\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_met_exp_m:
+        masked = f"set {p_met_exp_m.group(1)} to metrics_export_prometheus()"
+
+    # Cluster 10 (Phases 96-100: Metaprogramming, FFI & Self-Hosting)
+    p_c_m = re.match(r"^call\s+c\s+library\s+(.+?)\s+function\s+(.+?)\s+with\s+args\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_c_m:
+        masked = f"set {p_c_m.group(4)} to call_c_function({p_c_m.group(1).strip()}, {p_c_m.group(2).strip()}, {p_c_m.group(3).strip()})"
+
+    p_mini_m = re.match(r"^minify\s+doomscript\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if p_mini_m:
+        masked = f"set {p_mini_m.group(2)} to minify_doomscript_source({p_mini_m.group(1).strip()})"
+
     # Restore strings
     normalized = unmask_strings(masked, strings)
 

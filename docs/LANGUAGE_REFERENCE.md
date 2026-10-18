@@ -893,4 +893,212 @@ doom pack script.doom
 python script.pyz
 ```
 
+---
+
+## 47. How do I manage processes, system resources & file locks? (Phases 26–32)
+Execute commands with captured stdout/stderr, inspect processes, and handle cooperative cross-process locking:
+```doomscript
+# Piped subprocess execution
+run command "whoami" piped into who_res
+say "User: {who_res.stdout}, Return Code: {who_res.exit_code}"
+
+# Process existence check
+check if process "python" is running into is_running
+if is_running:
+    say "Python runtime is currently active"
+
+# Disk metrics & System Path
+get system disk space into disk_stats
+say "Free Space: {disk_stats.free_gb} GB"
+add directory "/opt/custom/bin" to system path
+
+# Cross-process file locking
+acquire file lock "app.lock" into lock_ref
+# critical section ...
+release file lock lock_ref
+```
+
+---
+
+## 48. How do I resolve DNS, ping hosts & manage cookie jars? (Phases 33–40)
+Standard-library network diagnostics and stateful HTTP session handling:
+```doomscript
+# Network Diagnostics
+resolve dns of "example.com" into ip_list
+say "IP Addresses: {ip_list}"
+
+ping host "1.1.1.1" into ping_stat
+say "Latency: {ping_stat.latency_ms} ms (Alive: {ping_stat.alive})"
+
+# Stateful Cookie Jar
+create cookie jar into jar
+set cookie "token" to "abc-123-session" in jar
+get cookie "token" from jar into auth_token
+get cookie "theme" with default "dark" from jar into ui_theme
+```
+
+---
+
+## 49. How do I compress data, create archives & calculate checksums? (Phases 41–48)
+High-performance Gzip, BZ2, ZIP compression, CRC32/Adler32, and Great-Circle Geolocation:
+```doomscript
+# Gzip Compression & Decompression
+compress text "High volume log stream" with gzip into compressed_bytes
+decompress gzip compressed_bytes into restored_text
+
+# BZ2 Compression & Decompression
+compress text "High density dataset" with bz2 into bz2_bytes
+decompress bz2 bz2_bytes into restored_bz2
+
+# ZIP Archiving and Extraction
+create zip archive "backup.zip" from files ["main.doom", "config.ini"]
+extract zip archive "backup.zip" into folder "unpacked_dir"
+
+# Checksums
+calculate crc32 of "payload" into crc_hash
+calculate adler32 of "payload" into adler_hash
+
+# Geolocation Distance (Haversine formula in km)
+calculate geo distance between 40.7128, -74.0060 and 34.0522, -118.2437 into dist_ny_la
+say "Distance NYC to LA: {dist_ny_la} km"
+```
+
+---
+
+## 50. How do I compute vector math, statistics & financial loans? (Phases 49–56)
+Linear algebra, statistical distributions, compound interest, and amortization:
+```doomscript
+# Linear Algebra
+vector [1, 2, 3] dot vector [4, 5, 6] into dot_product
+vector magnitude of [3, 4] into length_vec
+matrix [[1, 2], [3, 4]] multiply matrix [[2, 0], [1, 2]] into mat_product
+
+# Descriptive Statistics
+set sample to [10, 12, 15, 18, 20, 22, 25, 30]
+standard deviation of sample into std_dev
+variance of sample into var_res
+median of sample into median_val
+
+# Financial Mathematics
+compound interest on 5000 at 7% for 5 years into future_value
+loan payment for principal 250000 rate 6.5% months 360 into monthly_mortgage
+```
+
+---
+
+## 51. How do I build reactive event buses, priority queues & circuit breakers? (Phases 57–64)
+Decoupled event-driven architectures, prioritized task queues, and fault-tolerant service breakers:
+```doomscript
+# Reactive Pub/Sub EventBus
+create event bus into bus
+to on_user_signup:
+    say "New user notification received!"
+
+event_subscribe("user.signup", on_user_signup)
+publish event "user.signup" with data {"user": "Alice"}
+
+# Priority Queue
+create priority queue into task_queue
+enqueue task "Background Report" with priority 100 into task_queue
+enqueue task "Critical Security Alert" with priority 1 into task_queue
+dequeue next task from task_queue into next_action
+
+# Resilient Circuit Breaker
+create circuit breaker named "payment_gateway" into gateway_breaker
+to execute_payment:
+    return "Payment Processed"
+
+call circuit breaker gateway_breaker with execute_payment into tx_status
+```
+
+---
+
+## 52. How do I generate SVG graphics & calculate record diffs? (Phases 65–72)
+Generative vector graphics and object state difference analysis:
+```doomscript
+# Generative SVG Vector Graphics
+create svg circle at 100, 100 radius 50 fill "#ff4444" into red_circle
+create svg rect at 20, 20 width 160 height 40 fill "#336699" into blue_rect
+create svg canvas width 300 height 300 with elements [red_circle, blue_rect] into svg_output
+
+# Structural Record Diffing
+set v1 to {"theme": "dark", "build": 10, "debug": false}
+set v2 to {"theme": "light", "build": 11, "released": true}
+diff records v1 and v2 into patch_diff
+say "Changed fields: {patch_diff.changed}"
+say "Added fields: {patch_diff.added}"
+say "Removed fields: {patch_diff.removed}"
+```
+
+---
+
+## 53. How do I build AI Agents, RAG indexes & conversation memory? (Phases 73–80)
+Local vector retrieval-augmented generation and conversational history:
+```doomscript
+# Semantic Knowledge Index (Local Vector RAG)
+create knowledge index into brain_index
+index document "doc1" text "DoomScript transpiles to Python AST" into brain_index
+index document "doc2" text "All standard libraries are self-contained" into brain_index
+search knowledge index brain_index for "Python transpiler" into matches
+
+# Vector Cosine Similarity
+cosine similarity of [1.0, 0.0] and [0.8, 0.6] into sim_score
+
+# Conversation Memory
+create conversation memory into memory
+remember in memory memory role "user" content "Hello, agent"
+remember in memory memory role "assistant" content "Greetings, creator"
+get recall history from memory into chat_transcript
+```
+
+---
+
+## 54. How do I sign JWTs, hash passwords & mask PII? (Phases 81–88)
+Zero-dependency cryptographic tokens, PBKDF2 salting, and privacy sanitization:
+```doomscript
+# JSON Web Tokens (HS256)
+create jwt with payload {"sub": "user_123", "role": "admin"} and secret "supersecret" into jwt_token
+verify jwt jwt_token with secret "supersecret" into claims
+
+# PBKDF2 Secure Password Hashing
+secure hash password "MyStrongPass123!" into password_hash
+verify password "MyStrongPass123!" matches password_hash into valid_login
+
+# Privacy Redaction & PII Masking
+set dirty_text to "Send invoice to billing@corp.com or text 555-432-1000 regarding 123-45-6789"
+mask pii in text dirty_text into clean_text
+say clean_text
+# Output: "Send invoice to [EMAIL_MASKED] or text [PHONE_MASKED] regarding [SSN_MASKED]"
+```
+
+---
+
+## 55. How do I generate container configurations & export Prometheus metrics? (Phases 89–95)
+Microservice observability and containerization:
+```doomscript
+# Automated Dockerfile Generation
+generate dockerfile for entrypoint "server.doom" into dockerfile_text
+
+# Prometheus Metrics
+increment metric "api_requests_total"
+increment metric "api_requests_total"
+set metric "active_connections" to 42
+export prometheus metrics into prometheus_scrape_data
+```
+
+---
+
+## 56. How do I invoke C libraries (FFI) & minify DoomScript source? (Phases 96–100)
+Low-level Foreign Function Interface and source optimization:
+```doomscript
+# Ctypes Foreign Function Interface
+call c library "msvcrt" function "puts" with args ["Hello from C runtime!"] into result
+
+# AST Minifier
+set raw_code to "# Comment\nset x to 10\n\nset y to 20\nsay x + y"
+minify doomscript raw_code into compact_code
+say compact_code
+```
+
+
 

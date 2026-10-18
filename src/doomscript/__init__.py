@@ -10,7 +10,7 @@ from doomscript.runtime import (
     time_future, time_past
 )
 
-__version__ = "0.8.0"
+__version__ = "1.0.0"
 __all__ = [
     "compile_to_ast", "transpile", "execute", "Record", "sleep", "percent_of",
     "write_file", "append_file", "read_file", "count_of", "beep", "play_sound",

@@ -195,6 +195,10 @@ def execute(source: Any, custom_globals: dict = None) -> dict:
         "config_save": runtime.config_save,
         "benchmark_block": runtime.benchmark_block,
     }
+    for name, obj in vars(runtime).items():
+        if not name.startswith("_"):
+            exec_globals.setdefault(name, obj)
+            
     for k, v in runtime_helpers.items():
         exec_globals.setdefault(k, v)
         

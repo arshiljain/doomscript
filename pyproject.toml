@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "doomscript"
-version = "0.8.0"
+version = "1.0.0"
 description = "An English-first programming language that compiles to Python AST"
 readme = "README.md"
 requires-python = ">=3.10"

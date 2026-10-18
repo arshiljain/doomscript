@@ -1584,6 +1584,10 @@ def benchmark_block(name: str, iterations: int, fn, *args):
     return res
 
 
+# Import all Extended Runtime Features (Phases 26 through 100)
+from doomscript.runtime_extended import *
+
+
 
 
 

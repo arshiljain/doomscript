@@ -2,6 +2,58 @@
 
 All notable changes to DoomScript are documented in this file.
 
+## [1.0.0] - 2026-10-18 - Phases 26-100: Complete Language Milestone (10 Thematic Clusters)
+### Added
+- **Cluster 1 (Phases 26–32: Systems, OS, Processes & Signals)**:
+  - `run command <cmd> piped into <var>`: Subprocess execution capturing stdout, stderr, and exit codes into a Record.
+  - `check if process <name> is running into <var>`: Pure-stdlib process existence check.
+  - `get system disk space into <var>`: Disk capacity, usage, and free metrics in gigabytes.
+  - `add directory <dir> to system path`: Dynamic PATH modification and sys.path injection.
+  - `acquire file lock <path> into <var>` and `release file lock <var>`: Cooperative cross-process file locking.
+- **Cluster 2 (Phases 33–40: Network Protocols, DNS & Cookies)**:
+  - `resolve dns of <host> into <var>`: Zero-dependency DNS resolution.
+  - `ping host <host> into <var>`: Network reachability and latency benchmarking.
+  - `create cookie jar into <var>`, `set cookie <key> to <val> in <jar>`, `get cookie <key> from <jar> into <var>`.
+- **Cluster 3 (Phases 41–48: Advanced Data Engineering, Compression & Geolocation)**:
+  - `compress text <txt> with gzip into <var>` / `decompress gzip <bytes> into <var>`.
+  - `compress text <txt> with bz2 into <var>` / `decompress bz2 <bytes> into <var>`.
+  - `create zip archive <dest> from files <list>` and `extract zip archive <src> into folder <dest>`.
+  - `calculate crc32 of <txt> into <var>` and `calculate adler32 of <txt> into <var>`.
+  - `calculate geo distance between <lat1>, <lon1> and <lat2>, <lon2> into <var>`: Great-circle Haversine distance in kilometers.
+- **Cluster 4 (Phases 49–56: Mathematics, Linear Algebra, Statistics & Finance)**:
+  - `vector <v1> dot vector <v2> into <var>`: Vector dot products.
+  - `vector magnitude of <v> into <var>`: Euclidean vector norm.
+  - `matrix <m1> multiply matrix <m2> into <var>`: Pure Python matrix multiplication.
+  - `standard deviation of <list>`, `variance of <list>`, and `median of <list>`.
+  - `compound interest on <p> at <r>% for <t> years into <var>`: Future value compounding.
+  - `loan payment for principal <p> rate <r>% months <m> into <var>`: Monthly amortization payments.
+- **Cluster 5 (Phases 57–64: Reactive EventBus, Priority Queues & Resiliency)**:
+  - `create event bus into <var>`, `event_subscribe(<topic>, <handler>)`, `publish event <topic> with data <data>`.
+  - `create priority queue into <var>`, `enqueue task <item> with priority <p> into <q>`, `dequeue next task from <q> into <var>`.
+  - `create circuit breaker named <name> into <var>`, `call circuit breaker <cb> with <fn> into <var>`: Fault-tolerant CLOSED/HALF-OPEN/OPEN state machine.
+- **Cluster 6 (Phases 65–72: Modern Web, UI & Components, SVG Canvas)**:
+  - `create svg circle at <cx>, <cy> radius <r> fill <fill> into <var>`.
+  - `create svg rect at <x>, <y> width <w> height <h> fill <fill> into <var>`.
+  - `create svg canvas width <w> height <h> with elements <list> into <var>`.
+  - `diff records <r1> and <r2> into <var>`: Structural object difference engine reporting added, removed, and changed attributes.
+- **Cluster 7 (Phases 73–80: AI Agents, RAG & Cognitive Loops)**:
+  - `create knowledge index into <var>`: In-memory vector database.
+  - `index document <doc_id> text <txt> into <idx>`: Document indexing with deterministic semantic embeddings.
+  - `search knowledge index <idx> for <q> into <var>`: Cosine similarity vector search and retrieval.
+  - `cosine similarity of <v1> and <v2> into <var>`.
+  - `create conversation memory into <var>`, `remember in memory <mem> role <role> content <content>`, `get recall history from <mem> into <var>`.
+- **Cluster 8 (Phases 81–88: Security, Identity, Auth & Compliance)**:
+  - `create jwt with payload <data> and secret <secret> into <var>`: Zero-dependency HMAC-SHA256 JWT generator.
+  - `verify jwt <token> with secret <secret> into <var>`: Signature and claims validation.
+  - `secure hash password <pwd> into <var>` and `verify password <pwd> matches <hash> into <var>`: Salted PBKDF2-HMAC-SHA256 password security.
+  - `mask pii in text <txt> into <var>`: Redaction engine masking emails, phone numbers, and SSNs.
+- **Cluster 9 (Phases 89–95: Cloud, Containers & Prometheus Metrics)**:
+  - `generate dockerfile for entrypoint <entry> into <var>`: Production container configuration generator.
+  - `increment metric <name>`, `set metric <name> to <val>`, `export prometheus metrics into <var>`: Prometheus scrape exporter.
+- **Cluster 10 (Phases 96–100: Metaprogramming, FFI & Self-Hosting)**:
+  - `call c library <lib> function <fn> with args <args> into <var>`: Foreign Function Interface via ctypes.
+  - `minify doomscript <src> into <var>`: AST comment stripper and whitespace compressor.
+
 ## [0.8.0] - 2026-10-18 - Phases 14-25: AI Primitives, ORM, DocGen, Markdown, Cryptography, Streaming, Config, Benchmarking & Packager
 ### Added
 - **Phase 14: English AI & LLM Primitives**:
