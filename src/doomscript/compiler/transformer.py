@@ -301,14 +301,28 @@ class DoomToPython(Transformer):
         )
         return ast.Assign(targets=[target], value=comp)
 
+    def dotted_name(self, args):
+        return ".".join(str(a).strip("\"'") for a in args)
+
+    def import_alias(self, args):
+        name = str(args[0]).strip("\"'")
+        as_name = str(args[1]).strip("\"'") if len(args) > 1 and args[1] is not None else None
+        return ast.alias(name=name, asname=as_name)
+
     def import_module(self, args):
-        mod_name = str(args[0])
-        return ast.Import(names=[ast.alias(name=mod_name)])
+        mod_name = str(args[0]).strip("\"'")
+        as_name = str(args[1]).strip("\"'") if len(args) > 1 and args[1] is not None else None
+        return ast.Import(names=[ast.alias(name=mod_name, asname=as_name)])
 
     def import_from_module(self, args):
-        mod_name = str(args[0])
-        names = [str(a) for a in args[1:]]
-        return ast.ImportFrom(module=mod_name, names=[ast.alias(name=n) for n in names], level=0)
+        mod_name = str(args[0]).strip("\"'")
+        aliases = []
+        for item in args[1:]:
+            if isinstance(item, ast.alias):
+                aliases.append(item)
+            else:
+                aliases.append(ast.alias(name=str(item).strip("\"'"), asname=None))
+        return ast.ImportFrom(module=mod_name, names=aliases, level=0)
 
     def import_doom_file(self, args):
         filepath = args[0]
@@ -702,7 +716,11 @@ class DoomToPython(Transformer):
 
     def target_attr(self, args):
         val, attr = args
-        return ast.Attribute(value=val, attr=str(attr), ctx=ast.Store())
+        return ast.Attribute(value=to_load(val), attr=str(attr), ctx=ast.Store())
+
+    def target_subscript(self, args):
+        val, slice_idx = args
+        return ast.Subscript(value=to_load(val), slice=to_load(slice_idx), ctx=ast.Store())
 
     def add_to_list(self, args):
         item, target = args
@@ -1237,18 +1255,30 @@ class DoomToPython(Transformer):
 
     def possessive(self, args):
         atom, attr = args
-        return ast.Attribute(value=atom, attr=str(attr), ctx=ast.Load())
+        return ast.Attribute(value=to_load(atom), attr=str(attr), ctx=ast.Load())
 
-    def standard_call(self, args):
-        func_name = str(args[0])
+    def attr_access(self, args):
+        val, attr = args
+        return ast.Attribute(value=to_load(val), attr=str(attr), ctx=ast.Load())
+
+    def call_expr(self, args):
+        func = args[0]
         call_items = args[1] if len(args) > 1 and args[1] is not None else []
-        pos_args = [a for a in call_items if not isinstance(a, ast.keyword)]
+        pos_args = [to_load(a) for a in call_items if not isinstance(a, ast.keyword)]
         keywords = [a for a in call_items if isinstance(a, ast.keyword)]
+        func_node = ast.Name(id=str(func), ctx=ast.Load()) if isinstance(func, str) else to_load(func)
         return ast.Call(
-            func=ast.Name(id=func_name, ctx=ast.Load()),
+            func=func_node,
             args=pos_args,
             keywords=keywords
         )
+
+    def standard_call(self, args):
+        return self.call_expr(args)
+
+    def subscript_expr(self, args):
+        val, slice_idx = args
+        return ast.Subscript(value=to_load(val), slice=to_load(slice_idx), ctx=ast.Load())
 
     def var(self, args):
         name = str(args[0])

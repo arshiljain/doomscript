@@ -114,8 +114,11 @@ reverse_stmt: "reverse" target                        -> reverse_list_stmt
 group_stmt: "group" expr "by" NAME "into" target -> group_by_stmt
 filter_stmt: expr "where" NAME CMP_OP expr "into" target -> filter_records_stmt
 comp_assign_stmt: target ("is" | "=") ["the"] NAME "of" "each" NAME "in" expr -> comp_assign
-use_py_stmt: "use" "python" "module" NAME -> import_module
-from_py_stmt: "from" "python" "module" NAME "use" NAME ("," NAME)* -> import_from_module
+dotted_name: (NAME | STRING) ("." (NAME | STRING))* -> dotted_name
+import_alias: (NAME | STRING) ["as" NAME] -> import_alias
+
+use_py_stmt: "use" "python" "module" dotted_name ["as" NAME] -> import_module
+from_py_stmt: "from" "python" "module" dotted_name "use" import_alias ("," import_alias)* -> import_from_module
 use_doom_stmt: "use" expr -> import_doom_file
 skip_stmt: "skip" -> skip_stmt
 
@@ -181,7 +184,7 @@ return_stmt: "return" expr? -> return_val
 stop_stmt: "stop" -> stop_stmt
 
 call_stmt: "call" NAME [atom] ["with" call_arg_list] -> call_stmt
-expr_stmt: func_call -> expr_stmt
+expr_stmt: call_expr -> expr_stmt
 
 ?compound_stmt: if_stmt
               | unless_stmt
@@ -311,7 +314,6 @@ CMP_OP: "<="
        | data_op_expr
        | relative_time_expr
        | percent_expr
-       | possessive_expr
        | count_expr
        | math_fn_expr
        | date_fn_expr
@@ -325,7 +327,7 @@ data_op_expr: "uppercase" "of" factor                     -> expr_uppercase
             | "unique" ["items"] "of" factor              -> expr_unique
             | ("round" | "rounded") "of" factor "to" factor "decimals"  -> expr_round_dec
             | ("round" | "rounded") "of" factor                         -> expr_round
-            | (atom | possessive_expr) "as" TYPE_COERCE   -> expr_cast
+            | atom "as" TYPE_COERCE   -> expr_cast
 
 TYPE_COERCE.3: "number" | "text" | "string" | "boolean" | "bool"
 
@@ -339,7 +341,7 @@ aggregate_expr: "sum" "of" factor -> agg_sum
               | "last" "item" "of" factor -> agg_last
 
 math_fn_expr: "absolute" "value" "of" factor -> math_abs
-            | "square" "root" "of" factor -> math_sqrt
+            | "sqrt" "of" factor -> math_sqrt
 
 date_fn_expr: "today" -> date_today
             | ("now" | "current" "time") -> date_now
@@ -351,27 +353,34 @@ TIME_UNIT: "days" | "day" | "hours" | "hour" | "minutes" | "minute" | "seconds" 
 
 count_expr: ("count" | "length") "of" factor -> count_of
 percent_expr: NUMBER "%" "of" factor -> percent_of
-possessive_expr: atom "'s" NAME -> possessive
 
-?atom: func_call
-     | NAME           -> var
-     | NUMBER         -> num
-     | STRING         -> str
-     | "true"         -> const_true
-     | "false"        -> const_false
-     | "nothing"      -> const_none
-     | "none"         -> const_none
-     | list_expr
-     | dict_expr
-     | "(" expr ")"
+call_expr: atom "(" [call_arg_list] ")" -> call_expr
 
-func_call: NAME "(" [call_arg_list] ")" -> standard_call
+?atom: atom "." NAME -> attr_access
+     | atom "'s" NAME -> possessive
+     | call_expr
+     | atom "[" expr "]" -> subscript_expr
+     | base_atom
+
+?base_atom: NAME           -> var
+          | NUMBER         -> num
+          | STRING         -> str
+          | "true"         -> const_true
+          | "false"        -> const_false
+          | "nothing"      -> const_none
+          | "none"         -> const_none
+          | list_expr
+          | dict_expr
+          | "(" expr ")"
+
 list_expr: "[" [expr ("," expr)*] "]" -> list_val
 dict_expr: "{" [dict_pair ("," dict_pair)*] "}" -> dict_val
 dict_pair: (STRING | NAME) ":" expr
 
 ?target: NAME             -> target_var
+       | atom "." NAME    -> target_attr
        | atom "'s" NAME   -> target_attr
+       | atom "[" expr "]" -> target_subscript
 
 // Lexer & Whitespace rules
 _NEWLINE: ( /\r?\n[\t ]*/ | COMMENT )+

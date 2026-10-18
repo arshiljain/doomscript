@@ -2,6 +2,28 @@
 
 All notable changes to DoomScript are documented in this file.
 
+## [1.0.3] - 2026-10-19 - Phase 1: Dotted Calls & Full Python Interop
+### Added
+- **Dotted Calls & Attribute Access**:
+  - Dotted attribute access (`obj.attr`), method calls (`obj.method(args)`), chained method calls (`s.lower().split(" ")`), and calls on call results (`f()(x)`).
+  - Subscript method chaining (`df["y"].mean()`).
+  - Method calls with keyword arguments (`s.split(",", maxsplit=1)`).
+- **Python Module Import Aliasing & Dotted Paths**:
+  - Support for aliased imports: `use python module numpy as np`, `use python module matplotlib.pyplot as plt`.
+  - Support for dotted from-imports: `from python module sklearn.linear_model use LinearRegression`.
+- **Packaging Extras**:
+  - Added `data` optional dependency group to `pyproject.toml` (`pip install doomscript[data]`) for `numpy`, `pandas`, `matplotlib`, and `scikit-learn`.
+- **Test Suite**:
+  - Added comprehensive test suite `tests/test_phase1_interop.py` covering standard library calls, chained methods, numpy, pandas, matplotlib, and scikit-learn.
+
+### Fixed
+- **Dot Rewriting Mangle**:
+  - Removed normalizer rewrite that forcibly converted dots into possessives (`random.seed(1)` -> `random's seed(1)`). Dots with no whitespace now represent standard attribute access.
+- **Keyword Variable Access**:
+  - Fixed dotted access on variables named after keywords (e.g. `first = {revenue: 3}; first.revenue`).
+- **Callable Identifier Disambiguation**:
+  - Fixed function definitions and calls named `square` (`square(5)`) by normalizing `square root of` to `sqrt of` in the phrase pipeline, releasing `square` from being a reserved grammar terminal.
+
 ## [1.0.2] - 2026-10-19 - Phase 0: Safety & Spec Integrity
 ### Added
 - **MIT License & Packaging Metadata**:

@@ -79,3 +79,5 @@ e.txt
 t.txt
 o.csv
 nope.txt
+*.log
+audit.log

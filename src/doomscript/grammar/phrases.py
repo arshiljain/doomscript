@@ -399,9 +399,8 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         if filter_assign_m:
             masked = f"{filter_assign_m.group(2)} where {filter_assign_m.group(3)} into {filter_assign_m.group(1)}"
 
-    # Dot notation rewrites (e.g. math.pi -> math's pi)
-    while re.search(r"\b([A-Za-z_]\w*)\.([A-Za-z_]\w*)\b", masked):
-        masked = re.sub(r"\b([A-Za-z_]\w*)\.([A-Za-z_]\w*)\b", r"\1's \2", masked)
+    # Normalize square root of to sqrt of
+    masked = re.sub(r"\bsquare\s+root\s+of\b", "sqrt of", masked, flags=re.IGNORECASE)
 
     # Result of function calls in expressions
     masked = re.sub(r"\b(?:the\s+)?result\s+of\s+([A-Za-z_]\w*)\s+on\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"\1(\2)", masked, flags=re.IGNORECASE)
@@ -438,7 +437,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"(?<!'s\s)(?<!\.)(?<![\"'])\bcount\b(?![\"'])(?!\s+of\b)", "_var_count", masked)
     masked = re.sub(r"(?<!'s\s)(?<!\.)(?<![\"'])\bsum\b(?![\"'])(?!\s+of\b)", "_var_sum", masked)
     masked = re.sub(r"(?<!'s\s)(?<!\.)(?<!\bbullet\s)(?<!\ba\s)(?<!\bempty\s)(?<!\bnew\s)(?<![\"'])\blist\b(?![\"'])(?!\s+files\b)(?!\s+of\b)", "_var_list", masked)
-    masked = re.sub(r"(?<!'s\s)(?<!\.)(?<!\bfind\s)(?<!\btake\s)(?<!\bdrop\s)(?<![\"'])\bfirst\b(?![\"'])(?!\s+(?:\d+|[A-Za-z_]\w*)\s+items?\s+(?:of|from)\b|\s+item\s+of\b|\s+[A-Z]\w*)", "_var_first", masked)
+    masked = re.sub(r"(?<!'s\s)(?<!\.)(?<!\bfind\s)(?<!\btake\s)(?<!\bdrop\s)\bfirst\b(?!\s+(?:\d+|[A-Za-z_]\w*)\s+items?\s+(?:of|from)\b|\s+item\s+of\b|\s+[A-Z]\w*)", "_var_first", masked)
 
     # Arithmetic in words
     double_m = re.match(r"^\s*double\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)

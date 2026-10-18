@@ -18,6 +18,14 @@ dependencies = [
     "rich>=13.7.0",
 ]
 
+[project.optional-dependencies]
+data = [
+    "numpy",
+    "pandas",
+    "matplotlib",
+    "scikit-learn",
+]
+
 [project.urls]
 Homepage = "https://github.com/doomscript/doomscript"
 Repository = "https://github.com/doomscript/doomscript"
