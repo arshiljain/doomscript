@@ -38,3 +38,11 @@ Documentation = "https://github.com/doomscript/doomscript#readme"
 
 [project.scripts]
 doom = "doomscript.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"doomscript" = ["grammar/*.lark", "**/*.lark"]
+"doomscript.grammar" = ["*.lark"]
+

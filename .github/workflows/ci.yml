@@ -8,7 +8,7 @@ on:
 
 jobs:
   test:
-    name: Test on ${{ matrix.os }} (Python ${{ matrix.python-version }})
+    name: Core on ${{ matrix.os }} (Python ${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -25,7 +25,7 @@ jobs:
         python-version: ${{ matrix.python-version }}
         cache: 'pip'
 
-    - name: Install package and dependencies
+    - name: Install package and dependencies (Core)
       run: |
         python -m pip install --upgrade pip
         pip install -e .
@@ -36,10 +36,42 @@ jobs:
         doom --help
         doom check examples/todo_app.doom
 
-    - name: Run Pytest test suite
+    - name: Run Pytest test suite (Core)
       run: |
         python -m pytest -v
 
     - name: Run English Corpus Benchmark
       run: |
         python run_corpus.py --fail-under 95
+
+  test-viz:
+    name: Viz on ${{ matrix.os }} (Python ${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+
+    - name: Install package with visualization dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[viz]"
+        pip install pytest
+
+    - name: Run Visualization Test Suite
+      run: |
+        python -m pytest -v tests/viz/
+
+    - name: Run Visualization Capability Benchmark
+      run: |
+        python run_viz_capability.py
