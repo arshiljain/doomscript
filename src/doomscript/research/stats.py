@@ -360,6 +360,9 @@ def chi_square_independence(table: List[List[Union[int, float]]]) -> TestResult:
     )
 
 
+chi_square_test = chi_square_independence
+
+
 # ---------------------------------------------------------------------------
 # Confidence Intervals
 # ---------------------------------------------------------------------------

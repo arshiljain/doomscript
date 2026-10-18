@@ -72,6 +72,8 @@ COMPARISON_SYNONYMS: List[Tuple[str, str]] = [
     ("is shorter than", "is less than"),
     ("is above", "is greater than"),
     ("is below", "is less than"),
+    ("is over", "is greater than"),
+    ("is under", "is less than"),
     ("is identical to", "equals"),
     ("is strictly equal to", "equals"),
     ("is equal to", "equals"),
@@ -96,7 +98,7 @@ STATEMENT_START_KEYWORDS = {
     "ask", "call", "import", "unpack", "trim", "replace", "split", "join",
     "capitalize", "convert", "sort", "round", "combine", "fetch", "post", "download",
     "break", "continue", "stop", "exit", "quit", "add", "remove", "insert", "push", "discard", "clear", "empty", "reverse",
-    "load", "filter", "group", "plot"
+    "load", "filter", "group", "plot", "step", "compute", "test"
 }
 
 CORE_COMMAND_VERBS: List[str] = [
@@ -499,7 +501,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"\binsert\s+(.+?)\s+at\s+(?:index|position)\s+(.+?)\s+in\b", r"insert \1 at \2 in", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bunique\s+items\s+in\b", "unique items of", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\b(?:an\s+empty\s+list|a\s+new\s+list)\b", "[]", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\b(?:a\s+list\s+of|list\s+of)\s+([^;\n]+)$", r"[\1]", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(?:a\s+list\s+of|list\s+of)\s+([^;\n]+?)(?=\s+with\b|\s+at\b|\s+into\b|\s*\)|\s*\]|;\s*|\n|$)", r"[\1]", masked, flags=re.IGNORECASE)
 
     # Function definition with 'on': 'to tax on price' -> 'to tax with price'
     masked = re.sub(r"^\s*to\s+([A-Za-z_]\w*)\s+on\s+([A-Za-z_]\w*)\b", r"to \1 with \2", masked, flags=re.IGNORECASE)
@@ -1474,6 +1476,7 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
     pending_injections: List[Tuple[int, List[str], int]] = []
     pending_routes: List[Tuple[int, str, int]] = []
     match_stack: List[Dict[str, Any]] = []
+    in_research_mode: bool = False
 
     for line_idx, raw_line in enumerate(lines, start=1):
         if not raw_line.strip():
@@ -1508,6 +1511,19 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
             # Comment-only line
             emit(raw_line, line_idx)
             continue
+
+        # Research Mode Activation
+        if code.strip().lower() in ("use research", "enable research", "import research", "using research"):
+            in_research_mode = True
+            emit(f"{indent}# use research", line_idx)
+            continue
+
+        # If in research mode, apply declarative research phrase normalization first
+        if in_research_mode:
+            from doomscript.research.registry import apply_research_normalization
+            norm_res = apply_research_normalization(code)
+            if norm_res is not None:
+                code = norm_res
 
         # Phase 10: 'test "name":'
         test_m = re.match(r"^test\s+(.+?):?$", code, re.IGNORECASE)

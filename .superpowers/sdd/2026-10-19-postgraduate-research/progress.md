@@ -4,4 +4,5 @@ Task 1: complete (commit 0c3fab5, tests: python -m pytest tests/research/test_ba
 Task 2: complete (commit 7c045eb, tests: python -m pytest tests/research/test_distributions.py -> 5/5 pass)
 Task 3: complete (commit a0e2732, tests: python -m pytest tests/research/test_stats.py -> 8/8 pass)
 Task 4: complete (commit 1ccbe42, tests: python -m pytest tests/research/test_graph_algorithms.py -> 8/8 pass)
-Task 5: complete (tests: python -m pytest tests/research/test_autograd_optim.py -> 6/6 pass)
+Task 5: complete (commit 91d9f3a, tests: python -m pytest tests/research/test_autograd_optim.py -> 6/6 pass)
+Task 6: complete (tests: python -m pytest tests/research/test_research_grammar.py -> 5/5 pass)

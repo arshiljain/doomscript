@@ -1920,7 +1920,59 @@ def plot_table(table, x_col, y_col, kind="line", title=None):
     return fig
 
 
-
-
-
-
+# ---------------------------------------------------------------------------
+# Research Module Integration
+# ---------------------------------------------------------------------------
+from doomscript.research.backend import (
+    ResearchRNG,
+    ResearchSession,
+    get_active_session,
+    set_active_session,
+)
+from doomscript.research.distributions import (
+    gammainc,
+    gammaincc,
+    betainc,
+    betaincc,
+    t_cdf,
+    t_sf,
+    f_cdf,
+    f_sf,
+    chi2_cdf,
+    chi2_sf,
+    inv_normal_cdf,
+    inv_t_cdf,
+    inv_chi2_cdf,
+)
+from doomscript.research.stats import (
+    welch_t_test,
+    student_t_test,
+    mann_whitney_u_test,
+    one_way_anova,
+    chi_square_test,
+    confidence_interval,
+    wilson_score_interval,
+    bca_bootstrap,
+    adjust_p_values,
+    metropolis_hastings,
+    TestResult,
+    MCMCResult,
+)
+from doomscript.research.graph import (
+    ResearchGraph,
+    dijkstra_shortest_path,
+    bellman_ford,
+    floyd_warshall,
+    topological_sort,
+    edmonds_karp_max_flow,
+    NegativeEdgeWeightError,
+    NegativeCycleError,
+)
+from doomscript.research.algorithms import (
+    levenshtein_distance,
+    longest_common_subsequence,
+    knapsack_01,
+)
+from doomscript.research.autograd import Scalar, check_grad
+from doomscript.research.tensor import Tensor
+from doomscript.research.optim import Adam, SGDMomentum
