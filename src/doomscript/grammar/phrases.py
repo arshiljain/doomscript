@@ -278,6 +278,21 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"^\s*(?:make\s+sure\s+that|assert\s+that|check\s+that)\s+(.+?)\s+otherwise\s+(.+)$", r"verify that \1 otherwise \2", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*(?:make\s+sure\s+that|assert\s+that|check\s+that)\s+(.+)$", r'verify that \1 otherwise "Check failed"', masked, flags=re.IGNORECASE)
 
+    # Phase 3: Classes and Instance Attributes
+    masked = re.sub(
+        r"^\s*define\s+(?:a|an)\s+([A-Za-z_]\w*)\s+(?:that\s+is\s+(?:a|an)\s+|that\s+extends\s+|inherits\s+from\s+|from\s+)([A-Za-z_]\w*)\s*:",
+        r"class \1(\2):",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"^\s*define\s+(?:a|an)\s+([A-Za-z_]\w*)\s*:",
+        r"class \1:",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(r"\b(?:my|its)\s+([A-Za-z_]\w*)", r"self.\1", masked, flags=re.IGNORECASE)
+
     # 2. Flexible Assignment Patterns
     for pat, repl in ASSIGNMENT_PATTERNS:
         if pat.match(masked):
@@ -473,11 +488,11 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"^\s*(?:clear|empty)\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s*$", r"set \1 to []", masked, flags=re.IGNORECASE)
 
     # List Mutators in English
-    masked = re.sub(r"^\s*append\s+(.+?)\s+to\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s*$", r"add \1 to \2", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"^\s*push\s+(.+?)\s+(?:to|into)\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s*$", r"add \1 to \2", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"^\s*discard\s+(.+?)\s+from\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s*$", r"remove \1 from \2", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"^\s*(?:pop\s+(?:from\s+)?|remove\s+last\s+(?:item\s+)?from\s+)([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s*$", r"pop(\1)", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"(?<!def\s)(?<!to\s)\bpop\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\b", r"pop(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*append\s+(.+?)\s+to\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s*$", r"add \1 to \2", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*push\s+(.+?)\s+(?:to|into)\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s*$", r"add \1 to \2", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*discard\s+(.+?)\s+from\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s*$", r"remove \1 from \2", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*(?:pop\s+(?:from\s+)?|remove\s+last\s+(?:item\s+)?from\s+)([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s*$", r"pop(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"(?<!def\s)(?<!to\s)\bpop\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\b", r"pop(\1)", masked, flags=re.IGNORECASE)
 
     # Loop Controls & Flow
     masked = re.sub(r"^\s*for\s+(?:all|each\s+of\s+the|every)\s+([A-Za-z_]\w*)\s+in\b", r"for each \1 in", masked, flags=re.IGNORECASE)
@@ -491,6 +506,16 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"^\s*(?:break\s+out\s+of\s+(?:the\s+)?loop|break\s+loop|exit\s+loop|stop\s+loop|break)\s*$", "stop", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*(?:skip\s+to\s+next|skip\s+(?:this\s+)?iteration|continue\s+loop|next\s+iteration|continue)\s*$", "skip", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\brepeat\s+with\s+([A-Za-z_]\w*)\s+from\s+(.+?)\s+down\s+to\s+(.+?)(?=:|\n|$)", r"repeat with \1 from \2 to \3 by -1", masked, flags=re.IGNORECASE)
+
+    # Phase 3: Class Dunder Methods and Super Constructors
+    masked = re.sub(r"^\s*to\s+start\s+with\s+(.+?):", r"to __init__ with \1:", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*to\s+start\s*:", r"to __init__:", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*to\s+describe\s*:", r"to __repr__:", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*to\s+get\s+length\s*:", r"to __len__:", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*to\s+get\s+item\s+with\s+(.+?):", r"to __getitem__ with \1:", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*to\s+set\s+item\s+with\s+(.+?):", r"to __setitem__ with \1:", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*base\s+start\s+with\s+(.+)$", r"super().__init__(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*base\s+start\s*$", r"super().__init__()", masked, flags=re.IGNORECASE)
 
     # Function Definition & Returns
     masked = re.sub(r"^\s*(?:how\s+to|define|function)\s+([A-Za-z_]\w*)\s+with\s+(.+?):", r"to \1 with \2:", masked, flags=re.IGNORECASE)

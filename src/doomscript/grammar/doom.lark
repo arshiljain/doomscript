@@ -203,6 +203,9 @@ expr_stmt: call_expr -> expr_stmt
               | until_stmt
               | attempt_stmt
               | func_def
+              | class_def
+
+class_def: "class" NAME ["(" NAME ")"] ":"? _NEWLINE suite -> class_def
 
 if_stmt: "if" expr ":"? _NEWLINE suite elif_clause* else_clause? -> if_stmt
 elif_clause: "elif" expr ":"? _NEWLINE suite

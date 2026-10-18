@@ -752,7 +752,7 @@ class DoomToPython(Transformer):
 
     def add_to_list(self, args):
         item, target = args
-        load_target = ast.Name(id=target.id, ctx=ast.Load()) if isinstance(target, ast.Name) else target
+        load_target = to_load(target)
         call = ast.Call(
             func=ast.Attribute(value=load_target, attr="append", ctx=ast.Load()),
             args=[item],
@@ -762,7 +762,7 @@ class DoomToPython(Transformer):
 
     def remove_from_list(self, args):
         item, target = args
-        load_target = ast.Name(id=target.id, ctx=ast.Load()) if isinstance(target, ast.Name) else target
+        load_target = to_load(target)
         call = ast.Call(
             func=ast.Attribute(value=load_target, attr="remove", ctx=ast.Load()),
             args=[item],
@@ -1000,6 +1000,56 @@ class DoomToPython(Transformer):
             name=func_name,
             args=arguments_node,
             body=body,
+            decorator_list=[]
+        )
+
+    def class_def(self, args):
+        name = str(args[0])
+        if len(args) == 3:
+            parent = str(args[1]) if args[1] is not None else None
+            suite = args[2]
+        else:
+            parent = None
+            suite = args[1]
+
+        bases = [ast.Name(id=parent, ctx=ast.Load())] if parent else []
+        class_body = []
+        has_str = any(isinstance(s, ast.FunctionDef) and s.name == '__str__' for s in suite)
+
+        for stmt in suite:
+            if isinstance(stmt, ast.FunctionDef):
+                arg_names = [a.arg for a in stmt.args.args]
+                if not arg_names or arg_names[0] != 'self':
+                    stmt.args.args.insert(0, ast.arg(arg='self', annotation=None))
+                class_body.append(stmt)
+                if stmt.name == '__repr__' and not has_str:
+                    str_func = ast.FunctionDef(
+                        name='__str__',
+                        args=ast.arguments(
+                            posonlyargs=[],
+                            args=[ast.arg(arg='self', annotation=None)],
+                            vararg=None,
+                            kwonlyargs=[],
+                            kw_defaults=[],
+                            kwarg=None,
+                            defaults=[]
+                        ),
+                        body=[ast.Return(value=ast.Call(
+                            func=ast.Attribute(value=ast.Name(id='self', ctx=ast.Load()), attr='__repr__', ctx=ast.Load()),
+                            args=[],
+                            keywords=[]
+                        ))],
+                        decorator_list=[]
+                    )
+                    class_body.append(str_func)
+            else:
+                class_body.append(stmt)
+
+        return ast.ClassDef(
+            name=name,
+            bases=bases,
+            keywords=[],
+            body=class_body if class_body else [ast.Pass()],
             decorator_list=[]
         )
 

@@ -2,6 +2,30 @@
 
 All notable changes to DoomScript are documented in this file.
 
+## [1.0.5] - 2026-10-19 - Phase 3: Classes — English-First OOP (CS2 Core)
+### Added
+- **Design Document**:
+  - Authored `docs/DESIGN_CLASSES.md` documenting English-first OOP syntax, semantics, and dunder mappings.
+- **English-First Class Definitions**:
+  - `define a <Name>:` and `define an <Name>:` creating standard Python classes.
+  - Inheritance via `define a Dog that is an Animal:`, `that extends`, and `inherits from`.
+  - Python-style `class Name:` and `class Name(Base):` supported directly.
+- **Constructors & Special Methods**:
+  - `to start with <params>:` and `to start:` translating to `__init__`.
+  - `to describe:` translating to `__repr__` and automatic fallback `__str__`.
+  - `to get length:` translating to `__len__`.
+  - `to get item with <index>:` translating to `__getitem__`.
+  - `to set item with <index>, <val>:` translating to `__setitem__`.
+  - `base start with <args>` and `base start` calling `super().__init__(...)`.
+- **Instance Field Shorthand**:
+  - `my <field>` and `its <field>` automatically resolved to `self.<field>` with full load/store context support.
+  - Automatic `self` parameter injection for class methods.
+- **CS2 Data Structure Acceptance Tests**:
+  - Singly Linked List with `Node` pointers and traversal.
+  - Stack with `push`, `pop`, `peek`, and `is_empty`.
+  - Queue (FIFO) with `enqueue`, `dequeue`, and `is_empty`.
+  - Binary Search Tree with recursive `insert` and `inorder` traversal.
+
 ## [1.0.4] - 2026-10-19 - Phase 2: Indexing, Slicing, Tuples, and Essential Operators (CS1 Core)
 ### Added
 - **Subscripting & Slicing**:
