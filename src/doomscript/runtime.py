@@ -632,6 +632,47 @@ def get_field(obj, attr):
     return getattr(obj, str(attr), None)
 
 
+def to_text(val):
+    """Convert any value to a string representation."""
+    return str(val)
+
+
+def to_number(val):
+    """Convert a value or string to integer or float."""
+    if isinstance(val, (int, float)):
+        return val
+    s = str(val).strip()
+    try:
+        return float(s) if "." in s else int(s)
+    except (ValueError, TypeError):
+        return 0
+
+
+def str_title(text: str) -> str:
+    """Capitalize the first letter of each word in text."""
+    return str(text).title()
+
+
+def date_yesterday() -> str:
+    """Return yesterday's date formatted as YYYY-MM-DD."""
+    return (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+
+
+def date_tomorrow() -> str:
+    """Return tomorrow's date formatted as YYYY-MM-DD."""
+    return (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+
+
+def math_product(collection):
+    """Calculate the product of all elements in a numeric collection."""
+    if not collection:
+        return 0
+    res = 1
+    for x in collection:
+        res *= x
+    return res
+
+
 # ---------------------------------------------------------------------------
 # Phase 2 English Standard Library Helpers
 # ---------------------------------------------------------------------------

@@ -881,6 +881,12 @@ class DoomToPython(Transformer):
         left, op_tok, right = args
         op_str = str(op_tok)
         op_map = {
+            "<=": ast.LtE(),
+            ">=": ast.GtE(),
+            "!=": ast.NotEq(),
+            "==": ast.Eq(),
+            "<": ast.Lt(),
+            ">": ast.Gt(),
             "is at least": ast.GtE(),
             "is at most": ast.LtE(),
             "is greater than": ast.Gt(),
@@ -890,6 +896,8 @@ class DoomToPython(Transformer):
             "is not": ast.NotEq(),
             "isn't": ast.NotEq(),
             "equals": ast.Eq(),
+            "is not inside": ast.NotIn(),
+            "is not in": ast.NotIn(),
             "is inside": ast.In(),
             "is in": ast.In(),
             "is": ast.Eq(),

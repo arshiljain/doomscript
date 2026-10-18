@@ -15,11 +15,16 @@ from doomscript.exceptions import DoomScopeError, DoomSyntaxError
 
 # Filler words that can precede statements or verbs
 LEADING_FILLERS = [
+    "go ahead and",
+    "go ahead",
     "please",
     "kindly",
     "just",
     "simply",
     "then",
+    "now",
+    "next",
+    "finally",
 ]
 
 # Articles that can precede nouns/identifiers outside strings
@@ -30,11 +35,17 @@ IGNORABLE_ARTICLES = [
 # Verb synonyms mapping to canonical DoomScript verbs
 VERB_SYNONYMS: Dict[str, str] = {
     "show": "say",
+    "print out": "say",
     "print": "say",
     "tell": "say",
+    "echo": "say",
+    "output": "say",
+    "log": "say",
     "give back": "return",
     "hand back": "return",
     "yield back": "return",
+    "result is": "return",
+    "the result is": "return",
 }
 
 # Comparison synonyms mapping to canonical Lark operators
@@ -48,30 +59,42 @@ COMPARISON_SYNONYMS: List[Tuple[str, str]] = [
     ("is no less than", "is at least"),
     ("is no more than", "is at most"),
     ("is no smaller than", "is at least"),
+    ("is at minimum", "is at least"),
+    ("is at maximum", "is at most"),
     ("is bigger than", "is greater than"),
     ("is more than", "is greater than"),
     ("is higher than", "is greater than"),
+    ("is longer than", "is greater than"),
     ("exceeds", "is greater than"),
     ("is smaller than", "is less than"),
     ("is lower than", "is less than"),
+    ("is shorter than", "is less than"),
     ("is above", "is greater than"),
     ("is below", "is less than"),
+    ("is identical to", "equals"),
+    ("is strictly equal to", "equals"),
     ("is equal to", "equals"),
     ("is the same as", "equals"),
+    ("does not equal", "is not"),
     ("is not equal to", "is not"),
     ("is different from", "is not"),
+    ("is within", "is between"),
 ]
 
 # Statement starting keywords for sentence style case-normalization
 STATEMENT_START_KEYWORDS = {
-    "say", "show", "print", "display", "tell",
-    "set", "let", "make", "put", "increase", "decrease", "double",
-    "if", "unless", "while", "until", "repeat", "for",
+    "say", "show", "print", "display", "tell", "echo", "log", "output",
+    "set", "let", "make", "put", "assign", "store", "save", "initialize", "reset",
+    "increase", "decrease", "increment", "decrement", "bump", "double", "halve", "triple",
+    "multiply", "divide",
+    "if", "unless", "while", "until", "repeat", "for", "loop",
     "try", "attempt", "return", "give", "hand", "yield",
-    "to", "require", "verify", "match", "when", "otherwise", "else", "elif",
+    "to", "how", "define", "function", "require", "ensure", "verify", "assert", "check",
+    "match", "when", "otherwise", "else", "elif",
     "write", "read", "append", "delete", "copy", "create",
     "ask", "call", "import", "unpack", "trim", "replace", "split", "join",
-    "capitalize", "convert", "sort", "round", "combine", "fetch", "post", "download"
+    "capitalize", "convert", "sort", "round", "combine", "fetch", "post", "download",
+    "break", "continue", "stop", "exit", "quit", "add", "remove", "insert", "push", "discard", "clear", "empty"
 }
 
 # Patterns for flexible assignments
@@ -79,6 +102,16 @@ STATEMENT_START_KEYWORDS = {
 ASSIGNMENT_PATTERNS: List[Tuple[re.Pattern, str]] = [
     # put <expr> into <target>  -> set <target> to <expr>
     (re.compile(r"^\s*put\s+(.+?)\s+into\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s*$", re.IGNORECASE), r"set \2 to \1"),
+    # assign <expr> to <target> -> set <target> to <expr>
+    (re.compile(r"^\s*assign\s+(.+?)\s+to\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s*$", re.IGNORECASE), r"set \2 to \1"),
+    # store <expr> in/into <target>  -> set <target> to <expr>
+    (re.compile(r"^\s*store\s+(.+?)\s+(?:in|into)\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s*$", re.IGNORECASE), r"set \2 to \1"),
+    # save <expr> as <target>   -> set <target> to <expr>
+    (re.compile(r"^\s*save\s+(.+?)\s+as\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s*$", re.IGNORECASE), r"set \2 to \1"),
+    # initialize <target> to/with <expr> -> set <target> to <expr>
+    (re.compile(r"^\s*initialize\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s+(?:to|with)\s+(.+)$", re.IGNORECASE), r"set \1 to \2"),
+    # reset <target> to <expr>   -> set <target> to <expr>
+    (re.compile(r"^\s*reset\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s+to\s+(.+)$", re.IGNORECASE), r"set \1 to \2"),
     # let <target> be <expr>     -> set <target> to <expr>
     (re.compile(r"^\s*let\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s+be\s+(.+)$", re.IGNORECASE), r"set \1 to \2"),
     # make <target> be <expr>   -> set <target> to <expr>
@@ -220,7 +253,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
 
     # 1. Strip leading filler words (please, kindly, just, simply, then)
     for filler in LEADING_FILLERS:
-        pattern = re.compile(rf"^{filler}\s+", re.IGNORECASE)
+        pattern = re.compile(rf"^{re.escape(filler)}\s+(?![=,])", re.IGNORECASE)
         if pattern.match(masked):
             masked = pattern.sub("", masked)
             break
@@ -237,9 +270,13 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     if re.match(r"^attempt\b", masked, re.IGNORECASE):
         masked = re.sub(r"^attempt\b", "try", masked, flags=re.IGNORECASE)
 
-    # If condition ending in 'then' -> replace with ':'
-    if re.match(r"^if\s+.+\s+then$", masked, re.IGNORECASE):
+    # If or unless condition ending in 'then' -> replace with ':'
+    if re.match(r"^(?:if|unless)\s+.+\s+then$", masked, re.IGNORECASE):
         masked = re.sub(r"\s+then$", ":", masked, flags=re.IGNORECASE)
+
+    # Pre-normalize and protect assert that / make sure that / check that
+    masked = re.sub(r"^\s*(?:make\s+sure\s+that|assert\s+that|check\s+that)\s+(.+?)\s+otherwise\s+(.+)$", r"verify that \1 otherwise \2", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*(?:make\s+sure\s+that|assert\s+that|check\s+that)\s+(.+)$", r'verify that \1 otherwise "Check failed"', masked, flags=re.IGNORECASE)
 
     # 2. Flexible Assignment Patterns
     for pat, repl in ASSIGNMENT_PATTERNS:
@@ -395,25 +432,108 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     if not re.match(r"^\s*repeat\b", masked, re.IGNORECASE):
         masked = re.sub(r"(\b\w+|\))\s+times\s+(\b\w+|\()", r"\1 * \2", masked, flags=re.IGNORECASE)
     masked = re.sub(r"(\b\w+|\))\s+multiplied\s+by\s+(\b\w+|\()", r"\1 * \2", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(?:the\s+)?remainder\s+of\s+(.+?)\s+(?:divided\s+by|mod|/)\s+([^\s;,\n]+)", r"math_mod(\1, \2)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"(\b\w+|\))\s+divided\s+by\s+(\b\w+|\()", r"\1 / \2", masked, flags=re.IGNORECASE)
 
+    # Arithmetic Mutators in English
+    masked = re.sub(r"^\s*increment\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s+by\s+(.+)$", r"increase \1 by \2", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*increment\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s*$", r"increase \1 by 1", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*decrement\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s+by\s+(.+)$", r"decrease \1 by \2", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*decrement\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s*$", r"decrease \1 by 1", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*bump\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s+by\s+(.+)$", r"increase \1 by \2", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*bump\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s*$", r"increase \1 by 1", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*multiply\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s+by\s+(.+)$", r"set \1 to \1 * \2", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*divide\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s+by\s+(.+)$", r"set \1 to \1 / \2", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*halve\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s*$", r"set \1 to \1 / 2", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*triple\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s*$", r"set \1 to \1 * 3", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*(?:clear|empty)\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s*$", r"set \1 to []", masked, flags=re.IGNORECASE)
+
+    # List Mutators in English
+    masked = re.sub(r"^\s*append\s+(.+?)\s+to\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s*$", r"add \1 to \2", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*push\s+(.+?)\s+(?:to|into)\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s*$", r"add \1 to \2", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*discard\s+(.+?)\s+from\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s*$", r"remove \1 from \2", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*pop\s+from\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s*$", r"remove (last item of \1) from \1", masked, flags=re.IGNORECASE)
+
+    # Loop Controls & Flow
+    masked = re.sub(r"^\s*for\s+(?:all|each\s+of\s+the|every)\s+([A-Za-z_]\w*)\s+in\b", r"for each \1 in", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*for\s+each\s+([A-Za-z_]\w*)\s+of\b", r"for each \1 in", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*loop\s+(?:through|over)\s+(.+?)\s+as\s+([A-Za-z_]\w*):", r"for each \2 in \1:", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*as\s+long\s+as\s+(.+?):", r"while \1:", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*until\s+(.+?):", r"while not (\1):", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*repeat\s+while\s+(.+?):", r"while \1:", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*repeat\s+until\s+(.+?):", r"while not (\1):", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*(?:break\s+out\s+of\s+(?:the\s+)?loop|break\s+loop|exit\s+loop|stop\s+loop|break)\s*$", "stop", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*(?:skip\s+to\s+next|skip\s+(?:this\s+)?iteration|continue\s+loop|next\s+iteration|continue)\s*$", "skip", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\brepeat\s+with\s+([A-Za-z_]\w*)\s+from\s+(.+?)\s+down\s+to\s+(.+?)(?=:|\n|$)", r"repeat with \1 from \2 to \3 by -1", masked, flags=re.IGNORECASE)
+
+    # Function Definition & Returns
+    masked = re.sub(r"^\s*(?:how\s+to|define|function)\s+([A-Za-z_]\w*)\s+with\s+(.+?):", r"to \1 with \2:", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*(?:how\s+to|define|function)\s+([A-Za-z_]\w*):", r"to \1:", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*(?:the\s+)?result\s+is\s+(.+)$", r"return \1", masked, flags=re.IGNORECASE)
+
     # Conditions & Parity
+    masked = re.sub(r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s+is\s+divisible\s+by\s+([A-Za-z_]\w*|\d+)\b", r"math_mod(\1, \2) is 0", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s+is\s+not\s+divisible\s+by\s+([A-Za-z_]\w*|\d+)\b", r"math_mod(\1, \2) is not 0", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s+is\s+(?:a\s+)?multiple\s+of\s+([A-Za-z_]\w*|\d+)\b", r"math_mod(\1, \2) is 0", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s+is\s+even\b", r"math_mod(\1, 2) is 0", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s+is\s+odd\b", r"math_mod(\1, 2) is not 0", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s+is\s+not\s+one\s+of\s+([\[A-Za-z_].*?)(?=\s+and\b|\s+or\b|:|\n|$)", r"not (\1 is one of \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s+is\s+positive\b", r"\1 is greater than 0", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s+is\s+negative\b", r"\1 is less than 0", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s+is\s+zero\b", r"\1 is 0", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s+is\s+(?:non-zero|nonzero)\b", r"\1 is not 0", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s+is\s+blank\b", r"\1 is empty", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s+is\s+not\s+blank\b", r"\1 is not empty", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s+does\s+not\s+contain\s+(.+?)(?=\s+and\b|\s+or\b|:|\n|$)", r"not (\1 contains \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s+does\s+not\s+start\s+with\s+(.+?)(?=\s+and\b|\s+or\b|:|\n|$)", r"not (\1 starts with \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s+does\s+not\s+end\s+with\s+(.+?)(?=\s+and\b|\s+or\b|:|\n|$)", r"not (\1 ends with \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s+is\s+not\s+between\s+(.+?)\s+and\s+([^\s;,\n]+)", r"not (\1 is between \2 and \3)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s+is\s+outside\s+(.+?)\s+and\s+([^\s;,\n]+)", r"not (\1 is between \2 and \3)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s+is\s+neither\s+(.+?)\s+nor\s+([^\s;,\n]+)", r"not (\1 is \2 or \1 is \3)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"(\b\w+(?:'s\s+[A-Za-z_]\w*)?|\))\s+is\s+inside\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?|\[[^\]]*\])", r"\1 is inside \2", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"(\b\w+(?:'s\s+[A-Za-z_]\w*)?|\))\s+is\s+not\s+(?:inside|in)\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?|\[[^\]]*\])", r"\1 is not inside \2", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"(\b\w+(?:'s\s+[A-Za-z_]\w*)?|\))\s+is\s+not\s+one\s+of\s+([\[A-Za-z_].*?)(?=\s+and\b|\s+or\b|:|\n|$)", r"not (\1 is one of \2)", masked, flags=re.IGNORECASE)
 
-    # Loops
-    masked = re.sub(r"^\s*for\s+every\b", "for each", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\brepeat\s+with\s+([A-Za-z_]\w*)\s+from\s+(.+?)\s+down\s+to\s+(.+?)(?=:|\n|$)", r"repeat with \1 from \2 to \3 by -1", masked, flags=re.IGNORECASE)
+    # Fractions and Multiples
+    masked = re.sub(r"\bhalf\s+of\s+([A-Za-z_]\w*|\d+)\b", r"(\1 / 2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bquarter\s+of\s+([A-Za-z_]\w*|\d+)\b", r"(\1 / 4)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(?:double|twice)\s+of\s+([A-Za-z_]\w*|\d+)\b", r"(\1 * 2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\btriple\s+of\s+([A-Za-z_]\w*|\d+)\b", r"(\1 * 3)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(?:the\s+)?remainder\s+of\s+(.+?)\s+(?:divided\s+by|mod|/)\s+([^\s;,\n]+)", r"math_mod(\1, \2)", masked, flags=re.IGNORECASE)
 
     # Lists, Text, and Aggregates
     masked = re.sub(r"\bhow\s+many\s+items\s+are\s+in\s+([A-Za-z_]\w*)", r"count of \1", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(?:how\s+many|number\s+of)\s+items\s+in\s+(\[[^\]]*\]|[A-Za-z_]\w*)", r"count of \1", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bthe\s+count\s+of\s+([A-Za-z_]\w*)", r"count of \1", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(?:the\s+)?(?:length|size)\s+of\s+([A-Za-z_]\w*)", r"count of \1", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(?:the\s+)?reverse\s+of\s+(\[[^\]]*\]|[A-Za-z_]\w*)", r"reversed_list(\1)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\buppercase\s+of\s+(.+?)(?=\s+and\s+then|\s+into\b|\s*$)", r"str_uppercase(\1)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\blowercase\s+of\s+(.+?)(?=\s+and\s+then|\s+into\b|\s*$)", r"str_lowercase(\1)", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\btotal\s+of\s+([A-Za-z_]\w*)(?!\s+in\b)", r"sum of \1", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\bmaximum\s+of\s+([A-Za-z_]\w*)", r"highest in \1", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\bminimum\s+of\s+([A-Za-z_]\w*)", r"lowest in \1", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\bmedian\s+of\s+([A-Za-z_]\w+)\b(?!\s+into\b)", r"math_median(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(?:the\s+)?average\s+of\s+(\[[^\]]*\]|[A-Za-z_]\w+)(?!\s+in\b)", r"agg_avg(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bmean\s+of\s+(\[[^\]]*\]|[A-Za-z_]\w+)", r"agg_avg(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(?:the\s+)?sum\s+of\s+all\s+(\[[^\]]*\]|[A-Za-z_]\w+)", r"sum of \1", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bthe\s+sum\s+of\s+(\[[^\]]*\]|[A-Za-z_]\w+)(?!\s+in\b)", r"sum of \1", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\btotal\s+of\s+(\[[^\]]*\]|[A-Za-z_]\w*)(?!\s+in\b)", r"sum of \1", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bproduct\s+of\s+(\[[^\]]*\]|[A-Za-z_]\w+)", r"math_product(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bmaximum\s+of\s+(\[[^\]]*\]|[A-Za-z_]\w*)", r"highest in \1", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bminimum\s+of\s+(\[[^\]]*\]|[A-Za-z_]\w*)", r"lowest in \1", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bmedian\s+of\s+(\[[^\]]*\]|[A-Za-z_]\w*)\b(?!\s+into\b)", r"math_median(\1)", masked, flags=re.IGNORECASE)
+
+    # Text & Type Transformations
+    masked = re.sub(r"\bstrip\s+(?:spaces|whitespace)\s+from\s+(.+?)(?=\s+and\s+then|\s+into\b|\s*$|\))", r"str_trim(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\btrim\s+spaces\s+from\s+(.+?)(?=\s+and\s+then|\s+into\b|\s*$|\))", r"str_trim(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\btitle\s+case\s+of\s+(.+?)(?=\s+and\s+then|\s+into\b|\s*$|\))", r"str_title(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bconvert\s+(?!hex\b|binary\b)(.+?)\s+to\s+text\s+into\s+([A-Za-z_]\w*)", r"set \2 to to_text(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bturn\s+(?!hex\b|binary\b)(.+?)\s+into\s+text\s+into\s+([A-Za-z_]\w*)", r"set \2 to to_text(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bconvert\s+(?!hex\b|binary\b)(.+?)\s+to\s+number\s+into\s+([A-Za-z_]\w*)", r"set \2 to to_number(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bturn\s+(?!hex\b|binary\b)(.+?)\s+into\s+number\s+into\s+([A-Za-z_]\w*)", r"set \2 to to_number(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bto\s+text\s+(?!into\b)([A-Za-z_]\w*)\b", r"to_text(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bto\s+number\s+(?!into\b)([A-Za-z_]\w*)\b", r"to_number(\1)", masked, flags=re.IGNORECASE)
+
+    # Relative Dates
+    masked = re.sub(r"\byesterday\b", "date_yesterday()", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\btomorrow\b", "date_tomorrow()", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bcurrent\s+date\b", "date_today()", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bcurrent\s+timestamp\b", "date_now()", masked, flags=re.IGNORECASE)
 
     # Call statement without 'call' keyword: e.g. greet "Bob"
     call_no_kw_m = re.match(r"^\s*([A-Za-z_]\w*)\s+(__STR_LITERAL_\d+__|[\"'].*?[\"']|\d+|\[.*?\])\s*$", masked)
@@ -1369,6 +1489,19 @@ def normalize(source: str) -> str:
             cond = if_then_m.group(1).strip()
             then_stmt = if_then_m.group(2).strip()
             norm_cond = normalize_statement_text(f"if {cond}", scope, line_idx)
+            norm_then = normalize_statement_text(then_stmt, scope, line_idx)
+            if not norm_cond.endswith(":"):
+                norm_cond += ":"
+            output_lines.append(f"{indent}{norm_cond}")
+            output_lines.append(f"{indent}    {norm_then}")
+            continue
+
+        # Single-line 'unless ... then ...' split: e.g. 'unless x is 5 then say "not five"'
+        unless_then_m = re.match(r"^unless\s+(.+?)\s+then\s+([^\s].*)$", code, re.IGNORECASE)
+        if unless_then_m:
+            cond = unless_then_m.group(1).strip()
+            then_stmt = unless_then_m.group(2).strip()
+            norm_cond = normalize_statement_text(f"if not ({cond})", scope, line_idx)
             norm_then = normalize_statement_text(then_stmt, scope, line_idx)
             if not norm_cond.endswith(":"):
                 norm_cond += ":"

@@ -265,12 +265,20 @@ ENDS_WITH.3: "ends with"
 MATCHES_PATTERN.3: "matches pattern"
 DESCENDING_ORDER.3: "descending"
 
-CMP_OP: "is at least"      // >=
+CMP_OP: "<="
+      | ">="
+      | "!="
+      | "=="
+      | "<"
+      | ">"
+      | "is at least"      // >=
       | "is at most"       // <=
       | "is greater than"  // >
       | "is over"          // >
       | "is less than"     // <
       | "is under"         // <
+      | "is not inside"    // not in
+      | "is not in"        // not in
       | "is not"           // !=
       | "isn't"            // !=
       | "equals"           // ==
