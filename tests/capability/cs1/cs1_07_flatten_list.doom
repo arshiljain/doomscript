@@ -1,9 +1,12 @@
 # CS1-07: Flatten Nested List
 nested = [[1, 2], [3, 4, 5], [6], [7, 8]]
-flat = [x for sub in nested for x in sub]
+flat = []
+for each sub in nested
+    for each x in sub
+        add x to flat
 
 say "Nested:", nested
 say "Flattened:", flat
 verify that count of flat is 8 otherwise "Length is 8"
-verify that flat[0] is 1 otherwise "First item is 1"
-verify that flat[7] is 8 otherwise "Last item is 8"
+verify that first item of flat is 1 otherwise "First item is 1"
+verify that last item of flat is 8 otherwise "Last item is 8"

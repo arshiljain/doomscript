@@ -1,9 +1,9 @@
 # CS1-04: Palindrome Check
-to is_palindrome with text:
+to is_palindrome with text
     cleaned = text.lower()
     n = count of cleaned
-    repeat with i from 0 to (n // 2):
-        if cleaned[i] != cleaned[n - 1 - i]:
+    repeat with i from 0 to (n // 2)
+        if cleaned[i] is not cleaned[n - 1 - i]
             return false
     return true
 

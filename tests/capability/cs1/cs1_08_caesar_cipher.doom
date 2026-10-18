@@ -1,21 +1,21 @@
 # CS1-08: Caesar Cipher
-to caesar_encrypt with text, shift:
+to caesar_encrypt with text, shift
     result = []
-    repeat with i from 0 to (count of text) - 1:
+    repeat with i from 0 to (count of text) - 1
         ch = text[i]
         code = ord(ch)
-        if code >= 65 and code <= 90:
+        if code is between 65 and 90
             enc = chr((code - 65 + shift) % 26 + 65)
-            result.append(enc)
-        elif code >= 97 and code <= 122:
+            add enc to result
+        else if code is between 97 and 122
             enc = chr((code - 97 + shift) % 26 + 97)
-            result.append(enc)
-        else:
-            result.append(ch)
+            add enc to result
+        else
+            add ch to result
     return "".join(result)
 
 plain = "Hello, World!"
 cipher = caesar_encrypt(plain, 3)
 say "Plain:", plain
 say "Cipher:", cipher
-verify that cipher == "Khoor, Zruog!" otherwise "Expected Khoor, Zruog!"
+verify that cipher is "Khoor, Zruog!" otherwise "Expected Khoor, Zruog!"

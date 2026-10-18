@@ -1,8 +1,8 @@
 # CS2-09: Fibonacci with Memoization
 memo = {0: 0, 1: 1}
 
-to fib with n:
-    if memo contains n:
+to fib with n
+    if memo contains n
         return memo[n]
     res = fib(n - 1) + fib(n - 2)
     memo[n] = res

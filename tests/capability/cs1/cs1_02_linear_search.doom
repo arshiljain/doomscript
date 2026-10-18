@@ -1,11 +1,11 @@
 # CS1-02: Linear Search
-to linear_search with items, target:
-    repeat with i from 0 to (count of items) - 1:
-        if items[i] == target:
+to linear_search with items, target
+    repeat with i from 0 to (count of items) - 1
+        if items[i] equals target
             return i
     return -1
 
-numbers = [10, 20, 30, 40, 50]
+numbers = a list of 10, 20, 30, 40, 50
 idx1 = linear_search(numbers, 30)
 idx2 = linear_search(numbers, 99)
 say "Found 30 at:", idx1

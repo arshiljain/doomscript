@@ -1,15 +1,15 @@
 # ML-09: Cosine Similarity
-to cosine_similarity with v1, v2:
-    dot = sum([v1[i] * v2[i] for i in range(count of v1)])
+to cosine_similarity with v1, v2
+    dot = sum([(v1[i] * v2[i]) for i in range(count of v1)])
     norm_v1 = math.sqrt(sum([x ** 2 for x in v1]))
     norm_v2 = math.sqrt(sum([y ** 2 for y in v2]))
-    if norm_v1 == 0 or norm_v2 == 0:
+    if norm_v1 equals 0 or norm_v2 equals 0
         return 0.0
     return dot / (norm_v1 * norm_v2)
 
-vec1 = [1.0, 2.0, 3.0]
-vec2 = [2.0, 4.0, 6.0]  # Parallel vector
+vec1 = a list of 1.0, 2.0, 3.0
+vec2 = a list of 2.0, 4.0, 6.0  # Parallel vector
 cos_sim = cosine_similarity(vec1, vec2)
 say "Cosine similarity (parallel):", cos_sim
 
-verify that round(cos_sim, 4) == 1.0 otherwise "Parallel vectors have similarity 1.0"
+verify that round(cos_sim, 4) equals 1.0 otherwise "Parallel vectors have similarity 1.0"

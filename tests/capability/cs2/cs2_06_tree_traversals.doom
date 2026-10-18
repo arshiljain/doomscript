@@ -8,13 +8,13 @@ define a TNode:
 to inorder with node, result:
     if node is not None:
         inorder(node.left, result)
-        result.append(node.val)
+        add node.val to result
         inorder(node.right, result)
     return result
 
 to preorder with node, result:
     if node is not None:
-        result.append(node.val)
+        add node.val to result
         preorder(node.left, result)
         preorder(node.right, result)
     return result
@@ -25,5 +25,5 @@ pre_res = preorder(root, [])
 say "Inorder:", in_res
 say "Preorder:", pre_res
 
-verify that in_res == [1, 2, 3, 4, 5] otherwise "Inorder sorted"
-verify that pre_res == [4, 2, 1, 3, 5] otherwise "Preorder matches"
+verify that in_res equals [1, 2, 3, 4, 5] otherwise "Inorder sorted"
+verify that pre_res equals [4, 2, 1, 3, 5] otherwise "Preorder matches"

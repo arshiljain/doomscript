@@ -1,15 +1,15 @@
 # ML-07: Matrix Multiplication
-to matmul with A, B:
+to matmul with A, B
     rows_A = count of A
     cols_A = count of A[0]
     cols_B = count of B[0]
     C = []
-    repeat with i from 0 to rows_A - 1:
+    repeat with i from 0 to rows_A - 1
         row = []
-        repeat with j from 0 to cols_B - 1:
-            val = sum([A[i][k] * B[k][j] for k in range(cols_A)])
-            row.append(val)
-        C.append(row)
+        repeat with j from 0 to cols_B - 1
+            val = sum([(A[i][k] * B[k][j]) for k in range(cols_A)])
+            add val to row
+        add row to C
     return C
 
 A = [

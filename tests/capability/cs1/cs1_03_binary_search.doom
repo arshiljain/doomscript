@@ -1,18 +1,18 @@
 # CS1-03: Binary Search
-to binary_search with items, target:
+to binary_search with items, target
     low = 0
     high = (count of items) - 1
-    while low <= high:
+    repeat while low is at most high
         mid = (low + high) // 2
-        if items[mid] == target:
+        if items[mid] equals target
             return mid
-        elif items[mid] < target:
+        else if items[mid] is under target
             low = mid + 1
-        else:
+        else
             high = mid - 1
     return -1
 
-sorted_nums = [2, 5, 8, 12, 16, 23, 38, 56, 72, 91]
+sorted_nums = a list of 2, 5, 8, 12, 16, 23, 38, 56, 72, 91
 pos1 = binary_search(sorted_nums, 23)
 pos2 = binary_search(sorted_nums, 100)
 say "Found 23 at index:", pos1

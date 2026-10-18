@@ -4,7 +4,7 @@ define a Queue:
         my elements = []
 
     to enqueue with val:
-        my elements.append(val)
+        add val to my elements
 
     to dequeue:
         if my elements is empty:
@@ -14,7 +14,7 @@ define a Queue:
     to front:
         if my elements is empty:
             return None
-        return my elements[0]
+        return first item of my elements
 
     to get length:
         return count of my elements
@@ -29,6 +29,6 @@ first_out = q.dequeue()
 say "Dequeued:", first_out
 say "New front:", q.front()
 
-verify that first_out == "Task1" otherwise "First out is Task1"
-verify that q.front() == "Task2" otherwise "Front is Task2"
+verify that first_out is "Task1" otherwise "First out is Task1"
+verify that q.front() is "Task2" otherwise "Front is Task2"
 verify that count of q is 2 otherwise "Length is 2"

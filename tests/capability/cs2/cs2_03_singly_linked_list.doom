@@ -22,7 +22,7 @@ define a LinkedList:
         res = []
         cur = my head
         while cur is not None:
-            res.append(cur.val)
+            add cur.val to res
             cur = cur.next
         return res
 
@@ -33,5 +33,5 @@ ll.append(30)
 vals = ll.to_list()
 say "Linked List:", vals
 
-verify that vals == [10, 20, 30] otherwise "List values match"
+verify that vals equals [10, 20, 30] otherwise "List values match"
 verify that count of vals is 3 otherwise "3 elements in list"

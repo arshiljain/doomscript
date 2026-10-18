@@ -13,7 +13,7 @@ write raw_csv into file "raw_pipeline.csv"
 load table "raw_pipeline.csv" into df
 
 # 2. Filter experienced employees (>= 3 years)
-filter df where experience >= 3 into senior
+filter df where experience is at least 3 into senior
 
 # 3. Group and aggregate
 group senior by dept and average salary into dept_avgs

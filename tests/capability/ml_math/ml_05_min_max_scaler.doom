@@ -1,16 +1,16 @@
 # ML-05: Min-Max Scaler
-to min_max_scale with values:
+to min_max_scale with values
     min_v = min(values)
     max_v = max(values)
     rng = max_v - min_v
-    if rng == 0:
+    if rng equals 0
         return [0.0 for _ in values]
     return [(v - min_v) / rng for v in values]
 
-raw_scores = [10.0, 20.0, 30.0, 40.0, 50.0]
+raw_scores = a list of 10.0, 20.0, 30.0, 40.0, 50.0
 scaled = min_max_scale(raw_scores)
 say "Scaled:", scaled
 
-verify that scaled[0] == 0.0 otherwise "Min scales to 0.0"
-verify that scaled[4] == 1.0 otherwise "Max scales to 1.0"
-verify that scaled[2] == 0.5 otherwise "Midpoint scales to 0.5"
+verify that scaled[0] equals 0.0 otherwise "Min scales to 0.0"
+verify that scaled[4] equals 1.0 otherwise "Max scales to 1.0"
+verify that scaled[2] equals 0.5 otherwise "Midpoint scales to 0.5"

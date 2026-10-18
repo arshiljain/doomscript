@@ -1,11 +1,11 @@
 # ML-08: Vector Dot Product
-to dot_product with v1, v2:
-    return sum([v1[i] * v2[i] for i in range(count of v1)])
+to dot_product with v1, v2
+    return sum([(v1[i] * v2[i]) for i in range(count of v1)])
 
-vec_a = [1.0, 3.0, -5.0]
-vec_b = [4.0, -2.0, -1.0]
+vec_a = a list of 1.0, 3.0, -5.0
+vec_b = a list of 4.0, -2.0, -1.0
 # 1*4 + 3*(-2) + (-5)*(-1) = 4 - 6 + 5 = 3
 dot = dot_product(vec_a, vec_b)
 say "Dot product:", dot
 
-verify that round(dot, 1) == 3.0 otherwise "Dot product is 3.0"
+verify that round(dot, 1) equals 3.0 otherwise "Dot product is 3.0"

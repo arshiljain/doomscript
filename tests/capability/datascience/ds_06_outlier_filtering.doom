@@ -4,7 +4,7 @@ m = mean(dataset)
 s = std_dev(dataset)
 
 # Keep values within 2 standard deviations
-filtered = [x for x in dataset if abs(x - m) <= 2 * s]
+filtered = [x for x in dataset if abs(x - m) is at most 2 * s]
 say "Original count:", count of dataset
 say "Filtered count:", count of filtered
 

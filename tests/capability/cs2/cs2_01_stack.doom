@@ -4,7 +4,7 @@ define a Stack:
         my items = []
 
     to push with val:
-        my items.append(val)
+        add val to my items
 
     to pop:
         if my items is empty:
@@ -14,7 +14,7 @@ define a Stack:
     to peek:
         if my items is empty:
             return None
-        return my items[-1]
+        return last item of my items
 
     to get length:
         return count of my items

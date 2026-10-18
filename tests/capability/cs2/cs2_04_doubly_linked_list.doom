@@ -24,7 +24,7 @@ define a DoublyLinkedList:
         res = []
         cur = my head
         while cur is not None:
-            res.append(cur.val)
+            add cur.val to res
             cur = cur.next
         return res
 
@@ -32,7 +32,7 @@ define a DoublyLinkedList:
         res = []
         cur = my tail
         while cur is not None:
-            res.append(cur.val)
+            add cur.val to res
             cur = cur.prev
         return res
 
@@ -46,5 +46,5 @@ bwd = dll.backward()
 say "Forward:", fwd
 say "Backward:", bwd
 
-verify that fwd == [1, 2, 3] otherwise "Forward matches"
-verify that bwd == [3, 2, 1] otherwise "Backward matches"
+verify that fwd equals [1, 2, 3] otherwise "Forward matches"
+verify that bwd equals [3, 2, 1] otherwise "Backward matches"

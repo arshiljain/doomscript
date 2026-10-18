@@ -1,8 +1,8 @@
 # CS2-08: Graph Depth-First Search (DFS)
-to dfs with graph, node, visited:
-    visited.append(node)
-    for each neighbor in graph[node]:
-        if neighbor not in visited:
+to dfs with graph, node, visited
+    add node to visited
+    for each neighbor in graph[node]
+        if visited does not contain neighbor
             dfs(graph, neighbor, visited)
     return visited
 
@@ -17,5 +17,5 @@ graph = {
 
 order = dfs(graph, "A", [])
 say "DFS Order from A:", order
-verify that order[0] == "A" otherwise "Start is A"
+verify that order[0] is "A" otherwise "Start is A"
 verify that count of order is 6 otherwise "All 6 nodes visited"

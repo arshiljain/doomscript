@@ -8,12 +8,12 @@ num_rows = count of matrix
 num_cols = count of matrix[0]
 
 transposed = []
-repeat with col from 0 to num_cols - 1:
+repeat with col from 0 to num_cols - 1
     new_row = [matrix[row][col] for row in range(num_rows)]
-    transposed.append(new_row)
+    add new_row to transposed
 
 say "Original:", matrix
 say "Transposed:", transposed
-verify that transposed[0] == [1, 4] otherwise "First row matches"
-verify that transposed[1] == [2, 5] otherwise "Second row matches"
-verify that transposed[2] == [3, 6] otherwise "Third row matches"
+verify that transposed[0] equals [1, 4] otherwise "First row matches"
+verify that transposed[1] equals [2, 5] otherwise "Second row matches"
+verify that transposed[2] equals [3, 6] otherwise "Third row matches"

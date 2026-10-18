@@ -3,10 +3,10 @@ sentence = "apple banana apple orange banana apple"
 words = sentence.split(" ")
 counts = {}
 
-for each w in words:
-    if counts contains w:
+for each w in words
+    if counts contains w
         counts[w] = counts[w] + 1
-    else:
+    else
         counts[w] = 1
 
 say "Word counts:", counts

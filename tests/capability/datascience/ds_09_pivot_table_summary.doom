@@ -8,12 +8,12 @@ records = [
 ]
 
 regional_sales = {}
-for each r in records:
+for each r in records
     reg = r["region"]
     amt = r["sales"]
-    if regional_sales contains reg:
+    if regional_sales contains reg
         regional_sales[reg] = regional_sales[reg] + amt
-    else:
+    else
         regional_sales[reg] = amt
 
 say "Regional Sales Summary:", regional_sales

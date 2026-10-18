@@ -1,13 +1,13 @@
 # ML-02: Mean Squared Error
-to mean_squared_error with actual, predicted:
+to mean_squared_error with actual, predicted
     n = count of actual
     squared_errors = [(actual[i] - predicted[i]) ** 2 for i in range(n)]
     return mean(squared_errors)
 
-y_true = [3.0, -0.5, 2.0, 7.0]
-y_pred = [2.5, 0.0, 2.0, 8.0]
+y_true = a list of 3.0, -0.5, 2.0, 7.0
+y_pred = a list of 2.5, 0.0, 2.0, 8.0
 # errors: 0.5^2 = 0.25, (-0.5)^2 = 0.25, 0^2 = 0, (-1.0)^2 = 1.0 => sum = 1.5 => mean = 0.375
 mse = mean_squared_error(y_true, y_pred)
 say "MSE:", mse
 
-verify that round(mse, 3) == 0.375 otherwise "MSE should be 0.375"
+verify that round(mse, 3) equals 0.375 otherwise "MSE should be 0.375"

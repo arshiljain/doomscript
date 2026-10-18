@@ -1,13 +1,13 @@
 # ML-03: Euclidean Distance
-to euclidean_distance with p1, p2:
+to euclidean_distance with p1, p2
     dim = count of p1
     sq_diff_sum = sum([(p1[i] - p2[i]) ** 2 for i in range(dim)])
     return math.sqrt(sq_diff_sum)
 
-pointA = [1.0, 2.0, 3.0]
-pointB = [4.0, 6.0, 3.0]
+pointA = a list of 1.0, 2.0, 3.0
+pointB = a list of 4.0, 6.0, 3.0
 # diff: 3^2 + 4^2 + 0^2 = 9 + 16 = 25 -> sqrt = 5.0
 dist = euclidean_distance(pointA, pointB)
 say "Distance:", dist
 
-verify that round(dist, 1) == 5.0 otherwise "Distance is 5.0"
+verify that round(dist, 1) equals 5.0 otherwise "Distance is 5.0"

@@ -8,6 +8,6 @@ csv_content = """id,name,score
 write csv_content into file "students.csv"
 
 load table "students.csv" into df
-filter df where score >= 60 into passing
+filter df where score is at least 60 into passing
 say "Passing students count:", count of passing
 verify that count of passing is 2 otherwise "2 students passed"

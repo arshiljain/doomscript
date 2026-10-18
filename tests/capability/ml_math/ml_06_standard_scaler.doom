@@ -1,15 +1,15 @@
 # ML-06: Standard Scaler (Z-Score Normalization)
-to standard_scale with values:
+to standard_scale with values
     m = mean(values)
     s = std_dev(values)
-    if s == 0:
+    if s equals 0
         return [0.0 for _ in values]
     return [(v - m) / s for v in values]
 
-data = [10.0, 20.0, 30.0, 40.0, 50.0]
+data = a list of 10.0, 20.0, 30.0, 40.0, 50.0
 z_scores = standard_scale(data)
 say "Z-scores:", z_scores
 z_mean = mean(z_scores)
 
-verify that round(z_mean, 2) == 0.0 otherwise "Mean of z-scores is 0.0"
-verify that round(z_scores[2], 2) == 0.0 otherwise "Center z-score is 0.0"
+verify that round(z_mean, 2) equals 0.0 otherwise "Mean of z-scores is 0.0"
+verify that round(z_scores[2], 2) equals 0.0 otherwise "Center z-score is 0.0"

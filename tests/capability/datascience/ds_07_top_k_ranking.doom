@@ -18,6 +18,6 @@ top3_scores = list(ranked["score"][:3])
 say "Top 3 Names:", top3_names
 say "Top 3 Scores:", top3_scores
 
-verify that top3_names[0] == "Bob" otherwise "1st is Bob"
-verify that top3_names[1] == "David" otherwise "2nd is David"
-verify that top3_names[2] == "Alice" otherwise "3rd is Alice"
+verify that top3_names[0] is "Bob" otherwise "1st is Bob"
+verify that top3_names[1] is "David" otherwise "2nd is David"
+verify that top3_names[2] is "Alice" otherwise "3rd is Alice"

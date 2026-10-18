@@ -16,7 +16,7 @@ define a BST:
             my _insert_node(my root, val)
 
     to _insert_node with cur, val:
-        if val < cur.val:
+        if val is under cur.val:
             if cur.left is None:
                 cur.left = TreeNode(val)
             else:
@@ -33,9 +33,9 @@ define a BST:
     to _contains_node with cur, val:
         if cur is None:
             return false
-        if cur.val == val:
+        if cur.val equals val:
             return true
-        elif val < cur.val:
+        elif val is under cur.val:
             return my _contains_node(cur.left, val)
         else:
             return my _contains_node(cur.right, val)
