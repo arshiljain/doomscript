@@ -1,0 +1,12 @@
+use research
+# Sample from standard normal distribution
+to log_posterior with theta
+    return -0.5 * (theta[0] ** 2)
+
+sample from log_posterior using metropolis hastings with initial [3.0] into mcmc
+say "MCMC Acceptance rate:", mcmc's acceptance rate
+say "Gelman-Rubin R-hat:", mcmc's r hat
+say "Effective sample size:", mcmc's effective sample size
+verify that mcmc's r hat is under 1.10 otherwise "Chains should converge (R-hat < 1.10)"
+verify that mcmc's acceptance rate is over 0.15 otherwise "Good mixing acceptance"
+verify that mcmc's acceptance rate is under 0.70 otherwise "Good mixing acceptance"

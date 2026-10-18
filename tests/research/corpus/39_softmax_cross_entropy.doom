@@ -1,0 +1,12 @@
+use research
+z1 = a scalar with value 2.0
+z2 = a scalar with value 1.0
+e1 = z1.exp()
+e2 = z2.exp()
+sum_e = e1 + e2
+p1 = e1 / sum_e
+loss = -(p1.log())
+compute gradient of loss
+say "Cross entropy loss:", loss's value
+say "Gradient wrt correct logit z1:", z1's gradient
+verify that z1's gradient is under 0.0 otherwise "Gradient wrt correct logit is p1 - 1 < 0"

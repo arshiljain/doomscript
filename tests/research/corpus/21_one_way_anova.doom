@@ -1,0 +1,11 @@
+use research
+control = a list of 5.0, 6.0, 5.5, 4.8
+low_dose = a list of 7.2, 7.5, 6.9, 7.0
+high_dose = a list of 9.1, 9.5, 8.8, 9.0
+groups = a list of control, low_dose, high_dose
+test that means of groups are equal using anova into res
+say "F statistic:", res's test statistic
+say "Eta squared effect size:", res's effect size
+say "P-value:", res's p value
+verify that res's p value is under 0.001 otherwise "Groups have distinct means"
+verify that res's effect size is over 0.8 otherwise "Large effect size expected"

@@ -1,0 +1,16 @@
+use research
+# 3-node cyclic web graph: A -> B, B -> C, C -> A
+d = 0.85
+r = a list of 0.333333, 0.333333, 0.333333
+repeat with iter from 1 to 20
+    next_r = [0.0, 0.0, 0.0]
+    next_r[1] = (1.0 - d) / 3.0 + d * r[0]
+    next_r[2] = (1.0 - d) / 3.0 + d * r[1]
+    next_r[0] = (1.0 - d) / 3.0 + d * r[2]
+    r = next_r
+
+say "PageRank equilibrium:", r[0]
+total_rank = r[0] + r[1] + r[2]
+say "Total probability mass:", total_rank
+verify that total_rank is over 0.99 otherwise "Total rank must sum to 1.0"
+verify that total_rank is under 1.01 otherwise "Total rank must sum to 1.0"

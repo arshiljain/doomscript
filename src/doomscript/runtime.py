@@ -1955,6 +1955,10 @@ from doomscript.research.stats import (
     bca_bootstrap,
     adjust_p_values,
     metropolis_hastings,
+    pearson_correlation,
+    spearman_correlation,
+    wilcoxon_signed_rank,
+    fisher_exact_test,
     TestResult,
     MCMCResult,
 )

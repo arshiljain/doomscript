@@ -1,0 +1,16 @@
+use research
+# Mann-Whitney equivalence for ROC-AUC
+# Positive scores and negative scores
+pos_scores = a list of 0.9, 0.8, 0.7, 0.6
+neg_scores = a list of 0.5, 0.4, 0.3, 0.2
+pairs = 0
+concordant = 0
+for each p in pos_scores
+    for each n in neg_scores
+        pairs = pairs + 1
+        if p is greater than n
+            concordant = concordant + 1
+
+auc = concordant / pairs
+say "ROC AUC Score:", auc
+verify that auc equals 1.0 otherwise "Perfect separation gives AUC 1.0"

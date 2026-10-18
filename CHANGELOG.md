@@ -2,6 +2,46 @@
 
 All notable changes to DoomScript are documented in this file.
 
+## [1.1.0] - 2026-10-19 - Postgraduate & PhD Research Extension
+### Added
+- **Pure-Standard-Library Scientific Research Engine (`src/doomscript/research/`)**:
+  - Zero mandatory runtime dependencies: runs entirely on Python 3.10+ stdlib with optional explicit backend acceleration (`numpy`, `torch`).
+  - Strict float64 precision policy and deterministic behavior guarantees.
+- **Scientific Reproducibility Contract & 64-bit SplitMix PRNG (`backend.py`)**:
+  - `ResearchRNG`: Pure 64-bit SplitMix64 generator instance with 53-bit float precision generation, eliminating cross-library seed divergence.
+  - No silent switching: raises `CapabilityError` when backend lacks a primitive rather than secretly defaulting.
+  - Deterministic provenance logging (`create_provenance_log`, `verify_provenance`) with cryptographic SHA-256 state hashing and isolated volatile runtime metrics (timestamp, host).
+- **Direct Survival Functions & Statistical Distributions (`distributions.py`)**:
+  - Accurate incomplete gamma and incomplete beta continued fractions with symmetry switches, providing precision $\le 10^{-10}$ relative tolerance against SciPy.
+  - Direct upper-tail survival functions: `t_sf`, `f_sf`, `chi2_sf`, and `normal_sf` eliminating catastrophic $1 - p$ cancellation for near-zero $p$-values.
+  - Direct quantile inverse CDFs for normal, Student's $t$, Fisher's $F$, and $\chi^2$ via bracketed bisection.
+- **Hypothesis Testing & Bayesian Inference Engine (`stats.py`)**:
+  - Parametric tests: Welch's $t$-test (default unequal variances), Student's two-sample $t$-test, paired $t$-test, one-way ANOVA with $\eta^2$ effect size, and two-way factorial ANOVA with interaction effects.
+  - Non-parametric tests: Mann-Whitney $U$ with exact combinatorial distribution for small samples ($n \le 20$) and continuity/tie corrections for large samples; Wilcoxon signed-rank test.
+  - Categorical analysis: Pearson's $\chi^2$ test of independence and Fisher's exact test ($2 \times 2$ hypergeometric odds ratio).
+  - Resampling & Calibration: BCa bootstrap confidence intervals with percentile fallback on zero acceleration; Wilson score intervals with continuity correction for binomial proportions.
+  - Multiple testing corrections: Holm-Bonferroni (FWER) and Benjamini-Hochberg (FDR) $p$-value adjustments.
+  - MCMC Sampling: Metropolis-Hastings Markov Chain Monte Carlo with adaptive proposal scale tuning frozen post-burn-in, split-$\hat{R}$ (Gelman-Rubin) convergence diagnostics, and effective sample size (ESS).
+- **Graph Algorithms & Dynamic Programming (`graph.py`, `algorithms.py`)**:
+  - Deterministic tie-breaking by node insertion order for all traversal and graph shortest paths.
+  - Dijkstra shortest path with negative weight rejection; Bellman-Ford with negative-cycle detection.
+  - Floyd-Warshall all-pairs shortest paths, Kahn's topological sort, Edmonds-Karp maximum flow, min $s\text{-}t$ cut, Kruskal's minimum spanning tree with Union-Find, and $A^*$ heuristic pathfinding.
+  - Exact dynamic programming solvers: Levenshtein edit distance, longest common subsequence (LCS with reconstruction), 0/1 knapsack, matrix chain multiplication, longest increasing subsequence, and PageRank with power iteration.
+- **Reverse-Mode Scalar Autograd & Optimizers (`autograd.py`, `optim.py`)**:
+  - Pure Python scalar computational DAG with dynamic reverse-mode automatic differentiation.
+  - Dual-form activations & losses: ReLU, GELU, Sigmoid, Tanh, Binary Cross-Entropy (BCE), Softmax Cross-Entropy with stable log-sum-exp.
+  - Relative-error numerical gradient checking ($(\hat{g} - g) / \max(|g|, |\hat{g}|, \epsilon) \le 10^{-4}$) with subgradient tolerance at non-differentiable points.
+  - First-order optimizers: SGD, Momentum, Adam, with $L_2$ weight decay regularization and exponential/cosine learning rate schedulers.
+  - Pure Python Tensor matrix operations (matmul, 2D sum reductions, transpose).
+- **Single Source of Truth Research Phrase Registry (`registry.py`, `phrases.py`)**:
+  - `RESEARCH_REGISTRY`: Unified grammar specification generating both statement forms (`test hypothesis that ... into res`) and natural dual-form property expressions (`res's p value`, `p value of res`, `t[0, 0]'s gradient`).
+  - Scoped activation behind `use research` block context, guaranteeing zero collisions with general-purpose programming phrases.
+- **50-Program Postgraduate Research Benchmark Corpus (`tests/research/corpus/`, `run_research_capability.py`)**:
+  - 15 Graph & Discrete Algorithms benchmarks (Dijkstra through PageRank).
+  - 15 Statistical Inference benchmarks (Welch's $t$ through Metropolis-Hastings MCMC).
+  - 20 Machine Learning & Optimization benchmarks (Autograd chain rule through K-Fold cross validation).
+  - 100.0% pass rate achieved across all 50 programs (50/50 passed in 1.79s).
+
 ## [1.0.9] - 2026-10-19 - Phase 7: Capability Benchmark & Python Exporter
 ### Added
 - **Python Transpiler & Exporter**:

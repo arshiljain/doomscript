@@ -1,0 +1,8 @@
+use research
+group1 = a list of 20.0, 22.0, 19.0, 21.0, 20.5
+group2 = a list of 25.0, 24.5, 26.0, 25.5, 24.0
+test that means of group1 and group2 are equal using student t test into res
+say "Student t-statistic:", res's test statistic
+say "Degrees of freedom:", res's degrees of freedom
+verify that res's degrees of freedom equals 8.0 otherwise "DF should be 8"
+verify that res's p value is under 0.01 otherwise "P-value should be under 0.01"

@@ -1,0 +1,12 @@
+use research
+# Test that momentum accelerates convergence compared to flat updates
+w = a scalar with value 10.0
+create sgd optimizer for a list of w with learning rate 0.05 and momentum 0.9 into opt
+repeat with step from 1 to 10
+    zero gradients for opt
+    loss = w * w
+    compute gradient of loss
+    step opt
+
+say "Value after 10 momentum steps:", w's value
+verify that w's value is under 1.0 otherwise "Momentum should rapidly descend valley"

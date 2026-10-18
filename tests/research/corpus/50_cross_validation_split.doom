@@ -1,0 +1,14 @@
+use research
+# 5-fold cross validation splitting on 20 samples
+samples = [i for i in range(20)]
+k = 5
+fold_size = count of samples // k
+folds = a new list
+repeat with f from 0 to k - 1
+    val_set = samples[f * fold_size : (f + 1) * fold_size]
+    train_set = samples[: f * fold_size] + samples[(f + 1) * fold_size :]
+    add [count of train_set, count of val_set] to folds
+
+say "K-Fold splits (train, val):", folds[0]
+verify that folds[0][0] equals 16 otherwise "Train size is 16"
+verify that folds[0][1] equals 4 otherwise "Val size is 4"

@@ -1,0 +1,12 @@
+use research
+arr = a list of 10, 22, 9, 33, 21, 50, 41, 60, 80
+n = count of arr
+dp = [1 for x in range(n)]
+repeat with i from 1 to n - 1
+    repeat with j from 0 to i - 1
+        if arr[i] is greater than arr[j] and dp[i] is less than dp[j] + 1
+            dp[i] = dp[j] + 1
+
+lis = max(dp)
+say "Longest increasing subsequence length:", lis
+verify that lis equals 6 otherwise "LIS length should be 6"

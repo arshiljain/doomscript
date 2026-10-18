@@ -1,0 +1,13 @@
+use research
+# Strongly connected components using reachability
+create a research graph into g
+add edge from "A" to "B" with weight 1.0 to g
+add edge from "B" to "C" with weight 1.0 to g
+add edge from "C" to "A" with weight 1.0 to g
+add edge from "C" to "D" with weight 1.0 to g
+find all pairs shortest paths in g using floyd warshall into dist
+# A, B, C can reach each other mutually
+is_scc = (dist["A"]["B"] < 100) and (dist["B"]["A"] < 100)
+say "Cycle A-B-C forms an SCC:", is_scc
+verify that is_scc is true otherwise "A, B, C must form an SCC"
+verify that dist["D"]["A"] is INF otherwise "D cannot reach A"

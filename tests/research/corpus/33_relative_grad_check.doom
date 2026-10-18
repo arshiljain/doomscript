@@ -1,0 +1,7 @@
+use research
+to loss_fn with params
+    return (params[0] ** 3) + (params[1] * params[0]).exp()
+
+check gradient of loss_fn at [1.2, 0.4] into passed
+say "Numerical gradient check passed:", passed
+verify that passed is true otherwise "Analytical and numerical gradients must match"

@@ -1,0 +1,7 @@
+use research
+# 2x2 Contingency table: [Smoker, Non-Smoker] x [Disease, Healthy]
+table = a list of [40, 10], [20, 50]
+test that independence of table using chi square into res
+say "Chi-square statistic:", res's test statistic
+say "P-value:", res's p value
+verify that res's p value is under 0.001 otherwise "Smoking and disease are dependent"

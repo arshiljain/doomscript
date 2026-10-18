@@ -1,0 +1,15 @@
+use research
+vec_a = a list of 1.0, 2.0, 3.0
+vec_b = a list of 2.0, 4.0, 6.0
+dot = 0.0
+norm_a_sq = 0.0
+norm_b_sq = 0.0
+repeat with i from 0 to 2
+    dot = dot + vec_a[i] * vec_b[i]
+    norm_a_sq = norm_a_sq + vec_a[i] ** 2
+    norm_b_sq = norm_b_sq + vec_b[i] ** 2
+norm_a = math.sqrt(norm_a_sq)
+norm_b = math.sqrt(norm_b_sq)
+cos_sim = dot / (norm_a * norm_b)
+say "Cosine similarity between parallel vectors:", cos_sim
+verify that cos_sim equals 1.0 otherwise "Parallel vectors must have cosine similarity 1.0"

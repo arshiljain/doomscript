@@ -1,0 +1,9 @@
+use research
+y_true = 1.0
+p = a scalar with value 0.8
+bce = -(p.log())
+compute gradient of bce
+say "BCE loss:", bce's value
+say "Gradient wrt p:", p's gradient
+verify that bce's value is under 0.25 otherwise "-log(0.8) is ~0.223"
+verify that p's gradient equals -1.25 otherwise "d/dp(-log(p)) = -1/p = -1.25"

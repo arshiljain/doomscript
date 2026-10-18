@@ -1,0 +1,14 @@
+use research
+create a research graph into g
+add edge from "A" to "B" with weight 4.0 to g
+add edge from "A" to "C" with weight 2.0 to g
+add edge from "C" to "B" with weight 1.0 to g
+add edge from "B" to "D" with weight 5.0 to g
+add edge from "C" to "D" with weight 8.0 to g
+find shortest path from "A" to "D" in g using dijkstra into res
+dist = item 1 of res
+path = item 2 of res
+say "Shortest path to D is:", path
+say "Distance is:", dist
+verify that dist equals 8.0 otherwise "Shortest distance must be 8.0"
+verify that count of path equals 4 otherwise "Path should visit 4 nodes"

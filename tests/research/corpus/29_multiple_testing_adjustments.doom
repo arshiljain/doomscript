@@ -1,0 +1,8 @@
+use research
+raw_p = a list of 0.001, 0.008, 0.035, 0.045, 0.120
+adjust p values raw_p using holm into holm_adj
+adjust p values raw_p using benjamini hochberg into bh_adj
+say "Holm adjusted p-values:", holm_adj
+say "BH FDR adjusted p-values:", bh_adj
+verify that holm_adj[0] equals 0.005 otherwise "Holm first p-value is 0.001 * 5"
+verify that bh_adj[0] equals 0.005 otherwise "BH first p-value is 0.001 * 5 / 1"

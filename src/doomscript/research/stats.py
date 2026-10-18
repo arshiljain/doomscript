@@ -279,7 +279,9 @@ def mann_whitney_u_test(a: list, b: list, alternative: str = "two-sided") -> Tes
 
 
 def one_way_anova(*groups: list) -> TestResult:
-    """One-way Analysis of Variance (ANOVA)."""
+    """One-way Analysis of Variance (ANOVA). Accepts multiple group lists or a list of groups."""
+    if len(groups) == 1 and isinstance(groups[0], (list, tuple)):
+        groups = tuple(groups[0])
     k = len(groups)
     if k < 2:
         raise ValueError("At least 2 groups required for ANOVA.")
@@ -361,6 +363,151 @@ def chi_square_independence(table: List[List[Union[int, float]]]) -> TestResult:
 
 
 chi_square_test = chi_square_independence
+
+
+def pearson_correlation(x: list, y: list) -> TestResult:
+    """Computes Pearson product-moment correlation coefficient and two-sided p-value."""
+    n = len(x)
+    if n != len(y):
+        raise ValueError("x and y must have the same length.")
+    if n < 3:
+        raise ValueError("At least 3 pairs required for correlation test.")
+
+    mx, my = _mean(x), _mean(y)
+    dx = [xi - mx for xi in x]
+    dy = [yi - my for yi in y]
+
+    cov = sum(dxi * dyi for dxi, dyi in zip(dx, dy))
+    var_x = sum(dxi ** 2 for dxi in dx)
+    var_y = sum(dyi ** 2 for dyi in dy)
+
+    if var_x < 1e-15 or var_y < 1e-15:
+        return TestResult(statistic=0.0, p_value=1.0, test_name="Pearson correlation coefficient", df=n - 2)
+
+    r = max(-1.0, min(1.0, cov / math.sqrt(var_x * var_y)))
+    df = n - 2
+    if abs(r) >= 1.0 - 1e-12:
+        p_val = 0.0
+    else:
+        t_stat = r * math.sqrt(df / (1.0 - r ** 2))
+        p_val = 2.0 * t_sf(abs(t_stat), df)
+
+    return TestResult(
+        statistic=r,
+        p_value=p_val,
+        test_name="Pearson correlation coefficient",
+        df=df,
+    )
+
+
+def spearman_correlation(x: list, y: list) -> TestResult:
+    """Computes Spearman rank-order correlation coefficient and two-sided p-value."""
+    n = len(x)
+    if n != len(y):
+        raise ValueError("x and y must have the same length.")
+
+    def _rank_data(arr):
+        indexed = sorted(enumerate(arr), key=lambda item: item[1])
+        ranks = [0.0] * len(arr)
+        i = 0
+        while i < len(arr):
+            j = i
+            while j < len(arr) and indexed[j][1] == indexed[i][1]:
+                j += 1
+            avg_rank = (i + 1 + j) / 2.0
+            for k in range(i, j):
+                ranks[indexed[k][0]] = avg_rank
+            i = j
+        return ranks
+
+    rx = _rank_data(x)
+    ry = _rank_data(y)
+    res = pearson_correlation(rx, ry)
+    res["test_name"] = "Spearman rank-order correlation"
+    return res
+
+
+def wilcoxon_signed_rank(x: list, y: Optional[list] = None) -> TestResult:
+    """Wilcoxon signed-rank test for paired samples or one-sample symmetry."""
+    if y is not None:
+        if len(x) != len(y):
+            raise ValueError("x and y must have the same length.")
+        diffs = [x[i] - y[i] for i in range(len(x))]
+    else:
+        diffs = list(x)
+
+    non_zero = [d for d in diffs if abs(d) > 1e-14]
+    n = len(non_zero)
+    if n < 5:
+        raise ValueError("At least 5 non-zero differences required for Wilcoxon signed-rank test.")
+
+    abs_diffs = [abs(d) for d in non_zero]
+    indexed = sorted(enumerate(abs_diffs), key=lambda item: item[1])
+    ranks = [0.0] * n
+    i = 0
+    while i < n:
+        j = i
+        while j < n and abs(indexed[j][1] - indexed[i][1]) < 1e-12:
+            j += 1
+        avg_rank = (i + 1 + j) / 2.0
+        for k in range(i, j):
+            ranks[indexed[k][0]] = avg_rank
+        i = j
+
+    w_pos = sum(ranks[idx] for idx, d in enumerate(non_zero) if d > 0)
+    w_neg = sum(ranks[idx] for idx, d in enumerate(non_zero) if d < 0)
+    w_stat = min(w_pos, w_neg)
+
+    # Asymptotic normal approximation
+    e_w = n * (n + 1) / 4.0
+    var_w = n * (n + 1) * (2 * n + 1) / 24.0
+    z = (w_stat - e_w) / math.sqrt(var_w)
+    p_val = 2.0 * normal_sf(abs(z))
+
+    return TestResult(
+        statistic=w_stat,
+        p_value=p_val,
+        test_name="Wilcoxon signed-rank test",
+        df=n,
+        details={"w_pos": w_pos, "w_neg": w_neg},
+    )
+
+
+def fisher_exact_test(table: List[List[int]]) -> TestResult:
+    """Fisher's exact test for 2x2 contingency tables."""
+    if len(table) != 2 or len(table[0]) != 2 or len(table[1]) != 2:
+        raise ValueError("Fisher exact test requires a 2x2 contingency table.")
+
+    a, b = int(table[0][0]), int(table[0][1])
+    c, d = int(table[1][0]), int(table[1][1])
+    n = a + b + c + d
+    r1, r2 = a + b, c + d
+    c1, c2 = a + c, b + d
+
+    # Hypergeometric PMF for 2x2 table with cell (0,0) = k
+    def hyper_prob(k: int) -> float:
+        try:
+            return (math.comb(r1, k) * math.comb(r2, c1 - k)) / math.comb(n, c1)
+        except (ValueError, OverflowError):
+            return 0.0
+
+    p_observed = hyper_prob(a)
+    k_min = max(0, c1 - r2)
+    k_max = min(r1, c1)
+
+    p_val = 0.0
+    for k in range(k_min, k_max + 1):
+        pk = hyper_prob(k)
+        if pk <= p_observed + 1e-12:
+            p_val += pk
+
+    odds_ratio = (a * d) / (b * c) if (b * c) > 0 else float("inf")
+    return TestResult(
+        statistic=odds_ratio,
+        p_value=min(1.0, p_val),
+        test_name="Fisher's exact test",
+        details={"table": table},
+    )
 
 
 # ---------------------------------------------------------------------------

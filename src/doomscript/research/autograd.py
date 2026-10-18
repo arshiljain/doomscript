@@ -25,6 +25,10 @@ class Scalar:
         self._prev: Set[Scalar] = set(_children)
         self._op: str = _op
 
+    @property
+    def value(self) -> float:
+        return self.data
+
     def __add__(self, other: Union[Scalar, float, int]) -> Scalar:
         other = other if isinstance(other, Scalar) else Scalar(other)
         out = Scalar(self.data + other.data, (self, other), "+")

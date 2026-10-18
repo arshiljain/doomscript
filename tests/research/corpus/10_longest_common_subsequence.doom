@@ -1,0 +1,4 @@
+use research
+lcs = longest common subsequence between "ABCBDAB" and "BDCAB"
+say "Reconstructed LCS:", lcs
+verify that lcs equals "BCAB" otherwise "LCS should be BCAB"

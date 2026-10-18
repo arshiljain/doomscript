@@ -1,0 +1,13 @@
+use research
+# Minimize Loss = (w * 2.0 - 6.0)^2 starting from w = 0.0
+w = a scalar with value 0.0
+create adam optimizer for a list of w with learning rate 0.2 into opt
+repeat with step_idx from 1 to 60
+    zero gradients for opt
+    loss = (w * 2.0 - 6.0) ** 2
+    compute gradient of loss
+    step opt
+
+say "Fitted parameter w:", w's value
+verify that w's value is over 2.9 otherwise "Parameter should converge near 3.0"
+verify that w's value is under 3.1 otherwise "Parameter should converge near 3.0"

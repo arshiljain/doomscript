@@ -1,0 +1,7 @@
+use research
+before = a list of 120, 130, 140, 125, 135, 145
+after = a list of 110, 118, 125, 115, 120, 130
+test paired samples before and after using wilcoxon into res
+say "Wilcoxon W statistic:", res's test statistic
+say "P-value:", res's p value
+verify that res's p value is under 0.05 otherwise "Blood pressure drop is significant"

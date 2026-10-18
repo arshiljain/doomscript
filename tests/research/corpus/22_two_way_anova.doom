@@ -1,0 +1,10 @@
+use research
+# 2x2 Factorial design cell means: Diet (Low/High), Exercise (No/Yes)
+cell_00 = a list of 10.0, 11.0, 10.5
+cell_01 = a list of 15.0, 16.0, 14.5
+cell_10 = a list of 12.0, 13.0, 12.5
+cell_11 = a list of 22.0, 23.0, 21.5
+all_cells = a list of cell_00, cell_01, cell_10, cell_11
+test that means of all_cells are equal using anova into res
+say "Interaction ANOVA F-statistic:", res's test statistic
+verify that res's p value is under 0.001 otherwise "Factorial effect should be significant"

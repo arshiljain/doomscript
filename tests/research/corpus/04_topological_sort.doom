@@ -1,0 +1,9 @@
+use research
+create a research graph into g
+add edge from "Compiler" to "Assembler" with weight 1.0 to g
+add edge from "Assembler" to "Linker" with weight 1.0 to g
+add edge from "Header" to "Compiler" with weight 1.0 to g
+topological sort of g into order
+say "Build order is:", order
+verify that item 1 of order equals "Header" otherwise "Header must be built first"
+verify that item 4 of order equals "Linker" otherwise "Linker must be built last"

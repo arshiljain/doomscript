@@ -1,0 +1,28 @@
+use research
+# Kruskal's algorithm with disjoint set
+parent = a new record
+to find_root with i
+    if parent[i] equals i
+        return i
+    parent[i] = find_root(parent[i])
+    return parent[i]
+
+nodes = a list of "A", "B", "C", "D"
+for each n in nodes
+    parent[n] = n
+
+edges = a list of [1.0, "A", "B"], [2.0, "B", "C"], [3.0, "C", "D"], [4.0, "A", "C"], [5.0, "B", "D"]
+sorted_edges = sorted(edges)
+mst_weight = 0.0
+for each edge in sorted_edges
+    w = edge[0]
+    u = edge[1]
+    v = edge[2]
+    root_u = find_root(u)
+    root_v = find_root(v)
+    if root_u is not root_v
+        parent[root_u] = root_v
+        mst_weight = mst_weight + w
+
+say "MST Total Weight:", mst_weight
+verify that mst_weight equals 6.0 otherwise "MST weight should be 6.0"

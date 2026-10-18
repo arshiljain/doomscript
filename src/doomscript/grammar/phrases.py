@@ -501,7 +501,8 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"\binsert\s+(.+?)\s+at\s+(?:index|position)\s+(.+?)\s+in\b", r"insert \1 at \2 in", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bunique\s+items\s+in\b", "unique items of", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\b(?:an\s+empty\s+list|a\s+new\s+list)\b", "[]", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\b(?:a\s+list\s+of|list\s+of)\s+([^;\n]+?)(?=\s+with\b|\s+at\b|\s+into\b|\s*\)|\s*\]|;\s*|\n|$)", r"[\1]", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(?:an\s+empty\s+record|a\s+new\s+record|empty\s+record)\b", "Record()", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(?:a\s+list\s+of|list\s+of)\s+([^;\n]+?)(?=\s+with\b|\s+at\b|\s+into\b|;\s*|\n|$)", r"[\1]", masked, flags=re.IGNORECASE)
 
     # Function definition with 'on': 'to tax on price' -> 'to tax with price'
     masked = re.sub(r"^\s*to\s+([A-Za-z_]\w*)\s+on\s+([A-Za-z_]\w*)\b", r"to \1 with \2", masked, flags=re.IGNORECASE)
@@ -558,7 +559,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"(?<!'s\s)(?<!\.)(?<!\bbullet\s)(?<!\ba\s)(?<!\bempty\s)(?<!\bnew\s)(?<![\"'])\blist\b(?![\"'])(?!\s+files\b)(?!\s+of\b)(?!\s*\()", "_var_list", masked)
     masked = re.sub(r"(?<!'s\s)(?<!\.)(?<!\bfind\s)(?<!\btake\s)(?<!\bdrop\s)\bfirst\b(?!\s+(?:\d+|[A-Za-z_]\w*)\s+items?\s+(?:of|from)\b|\s+item\s+of\b|\s+[A-Z]\w*)", "_var_first", masked)
     masked = re.sub(r"\bround\s*\(", "math_round(", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\bsum\s*\(", "agg_sum(", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"(?<!\.)\bsum\s*\(", "agg_sum(", masked, flags=re.IGNORECASE)
 
     # Arithmetic in words
     double_m = re.match(r"^\s*double\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)

@@ -1,0 +1,5 @@
+use research
+wilson score interval of 18 out of 20 at 95 percent into ci
+say "Wilson Score Interval:", ci
+verify that ci[0] is over 0.65 otherwise "Lower bound must exceed 0.65"
+verify that ci[1] is under 0.99 otherwise "Upper bound must not exceed 0.99"

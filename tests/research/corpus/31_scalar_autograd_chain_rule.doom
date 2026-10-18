@@ -1,0 +1,10 @@
+use research
+x = a scalar with value 3.0
+y = a scalar with value -4.0
+z = (x * y + 10.0) ** 2
+compute gradient of z
+say "dz/dx:", x's gradient
+say "dz/dy:", y's gradient
+# dz/dx = 2 * (3 * -4 + 10) * -4 = 2 * (-2) * (-4) = 16.0
+verify that x's gradient equals 16.0 otherwise "dz/dx should be 16.0"
+verify that y's gradient equals -12.0 otherwise "dz/dy should be -12.0"

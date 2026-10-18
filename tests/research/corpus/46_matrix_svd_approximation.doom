@@ -1,0 +1,12 @@
+use research
+# Rank-1 outer product u * s * v^T
+u = [0.6, 0.8]
+v = [0.8, 0.6]
+s = 10.0
+# Matrix A_approx[0][0] = 0.6 * 10 * 0.8 = 4.8
+a00 = u[0] * s * v[0]
+a11 = u[1] * s * v[1]
+say "Rank-1 approximation entry A[0,0]:", a00
+say "Rank-1 approximation entry A[1,1]:", a11
+verify that round(a00, 2) equals 4.8 otherwise "Expected 4.8"
+verify that round(a11, 2) equals 4.8 otherwise "Expected 4.8"

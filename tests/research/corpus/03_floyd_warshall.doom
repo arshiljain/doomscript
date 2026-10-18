@@ -1,0 +1,11 @@
+use research
+create a research graph into g
+add edge from "1" to "2" with weight 3.0 to g
+add edge from "1" to "3" with weight 8.0 to g
+add edge from "2" to "3" with weight 2.0 to g
+add edge from "3" to "1" with weight 1.0 to g
+find all pairs shortest paths in g using floyd warshall into matrix
+say "Cost from 1 to 3 is:", matrix["1"]["3"]
+say "Cost from 2 to 1 is:", matrix["2"]["1"]
+verify that matrix["1"]["3"] equals 5.0 otherwise "Shortest path 1->3 is 5.0"
+verify that matrix["2"]["1"] equals 3.0 otherwise "Shortest path 2->1 is 3.0"

@@ -1,0 +1,9 @@
+use research
+w = a scalar with value 4.0
+lambda_reg = 0.01
+obj = (w - 1.0) ** 2 + (w ** 2) * lambda_reg
+compute gradient of obj
+# d/dw = 2*(4-1) + 2*0.01*4 = 6 + 0.08 = 6.08
+say "Objective with L2 penalty:", obj's value
+say "Gradient with L2 penalty:", w's gradient
+verify that w's gradient equals 6.08 otherwise "Gradient should include L2 term"

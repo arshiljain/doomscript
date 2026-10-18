@@ -1,0 +1,12 @@
+use research
+w = a scalar with value 1.0
+create sgd optimizer for a list of w with learning rate 0.1 and momentum 0.9 into opt
+repeat with step_idx from 1 to 40
+    zero gradients for opt
+    prob = (w * 1.5).sigmoid()
+    loss = (prob - 0.9) ** 2
+    compute gradient of loss
+    step opt
+
+say "Trained logistic parameter:", w's value
+verify that w's value is over 1.4 otherwise "Parameter should increase towards target"

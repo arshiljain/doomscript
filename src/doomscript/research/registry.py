@@ -83,7 +83,7 @@ RESEARCH_RULES: List[ResearchRule] = [
         name="wilson_score_interval",
         category="stats",
         description="Wilson score interval for binomial proportions",
-        expr_pattern=r"wilson\s+score\s+interval\s+of\s+([A-Za-z_]\w*|\d+)\s+out\s+of\s+([A-Za-z_]\w*|\d+)\s+at\s+(\d+(?:\.\d+)?)\s*(?:%|percent)",
+        expr_pattern=r"(?:wilson\s+score\s+interval|wilson_score_interval)\s+of\s+([A-Za-z_]\w*|\d+)\s+out\s+of\s+([A-Za-z_]\w*|\d+)\s+at\s+(\d+(?:\.\d+)?)\s*(?:%|percent)",
         py_template="wilson_score_interval({1}, {2}, float({3}) / 100.0)",
     ),
     ResearchRule(
@@ -106,6 +106,34 @@ RESEARCH_RULES: List[ResearchRule] = [
         description="Benjamini-Hochberg FDR p-value adjustment",
         expr_pattern=r"adjust\s+p\s+values\s+([A-Za-z_]\w*)\s+using\s+(?:benjamini\s+hochberg|bh|fdr)",
         py_template='adjust_p_values({1}, method="benjamini_hochberg")',
+    ),
+    ResearchRule(
+        name="pearson_correlation",
+        category="stats",
+        description="Pearson correlation coefficient between two numeric lists",
+        expr_pattern=r"(?:test\s+)?correlation\s+between\s+([A-Za-z_]\w*)\s+and\s+([A-Za-z_]\w*)\s+using\s+pearson",
+        py_template="pearson_correlation({1}, {2})",
+    ),
+    ResearchRule(
+        name="spearman_correlation",
+        category="stats",
+        description="Spearman rank-order correlation between two numeric lists",
+        expr_pattern=r"(?:test\s+)?correlation\s+between\s+([A-Za-z_]\w*)\s+and\s+([A-Za-z_]\w*)\s+using\s+spearman",
+        py_template="spearman_correlation({1}, {2})",
+    ),
+    ResearchRule(
+        name="wilcoxon_signed_rank",
+        category="stats",
+        description="Wilcoxon signed-rank test for paired samples",
+        expr_pattern=r"test\s+paired\s+samples\s+([A-Za-z_]\w*)\s+and\s+([A-Za-z_]\w*)\s+using\s+wilcoxon",
+        py_template="wilcoxon_signed_rank({1}, {2})",
+    ),
+    ResearchRule(
+        name="fisher_exact_test",
+        category="stats",
+        description="Fisher's exact test for 2x2 contingency table",
+        expr_pattern=r"test\s+(?:that\s+)?independence\s+of\s+([A-Za-z_]\w*)\s+using\s+fisher\s+exact",
+        py_template="fisher_exact_test({1})",
     ),
     ResearchRule(
         name="metropolis_hastings",
@@ -260,6 +288,24 @@ def _clean_arg(arg: str) -> str:
     return s
 
 
+_STRING_REGEX = re.compile(r'("""[\s\S]*?"""|\'\'\'[\s\S]*?\'\'\'|"(?:[^"\\]|\\.)*"|(?<!\w)\'(?:[^\'\\]|\\.)*\')')
+
+
+def _mask_strings(text: str) -> Tuple[str, List[str]]:
+    strings: List[str] = []
+    def repl(m: re.Match) -> str:
+        idx = len(strings)
+        strings.append(m.group(0))
+        return f"__STR_LIT_{idx}__"
+    return _STRING_REGEX.sub(repl, text), strings
+
+
+def _unmask_strings(text: str, strings: List[str]) -> str:
+    for idx, s in enumerate(strings):
+        text = text.replace(f"__STR_LIT_{idx}__", s)
+    return text
+
+
 def apply_research_normalization(line: str) -> Optional[str]:
     """
     Applies single-source research phrase rules to a single line of code.
@@ -270,13 +316,15 @@ def apply_research_normalization(line: str) -> Optional[str]:
     4. Attribute / property access (`res's p value`, `p value of res`)
     5. Pure expression replacements
     """
-    cleaned = line.strip()
+    masked_line, strings = _mask_strings(line)
+    cleaned = masked_line.strip()
 
     # 1. Action verbs without 'into'
     # compute gradient of <expr> -> <expr>.backward()
     grad_m = re.match(r"^compute\s+gradient\s+of\s+(.+)$", cleaned, re.IGNORECASE)
     if grad_m:
-        return f"({grad_m.group(1).strip()}).backward()"
+        raw_res = f"({grad_m.group(1).strip()}).backward()"
+        return _unmask_strings(raw_res, strings)
 
     # add edge from <u> to <v> [with weight <w>] to <g>
     edge_m = re.match(
@@ -289,17 +337,20 @@ def apply_research_normalization(line: str) -> Optional[str]:
         v = _clean_arg(edge_m.group(2))
         w = _clean_arg(edge_m.group(3)) if edge_m.group(3) else "1.0"
         g = edge_m.group(4).strip()
-        return f"{g}.add_edge({u}, {v}, {w})"
+        raw_res = f"{g}.add_edge({u}, {v}, {w})"
+        return _unmask_strings(raw_res, strings)
 
     # step <opt> / optimize step with <opt>
     step_m = re.match(r"^(?:step|optimize\s+step\s+with)\s+([A-Za-z_]\w*)$", cleaned, re.IGNORECASE)
     if step_m:
-        return f"{step_m.group(1)}.step()"
+        raw_res = f"{step_m.group(1)}.step()"
+        return _unmask_strings(raw_res, strings)
 
     # zero gradients for <opt> / reset gradients for <opt>
     zero_m = re.match(r"^(?:zero|reset)\s+gradients\s+for\s+([A-Za-z_]\w*)$", cleaned, re.IGNORECASE)
     if zero_m:
-        return f"{zero_m.group(1)}.zero_grad()"
+        raw_res = f"{zero_m.group(1)}.zero_grad()"
+        return _unmask_strings(raw_res, strings)
 
     # 2. Check each declarative rule for statement form (`... into target`)
     for rule in RESEARCH_RULES:
@@ -311,7 +362,8 @@ def apply_research_normalization(line: str) -> Optional[str]:
             py_call = rule.py_template
             for idx, arg in enumerate(args, 1):
                 py_call = py_call.replace(f"{{{idx}}}", arg)
-            return f"set {target} to {py_call}"
+            raw_res = f"set {target} to {py_call}"
+            return _unmask_strings(raw_res, strings)
 
     # 3. Check for assignment form: `target = <phrase>`
     assign_m = re.match(r"^([A-Za-z_]\w*)\s*=\s*(.+)$", cleaned)
@@ -325,7 +377,8 @@ def apply_research_normalization(line: str) -> Optional[str]:
                 py_call = rule.py_template
                 for idx, arg in enumerate(args, 1):
                     py_call = py_call.replace(f"{{{idx}}}", arg)
-                return f"set {target} to {py_call}"
+                raw_res = f"set {target} to {py_call}"
+                return _unmask_strings(raw_res, strings)
 
     # 4. In-place statement or expression transformation
     res_line = cleaned
@@ -340,21 +393,23 @@ def apply_research_normalization(line: str) -> Optional[str]:
 
         res_line = re.sub(rule.expr_pattern, repl, res_line, flags=re.IGNORECASE)
 
-    # 5. Dual-form property access: "x's p value" and "p value of x"
+    # 5. Dual-form property access: "x's p value", "x[0]'s p value", and "p value of x"
     for eng_prop, py_prop in RESEARCH_PROPERTIES.items():
-        # x's prop
+        # x's prop or x[idx]'s prop
         res_line = re.sub(
-            rf"\b([A-Za-z_]\w*)'s\s+{re.escape(eng_prop)}\b",
+            rf"\b([A-Za-z_]\w*(?:\[[^\]]+\])?)'s\s+{re.escape(eng_prop)}\b",
             rf"\1.{py_prop}",
             res_line,
             flags=re.IGNORECASE,
         )
         # prop of x
         res_line = re.sub(
-            rf"\b{re.escape(eng_prop)}\s+of\s+([A-Za-z_]\w*)\b",
+            rf"\b{re.escape(eng_prop)}\s+of\s+([A-Za-z_]\w*(?:\[[^\]]+\])?)\b",
             rf"\1.{py_prop}",
             res_line,
             flags=re.IGNORECASE,
         )
 
-    return res_line if res_line != cleaned else None
+    unmasked = _unmask_strings(res_line, strings)
+    return unmasked if unmasked != line.strip() else None
+

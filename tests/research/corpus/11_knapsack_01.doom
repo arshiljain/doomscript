@@ -1,0 +1,9 @@
+use research
+w = a list of 2, 3, 4, 5
+v = a list of 3.0, 4.0, 5.0, 6.0
+solve knapsack with weights w and values v at capacity 5 into res
+max_val = item 1 of res
+items = item 2 of res
+say "Max knapsack value is:", max_val
+say "Selected item indices:", items
+verify that max_val equals 7.0 otherwise "Max knapsack value should be 7.0"

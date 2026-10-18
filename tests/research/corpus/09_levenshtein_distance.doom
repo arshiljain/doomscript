@@ -1,0 +1,4 @@
+use research
+edit distance between "intention" and "execution" into dist
+say "Levenshtein distance:", dist
+verify that dist equals 5 otherwise "Edit distance between intention and execution is 5"

@@ -1,0 +1,8 @@
+use research
+study_hours = a list of 1.0, 2.0, 3.0, 4.0, 5.0, 6.0
+exam_scores = a list of 52.0, 60.0, 68.0, 77.0, 85.0, 94.0
+test correlation between study_hours and exam_scores using pearson into res
+say "Pearson r:", res's test statistic
+say "P-value:", res's p value
+verify that res's test statistic is over 0.99 otherwise "Strong positive linear correlation"
+verify that res's p value is under 0.001 otherwise "Correlation is statistically significant"

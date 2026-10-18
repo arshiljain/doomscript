@@ -1,0 +1,10 @@
+use research
+create a research graph into g
+add edge from "s" to "a" with weight 10.0 to g
+add edge from "s" to "b" with weight 5.0 to g
+add edge from "a" to "b" with weight 15.0 to g
+add edge from "a" to "t" with weight 10.0 to g
+add edge from "b" to "t" with weight 10.0 to g
+maximum flow from "s" to "t" in g into max_cap
+say "Min cut capacity equals max flow:", max_cap
+verify that max_cap equals 15.0 otherwise "Min cut should be 15.0"

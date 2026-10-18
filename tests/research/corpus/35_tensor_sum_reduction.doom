@@ -1,0 +1,7 @@
+use research
+t = a tensor from [[1.5, 2.5], [3.0, 4.0]]
+s = sum of tensor t
+compute gradient of s
+say "Tensor total sum:", s's value
+verify that s's value equals 11.0 otherwise "Sum should be 11.0"
+verify that t[0, 0]'s gradient equals 1.0 otherwise "Gradient of sum wrt each element is 1.0"

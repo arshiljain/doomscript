@@ -1,0 +1,8 @@
+use research
+cohort1 = a list of 1.0, 2.0, 3.0, 4.0
+cohort2 = a list of 10.0, 11.0, 12.0, 13.0
+test that distributions of cohort1 and cohort2 are equal using mann whitney test into res
+say "U statistic:", res's test statistic
+say "P-value:", res's p value
+verify that res's test statistic equals 0.0 otherwise "U should be 0.0"
+verify that res's p value is under 0.05 otherwise "Groups differ significantly"

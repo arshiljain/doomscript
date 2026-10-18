@@ -1,0 +1,6 @@
+use research
+small_table = a list of [8, 2], [1, 5]
+test that independence of small_table using fisher exact into res
+say "Odds ratio:", res's test statistic
+say "Fisher exact p-value:", res's p value
+verify that res's p value is under 0.05 otherwise "Association should be significant"

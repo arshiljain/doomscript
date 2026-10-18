@@ -1,0 +1,8 @@
+use research
+x = a scalar with value 2.0
+s = x.sigmoid()
+compute gradient of s
+say "Sigmoid value:", s's value
+say "Sigmoid gradient:", x's gradient
+verify that s's value is over 0.85 otherwise "Sigmoid(2) is ~0.88"
+verify that x's gradient is over 0.09 otherwise "Sigmoid gradient"

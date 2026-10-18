@@ -1,0 +1,17 @@
+use research
+# Chain dimensions: A1 (10x30), A2 (30x5), A3 (5x60) -> p = [10, 30, 5, 60]
+p = a list of 10, 30, 5, 60
+n = count of p - 1
+m = [[0 for x in range(n + 1)] for y in range(n + 1)]
+repeat with l from 2 to n
+    repeat with i from 1 to n - l + 1
+        j = i + l - 1
+        m[i][j] = 1000000000
+        repeat with k from i to j - 1
+            cost = m[i][k] + m[k + 1][j] + p[i - 1] * p[k] * p[j]
+            if cost is less than m[i][j]
+                m[i][j] = cost
+
+min_cost = m[1][n]
+say "Optimal matrix multiplication cost:", min_cost
+verify that min_cost equals 4500 otherwise "Optimal cost should be 4500"

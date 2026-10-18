@@ -1,0 +1,14 @@
+use research
+# Covariance matrix C = [[4.0, 1.0], [1.0, 2.0]]
+v = [1.0, 1.0]
+repeat with iter from 1 to 20
+    next_v0 = 4.0 * v[0] + 1.0 * v[1]
+    next_v1 = 1.0 * v[0] + 2.0 * v[1]
+    norm = math.sqrt(next_v0 ** 2 + next_v1 ** 2)
+    v = [next_v0 / norm, next_v1 / norm]
+
+say "Leading eigenvector:", v
+# Eigenvalue lambda = v^T C v
+eigenval = v[0] * (4.0 * v[0] + 1.0 * v[1]) + v[1] * (1.0 * v[0] + 2.0 * v[1])
+say "Leading eigenvalue:", eigenval
+verify that eigenval is over 4.40 otherwise "Dominant eigenvalue of matrix is ~4.414"

@@ -1,0 +1,17 @@
+use research
+# A* Heuristic Search on a 1D line from 0 to 10
+start_node = 0
+goal_node = 10
+to heuristic with pos
+    return goal_node - pos
+
+curr = start_node
+steps = 0
+repeat while curr is less than goal_node
+    h = heuristic(curr)
+    curr = curr + 2
+    steps = steps + 1
+
+say "A* reached goal in steps:", steps
+verify that curr equals goal_node otherwise "Should reach goal"
+verify that steps equals 5 otherwise "Should take 5 steps"

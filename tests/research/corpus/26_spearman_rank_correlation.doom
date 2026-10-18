@@ -1,0 +1,7 @@
+use research
+x = a list of 1.0, 2.0, 3.0, 4.0, 5.0
+y = a list of 10.0, 100.0, 1000.0, 10000.0, 100000.0
+test correlation between x and y using spearman into res
+say "Spearman rho:", res's test statistic
+say "P-value:", res's p value
+verify that res's test statistic equals 1.0 otherwise "Monotonic relation gives rho = 1.0"

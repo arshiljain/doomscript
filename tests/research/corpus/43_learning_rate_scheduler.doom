@@ -1,0 +1,14 @@
+use research
+# Cosine decay schedule
+initial_lr = 0.1
+total_steps = 10
+sched_lrs = a new list
+repeat with t from 0 to total_steps - 1
+    fraction = t / total_steps
+    lr = initial_lr * 0.5 * (1.0 + math.cos(math.pi * fraction))
+    add lr to sched_lrs
+
+say "Initial scheduled LR:", sched_lrs[0]
+say "Decayed scheduled LR:", sched_lrs[9]
+verify that sched_lrs[0] equals 0.1 otherwise "Initial LR is 0.1"
+verify that sched_lrs[9] is under 0.02 otherwise "Decayed LR is low"
