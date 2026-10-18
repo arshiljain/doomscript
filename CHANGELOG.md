@@ -2,6 +2,31 @@
 
 All notable changes to DoomScript are documented in this file.
 
+## [1.0.8] - 2026-10-19 - Phase 6: Friendly Error Experience
+### Added
+- **Accurate Syntax Error Line Number Tracking**:
+  - `format_syntax_error` now resolves normalized lines through `line_map` from `normalize_with_map()`.
+  - Errors in raw files with comments, multi-statement chains (`and then`), or line expansions point to the exact original line and column.
+- **Typo Keyword & Verb Suggestions**:
+  - Suggestions powered by `difflib` over core keywords and verb synonyms:
+    - Misspelled commands like `sya "hello"` -> `Did you mean: say "hello"?`.
+    - Keyword aliases like `prnt "hello"` -> `Did you mean: say "hello"?`.
+    - Loop headers like `repeta 5 times:` -> `Did you mean: repeat 5 times:`.
+  - Prevented silent absorption of command typos by call-statement normalization.
+- **Traceback-Aware Variable Typo Suggestions**:
+  - Misspelled variable names in runtime exceptions inspect the executing frame's scope and suggest closest matches (`say usre_name` when `user_name` exists -> `Did you mean 'user_name'?`).
+- **Beginner-Friendly Translations for Top 10 Python Runtime Exceptions**:
+  1. `NameError` -> `I don't know what '<var>' is. Did you mean '<suggestion>'? / Did you set it earlier?`.
+  2. `TypeError` (unsupported operands) -> `You tried to <op> a <type1> and a <type2>. These types can't be combined this way.`.
+  3. `IndexError` -> Intelligently inspects container length and index when available: `You asked for item <idx>, but this list only has <len> items.`.
+  4. `KeyError` -> `This dictionary doesn't have a key called '<key>'.`.
+  5. `ZeroDivisionError` -> `Cannot divide by zero. You tried to divide by zero.`.
+  6. `FileNotFoundError` -> `I couldn't find the file '<path>'. Check that the name and folder are correct.`.
+  7. `AttributeError` -> `A '<type>' doesn't have a '<attr>' property.`.
+  8. `ValueError` (unpacking) -> `Tried to unpack <N> values, but got <M>.`.
+  9. `RecursionError` -> `This function called itself too many times. Did you forget a base case?`.
+  10. `PermissionError` -> `I don't have permission to access '<path>'.`.
+
 ## [1.0.7] - 2026-10-19 - Phase 5: Data Science Verbs over pandas
 ### Added
 - **High-Level Tabular Verbs (pandas Backend)**:

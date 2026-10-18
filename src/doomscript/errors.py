@@ -14,6 +14,7 @@ from doomscript.grammar.phrases import (
     VERB_SYNONYMS,
     COMPARISON_SYNONYMS,
     ASSIGNMENT_PATTERNS,
+    CORE_COMMAND_VERBS,
 )
 
 # Canonical DoomScript sentence patterns for difflib matching
@@ -164,21 +165,6 @@ RESERVED_KEYWORDS = {
     "into": "used to specify destination variables ('read file ... into content')."
 }
 
-CORE_COMMAND_VERBS = [
-    "say", "show", "display",
-    "set", "make", "create", "let",
-    "if", "unless", "else", "elif",
-    "repeat", "while", "until", "for",
-    "to", "return", "ask", "read", "write", "append",
-    "sort", "reverse", "group", "filter",
-    "trim", "uppercase", "lowercase", "capitalize",
-    "round", "clamp", "convert",
-    "try", "attempt", "verify", "require", "ensure",
-    "fetch", "download", "post", "send",
-    "spawn", "wait", "start", "stop", "pause",
-    "match", "when", "unpack"
-]
-
 
 def translate_lark_error(err: Exception, source_line: str) -> Tuple[str, Optional[str]]:
     """
@@ -292,14 +278,16 @@ def translate_lark_error(err: Exception, source_line: str) -> Tuple[str, Optiona
             f"{filt_m.group(1).strip()} where {filt_m.group(2).strip()} into filtered_items"
         )
 
-    # 6. Typo / Edit-distance keyword suggestions (e.g. 'sya' -> 'say', 'repeta' -> 'repeat', 'whlie' -> 'while')
+    # 6. Typo / Edit-distance keyword suggestions (e.g. 'sya' -> 'say', 'repeta' -> 'repeat', 'whlie' -> 'while', 'prnt' -> 'say')
     first_token_m = re.match(r"^([A-Za-z_]\w*)", clean_line)
     if first_token_m:
         first_word = first_token_m.group(1).lower()
-        if first_word not in CORE_COMMAND_VERBS and not re.search(r"^[A-Za-z_]\w*\s*(?:=|is\b|\+=|-=|\*=)", clean_line):
-            close_verbs = difflib.get_close_matches(first_word, CORE_COMMAND_VERBS, n=1, cutoff=0.6)
+        candidate_verbs = list(set(CORE_COMMAND_VERBS) | set(VERB_SYNONYMS.keys()) | {"print", "println"})
+        if first_word not in candidate_verbs and not re.search(r"^[A-Za-z_]\w*\s*(?:=|is\b|\+=|-=|\*=)", clean_line):
+            close_verbs = difflib.get_close_matches(first_word, candidate_verbs, n=1, cutoff=0.6)
             if close_verbs:
                 match_verb = close_verbs[0]
+                match_verb = VERB_SYNONYMS.get(match_verb, match_verb)
                 rest = clean_line[len(first_word):].strip()
                 return (
                     f"I didn't recognize the command '{first_word}'. Did you mean '{match_verb}'?",
@@ -398,6 +386,21 @@ def translate_lark_error(err: Exception, source_line: str) -> Tuple[str, Optiona
     return (str(err), None)
 
 
+def get_traceback_variables(err: Exception) -> List[str]:
+    vars_found = set()
+    tb = getattr(err, "__traceback__", None)
+    while tb:
+        frame = tb.tb_frame
+        for k in frame.f_locals:
+            if not k.startswith("_") and k not in ("sys", "builtins", "runtime", "execute", "ast"):
+                vars_found.add(k)
+        for k in frame.f_globals:
+            if not k.startswith("_") and k not in ("sys", "builtins", "runtime", "execute", "ast"):
+                vars_found.add(k)
+        tb = tb.tb_next
+    return list(vars_found)
+
+
 def translate_runtime_error(err: Exception) -> str:
     """Translates Python runtime exceptions into beginner-friendly explanations."""
     err_str = str(err)
@@ -407,29 +410,85 @@ def translate_runtime_error(err: Exception) -> str:
             var_name = m.group(1)
             if var_name.startswith("_var_"):
                 var_name = var_name[5:]
+            candidates = [c for c in get_traceback_variables(err) if c != var_name]
+            close = difflib.get_close_matches(var_name, candidates, n=1, cutoff=0.55)
+            if close:
+                return f"I don't know what '{var_name}' is. Did you mean '{close[0]}'?"
             return f"I don't know what '{var_name}' is. Did you set it earlier?"
         return "I don't know what that variable is. Did you set it earlier?"
     elif isinstance(err, ZeroDivisionError):
-        return "Cannot divide by zero. Make sure the number you're dividing by is not 0."
+        return "Cannot divide by zero. You tried to divide by zero. Make sure the number you're dividing by is not 0."
     elif isinstance(err, IndexError):
+        tb = getattr(err, "__traceback__", None)
+        extracted = None
+        while tb:
+            frame = tb.tb_frame
+            line = ""
+            if frame.f_code and frame.f_code.co_filename:
+                import linecache
+                line = linecache.getline(frame.f_code.co_filename, tb.tb_lineno).strip()
+            if line:
+                m_sub = re.search(r"(\w+)\[(-?\d+)\]", line)
+                if m_sub:
+                    vname, idx_s = m_sub.group(1), m_sub.group(2)
+                    c = frame.f_locals.get(vname) or frame.f_globals.get(vname)
+                    if isinstance(c, (list, tuple, str)):
+                        extracted = f"You asked for item {idx_s}, but this list only has {len(c)} items."
+                        break
+                m_it = re.search(r"(?:item_of\((\d+),\s*(\w+)\)|item\s+(\d+)\s+of\s+(\w+))", line)
+                if m_it:
+                    idx_s = m_it.group(1) or m_it.group(3)
+                    vname = m_it.group(2) or m_it.group(4)
+                    c = frame.f_locals.get(vname) or frame.f_globals.get(vname)
+                    if isinstance(c, (list, tuple, str)):
+                        extracted = f"You asked for item {idx_s}, but this list only has {len(c)} items."
+                        break
+            tb = tb.tb_next
+        if extracted:
+            return extracted
         return "List item out of reach. The list doesn't have that many items."
     elif isinstance(err, KeyError):
-        m = re.search(r"'([^']+)'", err_str)
-        if m:
-            return f"Record does not contain the key '{m.group(1)}'. Check the field name."
-        return "Record key not found."
+        m = re.search(r"['\"]?([^'\"]+)['\"]?", err_str)
+        key = m.group(1) if m else err_str
+        return f"This dictionary doesn't have a key called '{key}'."
     elif isinstance(err, TypeError):
-        if "unsupported operand type" in err_str or "can only concatenate" in err_str:
-            return f"Cannot perform this operation on different types ({err_str}). Make sure both sides are numbers or both are text."
+        m_op = re.search(r"unsupported operand type\(s\) for ([^:]+):\s*'([^']+)'\s*and\s*'([^']+)'", err_str)
+        if m_op:
+            op, t1, t2 = m_op.groups()
+            op_disp = {"+": "add", "-": "subtract", "*": "multiply", "/": "divide", "//": "floor divide", "%": "mod"}.get(op.strip(), op.strip())
+            return f"You tried to {op_disp} a {t1} and a {t2}. These types can't be combined this way."
+        m_cat = re.search(r"can only concatenate (\w+) \(not \"(\w+)\"\) to \1", err_str)
+        if m_cat:
+            t1, t2 = m_cat.groups()
+            return f"You tried to combine a {t1} and a {t2}. These types can't be combined this way."
         return f"Type mismatch: {err_str}."
     elif isinstance(err, AttributeError):
+        m = re.search(r"'([^']+)' object has no attribute '([^']+)'", err_str)
+        if m:
+            t_name, a_name = m.groups()
+            return f"A '{t_name}' doesn't have a '{a_name}' property."
         return f"This value doesn't have that property or action: {err_str}."
     elif isinstance(err, FileNotFoundError):
-        return f"File not found: {err_str}. Check that the path is correct."
+        path = getattr(err, "filename", None)
+        if not path:
+            m = re.search(r"'(.*?)'", err_str)
+            path = m.group(1) if m else "specified"
+        return f"I couldn't find the file '{path}'. Check that the name and folder are correct."
     elif isinstance(err, PermissionError):
-        return f"Permission denied: {err_str}."
+        path = getattr(err, "filename", None)
+        if not path:
+            m = re.search(r"'(.*?)'", err_str)
+            path = m.group(1) if m else "this file"
+        return f"I don't have permission to access '{path}'."
     elif isinstance(err, ValueError):
+        m = re.search(r"(?:not enough|too many) values to unpack \(expected (\d+)(?:,\s*got\s*(\d+))?\)", err_str)
+        if m:
+            exp, got = m.groups()
+            got_str = got if got is not None else "fewer"
+            return f"Tried to unpack {exp} values, but got {got_str}."
         return f"Invalid value: {err_str}."
+    elif isinstance(err, RecursionError):
+        return "This function called itself too many times. Did you forget a base case?"
     elif isinstance(err, AssertionError):
         return f"Check failed: {err_str}"
     return f"{type(err).__name__}: {err_str}"
@@ -440,14 +499,24 @@ def format_syntax_error(
     err: Exception,
     file_path: str = "<source>",
     theatrical: bool = False,
+    line_map: Optional[dict] = None,
 ) -> str:
     """
     Builds a complete, formatted plain-English error message with line numbers,
     caret pointer under the problem, plain explanation, and 'Did you mean: ...?'.
     Never outputs raw Lark error representations.
     """
-    line_no = getattr(err, "line", 1)
+    raw_line_no = getattr(err, "line", 1)
     col_no = getattr(err, "column", 1)
+
+    if line_map is None:
+        try:
+            from doomscript.grammar.phrases import normalize_with_map
+            _, line_map = normalize_with_map(source)
+        except Exception:
+            line_map = {}
+
+    line_no = line_map.get(raw_line_no, raw_line_no) if line_map else raw_line_no
     lines = source.splitlines()
 
     source_line = ""
@@ -461,19 +530,19 @@ def format_syntax_error(
 
     suggestion = explicit_suggestion
     if not suggestion and source_line.strip():
-        closest = find_closest_phrasings(source_line, n=1, cutoff=0.6)
+        closest = find_closest_phrasings(source_line, n=1, cutoff=0.7)
         if closest:
             suggestion = closest[0]
 
-    # Caret positioning
-    pointer_col = max(1, col_no)
+    # Caret positioning: clamp to length of source_line + 1
+    pointer_col = max(1, min(col_no, len(source_line) + 1 if source_line else 1))
     prefix = f"{line_no:4d} | "
     caret_pad = " " * (len(prefix) + pointer_col - 1)
 
     output = []
     if theatrical:
         output.append("[bold red]FOOLISH MORTAL! The ancient monolith rejects your utterance![/bold red]")
-        output.append(f"[bold yellow]File:[/bold yellow] {file_path}:{line_no}:{col_no}")
+        output.append(f"[bold yellow]File:[/bold yellow] {file_path}:{line_no}:{pointer_col}")
         output.append("")
         output.append(f"{prefix}{source_line}")
         output.append(f"{caret_pad}[bold red]^[/bold red]")
@@ -482,7 +551,7 @@ def format_syntax_error(
         if suggestion:
             output.append(f"[bold green]Bow before the correct incantation:[/bold green] {suggestion}")
     else:
-        output.append(f"[bold red]DoomScript Syntax Error[/bold red] at [cyan]{file_path}:{line_no}:{col_no}[/cyan]")
+        output.append(f"[bold red]DoomScript Syntax Error[/bold red] at [cyan]{file_path}:{line_no}:{pointer_col}[/cyan]")
         output.append("")
         output.append(f"{prefix}{source_line}")
         output.append(f"{caret_pad}[bold red]^[/bold red]")

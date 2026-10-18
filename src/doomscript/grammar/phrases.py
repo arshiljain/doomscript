@@ -4,6 +4,7 @@ Driven by data tables (synonyms, filler words, flexible assignments, pronouns, p
 Adding a synonym here requires NO grammar edits.
 """
 
+import difflib
 import re
 from typing import Optional, List, Tuple, Dict, Any
 from doomscript.exceptions import DoomScopeError, DoomSyntaxError
@@ -97,6 +98,21 @@ STATEMENT_START_KEYWORDS = {
     "break", "continue", "stop", "exit", "quit", "add", "remove", "insert", "push", "discard", "clear", "empty", "reverse",
     "load", "filter", "group", "plot"
 }
+
+CORE_COMMAND_VERBS: List[str] = [
+    "say", "show", "display",
+    "set", "make", "create", "let",
+    "if", "unless", "else", "elif",
+    "repeat", "while", "until", "for",
+    "to", "return", "ask", "read", "write", "append",
+    "sort", "reverse", "group", "filter",
+    "trim", "uppercase", "lowercase", "capitalize",
+    "round", "clamp", "convert",
+    "try", "attempt", "verify", "require", "ensure",
+    "fetch", "download", "post", "send",
+    "spawn", "wait", "start", "stop", "pause",
+    "match", "when", "unpack"
+]
 
 # Patterns for flexible assignments
 # Format: (regex_pattern, replacement_template)
@@ -678,7 +694,9 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     if call_no_kw_m:
         func_word = call_no_kw_m.group(1).lower()
         if func_word not in STATEMENT_START_KEYWORDS:
-            masked = f"{call_no_kw_m.group(1)}({call_no_kw_m.group(2)})"
+            close_kw = difflib.get_close_matches(func_word, ["say", "print"], n=1, cutoff=0.65)
+            if not close_kw:
+                masked = f"{call_no_kw_m.group(1)}({call_no_kw_m.group(2)})"
 
     # Phase 4 Table Joins
     masked = re.sub(
