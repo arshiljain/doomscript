@@ -110,18 +110,18 @@ class PlaygroundHandler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
 
 
-def launch_playground(port: int = 8000, open_browser: bool = True):
-    """Starts local HTTP server and opens web playground."""
-    server_address = ("", port)
+def launch_playground(host: str = "127.0.0.1", port: int = 8000, open_browser: bool = True):
+    """Starts local HTTP server and opens web playground bound to 127.0.0.1 only."""
+    server_address = (host, port)
     try:
         httpd = http.server.HTTPServer(server_address, PlaygroundHandler)
     except OSError:
         # Port in use, pick fallback port
         port = port + 1
-        server_address = ("", port)
+        server_address = (host, port)
         httpd = http.server.HTTPServer(server_address, PlaygroundHandler)
 
-    url = f"http://localhost:{port}"
+    url = f"http://{host}:{port}"
     print(f"\n=======================================================")
     print(f" DoomScript Interactive Playground running at: {url}")
     print(f" Press Ctrl+C to stop.")

@@ -249,7 +249,7 @@
 - **Form**:
   ```doomscript
   try:
-      # Risky operations
+      total = 100 / 0
   if it fails as problem:
       say "Caught error:", problem
   ```

@@ -1251,7 +1251,14 @@ class DoomToPython(Transformer):
         )
 
     def var(self, args):
-        return ast.Name(id=str(args[0]), ctx=ast.Load())
+        name = str(args[0])
+        if name == "True":
+            return ast.Constant(value=True)
+        if name == "False":
+            return ast.Constant(value=False)
+        if name == "None":
+            return ast.Constant(value=None)
+        return ast.Name(id=name, ctx=ast.Load())
 
     def num(self, args):
         val = float(args[0]) if '.' in str(args[0]) else int(args[0])

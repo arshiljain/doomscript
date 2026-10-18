@@ -7,12 +7,21 @@ name = "doomscript"
 version = "1.0.1"
 description = "An English-first programming language that compiles to Python AST"
 readme = "README.md"
+authors = [
+    { name = "DoomScript Team" },
+]
 requires-python = ">=3.10"
+license = { text = "MIT" }
 dependencies = [
     "lark>=1.1.9",
     "typer>=0.12.0",
     "rich>=13.7.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/doomscript/doomscript"
+Repository = "https://github.com/doomscript/doomscript"
+Documentation = "https://github.com/doomscript/doomscript#readme"
 
 [project.scripts]
 doom = "doomscript.cli:app"

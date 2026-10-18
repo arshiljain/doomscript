@@ -417,6 +417,10 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"\bitem\s+(\d+|[A-Za-z_]\w*)\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"item_of(\1, \2)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bfirst\s+(\d+|[A-Za-z_]\w*)\s+items\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"first_n_items(\1, \2)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\blast\s+(\d+|[A-Za-z_]\w*)\s+items\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"last_n_items(\1, \2)", masked, flags=re.IGNORECASE)
+    unique_into_m = re.match(r"^\s*unique\s+(?:items\s+)?(?:of\s+)?(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if unique_into_m:
+        masked = f"{unique_into_m.group(2)} = unique_items({unique_into_m.group(1).strip()})"
+
     masked = re.sub(r"\bunique\s+(?:items\s+)?(?:of\s+)?(\[[^\]]*\]|[A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"unique_items(\1)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bsorted\s+(?:of\s+)?(\[[^\]]*\]|[A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"sorted_list(\1)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\breversed\s+(?:of\s+)?(\[[^\]]*\]|[A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"reversed_list(\1)", masked, flags=re.IGNORECASE)
@@ -1030,9 +1034,29 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     # =======================================================================
 
     # Cluster 1 (Phases 26-32: Systems, OS, Processes & Signals)
+    p_cmd_shell_into = re.match(r"^(?:run\s+command|execute\s+shell)\s+(.+?)\s+using\s+shell\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if not p_cmd_shell_into:
+        p_cmd_shell_into = re.match(r"^(?:run\s+command|execute\s+shell)\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s+using\s+shell$", masked, re.IGNORECASE)
+    if p_cmd_shell_into:
+        masked = f"{p_cmd_shell_into.group(2)} = run_command({p_cmd_shell_into.group(1).strip()}, shell=True)"
+
+    p_cmd_piped_shell = re.match(r"^(?:run\s+command|execute\s+shell)\s+(.+?)\s+using\s+shell\s+(?:piped\s+into|capturing\s+into)\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if not p_cmd_piped_shell:
+        p_cmd_piped_shell = re.match(r"^(?:run\s+command|execute\s+shell)\s+(.+?)\s+(?:piped\s+into|capturing\s+into)\s+([A-Za-z_]\w*)\s+using\s+shell$", masked, re.IGNORECASE)
+    if p_cmd_piped_shell:
+        masked = f"set {p_cmd_piped_shell.group(2)} to run_command_piped({p_cmd_piped_shell.group(1).strip()}, shell=True)"
+
+    p_cmd_shell_bare = re.match(r"^(?:run\s+command|execute\s+shell)\s+(.+?)\s+using\s+shell$", masked, re.IGNORECASE)
+    if p_cmd_shell_bare:
+        masked = f"run_command({p_cmd_shell_bare.group(1).strip()}, shell=True)"
+
     p_cmd_m = re.match(r"^(?:run\s+command|execute\s+shell)\s+(.+?)\s+(?:piped\s+into|capturing\s+into)\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
     if p_cmd_m:
         masked = f"set {p_cmd_m.group(2)} to run_command_piped({p_cmd_m.group(1).strip()})"
+
+    p_cmd_bare = re.match(r"^run\s+command\s+(.+?)$", masked, re.IGNORECASE)
+    if p_cmd_bare and not re.search(r"\s+into\s+[A-Za-z_]\w*$", masked, re.IGNORECASE):
+        masked = f"run_command({p_cmd_bare.group(1).strip()})"
 
     p_proc_m = re.match(r"^(?:check\s+if\s+)?process\s+(.+?)\s+is\s+running\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
     if p_proc_m:

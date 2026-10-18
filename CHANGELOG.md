@@ -2,6 +2,31 @@
 
 All notable changes to DoomScript are documented in this file.
 
+## [1.0.2] - 2026-10-19 - Phase 0: Safety & Spec Integrity
+### Added
+- **MIT License & Packaging Metadata**:
+  - Added project root `LICENSE` (MIT).
+  - Populated `authors`, `license = { text = "MIT" }`, and `[project.urls]` in `pyproject.toml`.
+- **Conformance & Safety Test Suites**:
+  - `tests/test_safety_and_integrity.py`: Validates playground 127.0.0.1 binding and subprocess shell isolation.
+  - `tests/test_core_spec_conformance.py`: Validates that all 30 guaranteed Core Spec forms (fenced blocks and inline examples) parse and execute without error.
+
+### Security
+- **Subprocess Shell Injection Defense**:
+  - `subprocess.run` in `runtime.py` and `runtime_extended.py` now defaults to `shell=False`.
+  - String commands are safely parsed using platform-aware `shlex.split`, stripping outer quotes on Windows while preserving path backslashes and ensuring shell metacharacters cannot trigger command injection.
+  - Shell execution is strictly opt-in via explicit `run command ... using shell` syntax.
+- **Playground Localhost Binding**:
+  - `launch_playground` in `src/doomscript/playground.py` now explicitly binds to `("127.0.0.1", port)` by default, preventing unintended network exposure on all interfaces.
+
+### Fixed
+- **Core Spec Form #20 Deduplication Statement**:
+  - Added phrase normalization for `unique items of <list> into <target>` (`clean_ids = unique_items(raw_ids)`).
+- **Python 3.14 AST Constant Safety**:
+  - Coerced `True`, `False`, and `None` identifiers to `ast.Constant` in `DoomToPython.var()` to prevent AST compiler errors on modern Python versions.
+- **Core Spec Example Executability**:
+  - Updated Form #30 in `docs/CORE_SPEC.md` with an executable division operation inside `try:` to ensure reproducible execution.
+
 ## [1.0.1] - 2026-10-18 - Critical Bug Fixes
 ### Fixed
 - **Compound Interest Rate Normalization & Compounding Frequency**:

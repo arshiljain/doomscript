@@ -898,10 +898,17 @@ def run_command(cmd: Union[str, List[str]], shell: bool = False):
     import shlex
     if isinstance(cmd, str):
         if not shell:
-            try:
-                args = shlex.split(cmd, posix=(sys.platform != "win32"))
-            except ValueError:
-                args = cmd.split()
+            if sys.platform == "win32":
+                try:
+                    raw_args = shlex.split(cmd, posix=False)
+                    args = [a[1:-1] if len(a) >= 2 and a[0] == a[-1] and a[0] in ('"', "'") else a for a in raw_args]
+                except ValueError:
+                    args = cmd.split()
+            else:
+                try:
+                    args = shlex.split(cmd, posix=True)
+                except ValueError:
+                    args = cmd.split()
             res = subprocess.run(args, shell=False, capture_output=True, text=True)
         else:
             res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
