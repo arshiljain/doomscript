@@ -19,6 +19,35 @@ def to_load(node):
 class DoomToPython(Transformer):
     """Transforms DoomScript CST to Python AST."""
 
+    def __init__(self, line_map=None, visit_tokens=True):
+        super().__init__(visit_tokens=visit_tokens)
+        self.line_map = line_map or {}
+
+    def _call_userfunc(self, tree, new_children=None):
+        res = super()._call_userfunc(tree, new_children)
+        if isinstance(res, ast.AST):
+            if hasattr(tree, "meta") and getattr(tree.meta, "line", None) is not None:
+                orig_line = self.line_map.get(tree.meta.line, tree.meta.line)
+                orig_col = max(0, getattr(tree.meta, "column", 1) - 1)
+                res.lineno = orig_line
+                res.col_offset = orig_col
+                end_line = getattr(tree.meta, "end_line", None)
+                if end_line is not None:
+                    orig_end_line = self.line_map.get(end_line, end_line)
+                    res.end_lineno = max(res.lineno, orig_end_line)
+                else:
+                    res.end_lineno = res.lineno
+                end_col = getattr(tree.meta, "end_column", None)
+                if end_col is not None:
+                    raw_end_col = max(0, end_col - 1)
+                    if res.end_lineno == res.lineno:
+                        res.end_col_offset = max(res.col_offset, raw_end_col)
+                    else:
+                        res.end_col_offset = raw_end_col
+                else:
+                    res.end_col_offset = res.col_offset
+        return res
+
     def start(self, stmts):
         body = [s for s in stmts if s is not None]
         mod = ast.Module(body=body, type_ignores=[])
@@ -65,6 +94,26 @@ class DoomToPython(Transformer):
     def decrease_var(self, args):
         target, val = args
         return ast.AugAssign(target=target, op=ast.Sub(), value=val)
+
+    def aug_add(self, args):
+        target, val = args
+        return ast.AugAssign(target=target, op=ast.Add(), value=val)
+
+    def aug_sub(self, args):
+        target, val = args
+        return ast.AugAssign(target=target, op=ast.Sub(), value=val)
+
+    def aug_mul(self, args):
+        target, val = args
+        return ast.AugAssign(target=target, op=ast.Mult(), value=val)
+
+    def aug_div(self, args):
+        target, val = args
+        return ast.AugAssign(target=target, op=ast.Div(), value=val)
+
+    def aug_mod(self, args):
+        target, val = args
+        return ast.AugAssign(target=target, op=ast.Mod(), value=val)
 
     def ask_input(self, args):
         if len(args) == 2:
@@ -172,6 +221,33 @@ class DoomToPython(Transformer):
         call = ast.Call(
             func=ast.Name(id='sort_records', ctx=ast.Load()),
             args=[to_load(target), ast.Constant(value=field), ast.Constant(value=bool(desc))],
+            keywords=[]
+        )
+        return ast.Expr(value=call)
+
+    def sort_list_asc(self, args):
+        target = args[0]
+        call = ast.Call(
+            func=ast.Attribute(value=to_load(target), attr='sort', ctx=ast.Load()),
+            args=[],
+            keywords=[]
+        )
+        return ast.Expr(value=call)
+
+    def sort_list_desc(self, args):
+        target = args[0]
+        call = ast.Call(
+            func=ast.Attribute(value=to_load(target), attr='sort', ctx=ast.Load()),
+            args=[],
+            keywords=[ast.keyword(arg='reverse', value=ast.Constant(value=True))]
+        )
+        return ast.Expr(value=call)
+
+    def reverse_list_stmt(self, args):
+        target = args[0]
+        call = ast.Call(
+            func=ast.Attribute(value=to_load(target), attr='reverse', ctx=ast.Load()),
+            args=[],
             keywords=[]
         )
         return ast.Expr(value=call)

@@ -856,9 +856,27 @@ def get_env_var(name: str, default: str = ""):
     return os.environ.get(str(name), default)
 
 
-def run_command(cmd: str):
-    """Executes a system shell command and returns standard output."""
-    res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+def run_command(cmd: Union[str, List[str]], shell: bool = False):
+    """
+    Executes a system command and returns standard output.
+
+    Security Notice:
+    By default, shell=False and string commands are safely split into arguments via shlex.split
+    to prevent command injection risks. Pass shell=True only when shell pipelines or redirections
+    are explicitly required with trusted input.
+    """
+    import shlex
+    if isinstance(cmd, str):
+        if not shell:
+            try:
+                args = shlex.split(cmd, posix=(sys.platform != "win32"))
+            except ValueError:
+                args = cmd.split()
+            res = subprocess.run(args, shell=False, capture_output=True, text=True)
+        else:
+            res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    else:
+        res = subprocess.run(cmd, shell=shell, capture_output=True, text=True)
     return res.stdout.strip()
 
 

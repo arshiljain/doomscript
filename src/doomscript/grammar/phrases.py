@@ -94,7 +94,7 @@ STATEMENT_START_KEYWORDS = {
     "write", "read", "append", "delete", "copy", "create",
     "ask", "call", "import", "unpack", "trim", "replace", "split", "join",
     "capitalize", "convert", "sort", "round", "combine", "fetch", "post", "download",
-    "break", "continue", "stop", "exit", "quit", "add", "remove", "insert", "push", "discard", "clear", "empty"
+    "break", "continue", "stop", "exit", "quit", "add", "remove", "insert", "push", "discard", "clear", "empty", "reverse"
 }
 
 # Patterns for flexible assignments
@@ -1280,26 +1280,28 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
 # MAIN NORMALIZATION FUNCTION
 # ---------------------------------------------------------------------------
 
-def normalize(source: str) -> str:
+def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
     """
     Preprocesses DoomScript source into canonical DoomScript.
-    - Preserves indentation
-    - Splits 'and then' into sequential statements
-    - Splits sentence-ending periods (outside strings/numbers) into separate statements
-    - Normalizes filler words, verb synonyms, comparison synonyms, possessives, and pronouns
-    - Desugars typed function parameters and contracts into assertions
-    - Desugars match/when pattern matching, tests, and web route handlers
+    Returns (normalized_source, line_map) where line_map maps 1-based line numbers
+    in normalized_source to 1-based line numbers in the original source.
     """
     lines = source.splitlines()
     output_lines: List[str] = []
+    line_map: Dict[int, int] = {}
+
+    def emit(text: str, orig_line: int):
+        output_lines.append(text)
+        line_map[len(output_lines)] = orig_line
+
     scope = ScopeTracker()
-    pending_injections: List[Tuple[int, List[str]]] = []
-    pending_routes: List[Tuple[int, str]] = []
+    pending_injections: List[Tuple[int, List[str], int]] = []
+    pending_routes: List[Tuple[int, str, int]] = []
     match_stack: List[Dict[str, Any]] = []
 
     for line_idx, raw_line in enumerate(lines, start=1):
         if not raw_line.strip():
-            output_lines.append("")
+            emit("", line_idx)
             continue
 
         # Extract leading indentation
@@ -1313,29 +1315,29 @@ def normalize(source: str) -> str:
 
         # Check pending deferred routes if indentation returned to parent level
         while pending_routes and indent_len <= pending_routes[-1][0]:
-            _, r_stmt = pending_routes.pop()
-            output_lines.append(r_stmt)
+            _, r_stmt, r_line = pending_routes.pop()
+            emit(r_stmt, r_line)
 
         # Check pending injections from a function header
         if pending_injections and raw_line.strip():
-            top_indent, assertions = pending_injections[-1]
+            top_indent, assertions, top_line = pending_injections[-1]
             if indent_len > top_indent:
                 for inj in assertions:
-                    output_lines.append(f"{indent}{inj}")
+                    emit(f"{indent}{inj}", top_line)
                 pending_injections.pop()
 
         # Split comment
         code, comment = split_comment(raw_line.strip())
         if not code:
             # Comment-only line
-            output_lines.append(raw_line)
+            emit(raw_line, line_idx)
             continue
 
         # Phase 10: 'test "name":'
         test_m = re.match(r"^test\s+(.+?):?$", code, re.IGNORECASE)
         if test_m:
             test_name = test_m.group(1).strip()
-            output_lines.append(f"{indent}if true:  # Test: {test_name}")
+            emit(f"{indent}if true:  # Test: {test_name}", line_idx)
             continue
 
         # Phase 9: 'match <expr>:'
@@ -1343,7 +1345,7 @@ def normalize(source: str) -> str:
         if match_m:
             target_expr = match_m.group(1).strip()
             match_var = f"__match_val_{len(match_stack)}_{line_idx}"
-            output_lines.append(f"{indent}set {match_var} to {target_expr}")
+            emit(f"{indent}set {match_var} to {target_expr}", line_idx)
             match_stack.append({"match_indent": indent_len, "when_indent": None, "var": match_var, "is_first": True})
             continue
 
@@ -1393,12 +1395,12 @@ def normalize(source: str) -> str:
 
                 branch_keyword = "if" if cur_match["is_first"] else "elif"
                 cur_match["is_first"] = False
-                output_lines.append(f"{' ' * cur_match['match_indent']}{branch_keyword} {cond}:")
+                emit(f"{' ' * cur_match['match_indent']}{branch_keyword} {cond}:", line_idx)
                 continue
 
             otherwise_m = re.match(r"^(?:otherwise|else):?$", code, re.IGNORECASE)
             if otherwise_m:
-                output_lines.append(f"{' ' * cur_match['match_indent']}else:")
+                emit(f"{' ' * cur_match['match_indent']}else:", line_idx)
                 continue
 
             # Body lines inside a when branch: unindent by shift
@@ -1412,10 +1414,10 @@ def normalize(source: str) -> str:
         if route_m:
             method = route_m.group(1).upper()
             path_expr = route_m.group(2).strip()
-            slug = re.sub(r"\W+", "_", path_expr.strip('"\'')).strip("_") or "root"
+            slug = re.sub(r"\W+", "_", path_expr.strip('\"\'')).strip("_") or "root"
             fn_name = f"__route_{method.lower()}_{slug}_{line_idx}"
-            output_lines.append(f"{indent}to {fn_name}:")
-            pending_routes.append((indent_len, f"{indent}route {method} {path_expr} to {fn_name}"))
+            emit(f"{indent}to {fn_name}:", line_idx)
+            pending_routes.append((indent_len, f"{indent}route {method} {path_expr} to {fn_name}", line_idx))
             continue
 
         # Check for function definition with typed parameters: 'to ... with ...'
@@ -1451,8 +1453,8 @@ def normalize(source: str) -> str:
             if assertions:
                 cleaned_param_str = unmask_strings(", ".join(cleaned_params), p_strings)
                 new_header = f"to {func_prefix} with {cleaned_param_str}{colon}"
-                output_lines.append(f"{indent}{new_header}")
-                pending_injections.append((indent_len, assertions))
+                emit(f"{indent}{new_header}", line_idx)
+                pending_injections.append((indent_len, assertions, line_idx))
                 continue
 
         # Phase 9: Destructuring (split via 'and then')
@@ -1492,8 +1494,8 @@ def normalize(source: str) -> str:
             norm_then = normalize_statement_text(then_stmt, scope, line_idx)
             if not norm_cond.endswith(":"):
                 norm_cond += ":"
-            output_lines.append(f"{indent}{norm_cond}")
-            output_lines.append(f"{indent}    {norm_then}")
+            emit(f"{indent}{norm_cond}", line_idx)
+            emit(f"{indent}    {norm_then}", line_idx)
             continue
 
         # Single-line 'unless ... then ...' split: e.g. 'unless x is 5 then say "not five"'
@@ -1505,8 +1507,8 @@ def normalize(source: str) -> str:
             norm_then = normalize_statement_text(then_stmt, scope, line_idx)
             if not norm_cond.endswith(":"):
                 norm_cond += ":"
-            output_lines.append(f"{indent}{norm_cond}")
-            output_lines.append(f"{indent}    {norm_then}")
+            emit(f"{indent}{norm_cond}", line_idx)
+            emit(f"{indent}    {norm_then}", line_idx)
             continue
 
         # Mask strings for statement splitting
@@ -1533,19 +1535,23 @@ def normalize(source: str) -> str:
             unmasked_s = unmask_strings(s, code_strings)
             norm_s = normalize_statement_text(unmasked_s, scope, line_idx)
             if norm_s:
-                output_lines.append(f"{indent}{norm_s}")
+                emit(f"{indent}{norm_s}", line_idx)
 
     while pending_injections:
-        top_indent, assertions = pending_injections.pop(0)
+        top_indent, assertions, top_line = pending_injections.pop(0)
         body_indent = " " * (top_indent + 4)
         for inj in assertions:
-            output_lines.append(f"{body_indent}{inj}")
+            emit(f"{body_indent}{inj}", top_line)
 
     while pending_routes:
-        _, r_stmt = pending_routes.pop(0)
-        output_lines.append(r_stmt)
+        _, r_stmt, r_line = pending_routes.pop(0)
+        emit(r_stmt, r_line)
 
-    return "\n".join(output_lines) + ("\n" if source.endswith("\n") else "")
+    res_str = "\n".join(output_lines) + ("\n" if source.endswith("\n") else "")
+    return res_str, line_map
+
+def normalize(source: str) -> str:
+    return normalize_with_map(source)[0]
 
 
 def explain_normalization(source: str) -> List[Tuple[str, str]]:

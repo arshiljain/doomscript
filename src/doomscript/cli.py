@@ -14,7 +14,7 @@ from rich.table import Table
 from rich.syntax import Syntax
 
 from doomscript.compiler.engine import compile_to_ast, transpile, execute
-from doomscript.errors import format_syntax_error, find_closest_phrasings
+from doomscript.errors import format_syntax_error, find_closest_phrasings, translate_runtime_error
 from doomscript.explainer import explain_source
 from doomscript.formatter import format_code
 from lark.exceptions import UnexpectedToken, UnexpectedCharacters, VisitError
@@ -51,7 +51,8 @@ def handle_cli_error(file_path: str, source: str, err: Exception, theatrical: bo
             prefix = f"{matched_lineno:4d} | "
             console.print(f"[bold red]{prefix}{line_text}[/bold red]")
             console.print(" " * len(prefix) + "[bold red]^[/bold red]")
-        console.print(f"\n[bold white]Error:[/bold white] {type(err).__name__}: {err}")
+        plain_msg = translate_runtime_error(err)
+        console.print(f"\n[bold white]Problem:[/bold white] {plain_msg}")
 
 
 @app.command()
@@ -68,7 +69,7 @@ def run(
         source = f.read()
 
     try:
-        execute(source)
+        execute(source, filename=str(file))
     except Exception as e:
         handle_cli_error(str(file), source, e, theatrical=theatrical)
         raise typer.Exit(code=1)
@@ -183,7 +184,13 @@ def suggest(
         else:
             console.print(f"[bold red]Sentence not understood:[/bold red] \"{sentence}\"")
 
-        closest = find_closest_phrasings(sentence, n=3)
+        closest = find_closest_phrasings(sentence, n=3, cutoff=0.3)
+        if not closest:
+            closest = [
+                'say "Hello, world!"',
+                'set score to 100',
+                'repeat 5 times:'
+            ]
         if closest:
             console.print("\n[bold green]Supported phrasings you can use:[/bold green]")
             for match in closest:

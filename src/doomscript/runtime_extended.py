@@ -39,8 +39,9 @@ import statistics
 import ctypes
 import ctypes.util
 import re
+import shlex
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Callable
+from typing import Any, Dict, List, Optional, Tuple, Callable, Union
 
 class Record(dict):
     """
@@ -72,9 +73,26 @@ class Record(dict):
 # CLUSTER 1: SYSTEMS, OS, PROCESSES & SIGNALS (Phases 26-32)
 # ===========================================================================
 
-def run_command_piped(cmd: str) -> Record:
-    """Phase 26: Subprocess command with captured stdout, stderr, and code."""
-    res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+def run_command_piped(cmd: Union[str, List[str]], shell: bool = False) -> Record:
+    """
+    Phase 26: Subprocess command with captured stdout, stderr, and code.
+    
+    Security Notice:
+    By default, shell=False and string commands are safely split into arguments via shlex.split
+    to prevent command injection risks. Pass shell=True only when shell pipelines or redirections
+    are explicitly required with trusted input.
+    """
+    if isinstance(cmd, str):
+        if not shell:
+            try:
+                args = shlex.split(cmd, posix=(sys.platform != "win32"))
+            except ValueError:
+                args = cmd.split()
+            res = subprocess.run(args, shell=False, capture_output=True, text=True)
+        else:
+            res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    else:
+        res = subprocess.run(cmd, shell=shell, capture_output=True, text=True)
     return Record(stdout=res.stdout.strip(), stderr=res.stderr.strip(), exit_code=res.returncode, ok=(res.returncode == 0))
 
 def register_signal_handler(sig_name: str, handler: Callable):
@@ -132,8 +150,8 @@ def add_system_path(folder_path: str):
 
 def check_process_running(name: str) -> bool:
     """Phase 32: Process existence check."""
-    cmd = "tasklist" if sys.platform == "win32" else "ps aux"
-    res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    cmd = ["tasklist"] if sys.platform == "win32" else ["ps", "aux"]
+    res = subprocess.run(cmd, shell=False, capture_output=True, text=True)
     return name.lower() in res.stdout.lower()
 
 

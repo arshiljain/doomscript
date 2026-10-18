@@ -9,12 +9,14 @@ from typing import Any, Union, Dict, Optional
 from lark import Lark
 from lark.indenter import PythonIndenter
 
+from functools import lru_cache
 from doomscript.compiler.transformer import DoomToPython
-from doomscript.grammar.phrases import normalize
+from doomscript.grammar.phrases import normalize, normalize_with_map
 from doomscript import runtime
 
 GRAMMAR_PATH = Path(__file__).parent.parent / "grammar" / "doom.lark"
 
+@lru_cache(maxsize=1)
 def get_parser() -> Lark:
     with open(GRAMMAR_PATH, "r", encoding="utf-8") as f:
         grammar = f.read()
@@ -22,17 +24,18 @@ def get_parser() -> Lark:
         grammar,
         parser="lalr",
         postlex=PythonIndenter(),
-        start="start"
+        start="start",
+        propagate_positions=True
     )
 
-def compile_to_ast(source: str) -> ast.Module:
+def compile_to_ast(source: str, filename: str = "<doom>") -> ast.Module:
     """Parses DoomScript source and returns a Python ast.Module."""
-    normalized_source = normalize(source)
+    normalized_source, line_map = normalize_with_map(source)
     if not normalized_source.endswith("\n"):
         normalized_source += "\n"
     parser = get_parser()
     tree = parser.parse(normalized_source)
-    transformer = DoomToPython()
+    transformer = DoomToPython(line_map=line_map)
     return transformer.transform(tree)
 
 def transpile(source: str) -> str:
@@ -40,13 +43,13 @@ def transpile(source: str) -> str:
     py_ast = compile_to_ast(source)
     return ast.unparse(py_ast)
 
-def execute(source: Any, custom_globals: dict = None) -> dict:
+def execute(source: Any, custom_globals: dict = None, filename: str = "<doom>") -> dict:
     """Executes DoomScript source code or AST directly and returns the environment dict."""
     if isinstance(source, ast.AST):
         py_ast = source
     else:
-        py_ast = compile_to_ast(source)
-    compiled = compile(py_ast, filename="<doom>", mode="exec")
+        py_ast = compile_to_ast(source, filename=filename)
+    compiled = compile(py_ast, filename=filename, mode="exec")
     
     if custom_globals is not None:
         exec_globals = custom_globals

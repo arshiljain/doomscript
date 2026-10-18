@@ -69,14 +69,36 @@ class ContractAnalyzer(ast.NodeVisitor):
                         message=f"Static contract violation: expected {target_type}, but got literal {type(val).__name__} ({val!r})"
                     ))
 
-        # 3. Assert on constant comparison: 5 > 10
+        # 3. Assert on constant comparison: 5 > 10 (evaluated safely via AST operator inspection, without eval)
         elif isinstance(test, ast.Compare):
             if isinstance(test.left, ast.Constant) and len(test.comparators) == 1 and isinstance(test.comparators[0], ast.Constant):
                 try:
-                    expr = ast.Expression(body=test)
-                    code = compile(expr, filename="<string>", mode="eval")
-                    res = eval(code, {"__builtins__": {}})
-                    if not res:
+                    left_val = test.left.value
+                    right_val = test.comparators[0].value
+                    op = test.ops[0]
+                    res = None
+                    if isinstance(op, ast.Eq):
+                        res = (left_val == right_val)
+                    elif isinstance(op, ast.NotEq):
+                        res = (left_val != right_val)
+                    elif isinstance(op, ast.Lt):
+                        res = (left_val < right_val)
+                    elif isinstance(op, ast.LtE):
+                        res = (left_val <= right_val)
+                    elif isinstance(op, ast.Gt):
+                        res = (left_val > right_val)
+                    elif isinstance(op, ast.GtE):
+                        res = (left_val >= right_val)
+                    elif isinstance(op, ast.In):
+                        res = (left_val in right_val)
+                    elif isinstance(op, ast.NotIn):
+                        res = (left_val not in right_val)
+                    elif isinstance(op, ast.Is):
+                        res = (left_val is right_val)
+                    elif isinstance(op, ast.IsNot):
+                        res = (left_val is not right_val)
+
+                    if res is False:
                         self.violations.append(ContractViolation(
                             line=lineno,
                             message=f"Static contract violation: condition is statically False ({ast.unparse(test)})"

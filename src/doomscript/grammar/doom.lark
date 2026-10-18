@@ -11,6 +11,7 @@ start: (_NEWLINE | stmt)*
 
 ?base_simple_stmt: say_stmt
                  | assign_stmt
+                 | aug_assign_stmt
                  | set_stmt
                  | increase_stmt
                  | decrease_stmt
@@ -27,6 +28,7 @@ start: (_NEWLINE | stmt)*
                  | run_cmd_stmt
                  | insert_stmt
                  | sort_stmt
+                 | reverse_stmt
                  | group_stmt
                  | filter_stmt
                  | comp_assign_stmt
@@ -85,6 +87,11 @@ start: (_NEWLINE | stmt)*
 
 say_stmt: "say" expr ("," expr)* -> say_multi
 assign_stmt: target ("=" | "is") expr -> assign
+aug_assign_stmt: target "+=" expr -> aug_add
+               | target "-=" expr -> aug_sub
+               | target "*=" expr -> aug_mul
+               | target "/=" expr -> aug_div
+               | target "%=" expr -> aug_mod
 set_stmt: "set" target "to" expr -> set_var
 increase_stmt: "increase" target "by" expr -> increase_var
 decrease_stmt: "decrease" target "by" expr -> decrease_var
@@ -101,6 +108,9 @@ env_var_stmt: "environment" "variable" expr "into" target -> get_env_var
 run_cmd_stmt: "run" "command" expr "into" target -> run_cmd
 insert_stmt: "insert" expr "at" expr "in" target -> insert_list
 sort_stmt: "sort" target "by" NAME [DESCENDING_ORDER] -> sort_records
+         | "sort" target DESCENDING_ORDER             -> sort_list_desc
+         | "sort" target [ASCENDING_ORDER]            -> sort_list_asc
+reverse_stmt: "reverse" target                        -> reverse_list_stmt
 group_stmt: "group" expr "by" NAME "into" target -> group_by_stmt
 filter_stmt: expr "where" NAME CMP_OP expr "into" target -> filter_records_stmt
 comp_assign_stmt: target ("is" | "=") ["the"] NAME "of" "each" NAME "in" expr -> comp_assign
@@ -263,7 +273,8 @@ IS_NOT_RECORD.3: "is not a record" | "is not record" | "is not a dictionary" | "
 STARTS_WITH.3: "starts with"
 ENDS_WITH.3: "ends with"
 MATCHES_PATTERN.3: "matches pattern"
-DESCENDING_ORDER.3: "descending"
+DESCENDING_ORDER.3: "descending" | "desc"
+ASCENDING_ORDER.3: "ascending" | "asc"
 
 CMP_OP: "<="
       | ">="

@@ -41,6 +41,9 @@ CANONICAL_TEMPLATES = [
     'second = item 2 of list',
     'first_three = first 3 items of list',
     'last_three = last 3 items of list',
+    'sort items',
+    'sort items descending',
+    'reverse items',
     'sorted_items = sorted items',
     'reversed_items = reversed items',
     'unique = unique items of items',
@@ -112,23 +115,20 @@ CANONICAL_TEMPLATES = [
 ]
 
 
-def find_closest_phrasings(broken_line: str, n: int = 3) -> List[str]:
+def find_closest_phrasings(broken_line: str, n: int = 3, cutoff: float = 0.5) -> List[str]:
     """Finds closest valid sentence phrasings using difflib against template library."""
     clean = broken_line.strip()
     if not clean:
         return []
-    # Strip trailing colons or dots for better match
     clean_stripped = clean.rstrip(":.")
-    matches = difflib.get_close_matches(clean_stripped, CANONICAL_TEMPLATES, n=n, cutoff=0.3)
+    matches = difflib.get_close_matches(clean_stripped, CANONICAL_TEMPLATES, n=n, cutoff=cutoff)
     if not matches:
-        # Fallback to word-overlap heuristic
-        words = set(clean_stripped.lower().split())
+        clean_lower = clean_stripped.lower()
         scored = []
         for tmpl in CANONICAL_TEMPLATES:
-            tmpl_words = set(tmpl.lower().split())
-            overlap = len(words & tmpl_words)
-            if overlap > 0:
-                scored.append((overlap, tmpl))
+            ratio = difflib.SequenceMatcher(None, clean_lower, tmpl.lower()).ratio()
+            if ratio >= cutoff:
+                scored.append((ratio, tmpl))
         scored.sort(key=lambda x: x[0], reverse=True)
         matches = [s[1] for s in scored[:n]]
     return matches
@@ -143,6 +143,22 @@ def translate_lark_error(err: Exception, source_line: str) -> Tuple[str, Optiona
         tok = err.token
         tok_val = getattr(tok, "value", str(tok))
         expected = getattr(err, "expected", []) or []
+
+        if tok_val in ("\n", "_NEWLINE", "\\n"):
+            return (
+                "The statement appears incomplete or ended unexpectedly.",
+                None
+            )
+        if tok_val in ("$END", "<END-OF-FILE>"):
+            return (
+                "The program ended unexpectedly. Check for unclosed blocks or incomplete statements.",
+                None
+            )
+        if tok_val in ("_INDENT", "_DEDENT"):
+            return (
+                "Indentation error. Check the spacing at the beginning of the line.",
+                None
+            )
 
         # Common intent patterns
         if tok_val == "=":
@@ -188,6 +204,43 @@ def translate_lark_error(err: Exception, source_line: str) -> Tuple[str, Optiona
     return (str(err), None)
 
 
+def translate_runtime_error(err: Exception) -> str:
+    """Translates Python runtime exceptions into beginner-friendly explanations."""
+    err_str = str(err)
+    if isinstance(err, NameError):
+        m = re.search(r"name '([^']+)' is not defined", err_str)
+        if m:
+            var_name = m.group(1)
+            if var_name.startswith("_var_"):
+                var_name = var_name[5:]
+            return f"I don't know what '{var_name}' is. Did you set it earlier?"
+        return "I don't know what that variable is. Did you set it earlier?"
+    elif isinstance(err, ZeroDivisionError):
+        return "Cannot divide by zero. Make sure the number you're dividing by is not 0."
+    elif isinstance(err, IndexError):
+        return "List item out of reach. The list doesn't have that many items."
+    elif isinstance(err, KeyError):
+        m = re.search(r"'([^']+)'", err_str)
+        if m:
+            return f"Record does not contain the key '{m.group(1)}'. Check the field name."
+        return "Record key not found."
+    elif isinstance(err, TypeError):
+        if "unsupported operand type" in err_str or "can only concatenate" in err_str:
+            return f"Cannot perform this operation on different types ({err_str}). Make sure both sides are numbers or both are text."
+        return f"Type mismatch: {err_str}."
+    elif isinstance(err, AttributeError):
+        return f"This value doesn't have that property or action: {err_str}."
+    elif isinstance(err, FileNotFoundError):
+        return f"File not found: {err_str}. Check that the path is correct."
+    elif isinstance(err, PermissionError):
+        return f"Permission denied: {err_str}."
+    elif isinstance(err, ValueError):
+        return f"Invalid value: {err_str}."
+    elif isinstance(err, AssertionError):
+        return f"Check failed: {err_str}"
+    return f"{type(err).__name__}: {err_str}"
+
+
 def format_syntax_error(
     source: str,
     err: Exception,
@@ -214,7 +267,7 @@ def format_syntax_error(
 
     suggestion = explicit_suggestion
     if not suggestion and source_line.strip():
-        closest = find_closest_phrasings(source_line, n=1)
+        closest = find_closest_phrasings(source_line, n=1, cutoff=0.6)
         if closest:
             suggestion = closest[0]
 
