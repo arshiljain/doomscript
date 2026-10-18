@@ -10,6 +10,7 @@ from doomscript.viz.spec import (
     LabelSpec,
 )
 from doomscript.viz.builder import PlotBuilder
+from doomscript.viz.explorer import explore_dataset, ExplorationReport
 
 __all__ = [
     "PlotSpec",
@@ -20,4 +21,6 @@ __all__ = [
     "ScaleSpec",
     "LabelSpec",
     "PlotBuilder",
+    "explore_dataset",
+    "ExplorationReport",
 ]
