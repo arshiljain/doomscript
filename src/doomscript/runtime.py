@@ -1829,6 +1829,88 @@ def benchmark_block(name: str, iterations: int, fn, *args):
 from doomscript.runtime_extended import *
 
 
+# Phase 5: Data Science Verbs over pandas
+def load_table(path):
+    """Load a tabular file (CSV) into a pandas DataFrame."""
+    import pandas as pd
+    return pd.read_csv(path)
+
+
+def save_table(table, path):
+    """Save a table/DataFrame to a CSV file."""
+    import pandas as pd
+    if hasattr(table, "to_csv"):
+        table.to_csv(path, index=False)
+    else:
+        pd.DataFrame(table).to_csv(path, index=False)
+
+
+def filter_table(table, col, op, val):
+    """Filter a table/DataFrame by a column condition."""
+    import pandas as pd
+    if not isinstance(table, pd.DataFrame):
+        table = pd.DataFrame(table)
+
+    op_str = str(op).strip().lower()
+    if op_str in (">", "is greater than", "is over"):
+        return table[table[col] > val]
+    elif op_str in (">=", "is at least", "is greater than or equal to"):
+        return table[table[col] >= val]
+    elif op_str in ("<", "is less than", "is under"):
+        return table[table[col] < val]
+    elif op_str in ("<=", "is at most", "is less than or equal to"):
+        return table[table[col] <= val]
+    elif op_str in ("==", "equals", "is"):
+        return table[table[col] == val]
+    elif op_str in ("!=", "is not", "isn't"):
+        return table[table[col] != val]
+    return table
+
+
+def sort_table(table, col, ascending=True):
+    """Sort a table/DataFrame by a column."""
+    import pandas as pd
+    if not isinstance(table, pd.DataFrame):
+        table = pd.DataFrame(table)
+    return table.sort_values(col, ascending=ascending)
+
+
+def group_and_agg_table(table, group_col, agg_col, func="mean"):
+    """Group a table/DataFrame by a column and aggregate a metric."""
+    import pandas as pd
+    if not isinstance(table, pd.DataFrame):
+        table = pd.DataFrame(table)
+    if func in ("mean", "average", "avg"):
+        return table.groupby(group_col, as_index=False)[agg_col].mean()
+    elif func == "sum":
+        return table.groupby(group_col, as_index=False)[agg_col].sum()
+    elif func == "count":
+        return table.groupby(group_col, as_index=False)[agg_col].count()
+    elif func in ("min", "lowest"):
+        return table.groupby(group_col, as_index=False)[agg_col].min()
+    elif func in ("max", "highest"):
+        return table.groupby(group_col, as_index=False)[agg_col].max()
+    return table.groupby(group_col, as_index=False)[agg_col].agg(func)
+
+
+def plot_table(table, x_col, y_col, kind="line", title=None):
+    """Create a plot from a table/DataFrame and return the matplotlib Figure."""
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots()
+    if kind == "line":
+        ax.plot(table[x_col], table[y_col])
+    elif kind == "scatter":
+        ax.scatter(table[x_col], table[y_col])
+    elif kind == "bar":
+        ax.bar(table[x_col], table[y_col])
+    ax.set_xlabel(str(x_col))
+    ax.set_ylabel(str(y_col))
+    if title:
+        ax.set_title(str(title))
+    return fig
+
+
+
 
 
 

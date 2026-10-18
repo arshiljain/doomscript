@@ -2,6 +2,19 @@
 
 All notable changes to DoomScript are documented in this file.
 
+## [1.0.7] - 2026-10-19 - Phase 5: Data Science Verbs over pandas
+### Added
+- **High-Level Tabular Verbs (pandas Backend)**:
+  - `load table <path> into <name>` loading CSVs into pandas DataFrames.
+  - `save table <name> into <path>` saving tables to clean CSVs (`index=False`).
+  - `filter <table> where <col> <op> <val> into <name>` with full comparison operator support (`==`, `!=`, `<`, `<=`, `>`, `>=`, English comparison words).
+  - `sort <table> by <col> descending into <name>` and `sort <table> by <col> into <name>`.
+  - `group <table> by <col> and average <metric> into <name>` and `group <table> by <col> and sum <metric> into <name>`.
+  - `plot <col_y> against <col_x> from <table>` and `plot line <table> with x="...", y="..."` generating matplotlib figures.
+- **Transparent Pandas Interop**:
+  - Full interoperability between English data science verbs and raw pandas calls (`df.groupby("dept")["salary"].mean()`).
+  - Seamless end-to-end data pipelines: load -> filter -> group -> sort -> export.
+
 ## [1.0.6] - 2026-10-19 - Phase 4: Comprehensions, Lambdas, Generators, and Math Builtins
 ### Added
 - **List, Dict, and Set Comprehensions**:

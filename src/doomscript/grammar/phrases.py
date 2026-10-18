@@ -94,7 +94,8 @@ STATEMENT_START_KEYWORDS = {
     "write", "read", "append", "delete", "copy", "create",
     "ask", "call", "import", "unpack", "trim", "replace", "split", "join",
     "capitalize", "convert", "sort", "round", "combine", "fetch", "post", "download",
-    "break", "continue", "stop", "exit", "quit", "add", "remove", "insert", "push", "discard", "clear", "empty", "reverse"
+    "break", "continue", "stop", "exit", "quit", "add", "remove", "insert", "push", "discard", "clear", "empty", "reverse",
+    "load", "filter", "group", "plot"
 }
 
 # Patterns for flexible assignments
@@ -315,6 +316,62 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(
         r"(?<!for\s)\beach\s+(.+?)\s+for\s+([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*)\s+in\s+([^:\n]+?)(?=\s*(?:#|\n|$))",
         r"[\1 for \2 in \3]",
+        masked,
+        flags=re.IGNORECASE
+    )
+
+    # Phase 5: Data Science Verbs over pandas
+    masked = re.sub(
+        r"^\s*load\s+table\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$",
+        r"\2 = load_table(\1)",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"^\s*save\s+table\s+(.+?)\s+(?:into|to)\s+(.+?)\s*$",
+        r"save_table(\1, \2)",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"^\s*filter\s+([A-Za-z_]\w*)\s+where\s+([A-Za-z_]\w*)\s*(==|!=|>=|<=|>|<|is\s+greater\s+than|is\s+at\s+least|is\s+less\s+than|is\s+at\s+most|is\s+not|equals|is)\s*(.+?)\s+into\s+([A-Za-z_]\w*)\s*$",
+        r"\5 = filter_table(\1, '\2', '\3', \4)",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"^\s*sort\s+([A-Za-z_]\w*)\s+by\s+([A-Za-z_]\w*)\s+(?:descending|in\s+descending\s+order)\s+into\s+([A-Za-z_]\w*)\s*$",
+        r"\3 = sort_table(\1, '\2', ascending=False)",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"^\s*sort\s+([A-Za-z_]\w*)\s+by\s+([A-Za-z_]\w*)\s*(?:ascending|in\s+ascending\s+order)?\s+into\s+([A-Za-z_]\w*)\s*$",
+        r"\3 = sort_table(\1, '\2', ascending=True)",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"^\s*group\s+([A-Za-z_]\w*)\s+by\s+([A-Za-z_]\w*)\s+and\s+(?:average|mean)\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)\s*$",
+        r"\4 = group_and_agg_table(\1, '\2', '\3', 'mean')",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"^\s*group\s+([A-Za-z_]\w*)\s+by\s+([A-Za-z_]\w*)\s+and\s+sum\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)\s*$",
+        r"\4 = group_and_agg_table(\1, '\2', '\3', 'sum')",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"\bplot\s+([A-Za-z_]\w*)\s+against\s+([A-Za-z_]\w*)\s+from\s+([A-Za-z_]\w*)\b",
+        r"plot_table(\3, '\2', '\1')",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"\bplot\s+(?:line\s+)?([A-Za-z_]\w*)\s+with\s+x=(.+?),\s*y=(.+?)(?=[,\)\]\}:;\n]|$)",
+        r"plot_table(\1, \2, \3)",
         masked,
         flags=re.IGNORECASE
     )
