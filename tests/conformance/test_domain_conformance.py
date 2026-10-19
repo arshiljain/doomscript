@@ -55,3 +55,27 @@ val = double_val(21)
         source,
         expected_vars=["val"],
     )
+
+
+def test_advanced_pipeline_conformance():
+    source = """use data
+
+users = [
+    {"user_id": 1, "name": "Alice"},
+    {"user_id": 2, "name": "Bob"}
+]
+
+orders = [
+    {"order_id": 101, "user_id": 1, "amount": 150},
+    {"order_id": 102, "user_id": 2, "amount": 250}
+]
+
+pipeline "user_orders_pipe":
+    read users into user_df
+    join with orders on user_id
+    calculate running_sum of amount over order_id into cum_amount
+"""
+    assert_execution_and_export_parity(
+        source,
+        expected_vars=["user_orders_pipe"],
+    )

@@ -54,6 +54,22 @@ class JoinStep(PipelineStep):
 
 
 @dataclass
+class SchemaContractStep(PipelineStep):
+    """Enforces typed schema contract on columns (e.g. integer, float, string)."""
+    schema: Dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
+class WindowStep(PipelineStep):
+    """Computes a window function over ordered data (row_number, running_sum, etc.)."""
+    func: str
+    source_col: Optional[str] = None
+    over_col: str = ""
+    partition_by: Optional[str] = None
+    target_col: str = "window_val"
+
+
+@dataclass
 class GroupByStep(PipelineStep):
     """Groups dataset by keys and computes aggregations."""
     keys: List[str] = field(default_factory=list)

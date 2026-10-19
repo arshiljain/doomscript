@@ -64,6 +64,18 @@ class DomainRegistry:
         """Retrieves a DomainIR spec by its unique identifier."""
         return self._specs.get(spec_id)
 
+    @property
+    def specs(self) -> Dict[str, DomainIR]:
+        """Returns dictionary of stored specs."""
+        return self._specs
+
+    def get_spec_by_name(self, name: str) -> Optional[DomainIR]:
+        """Retrieves a spec by its human-assigned name attribute."""
+        for s in self._specs.values():
+            if hasattr(s, "name") and s.name == name:
+                return s
+        return None
+
     def clear_specs(self) -> None:
         """Clears stored DomainIR specs."""
         self._specs.clear()

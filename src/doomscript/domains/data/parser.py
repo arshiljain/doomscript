@@ -12,6 +12,8 @@ from doomscript.domains.data.spec import (
     FillNaStep,
     DeriveStep,
     JoinStep,
+    SchemaContractStep,
+    WindowStep,
     GroupByStep,
     SortStep,
     SinkStep,
@@ -203,6 +205,57 @@ class DataDomainParser(DomainParser):
                 except Exception:
                     val = val_str
                 spec.steps.append(FillNaStep(column=col, value=val))
+                i += 1
+                continue
+
+            # validate schema: col as type, ...
+            schema_m = re.match(r"^validate\s+schema\s*:\s*(.+)$", line, re.IGNORECASE)
+            if schema_m:
+                rules_str = schema_m.group(1).strip()
+                schema_dict = {}
+                for part in rules_str.split(","):
+                    if " as " in part:
+                        c_name, c_type = part.split(" as ", 1)
+                        schema_dict[c_name.strip()] = c_type.strip().lower()
+                spec.steps.append(SchemaContractStep(schema=schema_dict))
+                i += 1
+                continue
+
+            # join / left join with <dataset> on <key>
+            join_m = re.match(
+                r"^(left|right|outer|cross|inner)?\s*join\s+(?:with\s+)?([A-Za-z_]\w*)\s+on\s+([A-Za-z_]\w*)$",
+                line,
+                re.IGNORECASE,
+            )
+            if join_m:
+                how = (join_m.group(1) or "inner").lower()
+                other_table = join_m.group(2)
+                on_key = join_m.group(3)
+                spec.steps.append(JoinStep(other_dataset=other_table, on_key=on_key, how=how))
+                i += 1
+                continue
+
+            # calculate (running_sum|running_avg|row_number|rank) [of <col>] over <col> [partitioned by <col>] into <target>
+            win_m = re.match(
+                r"^calculate\s+(running_sum|running_avg|row_number|rank|rolling_mean)\s+(?:of\s+([A-Za-z_]\w*)\s+)?over\s+([A-Za-z_]\w*)(?:\s+partitioned\s+by\s+([A-Za-z_]\w*))?(?:\s+into\s+([A-Za-z_]\w*))?$",
+                line,
+                re.IGNORECASE,
+            )
+            if win_m:
+                func = win_m.group(1).lower()
+                src_col = win_m.group(2)
+                over_col = win_m.group(3)
+                part_by = win_m.group(4)
+                target_col = win_m.group(5) or f"{func}_val"
+                spec.steps.append(
+                    WindowStep(
+                        func=func,
+                        source_col=src_col,
+                        over_col=over_col,
+                        partition_by=part_by,
+                        target_col=target_col,
+                    )
+                )
                 i += 1
                 continue
 

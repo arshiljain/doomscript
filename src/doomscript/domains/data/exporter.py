@@ -10,6 +10,8 @@ from doomscript.domains.data.spec import (
     FillNaStep,
     DeriveStep,
     JoinStep,
+    SchemaContractStep,
+    WindowStep,
     GroupByStep,
     SortStep,
     SinkStep,
@@ -140,6 +142,137 @@ class DataASTExporter(DomainASTExporter):
                     keywords=[],
                 )
                 stmts.append(ast.Assign(targets=[ast.Name(id=target_df, ctx=ast.Store())], value=query_call))
+
+            elif isinstance(step, JoinStep):
+                merge_call = ast.Call(
+                    func=ast.Attribute(value=ast.Name(id="pd", ctx=ast.Load()), attr="merge", ctx=ast.Load()),
+                    args=[
+                        ast.Name(id=target_df, ctx=ast.Load()),
+                        ast.Call(
+                            func=ast.Attribute(value=ast.Name(id="pd", ctx=ast.Load()), attr="DataFrame", ctx=ast.Load()),
+                            args=[ast.Name(id=step.other_dataset, ctx=ast.Load())],
+                            keywords=[],
+                        ),
+                    ],
+                    keywords=[
+                        ast.keyword(arg="on", value=ast.Constant(value=step.on_key)),
+                        ast.keyword(arg="how", value=ast.Constant(value=step.how)),
+                    ],
+                )
+                stmts.append(ast.Assign(targets=[ast.Name(id=target_df, ctx=ast.Store())], value=merge_call))
+
+            elif isinstance(step, SchemaContractStep):
+                type_map = {
+                    "int": "int64",
+                    "integer": "int64",
+                    "float": "float64",
+                    "number": "float64",
+                    "decimal": "float64",
+                    "str": "str",
+                    "string": "str",
+                    "text": "str",
+                    "bool": "bool",
+                    "boolean": "bool",
+                }
+                for col, c_type in step.schema.items():
+                    target_dtype = type_map.get(c_type.lower(), "object")
+                    astype_call = ast.Call(
+                        func=ast.Attribute(
+                            value=ast.Subscript(
+                                value=ast.Name(id=target_df, ctx=ast.Load()),
+                                slice=ast.Constant(value=col),
+                                ctx=ast.Load(),
+                            ),
+                            attr="astype",
+                            ctx=ast.Load(),
+                        ),
+                        args=[ast.Constant(value=target_dtype)],
+                        keywords=[],
+                    )
+                    stmts.append(
+                        ast.Assign(
+                            targets=[
+                                ast.Subscript(
+                                    value=ast.Name(id=target_df, ctx=ast.Load()),
+                                    slice=ast.Constant(value=col),
+                                    ctx=ast.Store(),
+                                )
+                            ],
+                            value=astype_call,
+                        )
+                    )
+
+            elif isinstance(step, WindowStep):
+                if step.over_col:
+                    sort_call = ast.Call(
+                        func=ast.Attribute(value=ast.Name(id=target_df, ctx=ast.Load()), attr="sort_values", ctx=ast.Load()),
+                        args=[ast.Constant(value=step.over_col)],
+                        keywords=[ast.keyword(arg="ascending", value=ast.Constant(value=True))],
+                    )
+                    stmts.append(ast.Assign(targets=[ast.Name(id=target_df, ctx=ast.Store())], value=sort_call))
+
+                if step.func in ("row_number", "rank"):
+                    if step.partition_by:
+                        val_node = ast.BinOp(
+                            left=ast.Call(
+                                func=ast.Attribute(
+                                    value=ast.Call(
+                                        func=ast.Attribute(value=ast.Name(id=target_df, ctx=ast.Load()), attr="groupby", ctx=ast.Load()),
+                                        args=[ast.Constant(value=step.partition_by)],
+                                        keywords=[],
+                                    ),
+                                    attr="cumcount",
+                                    ctx=ast.Load(),
+                                ),
+                                args=[],
+                                keywords=[],
+                            ),
+                            op=ast.Add(),
+                            right=ast.Constant(value=1),
+                        )
+                    else:
+                        val_node = ast.BinOp(
+                            left=ast.Call(
+                                func=ast.Attribute(
+                                    value=ast.Attribute(value=ast.Name(id=target_df, ctx=ast.Load()), attr="reset_index", ctx=ast.Load()),
+                                    attr="index",
+                                    ctx=ast.Load(),
+                                ),
+                                args=[],
+                                keywords=[],
+                            ),
+                            op=ast.Add(),
+                            right=ast.Constant(value=1),
+                        )
+                elif step.func == "running_sum":
+                    val_node = ast.Call(
+                        func=ast.Attribute(
+                            value=ast.Subscript(
+                                value=ast.Name(id=target_df, ctx=ast.Load()),
+                                slice=ast.Constant(value=step.source_col),
+                                ctx=ast.Load(),
+                            ),
+                            attr="cumsum",
+                            ctx=ast.Load(),
+                        ),
+                        args=[],
+                        keywords=[],
+                    )
+                else:
+                    val_node = ast.Constant(value=0)
+
+                stmts.append(
+                    ast.Assign(
+                        targets=[
+                            ast.Subscript(
+                                value=ast.Name(id=target_df, ctx=ast.Load()),
+                                slice=ast.Constant(value=step.target_col),
+                                ctx=ast.Store(),
+                            )
+                        ],
+                        value=val_node,
+                    )
+                )
 
             elif isinstance(step, GroupByStep):
                 keys_val = step.keys[0] if len(step.keys) == 1 else step.keys

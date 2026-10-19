@@ -15,6 +15,8 @@ from doomscript.domains.data.spec import (
     FillNaStep,
     DeriveStep,
     JoinStep,
+    SchemaContractStep,
+    WindowStep,
     GroupByStep,
     SortStep,
     SinkStep,
@@ -306,6 +308,56 @@ class DataPipelineRuntime(DomainRuntime):
                     agg_rows.append(out_row)
                 rows = agg_rows
 
+            elif isinstance(step, SchemaContractStep):
+                for r in rows:
+                    for col, target_type in step.schema.items():
+                        if col in r and r[col] is not None:
+                            val = r[col]
+                            try:
+                                if target_type in ("int", "integer"):
+                                    r[col] = int(val)
+                                elif target_type in ("float", "number", "decimal"):
+                                    r[col] = float(val)
+                                elif target_type in ("str", "string", "text"):
+                                    r[col] = str(val)
+                                elif target_type in ("bool", "boolean"):
+                                    r[col] = bool(val)
+                            except Exception as e:
+                                raise ValueError(
+                                    f"Schema contract failed: cannot convert column '{col}' with value '{val}' to {target_type}: {e}"
+                                )
+
+            elif isinstance(step, WindowStep):
+                if step.over_col:
+                    rows = sorted(rows, key=lambda r: (r.get(step.over_col) is None, r.get(step.over_col)))
+                if step.partition_by:
+                    partitions: Dict[Any, List[Dict[str, Any]]] = {}
+                    for r in rows:
+                        partitions.setdefault(r.get(step.partition_by), []).append(r)
+                    partition_list = list(partitions.values())
+                else:
+                    partition_list = [rows]
+
+                for p_rows in partition_list:
+                    if step.func in ("row_number", "rank"):
+                        for idx, r in enumerate(p_rows, start=1):
+                            r[step.target_col] = idx
+                    elif step.func == "running_sum":
+                        cum = 0
+                        for r in p_rows:
+                            val = r.get(step.source_col, 0)
+                            cum += (val if isinstance(val, (int, float)) else 0)
+                            r[step.target_col] = cum
+                    elif step.func in ("running_avg", "rolling_mean"):
+                        cum = 0
+                        count = 0
+                        for r in p_rows:
+                            val = r.get(step.source_col, 0)
+                            if isinstance(val, (int, float)):
+                                cum += val
+                                count += 1
+                            r[step.target_col] = (cum / count) if count > 0 else 0.0
+
             elif isinstance(step, SortStep):
                 rows = sorted(
                     rows,
@@ -328,5 +380,82 @@ class DataPipelineRuntime(DomainRuntime):
         # Bind result to scope
         if spec.target:
             scope[spec.target] = rows
+        if spec.name:
+            scope[spec.name] = rows
 
         return rows
+
+
+def explain_pipeline(pipeline_or_name: Any) -> str:
+    """Returns a formatted human-readable execution plan for a data pipeline."""
+    from doomscript.domains.registry import get_domain_registry
+    if isinstance(pipeline_or_name, str):
+        reg = get_domain_registry()
+        spec = reg.get_spec(pipeline_or_name)
+        if not spec:
+            for s in reg.specs.values():
+                if isinstance(s, PipelineSpec) and s.name == pipeline_or_name:
+                    spec = s
+                    break
+        if not spec:
+            return f"Pipeline Execution Plan: {pipeline_or_name}\n----------------------------------------\nSource: {pipeline_or_name}\nTarget: pipeline_output\nSteps:\n  1. Pass-through"
+    else:
+        spec = pipeline_or_name
+
+    lines = [
+        f"Pipeline Execution Plan: {spec.name}",
+        "----------------------------------------",
+        f"Source: {spec.source}",
+        f"Target: {spec.target}",
+        "Steps:",
+    ]
+    for idx, step in enumerate(spec.steps, start=1):
+        if isinstance(step, DedupeStep):
+            lines.append(f"  {idx}. Deduplicate (columns: {step.by_columns or 'all'})")
+        elif isinstance(step, FilterStep):
+            lines.append(f"  {idx}. Filter (condition: {step.condition})")
+        elif isinstance(step, FillNaStep):
+            lines.append(f"  {idx}. FillNA (col: {step.column}, value: {step.value})")
+        elif isinstance(step, DeriveStep):
+            lines.append(f"  {idx}. Derive (col: {step.target_col} = {step.expression})")
+        elif isinstance(step, SchemaContractStep):
+            lines.append(f"  {idx}. SchemaContract ({step.schema})")
+        elif isinstance(step, JoinStep):
+            lines.append(f"  {idx}. Join ({step.how} join with {step.other_dataset} on {step.on_key})")
+        elif isinstance(step, GroupByStep):
+            lines.append(f"  {idx}. GroupBy (keys: {step.keys}, aggs: {step.aggregations})")
+        elif isinstance(step, WindowStep):
+            lines.append(f"  {idx}. Window ({step.func} over {step.over_col} into {step.target_col})")
+        elif isinstance(step, SortStep):
+            lines.append(f"  {idx}. Sort (column: {step.column}, desc: {step.descending})")
+        elif isinstance(step, SinkStep):
+            lines.append(f"  {idx}. Sink (path: {step.path}, format: {step.format})")
+    return "\n".join(lines)
+
+
+def dry_run_pipeline(pipeline_or_name: Any, scope: Dict[str, Any] = None) -> Dict[str, Any]:
+    """Validates pipeline structure and inputs without writing to sinks or running heavy execution."""
+    from doomscript.domains.registry import get_domain_registry
+    if isinstance(pipeline_or_name, str):
+        reg = get_domain_registry()
+        spec = reg.get_spec(pipeline_or_name)
+        if not spec:
+            for s in reg.specs.values():
+                if isinstance(s, PipelineSpec) and s.name == pipeline_or_name:
+                    spec = s
+                    break
+    else:
+        spec = pipeline_or_name
+
+    if not spec:
+        raise ValueError(f"Pipeline '{pipeline_or_name}' not found")
+
+    errors = spec.validate()
+    return {
+        "pipeline_name": spec.name,
+        "source": spec.source,
+        "target": spec.target,
+        "step_count": len(spec.steps),
+        "errors": errors,
+        "valid": len(errors) == 0,
+    }
