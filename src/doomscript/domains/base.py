@@ -63,13 +63,19 @@ class DomainContract(ABC):
     parser: DomainParser
     runtime: DomainRuntime
     exporter: DomainASTExporter
+    verbs: List[Any] = []
+    blocks: List[Any] = []
+    capabilities: List[str] = []
+    optional_dependencies: Dict[str, str] = {}
 
-    @abstractmethod
     def can_handle_line(self, line: str) -> bool:
         """Determines if this domain can parse or handle a given standalone line."""
-        pass
+        if hasattr(self, "verbs") and self.verbs:
+            return any(v.matches(line) for v in self.verbs if hasattr(v, "matches"))
+        return False
 
-    @abstractmethod
     def can_handle_block(self, header: str) -> bool:
         """Determines if this domain can parse or handle a given block header."""
-        pass
+        if hasattr(self, "blocks") and self.blocks:
+            return any(b.matches(header) for b in self.blocks if hasattr(b, "matches"))
+        return False
