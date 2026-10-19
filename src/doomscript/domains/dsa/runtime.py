@@ -2684,3 +2684,191 @@ def dsa_skip_list(max_level: int = 16) -> SkipList:
     """Creates a new Skip List."""
     return SkipList(max_level)
 
+
+class BTreeNode:
+    """A node in a B-Tree of minimum degree t."""
+
+    def __init__(self, t: int, leaf: bool = True):
+        self.t = t
+        self.leaf = leaf
+        self.keys: List[Any] = []
+        self.values: List[Any] = []
+        self.children: List["BTreeNode"] = []
+
+    def find_key(self, k: Any) -> int:
+        idx = 0
+        while idx < len(self.keys) and self.keys[idx] < k:
+            idx += 1
+        return idx
+
+
+class BTree:
+    """Order-t self-balancing B-Tree for indexing and storage."""
+
+    def __init__(self, t: int = 2):
+        if t < 2:
+            raise ValueError("B-Tree minimum degree t must be >= 2")
+        self.t = t
+        self.root = BTreeNode(t, leaf=True)
+
+    def search(self, k: Any) -> Optional[Any]:
+        return self._search(self.root, k)
+
+    def _search(self, node: BTreeNode, k: Any) -> Optional[Any]:
+        idx = node.find_key(k)
+        if idx < len(node.keys) and node.keys[idx] == k:
+            return node.values[idx]
+        if node.leaf:
+            return None
+        return self._search(node.children[idx], k)
+
+    def insert(self, k: Any, v: Any = None) -> None:
+        root = self.root
+        if len(root.keys) == (2 * self.t - 1):
+            s = BTreeNode(self.t, leaf=False)
+            self.root = s
+            s.children.append(root)
+            self._split_child(s, 0, root)
+            self._insert_non_full(s, k, v)
+        else:
+            self._insert_non_full(root, k, v)
+
+    def _insert_non_full(self, node: BTreeNode, k: Any, v: Any) -> None:
+        i = len(node.keys) - 1
+        if node.leaf:
+            while i >= 0 and k < node.keys[i]:
+                i -= 1
+            if i >= 0 and node.keys[i] == k:
+                node.values[i] = v
+                return
+            node.keys.insert(i + 1, k)
+            node.values.insert(i + 1, v)
+        else:
+            while i >= 0 and k < node.keys[i]:
+                i -= 1
+            if i >= 0 and node.keys[i] == k:
+                node.values[i] = v
+                return
+            i += 1
+            if len(node.children[i].keys) == (2 * self.t - 1):
+                self._split_child(node, i, node.children[i])
+                if k > node.keys[i]:
+                    i += 1
+                elif k == node.keys[i]:
+                    node.values[i] = v
+                    return
+            self._insert_non_full(node.children[i], k, v)
+
+    def _split_child(self, parent: BTreeNode, i: int, child: BTreeNode) -> None:
+        t = self.t
+        z = BTreeNode(t, leaf=child.leaf)
+        parent.children.insert(i + 1, z)
+        parent.keys.insert(i, child.keys[t - 1])
+        parent.values.insert(i, child.values[t - 1])
+
+        z.keys = child.keys[t:]
+        z.values = child.values[t:]
+        child.keys = child.keys[: t - 1]
+        child.values = child.values[: t - 1]
+
+        if not child.leaf:
+            z.children = child.children[t:]
+            child.children = child.children[:t]
+
+    def inorder(self) -> List[Any]:
+        res = []
+        def _inorder(node: BTreeNode):
+            for i in range(len(node.keys)):
+                if not node.leaf:
+                    _inorder(node.children[i])
+                res.append(node.keys[i])
+            if not node.leaf:
+                _inorder(node.children[len(node.keys)])
+        _inorder(self.root)
+        return res
+
+
+class TrieNode:
+    """A node in a Prefix Trie."""
+
+    def __init__(self):
+        self.children: Dict[str, "TrieNode"] = {}
+        self.is_end: bool = False
+        self.value: Any = None
+
+
+class PrefixTrie:
+    """Trie with prefix auto-completion and wildcard search ('?')."""
+
+    def __init__(self):
+        self.root = TrieNode()
+        self.size = 0
+
+    def insert(self, word: str, value: Any = True) -> None:
+        curr = self.root
+        for ch in word:
+            if ch not in curr.children:
+                curr.children[ch] = TrieNode()
+            curr = curr.children[ch]
+        if not curr.is_end:
+            self.size += 1
+        curr.is_end = True
+        curr.value = value
+
+    def search(self, word: str) -> Optional[Any]:
+        curr = self.root
+        for ch in word:
+            if ch not in curr.children:
+                return None
+            curr = curr.children[ch]
+        return curr.value if curr.is_end else None
+
+    def starts_with(self, prefix: str) -> bool:
+        curr = self.root
+        for ch in prefix:
+            if ch not in curr.children:
+                return False
+            curr = curr.children[ch]
+        return True
+
+    def find_words_with_prefix(self, prefix: str) -> List[str]:
+        curr = self.root
+        for ch in prefix:
+            if ch not in curr.children:
+                return []
+            curr = curr.children[ch]
+        results = []
+        def _collect(node: TrieNode, path: List[str]):
+            if node.is_end:
+                results.append("".join(path))
+            for char, nxt in sorted(node.children.items()):
+                _collect(nxt, path + [char])
+        _collect(curr, list(prefix))
+        return results
+
+    def wildcard_search(self, pattern: str) -> List[str]:
+        results = []
+        def _dfs(node: TrieNode, idx: int, path: List[str]):
+            if idx == len(pattern):
+                if node.is_end:
+                    results.append("".join(path))
+                return
+            ch = pattern[idx]
+            if ch == "?":
+                for char, nxt in sorted(node.children.items()):
+                    _dfs(nxt, idx + 1, path + [char])
+            elif ch in node.children:
+                _dfs(node.children[ch], idx + 1, path + [ch])
+        _dfs(self.root, 0, [])
+        return results
+
+
+def dsa_btree(t: int = 2) -> BTree:
+    """Creates a new B-Tree with minimum degree t."""
+    return BTree(t=t)
+
+
+def dsa_prefix_trie() -> PrefixTrie:
+    """Creates a new Prefix Trie."""
+    return PrefixTrie()
+

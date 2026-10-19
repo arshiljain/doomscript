@@ -1131,3 +1131,112 @@ class TextRankSummarizer:
         return " ".join(sentences[i] for i in ranked_indices)
 
 
+class KneserNeyLanguageModel:
+    """N-gram language model with interpolated Kneser-Ney smoothing."""
+
+    def __init__(self, order: int = 3, discount: float = 0.75):
+        if order < 2:
+            raise ValueError("Kneser-Ney model order must be >= 2")
+        self.order = order
+        self.discount = float(discount)
+        self.ngram_counts: Dict[int, Dict[Tuple[str, ...], int]] = {i: {} for i in range(1, order + 1)}
+        self.context_counts: Dict[Tuple[str, ...], int] = {}
+        self.continuations_out: Dict[Tuple[str, ...], set] = {}
+        self.continuations_in: Dict[str, set] = {}
+        self.vocab: set = set()
+        self.total_unique_bigrams = 0
+
+    def fit(self, corpus: List[str]) -> "KneserNeyLanguageModel":
+        tokenized_sentences = []
+        for line in corpus:
+            tokens = re.findall(r"\b\w+\b", str(line).lower())
+            if tokens:
+                tokenized_sentences.append(["<s>"] * (self.order - 1) + tokens + ["</s>"])
+                self.vocab.update(tokens)
+
+        self.vocab.add("<s>")
+        self.vocab.add("</s>")
+
+        # Count n-grams for lengths 1 .. order
+        for sent in tokenized_sentences:
+            for k in range(1, self.order + 1):
+                for i in range(len(sent) - k + 1):
+                    ng = tuple(sent[i : i + k])
+                    self.ngram_counts[k][ng] = self.ngram_counts[k].get(ng, 0) + 1
+                    if k > 1:
+                        ctx = ng[:-1]
+                        target_w = ng[-1]
+                        self.context_counts[ctx] = self.context_counts.get(ctx, 0) + 1
+                        if ctx not in self.continuations_out:
+                            self.continuations_out[ctx] = set()
+                        self.continuations_out[ctx].add(target_w)
+                        if target_w not in self.continuations_in:
+                            self.continuations_in[target_w] = set()
+                        self.continuations_in[target_w].add(ctx[-1])
+
+        self.total_unique_bigrams = sum(len(s) for s in self.continuations_in.values())
+        return self
+
+    def _p_continuation(self, word: str) -> float:
+        if self.total_unique_bigrams == 0:
+            return 1.0 / max(len(self.vocab), 1)
+        num = len(self.continuations_in.get(word, set()))
+        return max(num, 1e-6) / self.total_unique_bigrams
+
+    def prob(self, word: str, context: Tuple[str, ...]) -> float:
+        """Computes Kneser-Ney smoothed P(word | context)."""
+        ctx = tuple(context[-(self.order - 1):])
+        k = len(ctx) + 1
+
+        if k == 1:
+            return self._p_continuation(word)
+
+        ctx_count = self.context_counts.get(ctx, 0)
+        ng = ctx + (word,)
+        ng_count = self.ngram_counts[k].get(ng, 0)
+
+        lower_prob = self.prob(word, ctx[1:])
+
+        if ctx_count == 0:
+            return lower_prob
+
+        # Discounted count
+        direct_prob = max(ng_count - self.discount, 0.0) / ctx_count
+        num_continuations = len(self.continuations_out.get(ctx, set()))
+        alpha = (self.discount * num_continuations) / ctx_count
+
+        return direct_prob + alpha * lower_prob
+
+    def score_sentence(self, sentence: str) -> float:
+        """Calculates log2 probability of a sentence under the model."""
+        tokens = re.findall(r"\b\w+\b", str(sentence).lower())
+        if not tokens:
+            return 0.0
+        padded = ["<s>"] * (self.order - 1) + tokens + ["</s>"]
+        total_log_prob = 0.0
+        for i in range(self.order - 1, len(padded)):
+            w = padded[i]
+            ctx = tuple(padded[i - self.order + 1 : i])
+            p = max(self.prob(w, ctx), 1e-12)
+            total_log_prob += math.log2(p)
+        return round(total_log_prob, 4)
+
+    def predict_next(self, context_tokens: List[str], top_n: int = 5) -> List[Tuple[str, float]]:
+        """Predicts top candidate next words given context."""
+        ctx = tuple(str(tok).lower() for tok in context_tokens)
+        candidates = []
+        for w in self.vocab:
+            if w in ("<s>", "</s>"):
+                continue
+            p = self.prob(w, ctx)
+            candidates.append((w, round(p, 6)))
+        candidates.sort(key=lambda t: t[1], reverse=True)
+        return candidates[:top_n]
+
+
+def nlp_kneser_ney(order: int = 3, discount: float = 0.75) -> KneserNeyLanguageModel:
+    """Creates a Kneser-Ney smoothed n-gram language model."""
+    return KneserNeyLanguageModel(order=order, discount=discount)
+
+
+

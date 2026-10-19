@@ -224,5 +224,8 @@ __all__ = [
     "geo_geohash_encode",
     "geo_geohash_decode",
     "SpatialRTree",
+    "QuadTree",
+    "QuadTreeNode",
+    "geo_quadtree",
 ]
 

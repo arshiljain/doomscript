@@ -176,3 +176,99 @@ final_stats = sim_eng.run_until(15.0)
     res_stats = env["final_stats"]["resources"]["server"]
     assert res_stats["total_served"] == 2
     assert res_stats["avg_wait_time"] == 1.5  # (0.0 + 3.0) / 2
+
+
+def test_dsa_btree():
+    code = """
+use dsa
+tree = dsa_btree(t=2)
+for x in [10, 20, 5, 6, 12, 30, 7, 17]:
+    tree.insert(x, f"v_{x}")
+
+search_12 = tree.search(12)
+search_missing = tree.search(999)
+sorted_keys = tree.inorder()
+"""
+    env = execute(code)
+    assert env["search_12"] == "v_12"
+    assert env["search_missing"] is None
+    assert env["sorted_keys"] == [5, 6, 7, 10, 12, 17, 20, 30]
+
+
+def test_dsa_prefix_trie():
+    code = """
+use dsa
+trie = dsa_prefix_trie()
+for w in ["cat", "car", "cart", "dog", "cot", "cost"]:
+    trie.insert(w, len(w))
+
+has_car = trie.search("car")
+has_cow = trie.search("cow")
+c_words = trie.find_words_with_prefix("ca")
+wild_c_t = trie.wildcard_search("c?t")
+"""
+    env = execute(code)
+    assert env["has_car"] == 3
+    assert env["has_cow"] is None
+    assert sorted(env["c_words"]) == ["car", "cart", "cat"]
+    assert sorted(env["wild_c_t"]) == ["cat", "cot"]
+
+
+def test_geo_quadtree():
+    code = """
+use geo
+qt = geo_quadtree(min_x=-100.0, min_y=-100.0, max_x=100.0, max_y=100.0, capacity=2)
+qt.insert(10.0, 10.0, "PointA")
+qt.insert(12.0, 15.0, "PointB")
+qt.insert(50.0, 50.0, "PointC")
+qt.insert(-20.0, -20.0, "PointD")
+
+# Query range around (0,0) to (20,20)
+range_results = qt.query_range(0.0, 0.0, 20.0, 20.0)
+# Query radius 10 around (10, 10)
+radius_results = qt.query_radius(10.0, 10.0, 6.0)
+"""
+    env = execute(code)
+    assert sorted(env["range_results"]) == ["PointA", "PointB"]
+    assert "PointA" in env["radius_results"]
+    assert "PointC" not in env["range_results"]
+
+
+def test_nlp_kneser_ney():
+    code = """
+use nlp
+corpus = [
+    "the cat sat on the mat",
+    "the dog sat on the rug",
+    "the cat chased the dog"
+]
+kn = nlp_kneser_ney(order=3, discount=0.75)
+kn.fit(corpus)
+
+candidates = kn.predict_next(["the", "cat"], top_n=3)
+top_word = candidates[0][0]
+score = kn.score_sentence("the cat sat on the mat")
+"""
+    env = execute(code)
+    assert env["top_word"] in ["sat", "chased"]
+    assert env["score"] < 0  # valid negative log probability
+
+
+def test_opt_hungarian_algorithm():
+    code = """
+use opt
+# 3 workers, 3 tasks cost matrix
+cost_mat = [
+    [9, 2, 7],
+    [6, 4, 3],
+    [5, 8, 1]
+]
+res = opt_hungarian_algorithm(cost_mat)
+"""
+    env = execute(code)
+    # Optimal matching: Worker 0 -> Task 1 (cost 2), Worker 1 -> Task 0 (cost 6) or Task 2, etc.
+    # Worker 0 -> Col 1 (2), Worker 1 -> Col 0 (6) or Worker 1 -> Col 1..., min total cost is:
+    # (0, 1) = 2, (1, 0) = 6, (2, 2) = 1 -> Total = 9. Or (0,1)=2, (1,2)=3, (2,0)=5 -> Total = 10.
+    assert env["res"]["total_cost"] == 9.0
+    assert len(env["res"]["assignment"]) == 3
+

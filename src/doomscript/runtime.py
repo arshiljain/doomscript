@@ -3449,6 +3449,12 @@ from doomscript.domains.dsa.runtime import (
     SkipListNode,
     dsa_red_black_tree,
     dsa_skip_list,
+    BTree,
+    BTreeNode,
+    PrefixTrie,
+    TrieNode,
+    dsa_btree,
+    dsa_prefix_trie,
 )
 
 from doomscript.domains.ml.runtime import (
@@ -3474,6 +3480,21 @@ from doomscript.domains.sim.runtime import (
     SimResource,
     DiscreteEventSimulation,
     sim_create_discrete_event_sim,
+)
+
+from doomscript.domains.geo.runtime import (
+    QuadTree,
+    QuadTreeNode,
+    geo_quadtree,
+)
+
+from doomscript.domains.nlp.runtime import (
+    KneserNeyLanguageModel,
+    nlp_kneser_ney,
+)
+
+from doomscript.domains.opt.runtime import (
+    opt_hungarian_algorithm,
 )
 
 

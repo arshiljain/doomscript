@@ -189,5 +189,7 @@ __all__ = [
     "HMMPOSTagger",
     "Word2VecSimple",
     "TextRankSummarizer",
+    "KneserNeyLanguageModel",
+    "nlp_kneser_ney",
 ]
 

@@ -304,4 +304,10 @@ __all__ = [
     "SkipListNode",
     "dsa_red_black_tree",
     "dsa_skip_list",
+    "BTree",
+    "BTreeNode",
+    "PrefixTrie",
+    "TrieNode",
+    "dsa_btree",
+    "dsa_prefix_trie",
 ]

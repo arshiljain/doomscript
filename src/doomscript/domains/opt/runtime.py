@@ -1463,3 +1463,83 @@ def opt_nelder_mead(
     }
 
 
+def opt_hungarian_algorithm(cost_matrix: List[List[float]]) -> Dict[str, Any]:
+    """Solves the optimal bipartite assignment problem using the Kuhn-Munkres (Hungarian) algorithm in O(N^3).
+
+    Given an N x M cost matrix, finds row-to-column matching that minimizes total cost.
+    Supports non-square matrices by zero-padding.
+    """
+    if not cost_matrix or not cost_matrix[0]:
+        return {"assignment": [], "row_to_col": [], "total_cost": 0.0}
+
+    n_rows = len(cost_matrix)
+    n_cols = len(cost_matrix[0])
+    dim = max(n_rows, n_cols)
+
+    grid = [[0.0] * dim for _ in range(dim)]
+    for r in range(n_rows):
+        for c in range(n_cols):
+            grid[r][c] = float(cost_matrix[r][c])
+
+    u = [0.0] * (dim + 1)
+    v = [0.0] * (dim + 1)
+    p = [0] * (dim + 1)
+    way = [0] * (dim + 1)
+
+    for i in range(1, dim + 1):
+        p[0] = i
+        j0 = 0
+        minv = [float("inf")] * (dim + 1)
+        used = [False] * (dim + 1)
+
+        while True:
+            used[j0] = True
+            i0 = p[j0]
+            delta = float("inf")
+            j1 = 0
+            for j in range(1, dim + 1):
+                if not used[j]:
+                    cur = grid[i0 - 1][j - 1] - u[i0] - v[j]
+                    if cur < minv[j]:
+                        minv[j] = cur
+                        way[j] = j0
+                    if minv[j] < delta:
+                        delta = minv[j]
+                        j1 = j
+
+            for j in range(dim + 1):
+                if used[j]:
+                    u[p[j]] += delta
+                    v[j] -= delta
+                else:
+                    minv[j] -= delta
+
+            j0 = j1
+            if p[j0] == 0:
+                break
+
+        while True:
+            j1 = way[j0]
+            p[j0] = p[j1]
+            j0 = j1
+            if j0 == 0:
+                break
+
+    ans = [-1] * n_rows
+    total_cost = 0.0
+    for j in range(1, dim + 1):
+        r_idx = p[j] - 1
+        c_idx = j - 1
+        if 0 <= r_idx < n_rows and 0 <= c_idx < n_cols:
+            ans[r_idx] = c_idx
+            total_cost += cost_matrix[r_idx][c_idx]
+
+    assignment = [{"row": r, "col": ans[r], "cost": cost_matrix[r][ans[r]]} for r in range(n_rows) if ans[r] != -1]
+    return {
+        "assignment": assignment,
+        "row_to_col": ans,
+        "total_cost": round(total_cost, 6),
+    }
+
+
+

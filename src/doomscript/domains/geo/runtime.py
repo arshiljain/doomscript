@@ -900,3 +900,121 @@ class SpatialRTree:
         return len(self.entries)
 
 
+class QuadTreeNode:
+    """A single node/cell in a 2D spatial QuadTree."""
+
+    def __init__(self, min_x: float, min_y: float, max_x: float, max_y: float, capacity: int = 4):
+        self.min_x = float(min_x)
+        self.min_y = float(min_y)
+        self.max_x = float(max_x)
+        self.max_y = float(max_y)
+        self.capacity = max(1, int(capacity))
+        self.points: List[Tuple[float, float, Any]] = []
+        self.divided = False
+        self.nw: Optional["QuadTreeNode"] = None
+        self.ne: Optional["QuadTreeNode"] = None
+        self.sw: Optional["QuadTreeNode"] = None
+        self.se: Optional["QuadTreeNode"] = None
+
+    def contains_point(self, x: float, y: float) -> bool:
+        return self.min_x <= x <= self.max_x and self.min_y <= y <= self.max_y
+
+    def subdivide(self) -> None:
+        mid_x = (self.min_x + self.max_x) / 2.0
+        mid_y = (self.min_y + self.max_y) / 2.0
+        c = self.capacity
+        self.nw = QuadTreeNode(self.min_x, mid_y, mid_x, self.max_y, c)
+        self.ne = QuadTreeNode(mid_x, mid_y, self.max_x, self.max_y, c)
+        self.sw = QuadTreeNode(self.min_x, self.min_y, mid_x, mid_y, c)
+        self.se = QuadTreeNode(mid_x, self.min_y, self.max_x, mid_y, c)
+        self.divided = True
+
+    def insert(self, x: float, y: float, data: Any) -> bool:
+        if not self.contains_point(x, y):
+            return False
+
+        if len(self.points) < self.capacity and not self.divided:
+            self.points.append((x, y, data))
+            return True
+
+        if not self.divided:
+            self.subdivide()
+            # Push existing points down
+            old_pts = list(self.points)
+            self.points = []
+            for px, py, pdata in old_pts:
+                self._insert_children(px, py, pdata)
+
+        return self._insert_children(x, y, data)
+
+    def _insert_children(self, x: float, y: float, data: Any) -> bool:
+        if self.nw.insert(x, y, data):
+            return True
+        if self.ne.insert(x, y, data):
+            return True
+        if self.sw.insert(x, y, data):
+            return True
+        if self.se.insert(x, y, data):
+            return True
+        return False
+
+    def query_range(self, q_min_x: float, q_min_y: float, q_max_x: float, q_max_y: float, found: List[Any]) -> None:
+        # Check bounding box intersection
+        if self.max_x < q_min_x or self.min_x > q_max_x or self.max_y < q_min_y or self.min_y > q_max_y:
+            return
+
+        for px, py, data in self.points:
+            if q_min_x <= px <= q_max_x and q_min_y <= py <= q_max_y:
+                found.append(data)
+
+        if self.divided:
+            self.nw.query_range(q_min_x, q_min_y, q_max_x, q_max_y, found)
+            self.ne.query_range(q_min_x, q_min_y, q_max_x, q_max_y, found)
+            self.sw.query_range(q_min_x, q_min_y, q_max_x, q_max_y, found)
+            self.se.query_range(q_min_x, q_min_y, q_max_x, q_max_y, found)
+
+
+class QuadTree:
+    """Zero-dependency 2D Spatial QuadTree for points and spatial bounds."""
+
+    def __init__(self, min_x: float = -180.0, min_y: float = -90.0, max_x: float = 180.0, max_y: float = 90.0, capacity: int = 4):
+        self.root = QuadTreeNode(min_x, min_y, max_x, max_y, capacity=capacity)
+        self.size = 0
+
+    def insert(self, x: float, y: float, data: Any = None) -> bool:
+        val = data if data is not None else (x, y)
+        ok = self.root.insert(float(x), float(y), val)
+        if ok:
+            self.size += 1
+        return ok
+
+    def query_range(self, min_x: float, min_y: float, max_x: float, max_y: float) -> List[Any]:
+        found = []
+        self.root.query_range(min(min_x, max_x), min(min_y, max_y), max(min_x, max_x), max(min_y, max_y), found)
+        return found
+
+    def query_radius(self, cx: float, cy: float, radius: float) -> List[Any]:
+        r = float(radius)
+        candidates = self.query_range(cx - r, cy - r, cx + r, cy + r)
+        # Refine by Euclidean distance
+        res = []
+        for item in candidates:
+            # If item is (x, y) tuple or has coords
+            if isinstance(item, (tuple, list)) and len(item) >= 2 and isinstance(item[0], (int, float)):
+                d = math.hypot(item[0] - cx, item[1] - cy)
+                if d <= r:
+                    res.append(item)
+            else:
+                res.append(item)
+        return res
+
+    def __len__(self) -> int:
+        return self.size
+
+
+def geo_quadtree(min_x: float = -180.0, min_y: float = -90.0, max_x: float = 180.0, max_y: float = 90.0, capacity: int = 4) -> QuadTree:
+    """Creates a new spatial QuadTree index."""
+    return QuadTree(min_x=min_x, min_y=min_y, max_x=max_x, max_y=max_y, capacity=capacity)
+
+
+
