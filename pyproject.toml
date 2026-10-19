@@ -30,6 +30,27 @@ viz = [
     "pypng>=0.20220715.0",
     "palettable>=3.3.3",
 ]
+nlp = [
+    "scikit-learn",
+]
+geo = [
+    "shapely>=2.0.0",
+]
+opt = [
+    "scipy>=1.10.0",
+]
+all = [
+    "numpy",
+    "pandas",
+    "matplotlib",
+    "scikit-learn",
+    "lets-plot>=4.5.0",
+    "pypng>=0.20220715.0",
+    "palettable>=3.3.3",
+    "shapely>=2.0.0",
+    "scipy>=1.10.0",
+]
+
 
 [project.urls]
 Homepage = "https://github.com/doomscript/doomscript"
