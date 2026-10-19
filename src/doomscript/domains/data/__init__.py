@@ -40,7 +40,7 @@ class DataDomain(DomainContract):
         return (
             s.startswith("inspect dataset")
             or s.startswith("profile dataset")
-            or s.startswith("clean ")
+            or (s.startswith("clean ") and " by removing " in s)
             or s.startswith("join ")
         )
 

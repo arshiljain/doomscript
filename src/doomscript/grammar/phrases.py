@@ -1516,6 +1516,9 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
     domain_block_stack: List[Dict[str, Any]] = []
     in_research_mode: bool = False
 
+    from doomscript.domains.registry import get_domain_registry
+    get_domain_registry().reset_active()
+
     def _close_domain_block(b_info, at_line_idx):
         ir_spec, target_var = b_info["domain"].parser.parse_block(b_info["header"], b_info["lines"], b_info["indent"])
         from doomscript.domains.registry import get_domain_registry

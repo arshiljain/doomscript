@@ -53,7 +53,7 @@ class NetDomainParser(DomainParser):
             rest = req_match.group(3).strip()
 
             target = "response"
-            into_m = re.search(r"\s+into\s+([A-Za-z_]\w*)$", rest, re.IGNORECASE)
+            into_m = re.search(r"(?:^|\s+)into\s+([A-Za-z_]\w*)$", rest, re.IGNORECASE)
             if into_m:
                 target = into_m.group(1)
                 rest = rest[:into_m.start()].strip()

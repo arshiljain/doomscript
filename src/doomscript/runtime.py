@@ -2282,6 +2282,33 @@ def run_dsa_benchmark(fn_name, input_sizes, repeat=3, generator="sorted_integers
 
 from doomscript.domains.dsa.runtime import ListNode, TreeNode, trace_recursion
 
+from doomscript.domains.nlp.runtime import (
+    clean_text,
+    tokenize_text,
+    extract_ngrams,
+    analyze_sentiment,
+    calculate_tfidf,
+    extract_entities,
+    NLPRuntime,
+)
+
+def execute_nlp_ir(spec):
+    import sys
+    from doomscript.domains.nlp.runtime import NLPRuntime
+    from doomscript.domains.registry import get_domain_registry
+    if isinstance(spec, str):
+        spec = get_domain_registry().get_spec(spec)
+    caller_frame = sys._getframe(1)
+    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
+    scope = dict(target_env)
+    if caller_frame.f_locals:
+        scope.update(caller_frame.f_locals)
+    res = NLPRuntime().execute_ir(spec, scope)
+    for k, v in scope.items():
+        target_env[k] = v
+    return res
+
+
 
 
 
