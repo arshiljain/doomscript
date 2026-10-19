@@ -208,8 +208,8 @@ class DataDomainParser(DomainParser):
                 i += 1
                 continue
 
-            # filter rows where <cond>
-            filter_m = re.match(r"^filter\s+rows\s+where\s+(.+)$", line, re.IGNORECASE)
+            # filter [rows] where <cond>
+            filter_m = re.match(r"^filter\s+(?:rows\s+)?where\s+(.+)$", line, re.IGNORECASE)
             if filter_m:
                 cond = filter_m.group(1).strip()
                 spec.steps.append(FilterStep(condition=cond))

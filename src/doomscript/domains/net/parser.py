@@ -61,9 +61,9 @@ class NetDomainParser(DomainParser):
             target = parse_m.group(3)
             return f'set {target} to parse_response_content({src}, format_type="{fmt}")'
 
-        # save <resp> to "<path>"
+        # save (response|resp) to "<path>"
         save_m = re.match(
-            r"^save\s+([A-Za-z_]\w*)\s+to\s+([\"'][^\"']+[\"'])$",
+            r"^save\s+(response|resp)\s+to\s+([\"'][^\"']+[\"'])$",
             line.strip(),
             re.IGNORECASE,
         )

@@ -142,6 +142,7 @@ class DiscreteEventQueueEngine:
             "total_events": n_events,
             "total_time": round(total_sim_time, 2),
             "server_utilization": round(min(1.0, utilization), 4),
+            "utilization": round(min(1.0, utilization), 4),
             "waiting_time": waiting_times,
             "service_time": service_times,
             "queue_length": queue_lengths,

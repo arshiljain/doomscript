@@ -1,0 +1,86 @@
+# =============================================================================
+# DoomScript Multi-Domain End-to-End Showcase
+# One Language, Many Specialized Domains.
+# =============================================================================
+
+use data
+use db
+use ml
+use sim
+use dsa
+use viz
+
+say "=== Step 1: Data Engineering Pipeline ==="
+
+raw_transactions = [
+    {"tx_id": 101, "customer": "Alice", "amount": 150.0, "risk_score": 12},
+    {"tx_id": 102, "customer": "Bob", "amount": 25.0, "risk_score": 4},
+    {"tx_id": 103, "customer": "Charlie", "amount": 320.0, "risk_score": 45},
+    {"tx_id": 104, "customer": "Diana", "amount": 500.0, "risk_score": 88},
+    {"tx_id": 105, "customer": "Evan", "amount": 45.0, "risk_score": 8},
+    {"tx_id": 105, "customer": "Evan", "amount": 45.0, "risk_score": 8}
+]
+
+pipeline "clean_transactions" from raw_transactions into verified_transactions:
+    remove duplicate rows
+    filter where amount is greater than 30
+
+inspect dataset verified_transactions into data_summary
+set n_rec to count of verified_transactions
+say "Verified records count: " + (n_rec as text)
+
+say "=== Step 2: Relational Queries & SQL ==="
+
+query verified_transactions into high_value_txs:
+    select tx_id, customer, amount
+    where amount is over 100
+    order by amount descending
+
+say "Top transaction customer: " + high_value_txs[0]["customer"]
+
+say "=== Step 3: Machine Learning Model ==="
+
+model fraud_detector from verified_transactions:
+    target: risk_score
+    features: amount
+    algorithm: linear_regression
+    split: 75% training, 25% testing
+
+train fraud_detector
+evaluate fraud_detector into fraud_eval
+say "Model R2 Score: " + (fraud_eval["r2"] as text)
+
+say "=== Step 4: Discrete-Event Simulation ==="
+
+simulate transaction_processing_queue:
+    arrivals: poisson with rate 12.0
+    service: exponential with rate 15.0
+    duration: 100 events
+    servers: 2
+
+say "Queue server utilization: " + (transaction_processing_queue["utilization"] as text)
+
+say "=== Step 5: Algorithm Benchmarking & Complexity ==="
+
+to linear_search with items:
+    set total to 0
+    for each item in items:
+        set total to total + item
+    return total
+
+benchmark linear_search:
+    input_sizes: [100, 500, 1000]
+    repeat: 3
+    measure: execution_time
+
+say "Empirical algorithm complexity: " + linear_search_benchmark["best_fit"]
+
+say "=== Step 6: Grammar-of-Graphics Visualization ==="
+
+plot verified_transactions as scatter into tx_plot:
+    x: amount
+    y: risk_score
+    title: "Transaction Risk vs Amount"
+    theme: minimal
+
+say "All domains executed successfully in harmony!"

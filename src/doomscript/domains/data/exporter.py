@@ -106,6 +106,41 @@ class DataASTExporter(DomainASTExporter):
                     )
                 )
 
+            elif isinstance(step, FilterStep):
+                cond_str = step.condition.strip()
+                replacements = [
+                    (r"\bis\s+greater\s+than\s+or\s+equal\s+to\b", ">="),
+                    (r"\bis\s+less\s+than\s+or\s+equal\s+to\b", "<="),
+                    (r"\bis\s+strictly\s+greater\s+than\b", ">"),
+                    (r"\bis\s+strictly\s+less\s+than\b", "<"),
+                    (r"\bis\s+at\s+least\b", ">="),
+                    (r"\bis\s+at\s+most\b", "<="),
+                    (r"\bis\s+greater\s+than\b", ">"),
+                    (r"\bis\s+less\s+than\b", "<"),
+                    (r"\bis\s+more\s+than\b", ">"),
+                    (r"\bis\s+over\b", ">"),
+                    (r"\bis\s+under\b", "<"),
+                    (r"\bis\s+above\b", ">"),
+                    (r"\bis\s+below\b", "<"),
+                    (r"\bis\s+equal\s+to\b", "=="),
+                    (r"\bis\s+identical\s+to\b", "=="),
+                    (r"\bis\s+the\s+same\s+as\b", "=="),
+                    (r"\bequals\b", "=="),
+                    (r"\bdoes\s+not\s+equal\b", "!="),
+                    (r"\bis\s+not\s+equal\s+to\b", "!="),
+                    (r"\bis\s+not\b", "!="),
+                ]
+                import re
+                for pat, rep in replacements:
+                    cond_str = re.sub(pat, rep, cond_str, flags=re.IGNORECASE)
+
+                query_call = ast.Call(
+                    func=ast.Attribute(value=ast.Name(id=target_df, ctx=ast.Load()), attr="query", ctx=ast.Load()),
+                    args=[ast.Constant(value=cond_str)],
+                    keywords=[],
+                )
+                stmts.append(ast.Assign(targets=[ast.Name(id=target_df, ctx=ast.Store())], value=query_call))
+
             elif isinstance(step, GroupByStep):
                 # agg_dict = {'amount': 'sum', ...}
                 agg_keys = [ast.Constant(value=src_col) for _, (_, src_col) in step.aggregations.items()]

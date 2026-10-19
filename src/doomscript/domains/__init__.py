@@ -14,6 +14,8 @@ from doomscript.domains.db import DB_DOMAIN
 from doomscript.domains.net import NET_DOMAIN
 from doomscript.domains.sim import SIM_DOMAIN
 from doomscript.domains.dsa import DSA_DOMAIN
+from doomscript.domains.viz import VIZ_DOMAIN
+from doomscript.domains.research import RESEARCH_DOMAIN
 
 __all__ = [
     "DomainContract",
@@ -29,4 +31,6 @@ __all__ = [
     "NET_DOMAIN",
     "SIM_DOMAIN",
     "DSA_DOMAIN",
+    "VIZ_DOMAIN",
+    "RESEARCH_DOMAIN",
 ]

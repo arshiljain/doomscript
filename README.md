@@ -267,6 +267,134 @@ say "Square root of 144:", math's sqrt(144)
 
 ---
 
+## English-First Domain Extensions: One Language, Many Domains
+
+DoomScript features a modular Domain Extension Architecture where you write ordinary core code, then activate specialized domain syntax via `use <domain>`. Every domain follows the **Three-Level Surface Pattern**:
+- **Level 1 (Inspect & Explore)**: Discover schema, inspect metadata, summary statistics.
+- **Level 2 (Single Operation)**: Direct, expressive single-line verbs.
+- **Level 3 (Compose Workflow)**: Multi-step pipeline, model training, simulation, or query blocks.
+
+All domains compile to zero-dependency execution engines or export into safe, idiomatic Python AST (`pandas`, `scikit-learn`, `sqlite3`, `lets-plot`, `urllib`).
+
+### 1. Data Engineering (`use data`)
+```doom
+use data
+
+raw_sales = [{"id": 1, "region": "North", "amount": 100}, {"id": 1, "region": "North", "amount": 100}]
+
+pipeline "clean_sales" from raw_sales into cleaned_sales:
+    validate:
+        require "region" is text
+        require "amount" is positive number
+        forbid nulls in "id"
+    remove duplicate rows
+    filter where amount is greater than 50
+    group by region:
+        calculate total_revenue as sum of amount
+        calculate order_count as count
+    sort by total_revenue descending
+    write to "output.csv"
+```
+*AST Export*: Lowers directly to `pandas.DataFrame.drop_duplicates()`, `.query()`, `.groupby()`, and `.to_csv()`.
+
+### 2. Machine Learning (`use ml`)
+```doom
+use ml
+
+model churn_predictor from customer_data:
+    target: churned
+    features: age, usage, monthly_fee
+    algorithm: random_forest
+    split: 80% training, 20% testing
+
+train churn_predictor
+evaluate churn_predictor into report
+say "Model Accuracy:", report["accuracy"]
+```
+*AST Export*: Generates idiomatic `sklearn.ensemble.RandomForestClassifier` and train/test pipelines. Built-in zero-dependency fallback algorithms run anywhere without external packages.
+
+### 3. Relational Data & SQL (`use db`)
+```doom
+use db
+
+query employees into senior_devs:
+    select id, name, salary
+    where salary is over 100000 and department equals "Engineering"
+    order by salary descending
+    limit 10
+```
+*AST Export*: Compiles to safe, parameterized `sqlite3.Cursor.execute()` with placeholder bindings, completely eliminating SQL injection risks.
+
+### 4. Web & API Automation (`use net`)
+```doom
+use net
+
+# Single-line request with automatic JSON parsing
+request GET "https://api.example.com/orders" into resp
+parse resp as JSON into orders
+
+# Composed workflow with backoff retries and authentication
+api "order_sync":
+    base_url: "https://api.example.com"
+    timeout: 10 seconds
+    retries: 3 times
+    get "/v1/inventory" into inv_resp
+    parse inv_resp as JSON into inventory
+    save inventory to "inventory.json"
+```
+*AST Export*: Translates to standard `urllib.request` with exponential backoff and timeout handling.
+
+### 5. Simulation & Optimization (`use sim`)
+```doom
+use sim
+
+# Discrete-event queue simulation (M/M/c)
+simulate customer_support:
+    arrivals: poisson with rate 12.0
+    service: exponential with rate 15.0
+    duration: 1000 events
+    servers: 2
+
+say "Average Waiting Time:", customer_support["summary"]["waiting_time"]["mean"]
+say "Server Utilization:", customer_support["utilization"]
+```
+*AST Export*: Lowers to stochastic event loops using Python's standard `random` and `heapq`.
+
+### 6. Testing & Algorithm Analysis (`use dsa`)
+```doom
+use dsa
+
+to quick_sort with items:
+    # ... sorting implementation ...
+    return sorted_items
+
+benchmark quick_sort:
+    input_sizes: [100, 500, 1000, 5000]
+    repeat: 5
+    measure: execution_time, memory
+
+say "Inferred Complexity:", quick_sort_benchmark["best_fit"]
+say "Peak Memory:", quick_sort_benchmark["peak_memory_bytes"]
+```
+*AST Export*: Uses `time.perf_counter_ns()` and `tracemalloc` to generate empirical runtime profiles with asymptotic $R^2$ curve fitting.
+
+### 7. Grammar-of-Graphics Visualization (`use viz`)
+```doom
+use viz
+
+plot sales as line into rev_trend:
+    x: month
+    y: revenue
+    color: region
+    title: "FY2026 Monthly Revenue Growth"
+    theme: minimal
+
+save rev_trend to "revenue.html" with width=1200, height=600
+```
+*AST Export*: Compiles directly into native `lets_plot.ggplot() + geom_line() + theme_minimal()` AST calls.
+
+---
+
 ## Development & Test Verification
 
 DoomScript is tested against a strict 200-sentence English corpus and unit test suite:

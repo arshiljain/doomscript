@@ -101,3 +101,12 @@ say "Domain activated"
     # Verifies that `use <domain>` compiles and executes without syntax error
     env = execute(source)
     assert env is not None
+
+
+def test_all_builtin_domains_registered():
+    import doomscript.domains
+    reg = get_domain_registry()
+    expected = ["data", "ml", "db", "net", "sim", "dsa", "viz", "research"]
+    for d in expected:
+        assert reg.has_domain(d), f"Domain {d} not registered"
+        assert reg.get_domain(d) is not None

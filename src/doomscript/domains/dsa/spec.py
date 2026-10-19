@@ -44,6 +44,7 @@ class ComplexityReport:
         return {
             "fn_name": self.fn_name,
             "best_fit": self.best_fit,
+            "complexity_class": self.best_fit,
             "confidence_r2": round(self.confidence_r2, 4),
             "timings": {s: round(t, 6) for s, t in self.timings.items()},
             "peak_memory_bytes": self.peak_memory_bytes,

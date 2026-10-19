@@ -27,19 +27,16 @@ class NetDomain(DomainContract):
 
     def can_handle_line(self, line: str) -> bool:
         s = line.strip().lower()
-        return (
+        if (
             s.startswith("inspect response ")
             or s.startswith("status of ")
             or s.startswith("request ")
-            or s.startswith("parse ")
-            and " as json " in s
-            or s.startswith("parse ")
-            and " as text " in s
-            or s.startswith("save ")
-            and " to " in s
-            and not s.endswith(":")
-            and not "plot" in s
-        )
+            or (s.startswith("parse ") and (" as json " in s or " as text " in s))
+        ):
+            return True
+        if re.match(r"^save\s+(?:response|resp)\s+to\s+", s):
+            return True
+        return False
 
     def can_handle_block(self, header: str) -> bool:
         s = header.strip().lower()

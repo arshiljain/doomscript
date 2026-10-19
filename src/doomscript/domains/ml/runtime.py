@@ -172,6 +172,7 @@ def evaluate_model(model_or_name: Any, scope: Optional[Dict[str, Any]] = None) -
         metrics["mse"] = round(mse, 4)
         metrics["rmse"] = round(math.sqrt(mse), 4)
         metrics["r2"] = round(r2_score(y_float, preds_float), 4)
+        metrics["r2_score"] = metrics["r2"]
     elif algo in ("k_means", "kmeans", "clustering"):
         task_type = "clustering"
         metrics["clusters"] = len(set(preds))
@@ -190,6 +191,7 @@ def evaluate_model(model_or_name: Any, scope: Optional[Dict[str, Any]] = None) -
         "task_type": task_type,
         "test_samples": len(X_eval),
         "metrics": metrics,
+        **metrics,
     }
     container.last_evaluation = report
     return report

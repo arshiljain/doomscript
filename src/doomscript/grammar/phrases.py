@@ -1554,6 +1554,9 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
                 reg = get_domain_registry()
                 if reg.has_domain(domain_name):
                     reg.activate(domain_name)
+                    dom = reg.get_domain(domain_name)
+                    if dom and dom.name == "research":
+                        in_research_mode = True
             except Exception:
                 pass
             if domain_name == "research":

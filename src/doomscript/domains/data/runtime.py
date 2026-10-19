@@ -4,6 +4,7 @@ import csv
 import json
 import math
 import os
+import re
 from typing import Any, Dict, List, Optional
 from doomscript.domains.base import DomainRuntime, DomainIR
 from doomscript.domains.data.spec import (
@@ -220,15 +221,41 @@ class DataPipelineRuntime(DomainRuntime):
                         pass
 
             elif isinstance(step, FilterStep):
+                cond_str = step.condition.strip()
+                replacements = [
+                    (r"\bis\s+greater\s+than\s+or\s+equal\s+to\b", ">="),
+                    (r"\bis\s+less\s+than\s+or\s+equal\s+to\b", "<="),
+                    (r"\bis\s+strictly\s+greater\s+than\b", ">"),
+                    (r"\bis\s+strictly\s+less\s+than\b", "<"),
+                    (r"\bis\s+at\s+least\b", ">="),
+                    (r"\bis\s+at\s+most\b", "<="),
+                    (r"\bis\s+greater\s+than\b", ">"),
+                    (r"\bis\s+less\s+than\b", "<"),
+                    (r"\bis\s+more\s+than\b", ">"),
+                    (r"\bis\s+over\b", ">"),
+                    (r"\bis\s+under\b", "<"),
+                    (r"\bis\s+above\b", ">"),
+                    (r"\bis\s+below\b", "<"),
+                    (r"\bis\s+equal\s+to\b", "=="),
+                    (r"\bis\s+identical\s+to\b", "=="),
+                    (r"\bis\s+the\s+same\s+as\b", "=="),
+                    (r"\bequals\b", "=="),
+                    (r"\bdoes\s+not\s+equal\b", "!="),
+                    (r"\bis\s+not\s+equal\s+to\b", "!="),
+                    (r"\bis\s+not\b", "!="),
+                ]
+                for pat, rep in replacements:
+                    cond_str = re.sub(pat, rep, cond_str, flags=re.IGNORECASE)
+
                 filtered = []
                 for r in rows:
                     env = {"math": math}
                     env.update(r)
                     try:
-                        if eval(step.condition, {"__builtins__": {}}, env):
+                        if eval(cond_str, {"__builtins__": {}}, env):
                             filtered.append(r)
                     except Exception:
-                        filtered.append(r)
+                        pass
                 rows = filtered
 
             elif isinstance(step, JoinStep):
