@@ -44,6 +44,20 @@ class HttpResponseContainer:
         return f"<Response [{self.status_code}] {self.method} {self.url}>"
 
 
+_MUTATING_ALLOWED: bool = True
+
+
+def set_mutating_requests_allowed(allowed: bool) -> None:
+    """Sets whether mutating HTTP requests (POST, PUT, DELETE, PATCH) are permitted."""
+    global _MUTATING_ALLOWED
+    _MUTATING_ALLOWED = bool(allowed)
+
+
+def is_mutating_requests_allowed() -> bool:
+    """Checks whether mutating HTTP requests are currently permitted."""
+    return _MUTATING_ALLOWED
+
+
 def execute_http_request(
     method: str,
     url: str,
@@ -55,6 +69,10 @@ def execute_http_request(
 ) -> HttpResponseContainer:
     """Executes an HTTP request with automatic retries and exponential backoff."""
     method = method.upper()
+    if method in ("POST", "PUT", "DELETE", "PATCH"):
+        if not is_mutating_requests_allowed():
+            raise PermissionError(f"Mutating HTTP request {method} is blocked by network permission policy")
+
     req_headers = dict(headers or {})
     data_bytes = None
 

@@ -2083,6 +2083,7 @@ from doomscript.domains.db.runtime import (
     inspect_table_schema,
     execute_raw_sql,
     get_db_runtime,
+    db_transaction,
 )
 
 def execute_db_ir(spec):
@@ -2117,6 +2118,8 @@ from doomscript.domains.net.runtime import (
     inspect_response,
     parse_response_content,
     save_response_content,
+    set_mutating_requests_allowed,
+    is_mutating_requests_allowed,
 )
 
 def execute_net_ir(spec):

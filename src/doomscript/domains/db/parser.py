@@ -35,18 +35,25 @@ class DBDomainParser(DomainParser):
         return None
 
     def parse_operation(self, line: str, line_no: int) -> Optional[str]:
-        # execute sql "<query>" [into <target>]
+        # execute sql / query db / query sql "<query>" [with <params>] [into <target>]
         m = re.match(
-            r"^execute\s+sql\s+[\"']([^\"']+)[\"'](?:\s+into\s+([A-Za-z_]\w*))?$",
+            r'^(?:execute\s+sql|query\s+(?:db|sql))\s+(?:"(.*?)"|\'(.*?)\')(?:\s+with\s+(.+?))?(?:\s+into\s+([A-Za-z_]\w*))?$',
             line.strip(),
             re.IGNORECASE,
         )
         if m:
-            sql_str = m.group(1)
-            target = m.group(2)
+            sql_str = m.group(1) if m.group(1) is not None else m.group(2)
+            params = m.group(3)
+            target = m.group(4)
+            clean_sql = sql_str.replace('"', '\\"')
+            call_expr = (
+                f'execute_raw_sql("{clean_sql}", params={params})'
+                if params
+                else f'execute_raw_sql("{clean_sql}")'
+            )
             if target:
-                return f'set {target} to execute_raw_sql("{sql_str}")'
-            return f'execute_raw_sql("{sql_str}")'
+                return f"set {target} to {call_expr}"
+            return call_expr
 
         # insert into <table> values <expr>
         m2 = re.match(

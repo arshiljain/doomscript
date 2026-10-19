@@ -1603,6 +1603,12 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
             emit(f"{indent}# target leetcode", line_idx)
             continue
 
+        # Database transaction: transaction [db]:
+        trans_m = re.match(r"^transaction(?:\s+db)?:$", code.strip(), re.IGNORECASE)
+        if trans_m:
+            emit(f"{indent}with db_transaction():", line_idx)
+            continue
+
         # Check domain block header (e.g. pipeline "name" from src into target:)
         if code.rstrip().endswith(":"):
             from doomscript.domains.registry import get_domain_registry

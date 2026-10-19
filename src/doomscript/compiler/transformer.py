@@ -883,7 +883,10 @@ class DoomToPython(Transformer):
     def with_stmt(self, args):
         if len(args) == 3:
             context_expr, target, body = args
-            opt_var = target if isinstance(target, ast.AST) else ast.Name(id=str(target), ctx=ast.Store())
+            if target is None:
+                opt_var = None
+            else:
+                opt_var = target if isinstance(target, ast.AST) else ast.Name(id=str(target), ctx=ast.Store())
         else:
             context_expr, body = args
             opt_var = None

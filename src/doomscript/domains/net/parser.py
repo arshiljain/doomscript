@@ -35,19 +35,72 @@ class NetDomainParser(DomainParser):
         return None
 
     def parse_operation(self, line: str, line_no: int) -> Optional[str]:
-        # request (GET|POST|PUT|DELETE|PATCH) "<url>" [with headers <headers>] [with json <body>] into <target>
-        req_m = re.match(
-            r"^request\s+(GET|POST|PUT|DELETE|PATCH)\s+([\"'][^\"']+[\"']|[A-Za-z_]\w*)(?:\s+with\s+headers\s+([^\s]+))?(?:\s+with\s+json\s+(.+?))?(?:\s+into\s+([A-Za-z_]\w*))?$",
+        # allow / block mutating network requests
+        if re.match(r"^allow\s+mutating\s+(?:network\s+)?requests$", line.strip(), re.IGNORECASE):
+            return "set_mutating_requests_allowed(True)"
+        if re.match(r"^(?:block|disallow)\s+mutating\s+(?:network\s+)?requests$", line.strip(), re.IGNORECASE):
+            return "set_mutating_requests_allowed(False)"
+
+        # request (GET|POST|PUT|DELETE|PATCH) <url> ...
+        req_match = re.match(
+            r"^request\s+(GET|POST|PUT|DELETE|PATCH)\s+([\"'][^\"']+[\"']|[A-Za-z_]\w*)(.*)$",
             line.strip(),
             re.IGNORECASE,
         )
-        if req_m:
-            method = req_m.group(1).upper()
-            url_expr = req_m.group(2)
-            headers_expr = req_m.group(3) or "{}"
-            body_expr = req_m.group(4) or "nothing"
-            target = req_m.group(5) or "response"
-            return f'set {target} to execute_http_request("{method}", {url_expr}, headers={headers_expr}, body={body_expr})'
+        if req_match:
+            method = req_match.group(1).upper()
+            url_expr = req_match.group(2)
+            rest = req_match.group(3).strip()
+
+            target = "response"
+            into_m = re.search(r"\s+into\s+([A-Za-z_]\w*)$", rest, re.IGNORECASE)
+            if into_m:
+                target = into_m.group(1)
+                rest = rest[:into_m.start()].strip()
+
+            timeout_expr = "10.0"
+            to_m = re.search(r"with\s+timeout\s+(\d+(?:\.\d+)?)\s*(?:seconds|second|s)?", rest, re.IGNORECASE)
+            if to_m:
+                timeout_expr = to_m.group(1)
+                rest = (rest[:to_m.start()] + " " + rest[to_m.end():]).strip()
+
+            retries_expr = "0"
+            ret_m = re.search(r"retry\s+(\d+)\s+times?", rest, re.IGNORECASE)
+            if ret_m:
+                retries_expr = ret_m.group(1)
+                rest = (rest[:ret_m.start()] + " " + rest[ret_m.end():]).strip()
+
+            bearer_token = None
+            bt_m = re.search(r"with\s+bearer\s+token\s+([\"'][^\"']+[\"']|[A-Za-z_]\w*)", rest, re.IGNORECASE)
+            if bt_m:
+                bearer_token = bt_m.group(1)
+                rest = (rest[:bt_m.start()] + " " + rest[bt_m.end():]).strip()
+
+            headers_expr = None
+            h_m = re.search(r"with\s+headers\s+([^\s]+)", rest, re.IGNORECASE)
+            if h_m:
+                headers_expr = h_m.group(1)
+                rest = (rest[:h_m.start()] + " " + rest[h_m.end():]).strip()
+
+            body_expr = "None"
+            b_m = re.search(r"with\s+json\s+(.+)$", rest, re.IGNORECASE)
+            if b_m:
+                body_expr = b_m.group(1).strip()
+
+            if bearer_token:
+                if headers_expr:
+                    headers_arg = f"dict({headers_expr}, **{{'Authorization': 'Bearer ' + {bearer_token}}})"
+                else:
+                    headers_arg = f"{{'Authorization': 'Bearer ' + {bearer_token}}}"
+            elif headers_expr:
+                headers_arg = headers_expr
+            else:
+                headers_arg = "{}"
+
+            return (
+                f'set {target} to execute_http_request("{method}", {url_expr}, '
+                f'headers={headers_arg}, body={body_expr}, timeout={timeout_expr}, retries={retries_expr})'
+            )
 
         # parse <resp> as JSON into <target>
         parse_m = re.match(
@@ -112,9 +165,9 @@ class NetDomainParser(DomainParser):
                 spec.retries = int(r_m.group(1))
                 continue
 
-            # get|post|put|delete "<endpoint>" into <target>
+            # [request] get|post|put|delete "<endpoint>" into <target>
             verb_m = re.match(
-                r"^(get|post|put|delete|patch)\s+[\"']([^\"']+)[\"'](?:\s+with\s+json\s+(.+?))?(?:\s+into\s+([A-Za-z_]\w*))?$",
+                r"^(?:request\s+)?(get|post|put|delete|patch)\s+[\"']([^\"']+)[\"'](?:\s+with\s+json\s+(.+?))?(?:\s+into\s+([A-Za-z_]\w*))?$",
                 line,
                 re.IGNORECASE,
             )

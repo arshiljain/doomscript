@@ -11,6 +11,8 @@ from doomscript.domains.net.runtime import (
     inspect_response,
     parse_response_content,
     save_response_content,
+    set_mutating_requests_allowed,
+    is_mutating_requests_allowed,
 )
 from doomscript.domains.net.exporter import NetASTExporter
 from doomscript.domains.registry import get_domain_registry
@@ -32,6 +34,9 @@ class NetDomain(DomainContract):
             or s.startswith("status of ")
             or s.startswith("request ")
             or (s.startswith("parse ") and (" as json " in s or " as text " in s))
+            or s.startswith("allow mutating ")
+            or s.startswith("block mutating ")
+            or s.startswith("disallow mutating ")
         ):
             return True
         if re.match(r"^save\s+(?:response|resp)\s+to\s+", s):
@@ -62,4 +67,6 @@ __all__ = [
     "inspect_response",
     "parse_response_content",
     "save_response_content",
+    "set_mutating_requests_allowed",
+    "is_mutating_requests_allowed",
 ]

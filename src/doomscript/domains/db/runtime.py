@@ -1,5 +1,6 @@
 """Runtime execution engine for Databases and SQL operations."""
 
+import contextlib
 import sqlite3
 from typing import Any, Dict, List, Optional, Tuple
 from doomscript.domains.base import DomainRuntime, DomainIR
@@ -14,6 +15,17 @@ class DBRuntime(DomainRuntime):
         self.db_path = db_path
         self._conn = sqlite3.connect(db_path, autocommit=True)
         self._conn.row_factory = sqlite3.Row
+
+    @contextlib.contextmanager
+    def transaction(self):
+        """Context-managed atomic transaction block."""
+        self._conn.execute("BEGIN TRANSACTION")
+        try:
+            yield self._conn
+            self._conn.execute("COMMIT")
+        except Exception:
+            self._conn.execute("ROLLBACK")
+            raise
 
     def get_connection(self) -> sqlite3.Connection:
         return self._conn
@@ -155,3 +167,8 @@ def execute_raw_sql(
         scope = dict(caller_frame.f_globals)
         scope.update(caller_frame.f_locals)
     return get_db_runtime().execute_raw_sql(sql, params, scope)
+
+
+def db_transaction():
+    """Context manager for DB transactions."""
+    return get_db_runtime().transaction()

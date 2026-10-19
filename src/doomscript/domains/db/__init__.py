@@ -10,6 +10,7 @@ from doomscript.domains.db.runtime import (
     execute_parameterized_query,
     inspect_table_schema,
     execute_raw_sql,
+    db_transaction,
 )
 from doomscript.domains.db.exporter import DBASTExporter
 from doomscript.domains.registry import get_domain_registry
@@ -31,6 +32,8 @@ class DBDomain(DomainContract):
             or s.startswith("schema of ")
             or s.startswith("execute sql ")
             or s.startswith("insert into ")
+            or s.startswith("query db ")
+            or s.startswith("query sql ")
         )
 
     def can_handle_block(self, header: str) -> bool:
@@ -54,4 +57,5 @@ __all__ = [
     "execute_parameterized_query",
     "inspect_table_schema",
     "execute_raw_sql",
+    "db_transaction",
 ]
