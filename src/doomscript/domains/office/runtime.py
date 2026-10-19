@@ -25,6 +25,8 @@ class DoomSpreadsheet:
 
     def add_row(self, row_data: Any) -> None:
         if isinstance(row_data, dict):
+            if not self.rows:
+                self.rows.append(list(row_data.keys()))
             self.rows.append(list(row_data.values()))
         elif isinstance(row_data, (list, tuple)):
             self.rows.append(list(row_data))
@@ -32,7 +34,15 @@ class DoomSpreadsheet:
             self.rows.append([row_data])
 
     def add_rows(self, rows_data: Any) -> None:
-        if isinstance(rows_data, list):
+        if hasattr(rows_data, "rows") and hasattr(rows_data, "columns"):
+            if not self.rows:
+                self.rows.append(list(rows_data.columns))
+            for r in rows_data.rows:
+                self.rows.append(list(r))
+            return
+        if hasattr(rows_data, "to_records"):
+            rows_data = rows_data.to_records()
+        if isinstance(rows_data, (list, tuple)):
             for r in rows_data:
                 self.add_row(r)
 

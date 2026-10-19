@@ -50,14 +50,51 @@ class VizASTExporter(DomainASTExporter):
         return set(), []
 
 
+from doomscript.domains.matcher import VerbSpec
+
+
 class VizDomain(DomainContract):
     """Visualization Domain Pack (Grammar of Graphics, Lets-Plot)."""
 
     name = "viz"
     aliases = ["visualization", "graphics", "plots", "plot"]
+    description = "Grammar of Graphics data visualization with layers, scales, themes, and facets"
     parser = VizDomainParser()
     runtime = VizRuntime()
     exporter = VizASTExporter()
+    capabilities = ["plots", "charts", "facets", "themes", "layers", "scales"]
+    optional_dependencies = ["lets_plot"]
+
+    verbs = [
+        VerbSpec(
+            name="explore",
+            pattern="explore {dataset:ident} [to understand {focus:expr}] [into {target:ident}]",
+            arg_schema={"dataset": "ident", "focus": "expr", "target": "ident"},
+            returns="Record",
+            description="Automated exploratory visualization and statistical insights",
+        ),
+        VerbSpec(
+            name="show_plot",
+            pattern="show {target_var:ident}",
+            arg_schema={"target_var": "ident"},
+            returns="None",
+            description="Display interactive plot figure",
+        ),
+        VerbSpec(
+            name="save_plot",
+            pattern="save {target_var:ident} to {path_str:expr}",
+            arg_schema={"target_var": "ident", "path_str": "expr"},
+            returns="str",
+            description="Save plot figure to PNG, SVG, or HTML file",
+        ),
+        VerbSpec(
+            name="plot",
+            pattern="plot {dataset:ident} as {geom:ident} with {params:expr} [into {target:ident}]",
+            arg_schema={"dataset": "ident", "geom": "ident", "params": "expr", "target": "ident"},
+            returns="Plot",
+            description="Construct single-layer plot figure",
+        ),
+    ]
 
     def can_handle_line(self, line: str) -> bool:
         # Handled by phrase normalizer

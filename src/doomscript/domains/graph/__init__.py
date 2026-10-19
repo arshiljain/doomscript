@@ -24,6 +24,7 @@ from doomscript.domains.graph.runtime import (
     graph_communities,
     execute_graph_ir,
 )
+from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.graph.exporter import GraphASTExporter
 from doomscript.domains.registry import get_domain_registry
 
@@ -33,9 +34,64 @@ class GraphDomain(DomainContract):
 
     name = "graph"
     aliases = ["network", "graph_theory"]
+    description = "Graph Analytics, shortest paths, PageRank, degree centrality, community detection"
     parser = GraphDomainParser()
     runtime = GraphRuntime()
     exporter = GraphASTExporter()
+    capabilities = ["graph", "pagerank", "shortest_path", "communities", "degrees"]
+    optional_dependencies = ["networkx"]
+
+    verbs = [
+        VerbSpec(
+            name="create_graph",
+            pattern="create (graph|directed graph|undirected graph) into {target:ident}",
+            arg_schema={"target": "ident"},
+            returns="Graph",
+            description="Create an empty directed or undirected graph",
+        ),
+        VerbSpec(
+            name="add_node",
+            pattern="add node {node_id:expr} to [graph] {g_var:ident}",
+            arg_schema={"node_id": "expr", "g_var": "ident"},
+            returns="None",
+            description="Add node vertex to graph",
+        ),
+        VerbSpec(
+            name="connect_nodes",
+            pattern="connect [node] {u:expr} to [node] {v:expr} in [graph] {g_var:ident} [with weight {w:expr}]",
+            arg_schema={"u": "expr", "v": "expr", "g_var": "ident"},
+            returns="None",
+            description="Add directed or undirected edge between two nodes",
+        ),
+        VerbSpec(
+            name="shortest_path",
+            pattern="shortest path from {u:expr} to {v:expr} in [graph] {g_var:ident} into {target:ident}",
+            arg_schema={"u": "expr", "v": "expr", "g_var": "ident", "target": "ident"},
+            returns="Collection",
+            description="Compute Dijkstra / BFS shortest path node sequence",
+        ),
+        VerbSpec(
+            name="pagerank",
+            pattern="pagerank of [graph] {g_var:ident} into {target:ident}",
+            arg_schema={"g_var": "ident", "target": "ident"},
+            returns="Record",
+            description="Compute Google PageRank centrality for all nodes",
+        ),
+        VerbSpec(
+            name="degrees",
+            pattern="degrees of nodes in [graph] {g_var:ident} into {target:ident}",
+            arg_schema={"g_var": "ident", "target": "ident"},
+            returns="Record",
+            description="Compute degree distribution of graph",
+        ),
+        VerbSpec(
+            name="communities",
+            pattern="detect communities in [graph] {g_var:ident} into {target:ident}",
+            arg_schema={"g_var": "ident", "target": "ident"},
+            returns="Collection",
+            description="Partition network into Louvain community clusters",
+        ),
+    ]
 
     def can_handle_line(self, line: str) -> bool:
         s = line.strip().lower()

@@ -44,9 +44,9 @@ class OfficeDomainParser(DomainParser):
             sheet_var = m_row.group(2).strip()
             return f"add_spreadsheet_row({sheet_var}, {row_expr})"
 
-        # add rows <rows_expr> to [spreadsheet] <sheet_var>
+        # add rows [from] <rows_expr> to [spreadsheet] <sheet_var>
         m_rows = re.match(
-            r"^add\s+rows\s+(.+?)\s+to\s+(?:spreadsheet\s+)?([A-Za-z_]\w*)$",
+            r"^add\s+rows\s+(?:from\s+)?(.+?)\s+to\s+(?:spreadsheet\s+)?([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )
