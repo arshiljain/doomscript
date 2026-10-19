@@ -2169,6 +2169,64 @@ def optimize_function(fn_name, initial_guess=None):
     return SimRuntime().execute_optimization(spec, scope)
 
 
+from doomscript.domains.dsa.runtime import (
+    DsaRuntime,
+    run_benchmark,
+    fit_complexity,
+    profile_memory_of_function as _prof_mem,
+)
+from doomscript.domains.dsa.spec import BenchmarkSpec
+
+def analyze_complexity(fn_name, input_sizes=None):
+    import sys
+    caller_frame = sys._getframe(1)
+    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
+    scope = dict(target_env)
+    if caller_frame.f_locals:
+        scope.update(caller_frame.f_locals)
+    spec = BenchmarkSpec(fn_name=fn_name, input_sizes=input_sizes or [100, 500, 1000, 2000])
+    return run_benchmark(spec, scope)
+
+
+def run_benchmark_with_sizes(fn_name, sizes):
+    import sys
+    caller_frame = sys._getframe(1)
+    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
+    scope = dict(target_env)
+    if caller_frame.f_locals:
+        scope.update(caller_frame.f_locals)
+    spec = BenchmarkSpec(fn_name=fn_name, input_sizes=sizes)
+    return run_benchmark(spec, scope)
+
+
+def profile_memory_of_function(fn_name, input_expr):
+    import sys
+    caller_frame = sys._getframe(1)
+    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
+    scope = dict(target_env)
+    if caller_frame.f_locals:
+        scope.update(caller_frame.f_locals)
+    return _prof_mem(fn_name, input_expr, scope)
+
+
+def execute_dsa_ir(spec):
+    import sys
+    from doomscript.domains.dsa.runtime import DsaRuntime
+    from doomscript.domains.registry import get_domain_registry
+    if isinstance(spec, str):
+        spec = get_domain_registry().get_spec(spec)
+    caller_frame = sys._getframe(1)
+    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
+    scope = dict(target_env)
+    if caller_frame.f_locals:
+        scope.update(caller_frame.f_locals)
+    res = DsaRuntime().execute_ir(spec, scope)
+    for k, v in scope.items():
+        target_env[k] = v
+    return res
+
+
+
 
 
 
