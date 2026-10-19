@@ -91,8 +91,8 @@ STATEMENT_START_KEYWORDS = {
     "increase", "decrease", "increment", "decrement", "bump", "double", "halve", "triple",
     "multiply", "divide",
     "if", "unless", "while", "until", "repeat", "for", "loop",
-    "try", "attempt", "return", "give", "hand", "yield",
-    "to", "how", "define", "function", "require", "ensure", "verify", "assert", "check",
+    "try", "attempt", "return", "give", "hand", "yield", "with",
+    "to", "def", "how", "define", "function", "require", "ensure", "verify", "assert", "check",
     "match", "when", "otherwise", "else", "elif",
     "write", "read", "append", "delete", "copy", "create",
     "ask", "call", "import", "unpack", "trim", "replace", "split", "join",
@@ -172,8 +172,11 @@ TYPE_CONTRACT_MAP: Dict[str, str] = {
 
 STRING_REGEX = re.compile(r'("""[\s\S]*?"""|\'\'\'[\s\S]*?\'\'\'|"(?:[^"\\]|\\.)*"|(?<!\w)\'(?:[^\'\\]|\\.)*\')')
 
+F_STRING_PREFIX_REGEX = re.compile(r'(?<!\w)[fF](?=["\'])')
+
 def mask_strings(text: str) -> Tuple[str, List[str]]:
     """Replaces string literals with placeholders to preserve their exact content."""
+    text = F_STRING_PREFIX_REGEX.sub("", text)
     strings = []
     def repl(m):
         idx = len(strings)
@@ -197,7 +200,7 @@ def split_comment(line: str) -> Tuple[str, str]:
         code_part = masked[:idx]
         comment_part = masked[idx:]
         return unmask_strings(code_part, strings), unmask_strings(comment_part, strings)
-    return line, ""
+    return unmask_strings(masked, strings), ""
 
 
 # ---------------------------------------------------------------------------
@@ -293,9 +296,9 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     if re.match(r"^(?:if|unless)\s+.+\s+then$", masked, re.IGNORECASE):
         masked = re.sub(r"\s+then$", ":", masked, flags=re.IGNORECASE)
 
-    # Pre-normalize and protect assert that / make sure that / check that
-    masked = re.sub(r"^\s*(?:make\s+sure\s+that|assert\s+that|check\s+that)\s+(.+?)\s+otherwise\s+(.+)$", r"verify that \1 otherwise \2", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"^\s*(?:make\s+sure\s+that|assert\s+that|check\s+that)\s+(.+)$", r'verify that \1 otherwise "Check failed"', masked, flags=re.IGNORECASE)
+    # Pre-normalize and protect assert that / make sure that / check that / assert
+    masked = re.sub(r"^\s*(?:make\s+sure\s+that|assert\s+that|assert|check\s+that)\s+(.+?)\s+otherwise\s+(.+)$", r"verify that \1 otherwise \2", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*(?:make\s+sure\s+that|assert\s+that|assert|check\s+that)\s+(.+)$", r'verify that \1 otherwise "Check failed"', masked, flags=re.IGNORECASE)
 
     # Phase 3: Classes and Instance Attributes
     masked = re.sub(
@@ -487,6 +490,9 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     # 9. Phase 2 Everyday Programming Rewrites
     masked = re.sub(r"^\s*(?:otherwise\s+if|else\s+if)\b", "elif", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*otherwise\b", "else", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*random\s+number\b", "roll", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*open\s+window\b", "open_window", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*with\s+(.+?)\s+(?:as|into)\s+([A-Za-z_]\w*)\s*:?", r"with \1 into \2:", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bask\s+(?:for\s+)?number\b", "ask number", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bask\s+(?:for\s+)?(?:boolean|yes/no|confirmation)\b", "ask boolean", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bread\s+csv\s+(?!file\b)", "read csv file ", masked, flags=re.IGNORECASE)
@@ -553,11 +559,11 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         )
 
     # Disambiguate reserved words used as standalone variable names
-    masked = re.sub(r"(?<!'s\s)(?<!\.)(?<![\"'])\bcount\b(?![\"'])(?!\s+of\b)(?!\s*\()", "_var_count", masked)
-    masked = re.sub(r"(?<!'s\s)(?<!\.)(?<![\"'])\bsum\b(?![\"'])(?!\s+of\b)(?!\s*\()", "_var_sum", masked)
+    masked = re.sub(r"(?<!'s\s)(?<!\.)(?<!\bto\s)(?<![\"'])\bcount\b(?![\"'])(?!\s+of\b)(?!\s*\()", "_var_count", masked)
+    masked = re.sub(r"(?<!'s\s)(?<!\.)(?<!\bto\s)(?<![\"'])\bsum\b(?![\"'])(?!\s+of\b)(?!\s*\()", "_var_sum", masked)
     masked = re.sub(r"(?<!'s\s)(?<!\.)(?<![\"'])\badd\b(?![\"'])(?!\s+(?:.+?\s+)?to\b)", "_var_add", masked)
-    masked = re.sub(r"(?<!'s\s)(?<!\.)(?<!\bbullet\s)(?<!\ba\s)(?<!\bempty\s)(?<!\bnew\s)(?<![\"'])\blist\b(?![\"'])(?!\s+files\b)(?!\s+of\b)(?!\s*\()", "_var_list", masked)
-    masked = re.sub(r"(?<!'s\s)(?<!\.)(?<!\bfind\s)(?<!\btake\s)(?<!\bdrop\s)\bfirst\b(?!\s+(?:\d+|[A-Za-z_]\w*)\s+items?\s+(?:of|from)\b|\s+item\s+of\b|\s+[A-Z]\w*)", "_var_first", masked)
+    masked = re.sub(r"(?<!'s\s)(?<!\.)(?<!\bto\s)(?<!\bbullet\s)(?<!\ba\s)(?<!\bempty\s)(?<!\bnew\s)(?<![\"'])\blist\b(?![\"'])(?!\s+files\b)(?!\s+of\b)(?!\s*\()", "_var_list", masked)
+    masked = re.sub(r"(?<!'s\s)(?<!\.)(?<!\bto\s)(?<!\bfind\s)(?<!\btake\s)(?<!\bdrop\s)\bfirst\b(?!\s+(?:\d+|[A-Za-z_]\w*)\s+items?\s+(?:of|from)\b|\s+item\s+of\b|\s+[A-Z]\w*)(?!\s*\()", "_var_first", masked)
     masked = re.sub(r"\bround\s*\(", "math_round(", masked, flags=re.IGNORECASE)
     masked = re.sub(r"(?<!\.)\bsum\s*\(", "agg_sum(", masked, flags=re.IGNORECASE)
 
@@ -623,6 +629,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"^\s*base\s+start\s*$", r"super().__init__()", masked, flags=re.IGNORECASE)
 
     # Function Definition & Returns
+    masked = re.sub(r"^\s*def\s+([A-Za-z_]\w*)\s*\(\s*(.*?)\s*\)\s*:?", lambda m: f"to {m.group(1)} with {m.group(2).strip()}:" if m.group(2).strip() else f"to {m.group(1)}:", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*(?:how\s+to|define|function)\s+([A-Za-z_]\w*)\s+with\s+(.+?):", r"to \1 with \2:", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*(?:how\s+to|define|function)\s+([A-Za-z_]\w*):", r"to \1:", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*(?:the\s+)?result\s+is\s+(.+)$", r"return \1", masked, flags=re.IGNORECASE)
@@ -646,8 +653,34 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s+is\s+not\s+between\s+(.+?)\s+and\s+([^\s;,\n]+)", r"not (\1 is between \2 and \3)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s+is\s+outside\s+(.+?)\s+and\s+([^\s;,\n]+)", r"not (\1 is between \2 and \3)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s+is\s+neither\s+(.+?)\s+nor\s+([^\s;,\n]+)", r"not (\1 is \2 or \1 is \3)", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"(\b\w+(?:'s\s+[A-Za-z_]\w*)?|\))\s+is\s+inside\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?|\[[^\]]*\])", r"\1 is inside \2", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"(\b\w+(?:'s\s+[A-Za-z_]\w*)?|\))\s+(?:is\s+)?not\s+(?:inside|in)\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?|\[[^\]]*\])", r"\1 is not inside \2", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"(\b\w+(?:'s\s+[A-Za-z_]\w*)?|\))\s+is\s+(?:inside|in)\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?|\[[^\]]*\]|\{[^\}]*\})", r"\1 is inside \2", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"(\b\w+(?:'s\s+[A-Za-z_]\w*)?|\))\s+(?:is\s+)?not\s+(?:inside|in)\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?|\[[^\]]*\]|\{[^\}]*\})", r"\1 is not inside \2", masked, flags=re.IGNORECASE)
+    
+    # Membership 'in' operator: x in y -> x is inside y (excluding for-loops, comprehensions, and statement keywords)
+    if not re.match(r"^\s*(?:set\s+(?:cookie|config)|remember\s+in\s+memory|mask\s+pii|list\s+files|start\s+server|insert\b|replace\b|display\s+colored)\b", masked, re.IGNORECASE):
+        def _in_repl(m):
+            if m.group(2).lower() in ("background", "bytes", "seconds", "minutes", "hours", "milliseconds", "days"):
+                return m.group(0)
+            if m.group(1).lower() in ("highest", "maximum", "lowest", "minimum", "files", "nulls", "items", "now"):
+                return m.group(0)
+            full_prefix = masked[:m.start()] + m.group(1)
+            if re.search(r"\bfor\s+(?:each\s+)?([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*)$", full_prefix, re.IGNORECASE):
+                return m.group(0)
+            if re.search(r"\beach\s+[A-Za-z_]\w*$", full_prefix, re.IGNORECASE):
+                return m.group(0)
+            prefix = masked[:m.start()]
+            if re.search(r"\b(?:insert|replace|files|nulls|background|highest|lowest|maximum|minimum|items)\s+(?:[^\n]*\s+)?$", prefix, re.IGNORECASE):
+                return m.group(0)
+            if re.search(r"\b(?:sum|average|avg|count|number)\s+of\s+(?:items\s+)?$", prefix, re.IGNORECASE):
+                return m.group(0)
+            return f"{m.group(1)} is inside {m.group(2)}"
+
+        masked = re.sub(
+            r"(\b\w+(?:\[[^\]]+\]|\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?|\))\s+in\s+([A-Za-z_]\w*(?:\[[^\]]+\]|\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?|\[|\(|\{)",
+            _in_repl,
+            masked,
+            flags=re.IGNORECASE,
+        )
     masked = re.sub(r"(\b\w+(?:'s\s+[A-Za-z_]\w*)?|\))\s+is\s+not\s+one\s+of\s+([\[A-Za-z_].*?)(?=\s+and\b|\s+or\b|:|\n|$)", r"not (\1 is one of \2)", masked, flags=re.IGNORECASE)
 
     # Fractions and Multiples
@@ -674,6 +707,8 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"\bmaximum\s+of\s+(\[[^\]]*\]|[A-Za-z_]\w*)", r"highest in \1", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bminimum\s+of\s+(\[[^\]]*\]|[A-Za-z_]\w*)", r"lowest in \1", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bmedian\s+of\s+(\[[^\]]*\]|[A-Za-z_]\w*)\b(?!\s+into\b)", r"math_median(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(?:the\s+)?(?:standard\s+deviation|std_dev|stdev)\s+of\s+(\[[^\]]*\]|[A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?|\([^)]+\))\b(?!\s+into\b)", r"std_dev(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(?:the\s+)?variance\s+of\s+(\[[^\]]*\]|[A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?|\([^)]+\))\b(?!\s+into\b)", r"variance(\1)", masked, flags=re.IGNORECASE)
 
     # Text & Type Transformations
     masked = re.sub(r"\bstrip\s+(?:spaces|whitespace)\s+from\s+(.+?)(?=\s+and\s+then|\s+into\b|\s*$|\))", r"str_trim(\1)", masked, flags=re.IGNORECASE)

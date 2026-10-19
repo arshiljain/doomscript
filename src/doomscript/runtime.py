@@ -106,9 +106,9 @@ def shuffle_list(collection):
 
 
 # Aggregate Functions
-def agg_sum(items):
+def agg_sum(items, *args, **kwargs):
     """Calculate sum of items."""
-    return sum(items)
+    return sum(items, *args, **kwargs)
 
 
 def agg_avg(items):
@@ -625,11 +625,11 @@ def ask_choice(prompt: str, options: list):
 
 
 # Math & Number Primitives
-def math_round(value, decimals=0):
+def math_round(value, decimals=None):
     """Round a number to specified decimal places."""
-    if decimals == 0:
-        return round(float(value))
-    return round(float(value), int(decimals))
+    if decimals is None or decimals == 0:
+        return round(value)
+    return round(value, int(decimals))
 
 
 def math_clamp(value, min_val, max_val):
@@ -698,7 +698,10 @@ mean = ds_mean
 median = ds_median
 std_dev = ds_std_dev
 stdev = ds_std_dev
+stats_stdev = ds_std_dev
 variance = ds_variance
+stats_variance = ds_variance
+stats_median = ds_median
 PI = math.pi
 E = math.e
 INF = float("inf")
@@ -808,9 +811,9 @@ def last_n_items(n, collection):
     return collection[-int(n):]
 
 
-def sorted_list(collection):
+def sorted_list(collection, *args, **kwargs):
     """Returns a newly sorted copy of the collection."""
-    return sorted(collection)
+    return sorted(collection, *args, **kwargs)
 
 
 def reversed_list(collection):

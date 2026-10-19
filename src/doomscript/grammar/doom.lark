@@ -165,7 +165,7 @@ fetch_json_stmt: "fetch" "json" "from" expr "into" target -> fetch_json
 fetch_text_stmt: "fetch" "text" "from" expr "into" target -> fetch_text
 download_file_stmt: "download" expr ("into" | "to") "file" expr -> download_file
 
-random_roll_stmt: ("roll" | "random" "number") ("between" | "from") sum_expr ("and" | "to") sum_expr "into" target -> random_range
+random_roll_stmt: "roll" ("between" | "from") sum_expr ("and" | "to") sum_expr "into" target -> random_range
 pick_random_stmt: "pick" "random" "from" expr "into" target -> pick_random
 shuffle_stmt: "shuffle" target -> shuffle_list
 
@@ -175,7 +175,7 @@ db_load_stmt: "load" "records" "from" "database" expr "table" expr "into" target
 beep_stmt: "beep" expr ("hz" | "hertz") "for" expr ("seconds" | "second" | "ms" | "milliseconds") -> beep_action
 play_sound_stmt: "play" "sound" expr -> play_sound_action
 
-open_window_stmt: "open" "window" expr "with" "width" expr [","] "height" expr -> open_window
+open_window_stmt: "open_window" expr "with" "width" expr [","] "height" expr -> open_window
 draw_circle_stmt: "draw" "circle" "at" expr "," expr "with" "radius" expr [","] "color" expr -> draw_circle
 draw_rect_stmt: "draw" "rectangle" "at" expr "," expr "with" "width" expr [","] "height" expr [","] "color" expr -> draw_rect
 draw_text_stmt: "draw" "text" expr "at" expr "," expr "with" "size" expr [","] "color" expr -> draw_text
@@ -194,6 +194,7 @@ expr_stmt: call_expr -> expr_stmt
 
 ?compound_stmt: if_stmt
               | unless_stmt
+              | with_stmt
               | try_stmt
               | repeat_stmt
               | repeat_range_stmt
@@ -206,6 +207,8 @@ expr_stmt: call_expr -> expr_stmt
               | attempt_stmt
               | func_def
               | class_def
+
+with_stmt: "with" expr ["into" target] ":"? _NEWLINE suite -> with_stmt
 
 class_def: "class" NAME ["(" NAME ")"] ":"? _NEWLINE suite -> class_def
 
@@ -303,6 +306,7 @@ CMP_OP: "<="
       | "is under"         // <
       | "is not inside"    // not in
       | "is not in"        // not in
+      | "not in"           // not in
       | "is not"           // !=
       | "isn't"            // !=
       | "equals"           // ==

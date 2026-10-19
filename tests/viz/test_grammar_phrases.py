@@ -106,6 +106,7 @@ final_spec = p.spec()
 
 
 def test_save_and_show_verbs(tmp_path):
+    pytest.importorskip("lets_plot")
     out_html = str(tmp_path / "chart.html").replace("\\", "/")
     code = f"""
 sales = [{{"x": 1, "y": 2}}]

@@ -880,6 +880,15 @@ class DoomToPython(Transformer):
         )
         return ast.Try(body=try_body, handlers=[handler], orelse=[], finalbody=always_body)
 
+    def with_stmt(self, args):
+        if len(args) == 3:
+            context_expr, target, body = args
+            opt_var = target if isinstance(target, ast.AST) else ast.Name(id=str(target), ctx=ast.Store())
+        else:
+            context_expr, body = args
+            opt_var = None
+        return ast.With(items=[ast.withitem(context_expr=to_load(context_expr), optional_vars=opt_var)], body=body)
+
     def repeat_range_stmt(self, args):
         var_name = args[0]
         start = args[1]
@@ -1026,6 +1035,8 @@ class DoomToPython(Transformer):
 
         for stmt in suite:
             if isinstance(stmt, ast.FunctionDef):
+                if stmt.name.startswith('_var_'):
+                    stmt.name = stmt.name[5:]
                 arg_names = [a.arg for a in stmt.args.args]
                 if not arg_names or arg_names[0] != 'self':
                     stmt.args.args.insert(0, ast.arg(arg='self', annotation=None))
@@ -1088,8 +1099,10 @@ class DoomToPython(Transformer):
             "equals": ast.Eq(),
             "is not inside": ast.NotIn(),
             "is not in": ast.NotIn(),
+            "not in": ast.NotIn(),
             "is inside": ast.In(),
             "is in": ast.In(),
+            "in": ast.In(),
             "is": ast.Eq(),
         }
         return ast.Compare(left=left, ops=[op_map[op_str]], comparators=[right])

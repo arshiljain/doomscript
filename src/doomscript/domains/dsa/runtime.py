@@ -60,7 +60,18 @@ def fit_complexity(sizes: List[int], times: List[float]) -> Tuple[str, float, Di
         r2 = 1.0 - (ss_res / ss_tot)
         r2_scores[name] = max(0.0, min(1.0, r2))
 
-    best_fit = max(r2_scores.items(), key=lambda it: it[1])[0]
+    complexity_order = ["O(1)", "O(log n)", "O(n)", "O(n log n)", "O(n^2)"]
+    max_r2 = max(r2_scores.values()) if r2_scores else 0.0
+
+    # Occam's razor: choose simplest model within 0.05 of max R2 (if R2 >= 0.70)
+    best_fit = None
+    for model in complexity_order:
+        if model in r2_scores and r2_scores[model] >= max(0.70, max_r2 - 0.05):
+            best_fit = model
+            break
+    if not best_fit:
+        best_fit = max(r2_scores.items(), key=lambda it: it[1])[0]
+
     return best_fit, r2_scores[best_fit], r2_scores
 
 
