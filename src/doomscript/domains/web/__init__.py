@@ -22,6 +22,7 @@ from doomscript.domains.web.runtime import (
     download_web_media,
     execute_web_ir,
 )
+from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.web.exporter import WebASTExporter
 from doomscript.domains.registry import get_domain_registry
 
@@ -31,9 +32,64 @@ class WebDomain(DomainContract):
 
     name = "web"
     aliases = ["crawl", "scrape", "browser"]
+    description = "Web scraping, DOM parsing, link extraction, HTML table parsing, and media downloading"
     parser = WebDomainParser()
     runtime = WebRuntime()
     exporter = WebASTExporter()
+    capabilities = ["scraping", "html", "links", "tables", "media_download"]
+    optional_dependencies = ["beautifulsoup4", "requests"]
+
+    verbs = [
+        VerbSpec(
+            name="open_webpage",
+            pattern="open webpage {url:expr} into {target:ident}",
+            arg_schema={"url": "expr", "target": "ident"},
+            returns="WebPage",
+            description="Fetch web page over HTTP and parse DOM structure",
+        ),
+        VerbSpec(
+            name="parse_html",
+            pattern="parse html {html_text:expr} into {target:ident}",
+            arg_schema={"html_text": "expr", "target": "ident"},
+            returns="WebPage",
+            description="Parse raw HTML document string into queryable DOM tree",
+        ),
+        VerbSpec(
+            name="webpage_title",
+            pattern="title of webpage {page_var:ident} into {target:ident}",
+            arg_schema={"page_var": "ident", "target": "ident"},
+            returns="str",
+            description="Extract <title> meta tag from page",
+        ),
+        VerbSpec(
+            name="webpage_text",
+            pattern="text in webpage {page_var:ident} into {target:ident}",
+            arg_schema={"page_var": "ident", "target": "ident"},
+            returns="str",
+            description="Extract cleaned inner text from page body",
+        ),
+        VerbSpec(
+            name="extract_links",
+            pattern="extract [all] links from [webpage] {page_var:ident} into {target:ident}",
+            arg_schema={"page_var": "ident", "target": "ident"},
+            returns="Collection",
+            description="Extract all resolved absolute URLs from anchor elements",
+        ),
+        VerbSpec(
+            name="find_table",
+            pattern="find table {index:int} in [webpage] {page_var:ident} into {target:ident}",
+            arg_schema={"index": "int", "page_var": "ident", "target": "ident"},
+            returns="Table",
+            description="Parse HTML <table> into structured Table object",
+        ),
+        VerbSpec(
+            name="download_media",
+            pattern="download all (images|media) from [webpage] {page_var:ident} to {dest_folder:expr} into {target:ident}",
+            arg_schema={"page_var": "ident", "dest_folder": "expr", "target": "ident"},
+            returns="Collection",
+            description="Download all images and media assets to local folder",
+        ),
+    ]
 
     def can_handle_line(self, line: str) -> bool:
         s = line.strip().lower()

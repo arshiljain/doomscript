@@ -14,6 +14,7 @@ from doomscript.domains.net.runtime import (
     set_mutating_requests_allowed,
     is_mutating_requests_allowed,
 )
+from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.net.exporter import NetASTExporter
 from doomscript.domains.registry import get_domain_registry
 
@@ -22,10 +23,44 @@ class NetDomain(DomainContract):
     """Web & API Automation domain pack providing HTTP verbs, retries, parsing, and workflow composition."""
 
     name = "net"
-    aliases = ["web", "api", "http"]
+    aliases = ["web_api", "http_api"]
+    description = "HTTP networking, REST APIs, JSON parsing, and response validation"
     parser = NetDomainParser()
     runtime = NetRuntime()
     exporter = NetASTExporter()
+    capabilities = ["http", "rest", "json", "download", "request"]
+    optional_dependencies = ["urllib", "requests"]
+
+    verbs = [
+        VerbSpec(
+            name="http_request",
+            pattern="(get|post|put|delete|patch) {url:expr} [with {params:expr}] into {target:ident}",
+            arg_schema={"url": "expr", "target": "ident"},
+            returns="Record",
+            description="Execute HTTP request to endpoint",
+        ),
+        VerbSpec(
+            name="inspect_response",
+            pattern="inspect response {resp:ident} [into {target:ident}]",
+            arg_schema={"resp": "ident", "target": "ident"},
+            returns="Record",
+            description="Inspect HTTP status code, headers, and payload size",
+        ),
+        VerbSpec(
+            name="parse_response",
+            pattern="parse [response] {resp:ident} as (json|text|html) into {target:ident}",
+            arg_schema={"resp": "ident", "target": "ident"},
+            returns="Any",
+            description="Parse HTTP response body into Record or string",
+        ),
+        VerbSpec(
+            name="save_response",
+            pattern="save response {resp:ident} to {path:expr}",
+            arg_schema={"resp": "ident", "path": "expr"},
+            returns="str",
+            description="Save response payload to local file",
+        ),
+    ]
 
     def can_handle_line(self, line: str) -> bool:
         s = line.strip().lower()

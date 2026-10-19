@@ -11,6 +11,7 @@ from doomscript.domains.opt.runtime import (
     parse_constraint,
     solve_linear_program,
 )
+from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.opt.exporter import OptASTExporter
 from doomscript.domains.registry import get_domain_registry
 
@@ -20,9 +21,22 @@ class OptDomain(DomainContract):
 
     name = "opt"
     aliases = ["optimization", "operations_research", "lp"]
+    description = "Linear programming, simplex algorithm, dual bounds, and operations research solvers"
     parser = OptDomainParser()
     runtime = OptRuntime()
     exporter = OptASTExporter()
+    capabilities = ["linear_programming", "simplex", "optimization"]
+    optional_dependencies = ["scipy"]
+
+    verbs = [
+        VerbSpec(
+            name="solve_lp",
+            pattern="solve [linear program] {lp_var:ident} into {target:ident}",
+            arg_schema={"lp_var": "ident", "target": "ident"},
+            returns="Record",
+            description="Solve linear programming problem using Simplex method",
+        ),
+    ]
 
     def can_handle_line(self, line: str) -> bool:
         s = line.strip().lower()

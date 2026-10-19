@@ -20,6 +20,7 @@ from doomscript.domains.nlp.runtime import (
     calculate_tfidf,
     extract_entities,
 )
+from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.nlp.exporter import NLPASTExporter
 from doomscript.domains.registry import get_domain_registry
 
@@ -29,9 +30,57 @@ class NLPDomain(DomainContract):
 
     name = "nlp"
     aliases = ["text", "text_analytics"]
+    description = "Natural Language Processing, tokenization, sentiment analysis, TF-IDF, named entity recognition"
     parser = NLPDomainParser()
     runtime = NLPRuntime()
     exporter = NLPASTExporter()
+    capabilities = ["tokenization", "sentiment", "tfidf", "entities", "cleaning"]
+    optional_dependencies = ["nltk", "spacy"]
+
+    verbs = [
+        VerbSpec(
+            name="clean_text",
+            pattern="clean [text] {text_expr:expr} into {target:ident}",
+            arg_schema={"text_expr": "expr", "target": "ident"},
+            returns="str",
+            description="Normalize case, remove punctuation, and strip whitespace",
+        ),
+        VerbSpec(
+            name="tokenize",
+            pattern="tokenize {text_expr:expr} into {target:ident}",
+            arg_schema={"text_expr": "expr", "target": "ident"},
+            returns="Collection",
+            description="Tokenize string into list of word tokens",
+        ),
+        VerbSpec(
+            name="ngrams",
+            pattern="(bigrams|trigrams) of {text_expr:expr} into {target:ident}",
+            arg_schema={"text_expr": "expr", "target": "ident"},
+            returns="Collection",
+            description="Extract consecutive N-gram word tuples",
+        ),
+        VerbSpec(
+            name="sentiment",
+            pattern="[analyze] sentiment of {text_expr:expr} into {target:ident}",
+            arg_schema={"text_expr": "expr", "target": "ident"},
+            returns="Record",
+            description="Compute polarity score and sentiment label",
+        ),
+        VerbSpec(
+            name="tfidf",
+            pattern="[calculate] tfidf of {corpus_expr:expr} into {target:ident}",
+            arg_schema={"corpus_expr": "expr", "target": "ident"},
+            returns="Table",
+            description="Compute Term Frequency - Inverse Document Frequency matrix",
+        ),
+        VerbSpec(
+            name="entities",
+            pattern="entities in {text_expr:expr} into {target:ident}",
+            arg_schema={"text_expr": "expr", "target": "ident"},
+            returns="Collection",
+            description="Extract named entities (people, places, dates)",
+        ),
+    ]
 
     def can_handle_line(self, line: str) -> bool:
         s = line.strip().lower()

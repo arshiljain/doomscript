@@ -30,6 +30,7 @@ from doomscript.domains.image.runtime import (
     save_image,
     execute_image_ir,
 )
+from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.image.exporter import ImageASTExporter
 from doomscript.domains.registry import get_domain_registry
 
@@ -39,9 +40,64 @@ class ImageDomain(DomainContract):
 
     name = "image"
     aliases = ["vision", "media", "img"]
+    description = "Image processing, resizing, cropping, rotation, filters, and formats"
     parser = ImageDomainParser()
     runtime = ImageRuntime()
     exporter = ImageASTExporter()
+    capabilities = ["image", "resize", "crop", "rotate", "filters", "drawing"]
+    optional_dependencies = ["Pillow", "opencv-python"]
+
+    verbs = [
+        VerbSpec(
+            name="open_image",
+            pattern="open image {path_expr:expr} into {target:ident}",
+            arg_schema={"path_expr": "expr", "target": "ident"},
+            returns="Image",
+            description="Open and decode bitmap or vector image from disk",
+        ),
+        VerbSpec(
+            name="create_blank_image",
+            pattern="create blank image of {width:int} by {height:int} [with color {color:expr}] into {target:ident}",
+            arg_schema={"width": "int", "height": "int", "target": "ident"},
+            returns="Image",
+            description="Create new empty raster canvas",
+        ),
+        VerbSpec(
+            name="resize_image",
+            pattern="resize image {img_var:ident} to {width:int} by {height:int} into {target:ident}",
+            arg_schema={"img_var": "ident", "width": "int", "height": "int", "target": "ident"},
+            returns="Image",
+            description="Scale image dimensions using bilinear interpolation",
+        ),
+        VerbSpec(
+            name="crop_image",
+            pattern="crop image {img_var:ident} to {coords:expr} into {target:ident}",
+            arg_schema={"img_var": "ident", "coords": "expr", "target": "ident"},
+            returns="Image",
+            description="Crop bounding box rectangle from image",
+        ),
+        VerbSpec(
+            name="rotate_image",
+            pattern="rotate image {img_var:ident} by {deg:expr} [degrees] into {target:ident}",
+            arg_schema={"img_var": "ident", "deg": "expr", "target": "ident"},
+            returns="Image",
+            description="Rotate image clockwise by angle degrees",
+        ),
+        VerbSpec(
+            name="apply_filter",
+            pattern="apply (grayscale|blur|sharpen) to [image] {img_var:ident} into {target:ident}",
+            arg_schema={"img_var": "ident", "target": "ident"},
+            returns="Image",
+            description="Apply convolution or color transform filter",
+        ),
+        VerbSpec(
+            name="save_image",
+            pattern="save image {img_var:ident} to {path:expr}",
+            arg_schema={"img_var": "ident", "path": "expr"},
+            returns="str",
+            description="Write encoded image to disk as PNG or JPEG",
+        ),
+    ]
 
     def can_handle_line(self, line: str) -> bool:
         s = line.strip().lower()
