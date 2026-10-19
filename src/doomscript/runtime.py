@@ -59,6 +59,12 @@ from doomscript.taxonomy import (
     to_table,
     to_records,
 )
+from doomscript.introspection import (
+    explain,
+    explain_domain,
+    preview_of,
+    summary_of,
+)
 
 
 def sleep(seconds):

@@ -11,13 +11,24 @@ class VerbSpec:
     """Specification of a single spoken-English domain operation verb."""
 
     pattern: str
-    emit: str
+    emit: str = ""
+    name: str = ""
+    arg_schema: Dict[str, str] = field(default_factory=dict)
+    defaults: Dict[str, Any] = field(default_factory=dict)
+    returns: str = "Any"
     doc: str = ""
+    description: str = ""
     _compiled_regex: Optional[re.Pattern] = field(default=None, repr=False)
     _slots: List[Tuple[str, str]] = field(default_factory=list, repr=False)
     _alt_groups: List[str] = field(default_factory=list, repr=False)
 
     def __post_init__(self):
+        if not self.description and self.doc:
+            self.description = self.doc
+        if not self.doc and self.description:
+            self.doc = self.description
+        if not self.name and self.pattern:
+            self.name = self.pattern.split()[0].replace("[", "").replace("]", "")
         self._compile()
 
     def _compile(self) -> None:

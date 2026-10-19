@@ -104,7 +104,8 @@ STATEMENT_START_KEYWORDS = {
     "scatter", "line", "bar", "histogram", "box",
     "train", "predict", "evaluate", "accuracy", "score",
     "distance", "point", "polygon", "maximize", "minimize", "optimize", "benchmark", "trace", "pop",
-    "sentiment", "tokenize", "entities", "tfidf", "sample"
+    "sentiment", "tokenize", "entities", "tfidf", "sample",
+    "explain", "preview", "summary"
 }
 
 CORE_COMMAND_VERBS: List[str] = [
@@ -1353,6 +1354,37 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     bench_m = re.match(r"^benchmark\s+(.+?)\s+with\s+(\d+)\s+iterations\s+for\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
     if bench_m:
         masked = f"set {bench_m.group(4)} to benchmark_block({bench_m.group(1).strip()}, {bench_m.group(2)}, {bench_m.group(3)})"
+
+    # Universal Introspection Framework (explain, summary of, preview of)
+    exp_dom_m = re.match(r"^explain\s+domain\s+([A-Za-z_]\w*)(?:\s+into\s+([A-Za-z_]\w*))?$", masked, re.IGNORECASE)
+    if exp_dom_m:
+        d_name = exp_dom_m.group(1).lower()
+        tgt = exp_dom_m.group(2)
+        if tgt:
+            masked = f'set {tgt} to explain_domain("{d_name}")'
+        else:
+            masked = f'say explain_domain("{d_name}")'
+
+    exp_into_m = re.match(r"^explain\s+(?!domain\b)(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if exp_into_m:
+        masked = f"set {exp_into_m.group(2)} to explain({exp_into_m.group(1).strip()})"
+    elif re.match(r"^explain\s+(?!domain\b)(.+)$", masked, re.IGNORECASE):
+        exp_bare_m = re.match(r"^explain\s+(?!domain\b)(.+)$", masked, re.IGNORECASE)
+        masked = f"say explain({exp_bare_m.group(1).strip()})"
+
+    prev_into_m = re.match(r"^preview\s+of\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if prev_into_m:
+        masked = f"set {prev_into_m.group(2)} to preview_of({prev_into_m.group(1).strip()})"
+    elif re.match(r"^preview\s+of\s+(.+)$", masked, re.IGNORECASE):
+        prev_bare_m = re.match(r"^preview\s+of\s+(.+)$", masked, re.IGNORECASE)
+        masked = f"say preview_of({prev_bare_m.group(1).strip()})"
+
+    summ_into_m = re.match(r"^summary\s+of\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if summ_into_m:
+        masked = f"set {summ_into_m.group(2)} to summary_of({summ_into_m.group(1).strip()})"
+    elif re.match(r"^summary\s+of\s+(.+)$", masked, re.IGNORECASE):
+        summ_bare_m = re.match(r"^summary\s+of\s+(.+)$", masked, re.IGNORECASE)
+        masked = f"say summary_of({summ_bare_m.group(1).strip()})"
 
     # =======================================================================
     # PHASES 26 TO 100 PHRASE NORMALIZATIONS

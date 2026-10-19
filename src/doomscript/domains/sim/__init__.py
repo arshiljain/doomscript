@@ -32,7 +32,6 @@ class SimDomain(DomainContract):
         return (
             s.startswith("inspect simulation ")
             or s.startswith("summarize ")
-            or s.startswith("summary of ")
             or s.startswith("sample ")
             or s.startswith("optimize ")
             or (s.startswith("run ") and "trials of" in s)

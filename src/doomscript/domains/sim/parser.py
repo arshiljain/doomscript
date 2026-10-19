@@ -43,17 +43,6 @@ class SimDomainParser(DomainParser):
             target = m2.group(2) or f"{var_name}_summary"
             return f"set {target} to summarize_metric({var_name})"
 
-        # summary of <var> [into <target>]
-        m_sum = re.match(
-            r"^summary\s+of\s+([A-Za-z_]\w*)(?:\s+into\s+([A-Za-z_]\w*))?$",
-            line.strip(),
-            re.IGNORECASE,
-        )
-        if m_sum:
-            var_name = m_sum.group(1)
-            target = m_sum.group(2) or f"{var_name}_summary"
-            return f"set {target} to summarize_uncertainty({var_name})"
-
         return None
 
     def parse_operation(self, line: str, line_no: int) -> Optional[str]:
