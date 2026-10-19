@@ -171,9 +171,16 @@ def fit_complexity(sizes: List[int], times: List[float]) -> Tuple[str, float, Di
         r2_scores[name] = max(0.0, min(1.0, r2))
 
     best_fit = max(r2_scores.items(), key=lambda it: it[1])[0]
-    # If O(n) explains >= 90% of variance and is within 0.03 of O(n^2) or O(n log n), prefer O(n)
-    if "O(n)" in r2_scores and r2_scores["O(n)"] >= 0.90:
-        if best_fit in ("O(n^2)", "O(n log n)") and (r2_scores[best_fit] - r2_scores["O(n)"] <= 0.03):
+
+    # If timings grew significantly (e.g., >= 1.8x between smallest and largest size),
+    # sublinear O(log n) or O(1) is physically ruled out when sizes grow multifold.
+    time_ratio = (times[-1] / max(times[0], 1e-9)) if len(times) >= 2 else 1.0
+    if time_ratio >= 1.8 and best_fit in ("O(1)", "O(log n)") and "O(n)" in r2_scores and r2_scores["O(n)"] >= 0.70:
+        best_fit = "O(n)"
+
+    # If O(n) explains >= 85% of variance and is within 0.05 of O(n^2) or O(n log n), prefer O(n)
+    if "O(n)" in r2_scores and r2_scores["O(n)"] >= 0.85:
+        if best_fit in ("O(n^2)", "O(n log n)") and (r2_scores[best_fit] - r2_scores["O(n)"] <= 0.05):
             best_fit = "O(n)"
 
     return best_fit, r2_scores[best_fit], r2_scores

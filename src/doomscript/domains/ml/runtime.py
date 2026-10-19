@@ -2,6 +2,7 @@
 
 import math
 import os
+import pickle
 from typing import Any, Dict, List, Optional, Tuple
 from doomscript.domains.base import DomainRuntime, DomainIR
 from doomscript.domains.ml.spec import ModelSpec, EvaluationReport
@@ -32,6 +33,7 @@ class ModelContainer:
         self.X_test: List[List[float]] = []
         self.y_train: List[Any] = []
         self.y_test: List[Any] = []
+        self.scalers: Dict[int, Tuple[float, float]] = {}
         self.last_evaluation: Optional[Dict[str, Any]] = None
 
     def __repr__(self) -> str:
@@ -105,12 +107,29 @@ def train_model(model_or_name: Any, scope: Optional[Dict[str, Any]] = None) -> M
         raise ValueError(f"Dataset '{dataset_name}' contains no rows to train on")
 
     # 2. Split dataset
+    seed = spec.seed if spec.seed is not None else 42
     if spec.split_train < 1.0 and len(X) >= 4:
         X_train, X_test, y_train, y_test = train_test_split(
-            X, y, train_ratio=spec.split_train, seed=42
+            X, y, train_ratio=spec.split_train, seed=seed
         )
     else:
-        X_train, X_test, y_train, y_test = X, X, y, y
+        X_train, X_test, y_train, y_test = [r[:] for r in X], [r[:] for r in X], list(y), list(y)
+
+    # 2b. Preprocessing: scaling
+    if spec.scale_features:
+        for feat in spec.scale_features:
+            if feat in spec.features:
+                idx = spec.features.index(feat)
+                vals = [r[idx] for r in X_train]
+                if vals:
+                    mean_val = sum(vals) / len(vals)
+                    var_val = sum((v - mean_val) ** 2 for v in vals) / len(vals)
+                    std_val = math.sqrt(var_val) if var_val > 1e-9 else 1.0
+                    container.scalers[idx] = (mean_val, std_val)
+                    for r in X_train:
+                        r[idx] = (r[idx] - mean_val) / std_val
+                    for r in X_test:
+                        r[idx] = (r[idx] - mean_val) / std_val
 
     container.X_train = X_train
     container.X_test = X_test
@@ -217,13 +236,20 @@ def predict_model(
     # Convert features to matrix
     if isinstance(features_data, list):
         if features_data and isinstance(features_data[0], list):
-            X = features_data
+            X = [r[:] for r in features_data]
         else:
             X, _ = _extract_dataset_matrices(features_data, container.spec.features)
     elif isinstance(features_data, dict):
         X, _ = _extract_dataset_matrices([features_data], container.spec.features)
     else:
         X = []
+
+    # Apply scalers if present
+    if container.scalers:
+        for r in X:
+            for idx, (mean_val, std_val) in container.scalers.items():
+                if idx < len(r):
+                    r[idx] = (r[idx] - mean_val) / std_val
 
     return container.model.predict(X)
 
@@ -248,3 +274,115 @@ def inspect_model(model_or_name: Any, scope: Optional[Dict[str, Any]] = None) ->
         "test_samples": len(container.X_test),
         "last_evaluation": container.last_evaluation,
     }
+
+
+def cross_validate_model(
+    model_or_name: Any, folds: int = 5, scope: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """Evaluates model performance across K stratified/sequential folds."""
+    if scope is None:
+        import sys
+        caller_frame = sys._getframe(1)
+        scope = dict(caller_frame.f_globals)
+        scope.update(caller_frame.f_locals)
+    container = _resolve_model(model_or_name, scope)
+    spec = container.spec
+    dataset = scope.get(spec.dataset)
+    if dataset is None:
+        raise ValueError(f"Dataset '{spec.dataset}' not found for cross-validation")
+
+    X, y = _extract_dataset_matrices(dataset, spec.features, spec.target)
+    n = len(X)
+    if n < folds:
+        folds = max(2, n)
+
+    fold_size = max(1, n // folds)
+    scores: List[float] = []
+
+    algo = spec.algorithm.lower()
+    is_regression = algo in ("linear_regression", "ols")
+
+    for k in range(folds):
+        val_start = k * fold_size
+        val_end = (k + 1) * fold_size if k < folds - 1 else n
+        X_val = [r[:] for r in X[val_start:val_end]]
+        y_val = list(y[val_start:val_end])
+        X_tr = [r[:] for r in X[:val_start] + X[val_end:]]
+        y_tr = list(y[:val_start] + y[val_end:])
+
+        if not X_val or not X_tr:
+            continue
+
+        # Apply scaling if configured
+        if spec.scale_features:
+            for feat in spec.scale_features:
+                if feat in spec.features:
+                    idx = spec.features.index(feat)
+                    vals = [r[idx] for r in X_tr]
+                    if vals:
+                        mean_val = sum(vals) / len(vals)
+                        var_val = sum((v - mean_val) ** 2 for v in vals) / len(vals)
+                        std_val = math.sqrt(var_val) if var_val > 1e-9 else 1.0
+                        for r in X_tr:
+                            r[idx] = (r[idx] - mean_val) / std_val
+                        for r in X_val:
+                            r[idx] = (r[idx] - mean_val) / std_val
+
+        if is_regression:
+            m = NativeLinearRegression()
+            m.fit(X_tr, [float(v) for v in y_tr])
+            preds = m.predict(X_val)
+            y_float = [float(v) for v in y_val]
+            preds_float = [float(p) for p in preds]
+            r2 = r2_score(y_float, preds_float)
+            scores.append(r2)
+        else:
+            if algo in ("decision_tree", "tree"):
+                m = NativeDecisionTree()
+            elif algo in ("random_forest", "forest"):
+                m = NativeRandomForest()
+            else:
+                m = NativeLogisticRegression()
+            m.fit(X_tr, y_tr)
+            preds = m.predict(X_val)
+            acc = accuracy_score(y_val, preds)
+            scores.append(acc)
+
+    mean_s = sum(scores) / len(scores) if scores else 0.0
+    var_s = sum((s - mean_s) ** 2 for s in scores) / len(scores) if len(scores) > 1 else 0.0
+    std_s = math.sqrt(var_s)
+
+    return {
+        "model": container.name,
+        "folds": folds,
+        "scores": [round(s, 4) for s in scores],
+        "mean_score": round(mean_s, 4),
+        "std_score": round(std_s, 4),
+    }
+
+
+def save_model(model_or_name: Any, path: str, scope: Optional[Dict[str, Any]] = None) -> str:
+    """Serializes a trained model container to disk."""
+    if scope is None:
+        import sys
+        caller_frame = sys._getframe(1)
+        scope = dict(caller_frame.f_globals)
+        scope.update(caller_frame.f_locals)
+    container = _resolve_model(model_or_name, scope)
+    clean_path = str(path).strip().strip("'\"")
+    parent_dir = os.path.dirname(os.path.abspath(clean_path))
+    if parent_dir:
+        os.makedirs(parent_dir, exist_ok=True)
+    with open(clean_path, "wb") as f:
+        pickle.dump(container, f)
+    return clean_path
+
+
+def load_model(path: str) -> ModelContainer:
+    """Deserializes a trained model container from disk."""
+    clean_path = str(path).strip().strip("'\"")
+    with open(clean_path, "rb") as f:
+        container = pickle.load(f)
+    if not isinstance(container, ModelContainer):
+        raise TypeError(f"Loaded object is not a ModelContainer: {type(container)}")
+    return container

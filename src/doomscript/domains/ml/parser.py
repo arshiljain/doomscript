@@ -64,6 +64,40 @@ class MLDomainParser(DomainParser):
             target = pred_m.group(3)
             return f"set {target} to predict_model({model_name}, {data_var})"
 
+        # cross validate <model_name> [with <N> folds] [into <target>]
+        cv_m = re.match(
+            r"^cross\s+validate\s+([A-Za-z_]\w*)(?:\s+with\s+(\d+)\s+folds?)?(?:\s+into\s+([A-Za-z_]\w*))?$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if cv_m:
+            model_name = cv_m.group(1)
+            folds = int(cv_m.group(2)) if cv_m.group(2) else 5
+            target = cv_m.group(3) or f"{model_name}_cv"
+            return f"set {target} to cross_validate_model({model_name}, folds={folds})"
+
+        # save model <model_name> to <path>
+        save_m = re.match(
+            r"^save\s+model\s+([A-Za-z_]\w*)\s+to\s+(.+)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if save_m:
+            model_name = save_m.group(1)
+            path = save_m.group(2).strip()
+            return f"save_model({model_name}, {path})"
+
+        # load model from <path> into <target>
+        load_m = re.match(
+            r"^load\s+model\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if load_m:
+            path = load_m.group(1).strip()
+            target = load_m.group(2).strip()
+            return f"set {target} to load_model({path})"
+
         return None
 
     def parse_block(
@@ -101,15 +135,29 @@ class MLDomainParser(DomainParser):
                 spec.features = [f.strip().strip("\"'") for f in raw_feats if f.strip()]
                 continue
 
+            # scale: <c1>, <c2>, ...
+            scale_m = re.match(r"^scale(?:_features)?\s*:\s*(.+)$", line, re.IGNORECASE)
+            if scale_m:
+                raw_feats = scale_m.group(1).split(",")
+                spec.scale_features = [f.strip().strip("\"'") for f in raw_feats if f.strip()]
+                continue
+
+            # encode: <c1>, <c2>, ...
+            encode_m = re.match(r"^encode(?:_features)?\s*:\s*(.+)$", line, re.IGNORECASE)
+            if encode_m:
+                raw_feats = encode_m.group(1).split(",")
+                spec.encode_features = [f.strip().strip("\"'") for f in raw_feats if f.strip()]
+                continue
+
             # algorithm: <algo>
             algo_m = re.match(r"^algorithm\s*:\s*([A-Za-z_]\w*)$", line, re.IGNORECASE)
             if algo_m:
                 spec.algorithm = algo_m.group(1).lower()
                 continue
 
-            # split: 80% training, 20% testing
+            # split: 80% training, 20% testing [with seed <seed>]
             split_m = re.match(
-                r"^split\s*:\s*(\d+)%?\s*(?:training|train)?\s*,\s*(\d+)%?\s*(?:testing|test)?",
+                r"^split\s*:\s*(\d+)%?\s*(?:training|train)?\s*,\s*(\d+)%?\s*(?:testing|test)?(?:\s+with\s+seed\s+(\d+))?",
                 line,
                 re.IGNORECASE,
             )
@@ -118,6 +166,14 @@ class MLDomainParser(DomainParser):
                 test_p = float(split_m.group(2)) / 100.0
                 spec.split_train = train_p
                 spec.split_test = test_p
+                if split_m.group(3):
+                    spec.seed = int(split_m.group(3))
+                continue
+
+            # seed: <digits>
+            seed_m = re.match(r"^seed\s*:\s*(\d+)$", line, re.IGNORECASE)
+            if seed_m:
+                spec.seed = int(seed_m.group(1))
                 continue
 
         errors = spec.validate()

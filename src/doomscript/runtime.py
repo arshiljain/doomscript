@@ -2039,6 +2039,9 @@ from doomscript.domains.ml.runtime import (
     inspect_model,
     ModelContainer,
     MLModelRuntime,
+    cross_validate_model,
+    save_model,
+    load_model,
 )
 
 def execute_data_ir(spec):

@@ -69,12 +69,36 @@ class MLASTExporter(DomainASTExporter):
                 )
             )
 
+        # 1b. Feature scaling if configured
+        if ir.scale_features:
+            imports.add("sklearn.preprocessing")
+            scaler_inst_name = f"{var_name}_scaler"
+            stmts.append(
+                ast.Assign(
+                    targets=[ast.Name(id=scaler_inst_name, ctx=ast.Store())],
+                    value=ast.Call(func=ast.Name(id="StandardScaler", ctx=ast.Load()), args=[], keywords=[]),
+                )
+            )
+            stmts.append(
+                ast.Assign(
+                    targets=[ast.Name(id=x_name, ctx=ast.Store())],
+                    value=ast.Call(
+                        func=ast.Attribute(value=ast.Name(id=scaler_inst_name, ctx=ast.Load()), attr="fit_transform", ctx=ast.Load()),
+                        args=[ast.Name(id=x_name, ctx=ast.Load())],
+                        keywords=[],
+                    ),
+                )
+            )
+
         # 2. Instantiate and fit sklearn model
         model_inst_name = f"{var_name}_model"
+        inst_keywords = []
+        if ir.seed is not None and algo_cls in ("RandomForestClassifier", "LogisticRegression", "DecisionTreeClassifier", "KMeans"):
+            inst_keywords.append(ast.keyword(arg="random_state", value=ast.Constant(value=ir.seed)))
         inst_call = ast.Call(
             func=ast.Name(id=algo_cls, ctx=ast.Load()),
             args=[],
-            keywords=[],
+            keywords=inst_keywords,
         )
         stmts.append(ast.Assign(targets=[ast.Name(id=model_inst_name, ctx=ast.Store())], value=inst_call))
 

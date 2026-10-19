@@ -18,6 +18,9 @@ class ModelSpec(DomainIR):
     split_test: float = 0.2
     hyperparameters: Dict[str, Any] = field(default_factory=dict)
     target_var: Optional[str] = None
+    seed: Optional[int] = 42
+    scale_features: List[str] = field(default_factory=list)
+    encode_features: List[str] = field(default_factory=list)
 
     def validate(self) -> List[str]:
         errors = []

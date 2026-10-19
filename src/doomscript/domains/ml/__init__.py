@@ -33,6 +33,9 @@ class MLDomain(DomainContract):
             or s.startswith("predict with ")
             or s.startswith("inspect model ")
             or s.startswith("summary of model ")
+            or s.startswith("cross validate ")
+            or s.startswith("save model ")
+            or s.startswith("load model ")
         )
 
     def can_handle_block(self, header: str) -> bool:
@@ -57,4 +60,7 @@ __all__ = [
     "evaluate_model",
     "predict_model",
     "inspect_model",
+    "cross_validate_model",
+    "save_model",
+    "load_model",
 ]
