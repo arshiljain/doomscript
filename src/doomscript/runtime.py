@@ -2309,6 +2309,35 @@ def execute_nlp_ir(spec):
     return res
 
 
+from doomscript.domains.geo.runtime import (
+    point,
+    polygon,
+    distance_between,
+    is_point_in_polygon,
+    bounding_box,
+    spatial_join,
+    to_geojson,
+    GeoRuntime,
+)
+
+def execute_geo_ir(spec):
+    import sys
+    from doomscript.domains.geo.runtime import GeoRuntime
+    from doomscript.domains.registry import get_domain_registry
+    if isinstance(spec, str):
+        spec = get_domain_registry().get_spec(spec)
+    caller_frame = sys._getframe(1)
+    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
+    scope = dict(target_env)
+    if caller_frame.f_locals:
+        scope.update(caller_frame.f_locals)
+    res = GeoRuntime().execute_ir(spec, scope)
+    for k, v in scope.items():
+        target_env[k] = v
+    return res
+
+
+
 
 
 
