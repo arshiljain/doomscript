@@ -16,7 +16,7 @@ In **DoomScript**, programming uses **Subject-Verb-Object (SVO)** phrasing, **po
 
 ---
 
-## 📚 20 Side-by-Side Examples (Beginner to Advanced)
+## 📚 25 Side-by-Side Examples (Beginner to Advanced)
 
 ```
 Table of Contents:
@@ -24,6 +24,7 @@ Table of Contents:
  Tier 2: Real-World Data, Web & Media (6–10)
  Tier 3: Algorithms, Math & Research (11–15)
  Tier 4: Modern Production Paradigms (16–20)
+ Tier 5: Science, Hardware & New Frontier Megapacks (21–25)
 ```
 
 ---
@@ -644,6 +645,248 @@ calculate convex hull of perimeter_coords into geofence_polygon
 
 ---
 
+### Tier 5: Science, Hardware & New Frontier Megapacks
+
+#### Example 21: Quantum Computing (Bell State & Multi-Shot Sampling)
+*Preparing entangled qubits and sampling superposition states without tensor math.*
+
+##### 🐍 Python
+```python
+import numpy as np
+
+# Simulate 2-qubit statevector manually
+# |00> = [1, 0, 0, 0]^T
+state = np.array([1.0 + 0j, 0, 0, 0])
+
+# Hadamard on qubit 0: H (x) I
+H = (1 / np.sqrt(2)) * np.array([[1, 1], [1, -1]])
+I = np.eye(2)
+H_full = np.kron(H, I)
+state = H_full @ state
+
+# CNOT (qubit 0 control, qubit 1 target)
+CNOT = np.array([
+    [1, 0, 0, 0],
+    [0, 1, 0, 0],
+    [0, 0, 0, 1],
+    [0, 0, 1, 0]
+])
+bell_state = CNOT @ state
+
+# Sample from state probabilities
+probs = np.abs(bell_state) ** 2
+outcomes = ["00", "01", "10", "11"]
+counts = dict(zip(outcomes, np.random.multinomial(1000, probs)))
+```
+
+##### 🔮 DoomScript
+```doomscript
+use quantum
+
+create quantum register with 2 qubits into reg
+apply hadamard to qubit 0 in reg
+apply cnot with control 0 and target 1 in reg
+measure quantum register reg with shots 1000 into counts
+```
+> **Why DoomScript is easier:** 30 lines of Kronecker matrix algebra and complex-vector multiplication collapse into 4 natural English statements.
+
+---
+
+#### Example 22: Genomics & Biological Sequence Alignment
+*Transcribing DNA and computing Needleman-Wunsch global alignment.*
+
+##### 🐍 Python
+```python
+# Needleman-Wunsch global alignment algorithm in pure Python
+seq1 = "GATTACA"
+seq2 = "GCATGCU"
+n, m = len(seq1), len(seq2)
+match, mismatch, gap = 1, -1, -1
+
+dp = [[0] * (m + 1) for _ in range(n + 1)]
+for i in range(n + 1):
+    dp[i][0] = i * gap
+for j in range(m + 1):
+    dp[0][j] = j * gap
+
+for i in range(1, n + 1):
+    for j in range(1, m + 1):
+        score = match if seq1[i - 1] == seq2[j - 1] else mismatch
+        dp[i][j] = max(
+            dp[i - 1][j - 1] + score,
+            dp[i - 1][j] + gap,
+            dp[i][j - 1] + gap
+        )
+
+# Traceback to reconstruct alignment
+align1, align2 = [], []
+i, j = n, m
+while i > 0 or j > 0:
+    if i > 0 and j > 0 and dp[i][j] == dp[i - 1][j - 1] + (match if seq1[i - 1] == seq2[j - 1] else mismatch):
+        align1.append(seq1[i - 1])
+        align2.append(seq2[j - 1])
+        i -= 1; j -= 1
+    elif i > 0 and dp[i][j] == dp[i - 1][j] + gap:
+        align1.append(seq1[i - 1])
+        align2.append("-")
+        i -= 1
+    else:
+        align1.append("-")
+        align2.append(seq2[j - 1])
+        j -= 1
+alignment_score = dp[n][m]
+```
+
+##### 🔮 DoomScript
+```doomscript
+use bio
+
+dna = "ATGCGATCGATCGATCGTAA"
+calculate gc content of dna into gc_val
+transcribe dna dna into rna
+align sequences "GATTACA" and "GCATGCU" using needleman wunsch into alignment
+```
+> **Why DoomScript is easier:** Replaces complex dynamic programming tables, boundary initializations, and pointer tracebacks with declarative biological verbs.
+
+---
+
+#### Example 23: Blockchain & Merkle Tree Inclusion Proofs
+*Building cryptographic Merkle trees and mining Proof-of-Work blocks.*
+
+##### 🐍 Python
+```python
+import hashlib
+
+def sha256(data: str) -> str:
+    return hashlib.sha256(data.encode("utf-8")).hexdigest()
+
+txs = ["tx1_alice_to_bob", "tx2_bob_to_carol", "tx3_carol_to_dave"]
+leaves = [sha256(t) for t in txs]
+
+# Build Merkle tree root
+tree_level = leaves[:]
+if len(tree_level) % 2 == 1:
+    tree_level.append(tree_level[-1])
+while len(tree_level) > 1:
+    next_level = []
+    for i in range(0, len(tree_level), 2):
+        combined = tree_level[i] + tree_level[i + 1]
+        next_level.append(sha256(combined))
+    tree_level = next_level
+merkle_root = tree_level[0]
+
+# Proof-of-Work mining
+difficulty = 2
+target_prefix = "0" * difficulty
+nonce = 0
+while True:
+    header = f"{merkle_root}_{nonce}"
+    block_hash = sha256(header)
+    if block_hash.startswith(target_prefix):
+        break
+    nonce += 1
+```
+
+##### 🔮 DoomScript
+```doomscript
+use chain
+
+txs = ["tx1_alice_to_bob", "tx2_bob_to_carol", "tx3_carol_to_dave"]
+create merkle tree from txs into tree
+get merkle root of tree into merkle_root
+mine block with data merkle_root and difficulty 2 into mined_block
+```
+> **Why DoomScript is easier:** Tree level parity handling, iterative hashing, and mining loops are packaged into readable English sentences.
+
+---
+
+#### Example 24: Ballistics with Aerodynamic Drag & Closed-Loop PID
+*Simulating real-world projectile flight with air resistance and tuning PID controls.*
+
+##### 🐍 Python
+```python
+import math
+
+# Ballistic trajectory with quadratic air drag (Euler method)
+def simulate_drag(v0, theta_deg, cd, m, g=9.81, dt=0.01):
+    rad = math.radians(theta_deg)
+    vx = v0 * math.cos(rad)
+    vy = v0 * math.sin(rad)
+    x, y = 0.0, 0.0
+    trajectory = []
+    while y >= 0:
+        trajectory.append((x, y))
+        v = math.hypot(vx, vy)
+        f_drag = 0.5 * cd * (v ** 2)
+        ax = -(f_drag / m) * (vx / v)
+        ay = -g - (f_drag / m) * (vy / v)
+        vx += ax * dt
+        vy += ay * dt
+        x += vx * dt
+        y += vy * dt
+    return trajectory
+
+# Closed-loop PID controller
+class PID:
+    def __init__(self, kp, ki, kd):
+        self.kp, self.ki, self.kd = kp, ki, kd
+        self.prev_error, self.integral = 0.0, 0.0
+
+    def update(self, target, current, dt):
+        error = target - current
+        self.integral += error * dt
+        deriv = (error - self.prev_error) / dt
+        self.prev_error = error
+        return self.kp * error + self.ki * self.integral + self.kd * deriv
+```
+
+##### 🔮 DoomScript
+```doomscript
+use physics
+
+calculate projectile with drag for mass 1.0 and velocity 25.0 and angle 45.0 and drag 0.05 into drag_traj
+create pid controller with kp 1.5 and ki 0.1 and kd 0.05 into pid
+```
+> **Why DoomScript is easier:** No vector differential equation loops or custom PID class definitions required.
+
+---
+
+#### Example 25: Electronics & Resistor Color Bands
+*Decoding 4-band and 5-band resistor color codes with tolerance.*
+
+##### 🐍 Python
+```python
+COLOR_DIGITS = {
+    "black": 0, "brown": 1, "red": 2, "orange": 3, "yellow": 4,
+    "green": 5, "blue": 6, "violet": 7, "gray": 8, "white": 9
+}
+COLOR_TOLERANCES = {
+    "brown": 1.0, "red": 2.0, "gold": 5.0, "silver": 10.0
+}
+
+def decode_resistor(bands):
+    if len(bands) == 4:
+        d1, d2, mult_color, tol_color = bands
+        val = (COLOR_DIGITS[d1] * 10 + COLOR_DIGITS[d2]) * (10 ** COLOR_DIGITS[mult_color])
+        tol = COLOR_TOLERANCES.get(tol_color, 20.0)
+        return {"resistance": float(val), "tolerance": tol}
+    raise ValueError("Invalid band count")
+
+resistor_info = decode_resistor(["brown", "black", "red", "gold"])
+# Resistance = 1000.0 Ohms (1k), Tolerance = 5.0%
+```
+
+##### 🔮 DoomScript
+```doomscript
+use circuit
+
+res = circuit_resistor_bands("brown", "black", "red", "gold")
+calculate voltage with current 2.5 and resistance res's resistance into v_res
+```
+> **Why DoomScript is easier:** Built-in hardware specifications and engineering formulas with natural possessive attribute access `res's resistance`.
+
+---
+
 ## 📊 Summary: The Ergonomic Comparison
 
 | Metric / Dimension | 🐍 Traditional Python | 🔮 DoomScript |
@@ -651,7 +894,7 @@ calculate convex hull of perimeter_coords into geofence_polygon
 | **Control Flow Syntax** | Requires colons (`:`) and rigid indentation | **Colons are optional**; clean, flexible indentation |
 | **Punctuation Density** | High (`[`, `]`, `{`, `}`, `(`, `)`, `:`, `;`, `,`) | **Near zero**; natural English words replace symbols |
 | **Property Access** | `obj["key"]` or `getattr(obj, "prop")` | `obj's key` or `item 1 of list` |
-| **Algorithm Availability** | Fragmented across hundreds of pip packages | **18 Built-in Domains** (DSA, ML, Graph, Cloud, NLP...) |
+| **Domain Breadth** | Fragmented across hundreds of pip packages | **25 Built-in Domains** (Bio, Quantum, Physics, Sec, Circuit, Chain...) |
 | **Execution Performance** | Standard CPython execution | **Identical** (compiles to Python AST or `.exe` via Nuitka) |
 | **Learning Curve** | High cognitive overhead memorizing APIs | **Speaks like human instructions** |
 
@@ -660,3 +903,4 @@ calculate convex hull of perimeter_coords into geofence_polygon
 ## 🏁 Conclusion
 
 DoomScript is not an alternative to Python's power—**it is Python freed from syntax friction**. By compiling natural English directly to Python AST, DoomScript gives you the full speed, ecosystem, and reliability of Python with code you can read aloud like a book.
+

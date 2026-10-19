@@ -49,6 +49,10 @@ from doomscript.domains.image.runtime import (
     image_mosaic_pixelate,
     image_blend_overlay,
     image_difference,
+    image_canny_edge_detector,
+    image_otsu_threshold,
+    image_bilateral_filter,
+    image_hough_lines,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.image.exporter import ImageASTExporter
@@ -244,4 +248,9 @@ __all__ = [
     "image_mosaic_pixelate",
     "image_blend_overlay",
     "image_difference",
+    "image_canny_edge_detector",
+    "image_otsu_threshold",
+    "image_bilateral_filter",
+    "image_hough_lines",
 ]
+

@@ -2,6 +2,7 @@
 
 from typing import Any, Dict, List, Optional, Tuple, Union
 import math
+import cmath
 import os
 import struct
 import wave
@@ -203,10 +204,10 @@ def execute_audio_ir(spec_id: str) -> Any:
 
 # --- Batch 10 Spoken English Audio Verbs ---
 
-def audio_generate_sine(freq: Any, dur: Any, sample_rate: int = 44100) -> DoomAudio:
+def audio_generate_sine(freq: Any = None, dur: Any = None, sample_rate: int = 44100, **kwargs) -> DoomAudio:
     """Generate pure sine tone at given frequency and duration."""
-    f = float(freq)
-    d = float(dur)
+    f = float(freq if freq is not None else kwargs.get("frequency", 440.0))
+    d = float(dur if dur is not None else kwargs.get("duration", 1.0))
     total_samples = int(d * sample_rate)
     samples = [math.sin(2.0 * math.pi * f * i / sample_rate) for i in range(total_samples)]
     return DoomAudio(samples=samples, sample_rate=sample_rate, channels=1)
@@ -484,5 +485,248 @@ def audio_generate_silence(duration: Any, sample_rate: int = 44100) -> DoomAudio
     d = float(duration)
     total_samples = int(d * sample_rate)
     return DoomAudio(samples=[0.0] * total_samples, sample_rate=sample_rate, channels=1)
+
+
+# =========================================================================
+# Deepened DSP & Acoustic Features: FFT, STFT, Mel Spectrogram, MFCC, Biquad
+# =========================================================================
+
+def _pad_power_of_two(x: List[complex]) -> List[complex]:
+    n = len(x)
+    if n <= 1:
+        return x
+    target_len = 1 << (n - 1).bit_length()
+    if target_len > n:
+        return x + [0.0j] * (target_len - n)
+    return x
+
+
+def _fft_cooley_tukey(x: List[complex]) -> List[complex]:
+    n = len(x)
+    if n <= 1:
+        return x
+    even = _fft_cooley_tukey(x[0::2])
+    odd = _fft_cooley_tukey(x[1::2])
+    terms = []
+    for k in range(n // 2):
+        factor = cmath.exp(-2j * cmath.pi * k / n) * odd[k]
+        terms.append(factor)
+    return [even[k] + terms[k] for k in range(n // 2)] + [even[k] - terms[k] for k in range(n // 2)]
+
+
+def audio_fft(samples_or_audio: Any) -> List[complex]:
+    """Cooley-Tukey Radix-2 Fast Fourier Transform."""
+    import cmath
+    if isinstance(samples_or_audio, DoomAudio):
+        s = samples_or_audio.samples
+    elif isinstance(samples_or_audio, (list, tuple)):
+        s = samples_or_audio
+    else:
+        s = _unwrap_audio(samples_or_audio).samples
+
+    c_samples = [complex(v) for v in s]
+    padded = _pad_power_of_two(c_samples)
+    return _fft_cooley_tukey(padded)
+
+
+def audio_ifft(spectrum: List[complex]) -> List[float]:
+    """Inverse Fast Fourier Transform."""
+    import cmath
+    n = len(spectrum)
+    if n == 0:
+        return []
+    # IFFT via FFT on conjugated input
+    conj_in = [x.conjugate() for x in spectrum]
+    padded = _pad_power_of_two(conj_in)
+    n_pad = len(padded)
+    raw = _fft_cooley_tukey(padded)
+    return [round((x.conjugate() / n_pad).real, 6) for x in raw[:n]]
+
+
+def audio_stft_spectrogram(
+    audio: Any,
+    frame_size: int = 512,
+    hop_size: int = 256,
+    window: str = "hann",
+) -> List[List[float]]:
+    """Short-Time Fourier Transform (STFT) magnitude spectrogram."""
+    import cmath
+    t = _unwrap_audio(audio)
+    s = t.samples
+    n_samples = len(s)
+    if n_samples == 0:
+        return []
+
+    # Window function
+    w = max(16, int(frame_size))
+    hop = max(1, int(hop_size))
+    win = []
+    for i in range(w):
+        if window.lower() == "hamming":
+            val = 0.54 - 0.46 * math.cos(2.0 * math.pi * i / (w - 1))
+        else:  # Hann
+            val = 0.5 - 0.5 * math.cos(2.0 * math.pi * i / (w - 1))
+        win.append(val)
+
+    spectrogram: List[List[float]] = []
+    half_w = (1 << (w - 1).bit_length()) // 2 + 1
+
+    for start in range(0, n_samples - w + 1, hop):
+        frame = [complex(s[start + i] * win[i]) for i in range(w)]
+        fft_res = audio_fft(frame)
+        # Power magnitude spectrum for first half of frequencies
+        mag_spec = [round(math.sqrt(val.real ** 2 + val.imag ** 2), 4) for val in fft_res[:half_w]]
+        spectrogram.append(mag_spec)
+
+    return spectrogram
+
+
+def _hz_to_mel(hz: float) -> float:
+    return 2595.0 * math.log10(1.0 + hz / 700.0)
+
+
+def _mel_to_hz(mel: float) -> float:
+    return 700.0 * (10.0 ** (mel / 2595.0) - 1.0)
+
+
+def audio_mel_spectrogram(
+    audio: Any,
+    n_mels: int = 40,
+    sample_rate: int = 44100,
+    frame_size: int = 512,
+    hop_size: int = 256,
+) -> List[List[float]]:
+    """Mel-scale filterbank power spectrogram."""
+    stft = audio_stft_spectrogram(audio, frame_size=frame_size, hop_size=hop_size)
+    if not stft:
+        return []
+
+    n_freq_bins = len(stft[0])
+    max_hz = sample_rate / 2.0
+    min_mel = _hz_to_mel(0.0)
+    max_mel = _hz_to_mel(max_hz)
+
+    # Linearly spaced points in Mel scale
+    mel_points = [min_mel + i * (max_mel - min_mel) / (n_mels + 1) for i in range(n_mels + 2)]
+    hz_points = [_mel_to_hz(m) for m in mel_points]
+    bin_points = [int(round(h * (n_freq_bins - 1) / max_hz)) for h in hz_points]
+
+    # Triangular filterbank
+    filterbank = [[0.0] * n_freq_bins for _ in range(n_mels)]
+    for m in range(1, n_mels + 1):
+        f_left = bin_points[m - 1]
+        f_center = bin_points[m]
+        f_right = bin_points[m + 1]
+
+        for k in range(f_left, f_center):
+            if f_center > f_left:
+                filterbank[m - 1][k] = (k - f_left) / (f_center - f_left)
+        for k in range(f_center, f_right):
+            if f_right > f_center:
+                filterbank[m - 1][k] = (f_right - k) / (f_right - f_center)
+
+    mel_spec = []
+    for frame in stft:
+        mel_frame = []
+        for m in range(n_mels):
+            val = sum(frame[k] * filterbank[m][k] for k in range(n_freq_bins))
+            mel_frame.append(round(val, 4))
+        mel_spec.append(mel_frame)
+
+    return mel_spec
+
+
+def audio_mfcc(
+    audio: Any,
+    n_mfcc: int = 13,
+    n_mels: int = 40,
+    sample_rate: int = 44100,
+) -> List[List[float]]:
+    """Mel-Frequency Cepstral Coefficients (MFCC) feature matrix."""
+    mel_spec = audio_mel_spectrogram(audio, n_mels=n_mels, sample_rate=sample_rate)
+    if not mel_spec:
+        return []
+
+    mfccs = []
+    for frame in mel_spec:
+        # Log mel energies
+        log_energies = [math.log(max(1e-6, val)) for val in frame]
+        # Discrete Cosine Transform (DCT-II)
+        coeff = []
+        for k in range(n_mfcc):
+            s = sum(
+                log_energies[m] * math.cos(math.pi * k * (m + 0.5) / n_mels)
+                for m in range(n_mels)
+            )
+            coeff.append(round(s, 4))
+        mfccs.append(coeff)
+
+    return mfccs
+
+
+def audio_biquad_filter(
+    audio: Any,
+    filter_type: str = "lowpass",
+    cutoff_freq: float = 1000.0,
+    sample_rate: int = 44100,
+    q: float = 0.707,
+) -> DoomAudio:
+    """Audio EQ Cookbook digital biquad filter (lowpass, highpass, bandpass)."""
+    t = _unwrap_audio(audio)
+    s = t.samples
+    if not s:
+        return t
+
+    f0 = float(cutoff_freq)
+    fs = float(sample_rate or t.sample_rate)
+    q_val = max(0.01, float(q))
+    w0 = 2.0 * math.pi * f0 / fs
+    alpha = math.sin(w0) / (2.0 * q_val)
+    cos_w0 = math.cos(w0)
+
+    ftype = filter_type.lower().strip()
+    if ftype in ("lowpass", "low_pass", "lp"):
+        b0 = (1.0 - cos_w0) / 2.0
+        b1 = 1.0 - cos_w0
+        b2 = (1.0 - cos_w0) / 2.0
+        a0 = 1.0 + alpha
+        a1 = -2.0 * cos_w0
+        a2 = 1.0 - alpha
+    elif ftype in ("highpass", "high_pass", "hp"):
+        b0 = (1.0 + cos_w0) / 2.0
+        b1 = -(1.0 + cos_w0)
+        b2 = (1.0 + cos_w0) / 2.0
+        a0 = 1.0 + alpha
+        a1 = -2.0 * cos_w0
+        a2 = 1.0 - alpha
+    else:  # bandpass default
+        b0 = alpha
+        b1 = 0.0
+        b2 = -alpha
+        a0 = 1.0 + alpha
+        a1 = -2.0 * cos_w0
+        a2 = 1.0 - alpha
+
+    # Normalize coefficients
+    b0 /= a0
+    b1 /= a0
+    b2 /= a0
+    a1 /= a0
+    a2 /= a0
+
+    out = [0.0] * len(s)
+    x1, x2 = 0.0, 0.0
+    y1, y2 = 0.0, 0.0
+
+    for i, x in enumerate(s):
+        y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2
+        out[i] = max(-1.0, min(1.0, y))
+        x2 = x1
+        x1 = x
+        y2 = y1
+        y1 = y
+
+    return DoomAudio(samples=out, sample_rate=t.sample_rate, channels=t.channels)
+
 
 

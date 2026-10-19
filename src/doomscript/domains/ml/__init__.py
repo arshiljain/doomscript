@@ -11,6 +11,15 @@ from doomscript.domains.ml.runtime import (
     evaluate_model,
     predict_model,
     inspect_model,
+    MLPClassifier,
+    MLPRegressor,
+    CARTDecisionTree,
+    GBDTModel,
+    IsolationForestModel,
+    ml_train_mlp,
+    ml_train_cart,
+    ml_train_gbdt,
+    ml_train_isolation_forest,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.ml.exporter import MLASTExporter
@@ -150,4 +159,14 @@ __all__ = [
     "cross_validate_model",
     "save_model",
     "load_model",
+    "MLPClassifier",
+    "MLPRegressor",
+    "CARTDecisionTree",
+    "GBDTModel",
+    "IsolationForestModel",
+    "ml_train_mlp",
+    "ml_train_cart",
+    "ml_train_gbdt",
+    "ml_train_isolation_forest",
 ]
+

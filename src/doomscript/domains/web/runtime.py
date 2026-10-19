@@ -1,6 +1,7 @@
 """Runtime execution engine for Web Scraping & Document Extraction domain."""
 
 from typing import Any, Dict, List, Optional, Tuple, Union
+import json
 import re
 import os
 import urllib.request
@@ -634,5 +635,221 @@ def web_generate_curl_command(method: str, url: str, headers: Optional[Dict[str,
     if body:
         parts.append(f"-d '{body}'")
     return " ".join(parts)
+
+
+class DOMNode:
+    """Represents a node in the pure-Python HTML DOM tree."""
+
+    def __init__(self, tag: str, attrs: Optional[Dict[str, str]] = None, parent: Optional["DOMNode"] = None):
+        self.tag = tag.lower()
+        self.attrs = attrs or {}
+        self.parent = parent
+        self.children: List["DOMNode"] = []
+        self.text_content: str = ""
+
+    def append_child(self, child: "DOMNode") -> None:
+        child.parent = self
+        self.children.append(child)
+
+    @property
+    def inner_text(self) -> str:
+        parts = [self.text_content]
+        for c in self.children:
+            parts.append(c.inner_text)
+        return " ".join(" ".join(parts).split()).strip()
+
+    def get_attr(self, name: str, default: str = "") -> str:
+        return self.attrs.get(name.lower(), default)
+
+
+class HTMLDOMSelector(HTMLParser):
+    """Zero-dependency HTML Parser and CSS selector query engine."""
+
+    def __init__(self, html: str):
+        super().__init__()
+        self.root = DOMNode("root")
+        self.current: DOMNode = self.root
+        self.feed(str(html))
+
+    def handle_starttag(self, tag: str, attrs: List[Tuple[str, Optional[str]]]):
+        attr_dict = {k.lower(): (v or "") for k, v in attrs}
+        node = DOMNode(tag, attr_dict, parent=self.current)
+        self.current.append_child(node)
+        # Void elements do not nest children
+        if tag.lower() not in ("img", "br", "hr", "input", "meta", "link"):
+            self.current = node
+
+    def handle_endtag(self, tag: str):
+        if self.current.parent is not None and self.current.tag == tag.lower():
+            self.current = self.current.parent
+
+    def handle_data(self, data: str):
+        clean = data.strip()
+        if clean:
+            if self.current.text_content:
+                self.current.text_content += " " + clean
+            else:
+                self.current.text_content = clean
+
+    def _matches_simple_selector(self, node: DOMNode, sel: str) -> bool:
+        if not sel or node.tag == "root":
+            return False
+
+        # ID: #id
+        if sel.startswith("#"):
+            return node.get_attr("id") == sel[1:]
+
+        # Class: .cls
+        if sel.startswith("."):
+            classes = node.get_attr("class").split()
+            return sel[1:] in classes
+
+        # Attribute: [attr] or [attr=val]
+        if sel.startswith("[") and sel.endswith("]"):
+            inner = sel[1:-1]
+            if "=" in inner:
+                k, v = inner.split("=", 1)
+                return node.get_attr(k.strip()) == v.strip("\"'")
+            return k.strip() in node.attrs
+
+        # Tag with class or id: div.card, span#main
+        if "." in sel:
+            tag, cls = sel.split(".", 1)
+            if tag and node.tag != tag.lower():
+                return False
+            return cls in node.get_attr("class").split()
+
+        if "#" in sel:
+            tag, el_id = sel.split("#", 1)
+            if tag and node.tag != tag.lower():
+                return False
+            return node.get_attr("id") == el_id
+
+        # Plain tag name
+        return node.tag == sel.lower()
+
+    def query_all(self, selector: str) -> List[DOMNode]:
+        """Query DOM tree using CSS selectors (supports descendant combinators)."""
+        tokens = selector.strip().split()
+        if not tokens:
+            return []
+
+        def match_descendant(current_nodes: List[DOMNode], tok_idx: int) -> List[DOMNode]:
+            if tok_idx >= len(tokens):
+                return current_nodes
+            sel = tokens[tok_idx]
+            matched: List[DOMNode] = []
+
+            for parent in current_nodes:
+                # BFS through descendants
+                queue = list(parent.children)
+                while queue:
+                    child = queue.pop(0)
+                    if self._matches_simple_selector(child, sel):
+                        matched.append(child)
+                    queue.extend(child.children)
+
+            return match_descendant(matched, tok_idx + 1)
+
+        return match_descendant([self.root], 0)
+
+    def query(self, selector: str) -> Optional[DOMNode]:
+        res = self.query_all(selector)
+        return res[0] if res else None
+
+
+def web_extract_metadata(html_content: str) -> Dict[str, Any]:
+    """Extract OpenGraph, Twitter Cards, JSON-LD, and standard meta descriptions."""
+    html = str(html_content)
+    res: Dict[str, Any] = {
+        "title": "",
+        "description": "",
+        "open_graph": {},
+        "twitter_cards": {},
+        "json_ld": [],
+    }
+
+    # Title
+    m_title = re.search(r"<title[^>]*>(.*?)</title>", html, re.IGNORECASE | re.DOTALL)
+    if m_title:
+        res["title"] = m_title.group(1).strip()
+
+    # Meta tags
+    meta_tags = re.findall(r"<meta\s+([^>]+)>", html, re.IGNORECASE)
+    for tag_str in meta_tags:
+        # Extract attributes
+        attrs = dict(re.findall(r'(\w+)=["\']([^"\']*)["\']', tag_str, re.IGNORECASE))
+        name = attrs.get("name", "").lower()
+        prop = attrs.get("property", "").lower()
+        content = attrs.get("content", "")
+
+        if name == "description":
+            res["description"] = content
+        elif prop.startswith("og:"):
+            res["open_graph"][prop[3:]] = content
+        elif name.startswith("twitter:"):
+            res["twitter_cards"][name[8:]] = content
+
+    # JSON-LD scripts
+    json_lds = re.findall(r'<script\s+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>', html, re.IGNORECASE | re.DOTALL)
+    for j_str in json_lds:
+        try:
+            res["json_ld"].append(json.loads(j_str.strip()))
+        except Exception:
+            pass
+
+    return res
+
+
+class RobotsTxtParser:
+    """Parses robots.txt and verifies URL crawl permissions."""
+
+    def __init__(self, content: str = ""):
+        self.rules: List[Dict[str, Any]] = []
+        self.sitemaps: List[str] = []
+        if content:
+            self.parse(content)
+
+    def parse(self, content: str) -> None:
+        lines = content.replace("\r\n", "\n").split("\n")
+        current_agent = "*"
+
+        for line in lines:
+            line = line.split("#")[0].strip()
+            if not line:
+                continue
+            if ":" not in line:
+                continue
+            field, val = line.split(":", 1)
+            field = field.strip().lower()
+            val = val.strip()
+
+            if field == "user-agent":
+                current_agent = val.lower()
+            elif field == "disallow":
+                self.rules.append({"agent": current_agent, "type": "disallow", "path": val})
+            elif field == "allow":
+                self.rules.append({"agent": current_agent, "type": "allow", "path": val})
+            elif field == "sitemap":
+                self.sitemaps.append(val)
+
+    def is_allowed(self, path: str, user_agent: str = "*") -> bool:
+        ua = user_agent.lower()
+        clean_path = path.strip()
+        matching = [r for r in self.rules if r["agent"] == ua]
+        if not matching and ua != "*":
+            matching = [r for r in self.rules if r["agent"] == "*"]
+
+        # Sort by longest path first (most specific rule applies per RFC 9309)
+        matching.sort(key=lambda r: (len(r["path"]), 1 if r["type"] == "allow" else 0), reverse=True)
+
+        for r in matching:
+            rule_path = r["path"]
+            if not rule_path:
+                continue
+            if clean_path.startswith(rule_path):
+                return r["type"] == "allow"
+        return True
+
 
 

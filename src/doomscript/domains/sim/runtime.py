@@ -791,3 +791,298 @@ def sim_survival_rate_kaplan_meier(durations: Any, events: Any) -> List[Dict[str
     return table
 
 
+def sim_queue_system(
+    arrival_rate: float,
+    service_rate: float,
+    servers: int = 1,
+    max_time: float = 500.0,
+    seed: int = 42,
+) -> Dict[str, Any]:
+    """Simulate M/M/c queuing system with Poisson arrivals and exponential service."""
+    import heapq
+    import random
+    rng = random.Random(seed)
+
+    c = max(1, int(servers))
+    lam = float(arrival_rate)
+    mu = float(service_rate)
+    if lam <= 0 or mu <= 0:
+        raise ValueError("Arrival rate and service rate must be positive")
+
+    t = 0.0
+    # Next arrival time
+    next_arrival = rng.expovariate(lam)
+
+    # Server busy status: list of finish times
+    server_free_times = [0.0] * c
+
+    queue: List[float] = []  # arrival times of waiting customers
+    wait_times: List[float] = []
+    service_times: List[float] = []
+    system_times: List[float] = []
+
+    total_arrivals = 0
+    served_count = 0
+
+    # Event queue: (event_time, event_type, customer_id, server_id)
+    # Types: 0 = arrival, 1 = departure
+    events = [(next_arrival, 0, 0, -1)]
+    heapq.heapify(events)
+
+    cust_id = 0
+    server_busy_time = [0.0] * c
+
+    while events and t < max_time:
+        event_time, event_type, cid, s_id = heapq.heappop(events)
+        t = event_time
+        if t > max_time:
+            break
+
+        if event_type == 0:
+            # Arrival
+            total_arrivals += 1
+            cust_id += 1
+            # Check for free server
+            free_server = None
+            for idx in range(c):
+                if server_free_times[idx] <= t:
+                    free_server = idx
+                    break
+
+            if free_server is not None:
+                st = rng.expovariate(mu)
+                server_free_times[free_server] = t + st
+                server_busy_time[free_server] += st
+                wait_times.append(0.0)
+                service_times.append(st)
+                system_times.append(st)
+                heapq.heappush(events, (t + st, 1, cid, free_server))
+            else:
+                queue.append(t)
+
+            # Schedule next arrival
+            arr_delta = rng.expovariate(lam)
+            if t + arr_delta < max_time:
+                heapq.heappush(events, (t + arr_delta, 0, cust_id, -1))
+
+        elif event_type == 1:
+            # Departure
+            served_count += 1
+            if queue:
+                arr_t = queue.pop(0)
+                wt = t - arr_t
+                st = rng.expovariate(mu)
+                server_free_times[s_id] = t + st
+                server_busy_time[s_id] += st
+                wait_times.append(wt)
+                service_times.append(st)
+                system_times.append(wt + st)
+                heapq.heappush(events, (t + st, 1, cust_id, s_id))
+
+    avg_wait = sum(wait_times) / max(1, len(wait_times))
+    avg_sys = sum(system_times) / max(1, len(system_times))
+    utilization = sum(server_busy_time) / (c * max(1e-6, t))
+
+    return {
+        "servers": c,
+        "total_arrivals": total_arrivals,
+        "served_count": served_count,
+        "avg_wait_time": round(avg_wait, 4),
+        "avg_system_time": round(avg_sys, 4),
+        "server_utilization": round(min(1.0, utilization), 4),
+        "traffic_intensity": round(lam / (c * mu), 4),
+    }
+
+
+class CellularAutomaton:
+    """2D Cellular Automata engine supporting Life-like outer-totalistic rules."""
+
+    def __init__(
+        self,
+        width: int = 20,
+        height: int = 20,
+        rule: str = "B3/S23",
+        neighborhood: str = "moore",
+    ):
+        self.w = max(3, int(width))
+        self.h = max(3, int(height))
+        self.rule = rule.upper()
+        self.neighborhood = neighborhood.lower()
+        self.grid = [[0] * self.w for _ in range(self.h)]
+        self._parse_rule()
+
+    def _parse_rule(self):
+        # Format B.../S...
+        self.birth = set()
+        self.survival = set()
+        parts = self.rule.split("/")
+        for p in parts:
+            if p.startswith("B"):
+                self.birth = {int(d) for d in p[1:] if d.isdigit()}
+            elif p.startswith("S"):
+                self.survival = {int(d) for d in p[1:] if d.isdigit()}
+
+    def set_cell(self, x: int, y: int, val: int = 1) -> None:
+        if 0 <= x < self.w and 0 <= y < self.h:
+            self.grid[y][x] = int(val)
+
+    def set_pattern(self, x: int, y: int, pattern: List[List[int]]) -> None:
+        for py, row in enumerate(pattern):
+            for px, val in enumerate(row):
+                self.set_cell(x + px, y + py, val)
+
+    def step(self) -> "CellularAutomaton":
+        next_grid = [[0] * self.w for _ in range(self.h)]
+
+        if self.neighborhood == "von_neumann":
+            deltas = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+        else:
+            deltas = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
+
+        for y in range(self.h):
+            for x in range(self.w):
+                # Count live neighbors with periodic toroidal boundaries
+                neighbors = 0
+                for dy, dx in deltas:
+                    ny = (y + dy) % self.h
+                    nx = (x + dx) % self.w
+                    if self.grid[ny][nx] == 1:
+                        neighbors += 1
+
+                alive = self.grid[y][x] == 1
+                if alive and neighbors in self.survival:
+                    next_grid[y][x] = 1
+                elif not alive and neighbors in self.birth:
+                    next_grid[y][x] = 1
+                else:
+                    next_grid[y][x] = 0
+
+        self.grid = next_grid
+        return self
+
+    def run(self, steps: int = 1) -> "CellularAutomaton":
+        for _ in range(max(0, int(steps))):
+            self.step()
+        return self
+
+    @property
+    def population(self) -> int:
+        return sum(sum(row) for row in self.grid)
+
+    def to_list(self) -> List[List[int]]:
+        return [list(r) for r in self.grid]
+
+
+class SpatialAgentSimulation:
+    """Continuous 2D Multi-Agent Flocking (Reynolds Boids) Simulation."""
+
+    def __init__(
+        self,
+        width: float = 100.0,
+        height: float = 100.0,
+        n_agents: int = 20,
+        max_speed: float = 3.0,
+        seed: int = 42,
+    ):
+        import random
+        self.w = float(width)
+        self.h = float(height)
+        self.max_speed = float(max_speed)
+        self.rng = random.Random(seed)
+        self.agents: List[Dict[str, float]] = []
+
+        for i in range(n_agents):
+            self.agents.append({
+                "id": i,
+                "x": self.rng.uniform(0.0, self.w),
+                "y": self.rng.uniform(0.0, self.h),
+                "vx": self.rng.uniform(-1.0, 1.0),
+                "vy": self.rng.uniform(-1.0, 1.0),
+            })
+
+    def step(
+        self,
+        dt: float = 0.5,
+        visual_range: float = 20.0,
+        separation_dist: float = 5.0,
+        cohesion_weight: float = 0.05,
+        alignment_weight: float = 0.1,
+        separation_weight: float = 0.15,
+    ) -> "SpatialAgentSimulation":
+        n = len(self.agents)
+        new_velocities = []
+
+        for i, a in enumerate(self.agents):
+            x, y = a["x"], a["y"]
+            vx, vy = a["vx"], a["vy"]
+
+            # Neighbor aggregates
+            neighbor_count = 0
+            avg_x, avg_y = 0.0, 0.0
+            avg_vx, avg_vy = 0.0, 0.0
+            sep_x, sep_y = 0.0, 0.0
+
+            for j, o in enumerate(self.agents):
+                if i == j:
+                    continue
+                dx = o["x"] - x
+                dy = o["y"] - y
+                dist = math.sqrt(dx * dx + dy * dy)
+                if dist < visual_range and dist > 1e-5:
+                    neighbor_count += 1
+                    avg_x += o["x"]
+                    avg_y += o["y"]
+                    avg_vx += o["vx"]
+                    avg_vy += o["vy"]
+                    if dist < separation_dist:
+                        sep_x -= dx / dist
+                        sep_y -= dy / dist
+
+            steer_x, steer_y = 0.0, 0.0
+            if neighbor_count > 0:
+                avg_x /= neighbor_count
+                avg_y /= neighbor_count
+                avg_vx /= neighbor_count
+                avg_vy /= neighbor_count
+
+                # Cohesion
+                steer_x += (avg_x - x) * cohesion_weight
+                steer_y += (avg_y - y) * cohesion_weight
+                # Alignment
+                steer_x += (avg_vx - vx) * alignment_weight
+                steer_y += (avg_vy - vy) * alignment_weight
+                # Separation
+                steer_x += sep_x * separation_weight
+                steer_y += sep_y * separation_weight
+
+            vx += steer_x
+            vy += steer_y
+
+            # Limit speed
+            spd = math.sqrt(vx * vx + vy * vy)
+            if spd > self.max_speed:
+                vx = (vx / spd) * self.max_speed
+                vy = (vy / spd) * self.max_speed
+
+            new_velocities.append((vx, vy))
+
+        # Update positions
+        for i, a in enumerate(self.agents):
+            vx, vy = new_velocities[i]
+            a["vx"] = vx
+            a["vy"] = vy
+            a["x"] = (a["x"] + vx * dt) % self.w
+            a["y"] = (a["y"] + vy * dt) % self.h
+
+        return self
+
+    def run(self, steps: int = 10, dt: float = 0.5) -> "SpatialAgentSimulation":
+        for _ in range(max(0, int(steps))):
+            self.step(dt=dt)
+        return self
+
+    def positions(self) -> List[Tuple[float, float]]:
+        return [(round(a["x"], 2), round(a["y"], 2)) for a in self.agents]
+
+
+

@@ -51,6 +51,9 @@ from doomscript.domains.office.runtime import (
     office_count_words_in_document,
     office_count_characters_in_document,
     office_extract_document_metadata,
+    PureXlsxWorkbook,
+    PureDocxDocument,
+    PurePptxPresentation,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.office.exporter import OfficeASTExporter
@@ -257,4 +260,7 @@ __all__ = [
     "office_count_words_in_document",
     "office_count_characters_in_document",
     "office_extract_document_metadata",
+    "PureXlsxWorkbook",
+    "PureDocxDocument",
+    "PurePptxPresentation",
 ]

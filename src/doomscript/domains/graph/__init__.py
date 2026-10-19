@@ -48,6 +48,11 @@ from doomscript.domains.graph.runtime import (
     graph_transitive_closure,
     graph_k_core,
     graph_laplacian_matrix,
+    graph_bron_kerbosch_cliques,
+    graph_louvain_communities,
+    graph_betweenness_centrality,
+    graph_tarjan_scc,
+    graph_mst,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.graph.exporter import GraphASTExporter
@@ -228,4 +233,10 @@ __all__ = [
     "graph_transitive_closure",
     "graph_k_core",
     "graph_laplacian_matrix",
+    "graph_bron_kerbosch_cliques",
+    "graph_louvain_communities",
+    "graph_betweenness_centrality",
+    "graph_tarjan_scc",
+    "graph_mst",
 ]
+

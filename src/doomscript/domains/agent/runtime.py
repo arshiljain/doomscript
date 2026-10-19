@@ -786,3 +786,189 @@ def agent_export_chat_transcript(agent: Any, output_file: str) -> str:
         f.write(formatted)
     return out_path
 
+
+class ToolHarness:
+    """Registry and execution harness for agent tools with parameter validation."""
+
+    def __init__(self):
+        self.tools: Dict[str, Dict[str, Any]] = {}
+
+    def register(
+        self,
+        name: str,
+        func: Callable,
+        description: str = "",
+        param_schema: Optional[Dict[str, type]] = None,
+    ) -> None:
+        self.tools[name] = {
+            "name": name,
+            "func": func,
+            "description": description or func.__doc__ or "",
+            "param_schema": param_schema or {},
+        }
+
+    def execute(self, name: str, **kwargs) -> Any:
+        if name not in self.tools:
+            return f"Error: Tool '{name}' not found. Available: {list(self.tools.keys())}"
+        tool_entry = self.tools[name]
+        fn = tool_entry["func"]
+        schema = tool_entry["param_schema"]
+
+        # Validate types
+        for p_name, expected_type in schema.items():
+            if p_name in kwargs and not isinstance(kwargs[p_name], expected_type):
+                try:
+                    kwargs[p_name] = expected_type(kwargs[p_name])
+                except Exception:
+                    return f"Error: Parameter '{p_name}' expected type {expected_type.__name__}"
+
+        try:
+            return fn(**kwargs)
+        except Exception as e:
+            return f"Error executing tool '{name}': {str(e)}"
+
+    def get_tool_definitions(self) -> List[Dict[str, Any]]:
+        return [
+            {
+                "name": t["name"],
+                "description": t["description"],
+                "parameters": {k: v.__name__ for k, v in t["param_schema"].items()},
+            }
+            for t in self.tools.values()
+        ]
+
+
+class AgentMemoryBuffer:
+    """Hierarchical conversation memory with token budgeting and compaction."""
+
+    def __init__(self, max_messages: int = 20, max_chars: int = 10000):
+        self.max_messages = max(5, int(max_messages))
+        self.max_chars = max(500, int(max_chars))
+        self.messages: List[Dict[str, Any]] = []
+        self.compacted_summary: str = ""
+
+    def add(self, role: str, content: str, priority: int = 1) -> None:
+        self.messages.append({
+            "role": role,
+            "content": str(content),
+            "priority": int(priority),
+        })
+        if len(self.messages) > self.max_messages or self.total_chars() > self.max_chars:
+            self.compact()
+
+    def total_chars(self) -> int:
+        return sum(len(m["content"]) for m in self.messages)
+
+    def compact(self) -> None:
+        """Compact older low-priority messages into a short summary paragraph."""
+        if len(self.messages) <= self.max_messages // 2:
+            return
+
+        to_archive = self.messages[: len(self.messages) // 2]
+        self.messages = self.messages[len(self.messages) // 2:]
+
+        summary_lines = []
+        for m in to_archive:
+            role = m["role"]
+            snippet = m["content"][:60].replace("\n", " ")
+            summary_lines.append(f"{role}: {snippet}...")
+        self.compacted_summary += " | " + " ".join(summary_lines)
+
+    def get_context_for_prompt(self) -> str:
+        parts = []
+        if self.compacted_summary:
+            parts.append(f"[Previous Context Summary: {self.compacted_summary.strip(' | ')}]")
+        for m in self.messages:
+            parts.append(f"{m['role'].upper()}: {m['content']}")
+        return "\n".join(parts)
+
+    def search(self, query: str) -> List[Dict[str, Any]]:
+        q = query.lower()
+        return [m for m in self.messages if q in m["content"].lower()]
+
+
+class ReActAgent:
+    """Reasoning + Acting execution loop with Thought, Action, and Observation cycles."""
+
+    def __init__(
+        self,
+        name: str,
+        harness: Optional[ToolHarness] = None,
+        max_iterations: int = 5,
+        memory: Optional[AgentMemoryBuffer] = None,
+    ):
+        self.name = name
+        self.harness = harness or ToolHarness()
+        self.max_iterations = max_iterations
+        self.memory = memory or AgentMemoryBuffer()
+        self.trajectory: List[Dict[str, Any]] = []
+
+    def solve(
+        self,
+        task: str,
+        reasoning_policy: Optional[Callable[[str, List[Dict[str, Any]]], Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        """Execute ReAct cycle on task."""
+        self.trajectory = []
+        self.memory.add("user", task)
+
+        # Default rule-based policy if no LLM policy provided
+        def default_policy(goal: str, history: List[Dict[str, Any]]) -> Dict[str, Any]:
+            # Step 1: Check tools
+            step_num = len(history) + 1
+            avail_tools = list(self.harness.tools.keys())
+            if not avail_tools or step_num >= 2:
+                return {
+                    "thought": f"Finalizing answer for task: {goal}",
+                    "action": None,
+                    "final_answer": f"Completed task: {goal}",
+                }
+            tool_name = avail_tools[0]
+            return {
+                "thought": f"Need to invoke tool {tool_name} to gather required data.",
+                "action": tool_name,
+                "action_input": {},
+                "final_answer": None,
+            }
+
+        policy = reasoning_policy or default_policy
+
+        for step in range(1, self.max_iterations + 1):
+            decision = policy(task, self.trajectory)
+            thought = decision.get("thought", "")
+            action = decision.get("action")
+            action_input = decision.get("action_input", {})
+            final_ans = decision.get("final_answer")
+
+            step_record = {
+                "step": step,
+                "thought": thought,
+                "action": action,
+                "action_input": action_input,
+            }
+
+            if final_ans is not None:
+                step_record["final_answer"] = final_ans
+                self.trajectory.append(step_record)
+                self.memory.add("assistant", final_ans)
+                return {
+                    "status": "success",
+                    "final_answer": final_ans,
+                    "steps": len(self.trajectory),
+                    "trajectory": self.trajectory,
+                }
+
+            # Execute action
+            observation = self.harness.execute(action, **action_input)
+            step_record["observation"] = observation
+            self.trajectory.append(step_record)
+            self.memory.add("system", f"Tool {action} returned: {observation}")
+
+        return {
+            "status": "max_iterations_reached",
+            "final_answer": f"Reached max iterations ({self.max_iterations}) without final answer",
+            "steps": len(self.trajectory),
+            "trajectory": self.trajectory,
+        }
+
+

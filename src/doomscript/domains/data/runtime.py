@@ -5,7 +5,7 @@ import json
 import math
 import os
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 from doomscript.domains.base import DomainRuntime, DomainIR
 from doomscript.domains.data.expr_eval import SafeASTEvaluator, SafeEvalError, SafeEvalSecurityError
 from doomscript.domains.data.spec import (
@@ -979,4 +979,516 @@ def data_sample_fraction(data: Any, fraction: Any, seed: Any = 42) -> List[Dict[
     k = int(round(len(rows) * frac))
     rng = random.Random(seed)
     return rng.sample(rows, k)
+
+
+# =========================================================================
+# Deepened Columnar Storage & Advanced Tabular Operations
+# =========================================================================
+
+class ColumnarTable:
+    """Zero-dependency columnar in-memory data store with vector-like operations."""
+
+    def __init__(self, data: Optional[Union[Dict[str, List[Any]], List[Dict[str, Any]]]] = None):
+        self._columns: Dict[str, List[Any]] = {}
+        self._num_rows: int = 0
+        if data is not None:
+            if isinstance(data, dict):
+                for k, v in data.items():
+                    col_vals = list(v) if isinstance(v, (list, tuple)) else [v]
+                    self._columns[str(k)] = col_vals
+                self._num_rows = max((len(v) for v in self._columns.values()), default=0)
+                for k in self._columns:
+                    if len(self._columns[k]) < self._num_rows:
+                        self._columns[k].extend([None] * (self._num_rows - len(self._columns[k])))
+            elif isinstance(data, list):
+                self._load_from_records(data)
+
+    def _load_from_records(self, records: List[Dict[str, Any]]) -> None:
+        rows = _to_record_list(records)
+        self._columns.clear()
+        self._num_rows = len(rows)
+        if not rows:
+            return
+        keys = list(rows[0].keys())
+        for k in keys:
+            self._columns[k] = []
+        for r in rows:
+            for k in keys:
+                self._columns[k].append(r.get(k))
+
+    @classmethod
+    def from_records(cls, records: List[Dict[str, Any]]) -> "ColumnarTable":
+        table = cls()
+        table._load_from_records(records)
+        return table
+
+    def to_records(self) -> List[Dict[str, Any]]:
+        if self._num_rows == 0 or not self._columns:
+            return []
+        keys = list(self._columns.keys())
+        records = []
+        for i in range(self._num_rows):
+            rec = {k: self._columns[k][i] for k in keys}
+            records.append(rec)
+        return records
+
+    @property
+    def num_rows(self) -> int:
+        return self._num_rows
+
+    @property
+    def num_cols(self) -> int:
+        return len(self._columns)
+
+    @property
+    def column_names(self) -> List[str]:
+        return list(self._columns.keys())
+
+    @property
+    def dtypes(self) -> Dict[str, str]:
+        types = {}
+        for k, vals in self._columns.items():
+            non_null = [v for v in vals if v is not None]
+            types[k] = type(non_null[0]).__name__ if non_null else "null"
+        return types
+
+    def select(self, cols: List[str]) -> "ColumnarTable":
+        res = ColumnarTable()
+        for c in cols:
+            if c in self._columns:
+                res._columns[c] = list(self._columns[c])
+        res._num_rows = self._num_rows if res._columns else 0
+        return res
+
+    def filter(self, column: str, op: str, value: Any) -> "ColumnarTable":
+        if column not in self._columns:
+            raise KeyError(f"Column '{column}' not found")
+        col_vals = self._columns[column]
+        mask = []
+        op = op.strip().lower()
+        for v in col_vals:
+            if v is None:
+                mask.append(False)
+            elif op in ("==", "=", "eq", "is"):
+                mask.append(v == value)
+            elif op in ("!=", "neq", "is not"):
+                mask.append(v != value)
+            elif op in (">", "gt"):
+                mask.append(v > value)
+            elif op in (">=", "gte"):
+                mask.append(v >= value)
+            elif op in ("<", "lt"):
+                mask.append(v < value)
+            elif op in ("<=", "lte"):
+                mask.append(v <= value)
+            elif op in ("contains", "in"):
+                mask.append(value in str(v))
+            else:
+                mask.append(False)
+
+        res = ColumnarTable()
+        for k, vals in self._columns.items():
+            res._columns[k] = [v for idx, v in enumerate(vals) if mask[idx]]
+        res._num_rows = sum(1 for m in mask if m)
+        return res
+
+    def filter_by(self, predicate: Callable[[Dict[str, Any]], bool]) -> "ColumnarTable":
+        records = self.to_records()
+        filtered = [r for r in records if predicate(r)]
+        return ColumnarTable.from_records(filtered)
+
+    def add_column(self, name: str, values: List[Any]) -> None:
+        vals = list(values)
+        if self._num_rows == 0:
+            self._num_rows = len(vals)
+        elif len(vals) != self._num_rows:
+            raise ValueError(f"Column length {len(vals)} does not match table row count {self._num_rows}")
+        self._columns[name] = vals
+
+    def drop_column(self, name: str) -> None:
+        if name in self._columns:
+            del self._columns[name]
+
+    def rename_column(self, old_name: str, new_name: str) -> None:
+        if old_name in self._columns:
+            self._columns[new_name] = self._columns.pop(old_name)
+
+    def sort_by(self, column: str, descending: bool = False) -> "ColumnarTable":
+        if column not in self._columns:
+            raise KeyError(f"Column '{column}' not found")
+        vals = self._columns[column]
+        indexed = list(enumerate(vals))
+        indexed.sort(
+            key=lambda item: (item[1] is None, item[1] if item[1] is not None else 0),
+            reverse=descending,
+        )
+        indices = [idx for idx, _ in indexed]
+        res = ColumnarTable()
+        for k, col in self._columns.items():
+            res._columns[k] = [col[i] for i in indices]
+        res._num_rows = self._num_rows
+        return res
+
+    def aggregate(self, column: str, agg: str) -> Any:
+        if column not in self._columns:
+            raise KeyError(f"Column '{column}' not found")
+        vals = [v for v in self._columns[column] if v is not None]
+        agg = agg.strip().lower()
+        if not vals:
+            return 0.0 if agg in ("sum", "mean", "std", "count") else None
+        if agg == "count":
+            return len(vals)
+        num_vals = [float(v) for v in vals if isinstance(v, (int, float))]
+        if not num_vals:
+            return None
+        if agg == "sum":
+            return round(sum(num_vals), 4)
+        if agg in ("mean", "avg"):
+            return round(sum(num_vals) / len(num_vals), 4)
+        if agg in ("min", "minimum"):
+            return min(num_vals)
+        if agg in ("max", "maximum"):
+            return max(num_vals)
+        if agg == "median":
+            s = sorted(num_vals)
+            mid = len(s) // 2
+            return s[mid] if len(s) % 2 != 0 else round((s[mid - 1] + s[mid]) / 2.0, 4)
+        if agg == "std":
+            m = sum(num_vals) / len(num_vals)
+            return round(math.sqrt(sum((x - m) ** 2 for x in num_vals) / max(1, len(num_vals) - 1)), 4)
+        raise ValueError(f"Unknown aggregation function '{agg}'")
+
+    def head(self, n: int = 5) -> "ColumnarTable":
+        return self.slice(0, n)
+
+    def tail(self, n: int = 5) -> "ColumnarTable":
+        start = max(0, self._num_rows - n)
+        return self.slice(start, self._num_rows)
+
+    def slice(self, start: int, stop: int) -> "ColumnarTable":
+        res = ColumnarTable()
+        for k, v in self._columns.items():
+            res._columns[k] = v[start:stop]
+        res._num_rows = max(0, min(stop, self._num_rows) - max(0, start))
+        return res
+
+    def describe(self) -> Dict[str, Dict[str, float]]:
+        desc = {}
+        for col in self.column_names:
+            nums = [float(v) for v in self._columns[col] if isinstance(v, (int, float))]
+            if nums:
+                m = sum(nums) / len(nums)
+                var = sum((x - m) ** 2 for x in nums) / max(1, len(nums) - 1)
+                desc[col] = {
+                    "count": float(len(nums)),
+                    "mean": round(m, 4),
+                    "std": round(math.sqrt(var), 4),
+                    "min": float(min(nums)),
+                    "max": float(max(nums)),
+                }
+        return desc
+
+    def __getitem__(self, item: Any) -> Any:
+        if isinstance(item, str):
+            return self._columns[item]
+        if isinstance(item, int):
+            return {k: self._columns[k][item] for k in self._columns}
+        raise TypeError(f"ColumnarTable subscript must be str or int, got {type(item).__name__}")
+
+    def __len__(self) -> int:
+        return self._num_rows
+
+    def __contains__(self, item: Any) -> bool:
+        return item in self._columns
+
+    def __repr__(self) -> str:
+        cols = ", ".join(f"{k} [{self.dtypes.get(k, 'unknown')}]: {len(v)}" for k, v in self._columns.items())
+        return f"<ColumnarTable rows={self._num_rows} cols={self.num_cols} ({cols})>"
+
+
+def data_to_columnar(data: Any) -> ColumnarTable:
+    """Convert dataset records, list of dicts, or dictionary of columns into a ColumnarTable."""
+    if isinstance(data, ColumnarTable):
+        return data
+    if isinstance(data, dict):
+        return ColumnarTable(data)
+    rows = _to_record_list(data)
+    return ColumnarTable.from_records(rows)
+
+
+def columnar_to_records(table: Any) -> List[Dict[str, Any]]:
+    """Convert ColumnarTable back to standard list of dictionary records."""
+    if isinstance(table, ColumnarTable):
+        return table.to_records()
+    return _to_record_list(table)
+
+
+# -------------------------------------------------------------------------
+# Fuzzy Matching and String Similarities
+# -------------------------------------------------------------------------
+
+def _levenshtein_distance(s1: str, s2: str) -> int:
+    """Computes exact edit distance between two strings."""
+    if len(s1) < len(s2):
+        return _levenshtein_distance(s2, s1)
+    if len(s2) == 0:
+        return len(s1)
+    previous_row = list(range(len(s2) + 1))
+    for i, c1 in enumerate(s1):
+        current_row = [i + 1]
+        for j, c2 in enumerate(s2):
+            insertions = previous_row[j + 1] + 1
+            deletions = current_row[j] + 1
+            substitutions = previous_row[j] + (c1 != c2)
+            current_row.append(min(insertions, deletions, substitutions))
+        previous_row = current_row
+    return previous_row[-1]
+
+
+def _levenshtein_similarity(s1: str, s2: str) -> float:
+    """Normalized Levenshtein similarity ratio between 0.0 and 1.0."""
+    a, b = str(s1).lower().strip(), str(s2).lower().strip()
+    if a == b:
+        return 1.0
+    max_len = max(len(a), len(b))
+    if max_len == 0:
+        return 1.0
+    dist = _levenshtein_distance(a, b)
+    return round(1.0 - (dist / max_len), 4)
+
+
+def _jaccard_similarity(s1: str, s2: str) -> float:
+    """Jaccard word-level token similarity between 0.0 and 1.0."""
+    t1 = set(re.findall(r"\w+", str(s1).lower()))
+    t2 = set(re.findall(r"\w+", str(s2).lower()))
+    if not t1 and not t2:
+        return 1.0
+    union = t1 | t2
+    if not union:
+        return 0.0
+    return round(len(t1 & t2) / len(union), 4)
+
+
+def data_fuzzy_join(
+    left_data: Any,
+    right_data: Any,
+    left_on: str,
+    right_on: str,
+    threshold: float = 0.8,
+    metric: str = "levenshtein",
+    how: str = "inner",
+) -> List[Dict[str, Any]]:
+    """Approximate string matching join between two datasets."""
+    left_rows = _to_record_list(left_data)
+    right_rows = _to_record_list(right_data)
+    thresh = float(threshold)
+    sim_fn = _jaccard_similarity if metric.lower() == "jaccard" else _levenshtein_similarity
+    how = how.lower()
+
+    results: List[Dict[str, Any]] = []
+    matched_right_indices = set()
+
+    for l_idx, l_row in enumerate(left_rows):
+        l_val = l_row.get(left_on, "")
+        best_match = None
+        best_score = -1.0
+        best_r_idx = -1
+
+        for r_idx, r_row in enumerate(right_rows):
+            r_val = r_row.get(right_on, "")
+            score = sim_fn(str(l_val), str(r_val))
+            if score >= thresh and score > best_score:
+                best_score = score
+                best_match = r_row
+                best_r_idx = r_idx
+
+        if best_match is not None:
+            matched_right_indices.add(best_r_idx)
+            combined = dict(l_row)
+            for k, v in best_match.items():
+                if k in combined and k != left_on:
+                    combined[f"right_{k}"] = v
+                else:
+                    combined[k] = v
+            combined["similarity_score"] = best_score
+            results.append(combined)
+        elif how in ("left", "outer"):
+            combined = dict(l_row)
+            combined["similarity_score"] = 0.0
+            results.append(combined)
+
+    if how in ("right", "outer"):
+        for r_idx, r_row in enumerate(right_rows):
+            if r_idx not in matched_right_indices:
+                combined = dict(r_row)
+                combined["similarity_score"] = 0.0
+                results.append(combined)
+
+    return results
+
+
+# -------------------------------------------------------------------------
+# Advanced Pivot, Melt, and Nested JSON Unpacking
+# -------------------------------------------------------------------------
+
+def data_pivot_advanced(
+    data: Any,
+    index_col: str,
+    columns_col: str,
+    values_col: str,
+    agg_fn: str = "sum",
+    fill_value: Any = 0.0,
+) -> List[Dict[str, Any]]:
+    """Flexible multi-function pivoting supporting sum, mean, count, min, max, std, median."""
+    rows = _to_record_list(data)
+    agg = agg_fn.lower().strip()
+
+    matrix: Dict[Any, Dict[str, List[float]]] = {}
+    unique_columns = set()
+
+    for r in rows:
+        idx_val = r.get(index_col)
+        c_val = str(r.get(columns_col, ""))
+        v_val = r.get(values_col)
+        if idx_val is not None and c_val:
+            unique_columns.add(c_val)
+            matrix.setdefault(idx_val, {}).setdefault(c_val, [])
+            if v_val is not None and isinstance(v_val, (int, float)):
+                matrix[idx_val][c_val].append(float(v_val))
+
+    sorted_cols = sorted(list(unique_columns))
+    result = []
+
+    for idx_val, col_entries in sorted(matrix.items(), key=lambda x: str(x[0])):
+        row = {index_col: idx_val}
+        for col_name in sorted_cols:
+            vals = col_entries.get(col_name, [])
+            if not vals:
+                row[col_name] = fill_value
+            elif agg == "count":
+                row[col_name] = len(vals)
+            elif agg in ("mean", "avg"):
+                row[col_name] = round(sum(vals) / len(vals), 4)
+            elif agg == "min":
+                row[col_name] = min(vals)
+            elif agg == "max":
+                row[col_name] = max(vals)
+            elif agg == "median":
+                s = sorted(vals)
+                row[col_name] = s[len(s) // 2]
+            elif agg == "std":
+                m = sum(vals) / len(vals)
+                var = sum((x - m) ** 2 for x in vals) / max(1, len(vals) - 1)
+                row[col_name] = round(math.sqrt(var), 4)
+            else:  # sum default
+                row[col_name] = round(sum(vals), 4)
+        result.append(row)
+    return result
+
+
+def data_unpivot_melt(
+    data: Any,
+    id_vars: Any,
+    value_vars: Optional[Any] = None,
+    var_name: str = "variable",
+    value_name: str = "value",
+) -> List[Dict[str, Any]]:
+    """Reshape wide table into long table unpivoting value columns."""
+    rows = _to_record_list(data)
+    if not rows:
+        return []
+    ids = [str(id_vars).strip("'\"")] if isinstance(id_vars, str) else [str(x).strip("'\"") for x in id_vars]
+    
+    if value_vars is not None:
+        vals = [str(value_vars).strip("'\"")] if isinstance(value_vars, str) else [str(x).strip("'\"") for x in value_vars]
+    else:
+        vals = [k for k in rows[0].keys() if k not in ids]
+
+    melted = []
+    for r in rows:
+        base = {k: r.get(k) for k in ids}
+        for v_col in vals:
+            m_row = dict(base)
+            m_row[var_name] = v_col
+            m_row[value_name] = r.get(v_col)
+            melted.append(m_row)
+    return melted
+
+
+def data_json_explode(
+    data: Any,
+    column: str,
+    target_column: Optional[str] = None,
+    unpack_dict: bool = False,
+) -> List[Dict[str, Any]]:
+    """Explode nested arrays into separate rows, or unpack dictionary fields into top-level columns."""
+    rows = _to_record_list(data)
+    col = str(column).strip("'\"")
+    tgt = str(target_column).strip("'\"") if target_column else col
+    exploded: List[Dict[str, Any]] = []
+
+    for r in rows:
+        val = r.get(col)
+        if isinstance(val, (list, tuple)) and val:
+            for item in val:
+                c = dict(r)
+                c[tgt] = item
+                exploded.append(c)
+        elif isinstance(val, dict) and unpack_dict:
+            c = dict(r)
+            del c[col]
+            for k, v in val.items():
+                c[f"{col}_{k}"] = v
+            exploded.append(c)
+        else:
+            exploded.append(dict(r))
+    return exploded
+
+
+def data_window_rolling(
+    data: Any,
+    column: str,
+    window_size: int = 3,
+    stat: str = "mean",
+    min_periods: int = 1,
+) -> List[Dict[str, Any]]:
+    """Enhanced rolling window calculation (mean, sum, std, min, max, median)."""
+    rows = _to_record_list(data)
+    col = str(column).strip("'\"")
+    w = max(1, int(window_size))
+    st = stat.lower().strip()
+    out: List[Dict[str, Any]] = []
+    buf: List[float] = []
+
+    for r in rows:
+        c = dict(r)
+        val = r.get(col)
+        if isinstance(val, (int, float)):
+            buf.append(float(val))
+            if len(buf) > w:
+                buf.pop(0)
+
+            if len(buf) >= min_periods:
+                if st == "sum":
+                    calc = sum(buf)
+                elif st in ("min", "minimum"):
+                    calc = min(buf)
+                elif st in ("max", "maximum"):
+                    calc = max(buf)
+                elif st == "median":
+                    sb = sorted(buf)
+                    calc = sb[len(sb) // 2]
+                elif st == "std":
+                    m = sum(buf) / len(buf)
+                    calc = math.sqrt(sum((x - m) ** 2 for x in buf) / max(1, len(buf) - 1))
+                else:  # mean
+                    calc = sum(buf) / len(buf)
+                c[f"{col}_rolling_{st}"] = round(calc, 4)
+            else:
+                c[f"{col}_rolling_{st}"] = None
+        else:
+            c[f"{col}_rolling_{st}"] = None
+        out.append(c)
+    return out
+
 

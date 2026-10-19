@@ -2104,6 +2104,15 @@ from doomscript.domains.ml.runtime import (
     ml_learning_curve_points,
     ml_exponential_moving_average_weights,
     ml_gradient_clip_norm,
+    MLPClassifier,
+    MLPRegressor,
+    CARTDecisionTree,
+    GBDTModel,
+    IsolationForestModel,
+    ml_train_mlp,
+    ml_train_cart,
+    ml_train_gbdt,
+    ml_train_isolation_forest,
 )
 
 def execute_data_ir(spec):
@@ -2533,6 +2542,30 @@ from doomscript.domains.dsa.runtime import (
     dsa_rabin_karp_search,
     dsa_manacher,
     dsa_tarjan_bridges,
+    AVLTree,
+    AVLNode,
+    dsa_avl_create,
+    dsa_avl_insert,
+    dsa_avl_delete,
+    dsa_avl_contains,
+    dsa_avl_inorder,
+    dsa_avl_height,
+    SuffixAutomaton,
+    dsa_suffix_automaton_create,
+    dsa_sam_contains_substring,
+    dsa_sam_distinct_substrings,
+    dsa_sam_longest_common_substring,
+    AhoCorasick,
+    dsa_aho_corasick_create,
+    dsa_aho_corasick_search,
+    Treap,
+    TreapNode,
+    dsa_treap_create,
+    dsa_treap_insert,
+    dsa_treap_contains,
+    dsa_treap_to_list,
+    DinicMaxFlow,
+    dsa_dinic_max_flow,
 )
 
 from doomscript.domains.data.runtime import (
@@ -2564,6 +2597,14 @@ from doomscript.domains.data.runtime import (
     data_fill_null_backward,
     data_extract_year,
     data_sample_fraction,
+    ColumnarTable,
+    data_to_columnar,
+    columnar_to_records,
+    data_fuzzy_join,
+    data_pivot_advanced,
+    data_unpivot_melt,
+    data_json_explode,
+    data_window_rolling,
 )
 
 from doomscript.domains.nlp.runtime import (
@@ -2601,6 +2642,10 @@ from doomscript.domains.nlp.runtime import (
     nlp_character_ngrams,
     nlp_collocations,
     nlp_word_wrap,
+    BPETokenizer,
+    HMMPOSTagger,
+    Word2VecSimple,
+    TextRankSummarizer,
 )
 
 def execute_nlp_ir(spec):
@@ -2813,6 +2858,10 @@ from doomscript.domains.image.runtime import (
     image_mosaic_pixelate,
     image_blend_overlay,
     image_difference,
+    image_canny_edge_detector,
+    image_otsu_threshold,
+    image_bilateral_filter,
+    image_hough_lines,
 )
 
 from doomscript.domains.web.runtime import (
@@ -2889,6 +2938,12 @@ from doomscript.domains.audio.runtime import (
     audio_delay_echo,
     audio_time_stretch_naive,
     audio_generate_silence,
+    audio_fft,
+    audio_ifft,
+    audio_stft_spectrogram,
+    audio_mel_spectrogram,
+    audio_mfcc,
+    audio_biquad_filter,
 )
 
 from doomscript.domains.finance.runtime import (
@@ -2926,6 +2981,10 @@ from doomscript.domains.finance.runtime import (
     fin_drawdown_series,
     fin_implied_volatility_bisection,
     fin_var_historical,
+    fin_black_litterman,
+    fin_var_cvar_monte_carlo,
+    fin_hull_white_trinomial,
+    fin_ichimoku_cloud,
 )
 
 from doomscript.domains.graph.runtime import (
@@ -2970,6 +3029,10 @@ from doomscript.domains.graph.runtime import (
     graph_transitive_closure,
     graph_k_core,
     graph_laplacian_matrix,
+    graph_bron_kerbosch_cliques,
+    graph_louvain_communities,
+    graph_tarjan_scc,
+    graph_mst,
 )
 
 from doomscript.domains.office.runtime import (
@@ -3068,6 +3131,109 @@ from doomscript.domains.research.runtime import (
     research_transitive_reduction,
     research_find_negative_cycle,
     research_degree_distribution,
+)
+
+from doomscript.domains.bio.runtime import (
+    bio_gc_content,
+    bio_transcribe,
+    bio_reverse_complement,
+    bio_translate,
+    bio_find_orfs,
+    bio_kmer_counts,
+    bio_find_motif,
+    bio_molecular_weight,
+    bio_needleman_wunsch,
+    bio_smith_waterman,
+    bio_parse_fasta,
+    execute_bio_ir,
+)
+
+from doomscript.domains.physics.runtime import (
+    physics_projectile_trajectory,
+    physics_projectile_range,
+    physics_drag_trajectory,
+    physics_check_aabb_collision,
+    physics_check_sat_collision,
+    physics_harmonic_oscillator,
+    physics_orbital_velocity,
+    physics_escape_velocity,
+    physics_create_pid,
+    physics_update_pid,
+    execute_physics_ir,
+)
+
+from doomscript.domains.sec.runtime import (
+    sec_entropy,
+    sec_audit_password,
+    sec_caesar_cipher,
+    sec_caesar_crack,
+    sec_vigenere_cipher,
+    sec_frequency_analysis,
+    sec_xor_cipher,
+    sec_decode_jwt,
+    sec_verify_jwt,
+    sec_hexdump,
+    sec_cvss_score,
+    sec_parse_banner,
+    execute_sec_ir,
+)
+
+from doomscript.domains.game.runtime import (
+    game_roll_dice,
+    game_weighted_choice,
+    game_create_tilemap,
+    game_set_tile,
+    game_get_tile,
+    game_astar_grid,
+    game_has_line_of_sight,
+    game_resolve_turn,
+    game_apply_status_effect,
+    execute_game_ir,
+)
+
+from doomscript.domains.quantum.runtime import (
+    QuantumRegister,
+    quantum_create_register,
+    quantum_apply_h,
+    quantum_apply_x,
+    quantum_apply_y,
+    quantum_apply_z,
+    quantum_apply_phase,
+    quantum_apply_cnot,
+    quantum_measure,
+    quantum_sample,
+    quantum_bell_state,
+    quantum_state_vector,
+    execute_quantum_ir,
+)
+
+from doomscript.domains.circuit.runtime import (
+    circuit_ohms_law,
+    circuit_resistor_bands,
+    circuit_voltage_divider,
+    circuit_555_timer,
+    circuit_rc_time_constant,
+    circuit_eval_logic,
+    circuit_pwm_analog_value,
+    circuit_create_gpio,
+    circuit_set_pin,
+    circuit_read_pin,
+    execute_circuit_ir,
+)
+
+from doomscript.domains.chain.runtime import (
+    MerkleTree,
+    chain_create_merkle_tree,
+    chain_get_merkle_root,
+    chain_get_merkle_proof,
+    chain_verify_merkle_proof,
+    chain_mine_pow_block,
+    chain_verify_pow_block,
+    chain_create_utxo_ledger,
+    chain_add_utxo_tx,
+    chain_get_utxo_balance,
+    chain_eip55_address,
+    execute_chain_ir,
 )
 
 

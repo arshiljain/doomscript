@@ -724,3 +724,410 @@ def nlp_word_wrap(text: Any, width: Any = 80) -> str:
         lines.append(" ".join(cur_line))
     return "\n".join(lines)
 
+
+# =========================================================================
+# Deepened NLP Models: BPE Tokenizer, HMM Viterbi POS Tagger, Word2Vec, TextRank
+# =========================================================================
+
+class BPETokenizer:
+    """Byte-Pair Encoding (BPE) subword tokenizer."""
+
+    def __init__(self, vocab_size: int = 100):
+        self.target_vocab_size = vocab_size
+        self.merges: List[Tuple[str, str]] = []
+        self.vocab: Set[str] = set()
+
+    def train(self, corpus: List[str]) -> "BPETokenizer":
+        # Form initial word frequencies with characters + '</w>'
+        word_freqs: Dict[Tuple[str, ...], int] = {}
+        for doc in corpus:
+            words = re.findall(r"\b\w+\b", str(doc).lower())
+            for w in words:
+                chars = tuple(list(w) + ["</w>"])
+                word_freqs[chars] = word_freqs.get(chars, 0) + 1
+
+        self.vocab = set()
+        for w_tuple in word_freqs:
+            for ch in w_tuple:
+                self.vocab.add(ch)
+
+        self.merges = []
+
+        while len(self.vocab) < self.target_vocab_size:
+            # Count adjacent pairs
+            pair_counts: Dict[Tuple[str, str], int] = {}
+            for w_tuple, freq in word_freqs.items():
+                for i in range(len(w_tuple) - 1):
+                    pair = (w_tuple[i], w_tuple[i + 1])
+                    pair_counts[pair] = pair_counts.get(pair, 0) + freq
+
+            if not pair_counts:
+                break
+
+            best_pair = max(pair_counts.items(), key=lambda kv: kv[1])[0]
+            if pair_counts[best_pair] < 1:
+                break
+
+            self.merges.append(best_pair)
+            merged_token = best_pair[0] + best_pair[1]
+            self.vocab.add(merged_token)
+
+            # Apply merge across all words
+            new_word_freqs = {}
+            for w_tuple, freq in word_freqs.items():
+                new_w = []
+                i = 0
+                while i < len(w_tuple):
+                    if i < len(w_tuple) - 1 and (w_tuple[i], w_tuple[i + 1]) == best_pair:
+                        new_w.append(merged_token)
+                        i += 2
+                    else:
+                        new_w.append(w_tuple[i])
+                        i += 1
+                new_word_freqs[tuple(new_w)] = freq
+            word_freqs = new_word_freqs
+
+        return self
+
+    def encode(self, text: str) -> List[str]:
+        words = re.findall(r"\b\w+\b", str(text).lower())
+        tokens = []
+        for w in words:
+            word_tokens = list(w) + ["</w>"]
+            for pair in self.merges:
+                merged = pair[0] + pair[1]
+                new_tokens = []
+                i = 0
+                while i < len(word_tokens):
+                    if i < len(word_tokens) - 1 and word_tokens[i] == pair[0] and word_tokens[i + 1] == pair[1]:
+                        new_tokens.append(merged)
+                        i += 2
+                    else:
+                        new_tokens.append(word_tokens[i])
+                        i += 1
+                word_tokens = new_tokens
+            tokens.extend(word_tokens)
+        return tokens
+
+    def decode(self, tokens: List[str]) -> str:
+        s = "".join(tokens)
+        return s.replace("</w>", " ").strip()
+
+
+class HMMPOSTagger:
+    """Hidden Markov Model Part-of-Speech Tagger using Viterbi Trellis Decoding."""
+
+    def __init__(self):
+        self.tags: Set[str] = {"NOUN", "VERB", "ADJ", "ADV", "DET", "PRON", "PREP", "PUNCT"}
+        self.transitions: Dict[str, Dict[str, float]] = {t: {t2: 1.0 for t2 in self.tags} for t in self.tags}
+        self.emissions: Dict[str, Dict[str, float]] = {t: {} for t in self.tags}
+        self.start_probs: Dict[str, float] = {
+            "DET": 15.0,
+            "PRON": 12.0,
+            "NOUN": 10.0,
+            "ADJ": 5.0,
+            "VERB": 2.0,
+            "ADV": 2.0,
+            "PREP": 2.0,
+            "PUNCT": 0.01,
+        }
+        self._init_defaults()
+
+    def _init_defaults(self):
+        # Seed realistic English linguistic heuristics
+        heuristics = [
+            ("DET", ["the", "a", "an", "this", "that", "these", "those", "every", "all"]),
+            ("PRON", ["i", "you", "he", "she", "it", "we", "they", "me", "him", "her", "us", "them"]),
+            ("VERB", ["is", "are", "was", "were", "be", "have", "has", "had", "do", "does", "did", "say", "go", "make", "take", "run", "runs", "ran", "jump", "jumps", "jumped", "eats", "ate"]),
+            ("NOUN", ["cat", "dog", "man", "woman", "person", "time", "year", "day", "way", "fox", "fence", "quick", "lazy", "food", "data", "model", "graph"]),
+            ("ADJ", ["quick", "brown", "lazy", "good", "great", "fast", "slow", "smart", "big", "small", "happy", "new", "first", "last"]),
+            ("ADV", ["quickly", "slowly", "very", "never", "always", "often", "well", "almost", "now", "then"]),
+            ("PREP", ["in", "on", "at", "to", "for", "with", "from", "by", "about", "over", "under"]),
+            ("PUNCT", [".", ",", "!", "?", ";", ":", "-", "(", ")", "\"", "'"]),
+        ]
+        for tag, words in heuristics:
+            for w in words:
+                self.emissions[tag][w] = 10.0
+
+        # Seed realistic transition weights
+        self.transitions["DET"]["NOUN"] = 10.0
+        self.transitions["DET"]["ADJ"] = 8.0
+        self.transitions["ADJ"]["NOUN"] = 10.0
+        self.transitions["NOUN"]["VERB"] = 10.0
+        self.transitions["PRON"]["VERB"] = 10.0
+        self.transitions["VERB"]["NOUN"] = 8.0
+        self.transitions["VERB"]["PREP"] = 8.0
+        self.transitions["PREP"]["DET"] = 10.0
+        self.transitions["PREP"]["NOUN"] = 8.0
+
+    def train(self, tagged_sentences: List[List[Tuple[str, str]]]) -> "HMMPOSTagger":
+        for sent in tagged_sentences:
+            if not sent:
+                continue
+            prev_t = None
+            for idx, (word, tag) in enumerate(sent):
+                w = word.lower()
+                self.tags.add(tag)
+                if tag not in self.transitions:
+                    self.transitions[tag] = {}
+                if tag not in self.emissions:
+                    self.emissions[tag] = {}
+
+                self.emissions[tag][w] = self.emissions[tag].get(w, 0.0) + 1.0
+
+                if idx == 0:
+                    self.start_probs[tag] = self.start_probs.get(tag, 0.0) + 1.0
+                if prev_t is not None:
+                    if prev_t not in self.transitions:
+                        self.transitions[prev_t] = {}
+                    self.transitions[prev_t][tag] = self.transitions[prev_t].get(tag, 0.0) + 1.0
+                prev_t = tag
+        return self
+
+    def tag(self, words: List[str]) -> List[Tuple[str, str]]:
+        if not words:
+            return []
+        tokens = [str(w).lower() for w in words]
+        n_words = len(tokens)
+        tags_list = sorted(list(self.tags))
+
+        all_vocab = {w for t in self.tags for w in self.emissions.get(t, {})}
+        vocab_size = max(50, len(all_vocab))
+
+        def get_emit_p(t: str, word: str) -> float:
+            tag_em = self.emissions.get(t, {})
+            tot = sum(tag_em.values()) + vocab_size
+            c = tag_em.get(word, 1e-4)
+            return math.log(c / tot)
+
+        # Viterbi tables
+        viterbi = [{t: -float("inf") for t in tags_list} for _ in range(n_words)]
+        backpointer = [{t: None for t in tags_list} for _ in range(n_words)]
+
+        total_starts = sum(self.start_probs.values()) or 1.0
+        w0 = tokens[0]
+
+        for t in tags_list:
+            p_start = math.log((self.start_probs.get(t, 1.0)) / total_starts)
+            viterbi[0][t] = p_start + get_emit_p(t, w0)
+
+        # Forward trellis
+        for i in range(1, n_words):
+            wi = tokens[i]
+            for t in tags_list:
+                p_emit = get_emit_p(t, wi)
+                best_prob = -float("inf")
+                best_prev = None
+
+                for prev_t in tags_list:
+                    tot_trans = sum(self.transitions.get(prev_t, {}).values()) + len(tags_list)
+                    t_count = self.transitions.get(prev_t, {}).get(t, 1.0)
+                    p_trans = math.log(t_count / tot_trans)
+
+                    candidate = viterbi[i - 1][prev_t] + p_trans + p_emit
+                    if candidate > best_prob:
+                        best_prob = candidate
+                        best_prev = prev_t
+
+                viterbi[i][t] = best_prob
+                backpointer[i][t] = best_prev
+
+        # Find best terminal tag
+        best_last_tag = max(tags_list, key=lambda t: viterbi[-1][t])
+        best_path = [best_last_tag]
+
+        for i in range(n_words - 1, 0, -1):
+            best_last_tag = backpointer[i][best_last_tag]
+            best_path.append(best_last_tag)
+
+        best_path.reverse()
+        return list(zip(words, best_path))
+
+
+class Word2VecSimple:
+    """Pure-Python Skip-Gram Word Embeddings with Negative Sampling."""
+
+    def __init__(self, embedding_dim: int = 16, lr: float = 0.05, epochs: int = 5):
+        self.dim = embedding_dim
+        self.lr = lr
+        self.epochs = epochs
+        self.word2id: Dict[str, int] = {}
+        self.id2word: Dict[int, str] = {}
+        self.W_in: List[List[float]] = []
+        self.W_out: List[List[float]] = []
+
+    def fit(self, corpus: List[str], window: int = 2, n_negatives: int = 3, seed: int = 42) -> "Word2VecSimple":
+        import random
+        rng = random.Random(seed)
+
+        # Build vocabulary
+        freqs: Dict[str, int] = {}
+        tokenized_docs = []
+        for doc in corpus:
+            tokens = re.findall(r"\b\w+\b", str(doc).lower())
+            tokenized_docs.append(tokens)
+            for tok in tokens:
+                freqs[tok] = freqs.get(tok, 0) + 1
+
+        self.word2id = {w: i for i, w in enumerate(sorted(freqs.keys()))}
+        self.id2word = {i: w for w, i in self.word2id.items()}
+        vocab_size = len(self.word2id)
+        if vocab_size == 0:
+            return self
+
+        # Initialize weights
+        limit = 1.0 / math.sqrt(self.dim)
+        self.W_in = [[rng.uniform(-limit, limit) for _ in range(self.dim)] for _ in range(vocab_size)]
+        self.W_out = [[0.0 for _ in range(self.dim)] for _ in range(vocab_size)]
+
+        # Training loop
+        all_ids = list(range(vocab_size))
+        for _ in range(self.epochs):
+            for doc in tokenized_docs:
+                for idx, word in enumerate(doc):
+                    center_id = self.word2id[word]
+                    start = max(0, idx - window)
+                    end = min(len(doc), idx + window + 1)
+                    context_words = [doc[j] for j in range(start, end) if j != idx]
+
+                    for ctx_w in context_words:
+                        ctx_id = self.word2id[ctx_w]
+                        # Target pair: (center_id, ctx_id) label = 1
+                        self._update_pair(center_id, ctx_id, 1.0)
+
+                        # Negative samples
+                        for _ in range(n_negatives):
+                            neg_id = rng.choice(all_ids)
+                            if neg_id != ctx_id:
+                                self._update_pair(center_id, neg_id, 0.0)
+
+        return self
+
+    def _update_pair(self, center_id: int, target_id: int, label: float) -> None:
+        v_c = self.W_in[center_id]
+        v_t = self.W_out[target_id]
+
+        # Dot product
+        dot = sum(v_c[d] * v_t[d] for d in range(self.dim))
+        sig = 1.0 / (1.0 + math.exp(-max(-20.0, min(20.0, dot))))
+        err = sig - label
+
+        # Gradients
+        for d in range(self.dim):
+            g_c = err * v_t[d]
+            g_t = err * v_c[d]
+            self.W_in[center_id][d] -= self.lr * g_c
+            self.W_out[target_id][d] -= self.lr * g_t
+
+    def get_vector(self, word: str) -> Optional[List[float]]:
+        wid = self.word2id.get(str(word).lower())
+        if wid is not None:
+            return self.W_in[wid]
+        return None
+
+    def cosine_similarity(self, word1: str, word2: str) -> float:
+        v1 = self.get_vector(word1)
+        v2 = self.get_vector(word2)
+        if not v1 or not v2:
+            return 0.0
+        dot = sum(a * b for a, b in zip(v1, v2))
+        norm1 = math.sqrt(sum(a * a for a in v1)) or 1.0
+        norm2 = math.sqrt(sum(b * b for b in v2)) or 1.0
+        return round(dot / (norm1 * norm2), 4)
+
+    def most_similar(self, word: str, top_n: int = 5) -> List[Tuple[str, float]]:
+        w = str(word).lower()
+        if w not in self.word2id:
+            return []
+        sims = []
+        for other_w in self.word2id:
+            if other_w != w:
+                sims.append((other_w, self.cosine_similarity(w, other_w)))
+        sims.sort(key=lambda item: item[1], reverse=True)
+        return sims[:top_n]
+
+
+class TextRankSummarizer:
+    """Graph-based TextRank keyword and sentence extraction."""
+
+    @staticmethod
+    def extract_keywords(text: str, top_n: int = 5, window_size: int = 3, max_iter: int = 30) -> List[str]:
+        words = [w.lower() for w in re.findall(r"\b[a-zA-Z]{3,}\b", str(text)) if w.lower() not in ENGLISH_STOPWORDS]
+        if not words:
+            return []
+
+        vocab = sorted(list(set(words)))
+        word_idx = {w: i for i, w in enumerate(vocab)}
+        n = len(vocab)
+        if n == 1:
+            return vocab
+
+        # Co-occurrence graph
+        adj = [[0.0] * n for _ in range(n)]
+        for i in range(len(words)):
+            w1 = words[i]
+            idx1 = word_idx[w1]
+            for j in range(i + 1, min(len(words), i + window_size)):
+                w2 = words[j]
+                idx2 = word_idx[w2]
+                if idx1 != idx2:
+                    adj[idx1][idx2] += 1.0
+                    adj[idx2][idx1] += 1.0
+
+        # PageRank power iteration
+        d = 0.85
+        scores = [1.0 / n] * n
+        deg = [sum(adj[i]) for i in range(n)]
+
+        for _ in range(max_iter):
+            new_scores = [(1.0 - d) / n] * n
+            for i in range(n):
+                for j in range(n):
+                    if adj[j][i] > 0 and deg[j] > 0:
+                        new_scores[i] += d * (scores[j] * adj[j][i] / deg[j])
+            scores = new_scores
+
+        ranked = sorted(zip(vocab, scores), key=lambda it: it[1], reverse=True)
+        return [w for w, _ in ranked[:top_n]]
+
+    @staticmethod
+    def summarize(text: str, top_n_sentences: int = 2, max_iter: int = 30) -> str:
+        sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", str(text)) if s.strip()]
+        if len(sentences) <= top_n_sentences:
+            return " ".join(sentences)
+
+        n = len(sentences)
+        # Sentence word sets
+        sent_words = [set(w.lower() for w in re.findall(r"\b\w+\b", s) if w.lower() not in ENGLISH_STOPWORDS) for s in sentences]
+
+        # Similarity matrix based on token overlap
+        sim_mat = [[0.0] * n for _ in range(n)]
+        for i in range(n):
+            for j in range(i + 1, n):
+                inter = len(sent_words[i] & sent_words[j])
+                len1 = len(sent_words[i])
+                len2 = len(sent_words[j])
+                if inter > 0 and len1 > 0 and len2 > 0:
+                    denom = math.log(len1 + 1) + math.log(len2 + 1)
+                    score = inter / denom if denom > 0 else 0.0
+                    sim_mat[i][j] = score
+                    sim_mat[j][i] = score
+
+        d = 0.85
+        scores = [1.0 / n] * n
+        deg = [sum(sim_mat[i]) for i in range(n)]
+
+        for _ in range(max_iter):
+            new_scores = [(1.0 - d) / n] * n
+            for i in range(n):
+                for j in range(n):
+                    if sim_mat[j][i] > 0 and deg[j] > 0:
+                        new_scores[i] += d * (scores[j] * sim_mat[j][i] / deg[j])
+            scores = new_scores
+
+        ranked_indices = sorted(range(n), key=lambda i: scores[i], reverse=True)[:top_n_sentences]
+        # Keep original sequence order
+        ranked_indices.sort()
+        return " ".join(sentences[i] for i in ranked_indices)
+
+

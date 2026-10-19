@@ -39,6 +39,9 @@ from doomscript.domains.sim.runtime import (
     sim_sample_weibull,
     sim_generate_synthetic_timeline,
     sim_survival_rate_kaplan_meier,
+    sim_queue_system,
+    CellularAutomaton,
+    SpatialAgentSimulation,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.sim.exporter import SimASTExporter
@@ -187,4 +190,7 @@ __all__ = [
     "sim_sample_weibull",
     "sim_generate_synthetic_timeline",
     "sim_survival_rate_kaplan_meier",
+    "sim_queue_system",
+    "CellularAutomaton",
+    "SpatialAgentSimulation",
 ]

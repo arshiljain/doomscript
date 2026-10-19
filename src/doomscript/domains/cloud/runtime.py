@@ -518,3 +518,214 @@ def cloud_set_storage_class(bucket: Any, key: str, storage_class: str) -> str:
         json.dump({"storage_class": cls_str}, f)
     return cls_str
 
+
+class CloudStorageManager:
+    """Multi-part upload, versioning, and lifecycle rule engine for cloud object stores."""
+
+    def __init__(self, bucket: Any):
+        self.bucket = _ensure_bucket(bucket)
+        self.active_uploads: Dict[str, Dict[str, Any]] = {}
+        self.versions: Dict[str, List[Dict[str, Any]]] = {}
+
+    def initiate_multipart_upload(self, key: str) -> str:
+        import uuid
+        upload_id = str(uuid.uuid4())[:8]
+        clean_key = str(key).strip("'\"").lstrip("/")
+        self.active_uploads[upload_id] = {
+            "key": clean_key,
+            "parts": {},
+            "initiated_at": 1000.0,
+        }
+        return upload_id
+
+    def upload_part(self, upload_id: str, part_number: int, data: Union[str, bytes]) -> Dict[str, Any]:
+        import hashlib
+        if upload_id not in self.active_uploads:
+            raise KeyError(f"Upload ID not found: {upload_id}")
+        raw_bytes = data.encode("utf-8") if isinstance(data, str) else data
+        etag = hashlib.md5(raw_bytes).hexdigest()
+        self.active_uploads[upload_id]["parts"][int(part_number)] = {
+            "data": raw_bytes,
+            "etag": etag,
+            "size": len(raw_bytes),
+        }
+        return {"part_number": part_number, "etag": etag, "size": len(raw_bytes)}
+
+    def complete_multipart_upload(self, upload_id: str) -> Dict[str, Any]:
+        import hashlib
+        if upload_id not in self.active_uploads:
+            raise KeyError(f"Upload ID not found: {upload_id}")
+        session = self.active_uploads.pop(upload_id)
+        key = session["key"]
+        sorted_parts = sorted(session["parts"].items(), key=lambda x: x[0])
+
+        combined = bytearray()
+        for pnum, pinfo in sorted_parts:
+            combined.extend(pinfo["data"])
+
+        # Write to backing store
+        dest = os.path.join(self.bucket._store_dir, key)
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        with open(dest, "wb") as f:
+            f.write(combined)
+
+        etag = hashlib.md5(combined).hexdigest()
+        version_id = f"v{len(self.versions.get(key, [])) + 1}"
+        self.versions.setdefault(key, []).append({
+            "version_id": version_id,
+            "size": len(combined),
+            "etag": etag,
+        })
+
+        return {
+            "key": key,
+            "total_parts": len(sorted_parts),
+            "total_bytes": len(combined),
+            "etag": etag,
+            "version_id": version_id,
+        }
+
+    def list_versions(self, key: str) -> List[Dict[str, Any]]:
+        clean_key = str(key).strip("'\"").lstrip("/")
+        return list(self.versions.get(clean_key, []))
+
+
+class IAMPolicyEngine:
+    """IAM Access Policy evaluation engine supporting wildcards, Allow/Deny, and Conditions."""
+
+    def __init__(self):
+        self.policies: List[Dict[str, Any]] = []
+
+    def add_policy(self, policy_doc: Dict[str, Any]) -> None:
+        self.policies.append(policy_doc)
+
+    def evaluate(
+        self,
+        action: str,
+        resource: str,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Evaluate access request against all policies. Deny overrides Allow; default is Deny."""
+        ctx = context or {}
+        has_allow = False
+
+        for pol in self.policies:
+            statements = pol.get("Statement", [])
+            if isinstance(statements, dict):
+                statements = [statements]
+
+            for stmt in statements:
+                effect = stmt.get("Effect", "Deny").capitalize()
+                actions = stmt.get("Action", [])
+                if isinstance(actions, str):
+                    actions = [actions]
+
+                resources = stmt.get("Resource", [])
+                if isinstance(resources, str):
+                    resources = [resources]
+
+                # Match action
+                action_match = any(fnmatch.fnmatch(action.lower(), a.lower()) for a in actions)
+                if not action_match:
+                    continue
+
+                # Match resource
+                resource_match = any(fnmatch.fnmatch(resource.lower(), r.lower()) for r in resources)
+                if not resource_match:
+                    continue
+
+                # Match conditions if any
+                cond_pass = True
+                conds = stmt.get("Condition", {})
+                for cond_type, cond_dict in conds.items():
+                    if cond_type == "StringEquals":
+                        for k, v in cond_dict.items():
+                            if str(ctx.get(k)) != str(v):
+                                cond_pass = False
+                    elif cond_type == "IpAddress":
+                        for k, v in cond_dict.items():
+                            if str(ctx.get(k)) != str(v):
+                                cond_pass = False
+
+                if not cond_pass:
+                    continue
+
+                if effect == "Deny":
+                    return {"decision": "Deny", "allowed": False, "matched_statement": stmt}
+                elif effect == "Allow":
+                    has_allow = True
+
+        if has_allow:
+            return {"decision": "Allow", "allowed": True}
+        return {"decision": "ImplicitDeny", "allowed": False}
+
+
+class CloudCostCalculator:
+    """Multi-cloud resource and monthly bill estimation engine."""
+
+    RATES = {
+        "compute": {
+            "micro": {"vcpu": 1, "ram_gb": 1.0, "rate_hourly": 0.0104},
+            "small": {"vcpu": 1, "ram_gb": 2.0, "rate_hourly": 0.0208},
+            "medium": {"vcpu": 2, "ram_gb": 4.0, "rate_hourly": 0.0416},
+            "large": {"vcpu": 4, "ram_gb": 8.0, "rate_hourly": 0.0832},
+            "xlarge": {"vcpu": 8, "ram_gb": 16.0, "rate_hourly": 0.1664},
+        },
+        "storage_gb_month": {
+            "STANDARD": 0.023,
+            "INFREQUENT": 0.0125,
+            "COLD": 0.004,
+            "ARCHIVE": 0.00099,
+        },
+        "egress_gb": 0.09,
+    }
+
+    def __init__(self):
+        self.resources: List[Dict[str, Any]] = []
+
+    def add_instance(self, size: str, count: int = 1, hours_per_month: float = 730.0) -> None:
+        self.resources.append({
+            "type": "compute",
+            "size": size.lower(),
+            "count": int(count),
+            "hours": float(hours_per_month),
+        })
+
+    def add_storage(self, gb: float, storage_class: str = "STANDARD") -> None:
+        self.resources.append({
+            "type": "storage",
+            "gb": float(gb),
+            "tier": storage_class.upper(),
+        })
+
+    def add_egress(self, gb: float) -> None:
+        self.resources.append({
+            "type": "egress",
+            "gb": float(gb),
+        })
+
+    def estimate_monthly(self) -> Dict[str, Any]:
+        compute_cost = 0.0
+        storage_cost = 0.0
+        egress_cost = 0.0
+
+        for r in self.resources:
+            t = r["type"]
+            if t == "compute":
+                rate = self.RATES["compute"].get(r["size"], {}).get("rate_hourly", 0.05)
+                compute_cost += rate * r["count"] * r["hours"]
+            elif t == "storage":
+                tier_rate = self.RATES["storage_gb_month"].get(r["tier"], 0.023)
+                storage_cost += tier_rate * r["gb"]
+            elif t == "egress":
+                egress_cost += self.RATES["egress_gb"] * r["gb"]
+
+        total = compute_cost + storage_cost + egress_cost
+        return {
+            "compute_cost": round(compute_cost, 2),
+            "storage_cost": round(storage_cost, 2),
+            "egress_cost": round(egress_cost, 2),
+            "total_monthly_estimate": round(total, 2),
+        }
+
+

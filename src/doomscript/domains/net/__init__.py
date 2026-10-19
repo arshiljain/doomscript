@@ -38,6 +38,9 @@ from doomscript.domains.net.runtime import (
     net_format_http_headers,
     net_is_private_ip,
     net_download_file,
+    HTTP2FrameParser,
+    PacketDissector,
+    WebSocketCodec,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.net.exporter import NetASTExporter
@@ -196,4 +199,7 @@ __all__ = [
     "net_format_http_headers",
     "net_is_private_ip",
     "net_download_file",
+    "HTTP2FrameParser",
+    "PacketDissector",
+    "WebSocketCodec",
 ]

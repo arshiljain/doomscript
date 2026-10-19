@@ -191,6 +191,13 @@ class DoomImage:
         self._img.save(path, **save_kwargs)
         return path
 
+    def __getitem__(self, item: int) -> Any:
+        grid, _, _ = _to_gray_grid(self)
+        return grid[item]
+
+    def __len__(self) -> int:
+        return self.height
+
     def __repr__(self) -> str:
         return f"DoomImage(size={self.size}, format='{self.format}', mode='{self.mode}')"
 
@@ -612,5 +619,286 @@ def image_difference(img1: Any, img2: Any) -> Any:
     rgb2 = r2.convert("RGB").resize(rgb1.size)
     out = ImageChops.difference(rgb1, rgb2)
     return DoomImage(out)
+
+
+# =========================================================================
+# Deepened Computer Vision: Canny, Otsu, Bilateral Filter, Hough Lines
+# =========================================================================
+
+def _to_gray_grid(img_or_pixels: Any) -> Tuple[List[List[float]], int, int]:
+    """Extract a 2D float intensity grid (H, W) from DoomImage, PIL Image, or nested lists."""
+    raw = _unwrap_img(img_or_pixels)
+    if HAS_PIL and isinstance(raw, PILImage.Image):
+        gray = raw.convert("L")
+        w, h = gray.size
+        data = list(gray.getdata())
+        grid = [[float(data[y * w + x]) for x in range(w)] for y in range(h)]
+        return grid, w, h
+    elif isinstance(img_or_pixels, (list, tuple)) and img_or_pixels:
+        if isinstance(img_or_pixels[0], (list, tuple)):
+            h = len(img_or_pixels)
+            w = len(img_or_pixels[0])
+            grid = []
+            for row in img_or_pixels:
+                g_row = []
+                for val in row:
+                    if isinstance(val, (tuple, list)):
+                        # Average RGB
+                        g_row.append(sum(val[:3]) / max(1, len(val[:3])))
+                    else:
+                        g_row.append(float(val))
+                grid.append(g_row)
+            return grid, w, h
+    # Fallback 10x10 zero grid
+    return [[0.0] * 10 for _ in range(10)], 10, 10
+
+
+def image_canny_edge_detector(
+    img: Any,
+    low_thresh: float = 20.0,
+    high_thresh: float = 50.0,
+) -> Any:
+    """Full 5-stage Canny Edge Detection pipeline."""
+    import math
+    grid, w, h = _to_gray_grid(img)
+    if h < 3 or w < 3:
+        return img
+
+    # 1. 5x5 Gaussian Blur
+    kernel = [
+        [2, 4, 5, 4, 2],
+        [4, 9, 12, 9, 4],
+        [5, 12, 15, 12, 5],
+        [4, 9, 12, 9, 4],
+        [2, 4, 5, 4, 2],
+    ]
+    k_sum = 159.0
+    blurred = [[0.0] * w for _ in range(h)]
+    for y in range(2, h - 2):
+        for x in range(2, w - 2):
+            val = sum(grid[y + ky - 2][x + kx - 2] * kernel[ky][kx] for ky in range(5) for kx in range(5))
+            blurred[y][x] = val / k_sum
+
+    # 2. Sobel Gradients
+    gx = [[0.0] * w for _ in range(h)]
+    gy = [[0.0] * w for _ in range(h)]
+    mag = [[0.0] * w for _ in range(h)]
+    angle = [[0.0] * w for _ in range(h)]
+
+    kx_sobel = [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]]
+    ky_sobel = [[1, 2, 1], [0, 0, 0], [-1, -2, -1]]
+
+    for y in range(1, h - 1):
+        for x in range(1, w - 1):
+            val_x = sum(blurred[y + ky - 1][x + kx - 1] * kx_sobel[ky][kx] for ky in range(3) for kx in range(3))
+            val_y = sum(blurred[y + ky - 1][x + kx - 1] * ky_sobel[ky][kx] for ky in range(3) for kx in range(3))
+            gx[y][x] = val_x
+            gy[y][x] = val_y
+            m = math.sqrt(val_x * val_x + val_y * val_y)
+            mag[y][x] = m
+            ang = (math.atan2(val_y, val_x) * 180.0 / math.pi) % 180.0
+            angle[y][x] = ang
+
+    # 3. Non-Maximum Suppression
+    nms = [[0.0] * w for _ in range(h)]
+    for y in range(1, h - 1):
+        for x in range(1, w - 1):
+            ang = angle[y][x]
+            m = mag[y][x]
+            q, r = 255.0, 255.0
+
+            # 0 deg (east-west)
+            if (0 <= ang < 22.5) or (157.5 <= ang <= 180):
+                q = mag[y][x + 1]
+                r = mag[y][x - 1]
+            # 45 deg (northeast-southwest)
+            elif 22.5 <= ang < 67.5:
+                q = mag[y + 1][x - 1]
+                r = mag[y - 1][x + 1]
+            # 90 deg (north-south)
+            elif 67.5 <= ang < 112.5:
+                q = mag[y + 1][x]
+                r = mag[y - 1][x]
+            # 135 deg (northwest-southeast)
+            elif 112.5 <= ang < 157.5:
+                q = mag[y - 1][x - 1]
+                r = mag[y + 1][x + 1]
+
+            if m >= q and m >= r:
+                nms[y][x] = m
+            else:
+                nms[y][x] = 0.0
+
+    # 4. Double Hysteresis Thresholding
+    edges = [[0] * w for _ in range(h)]
+    strong, weak = 255, 50
+
+    for y in range(1, h - 1):
+        for x in range(1, w - 1):
+            if nms[y][x] >= high_thresh:
+                edges[y][x] = strong
+            elif nms[y][x] >= low_thresh:
+                edges[y][x] = weak
+
+    # 5. Edge Tracking by Hysteresis
+    for y in range(1, h - 1):
+        for x in range(1, w - 1):
+            if edges[y][x] == weak:
+                if any(edges[y + dy][x + dx] == strong for dy in (-1, 0, 1) for dx in (-1, 0, 1)):
+                    edges[y][x] = strong
+                else:
+                    edges[y][x] = 0
+
+    if HAS_PIL:
+        flat_bytes = bytes([edges[y][x] for y in range(h) for x in range(w)])
+        out_pil = PILImage.frombytes("L", (w, h), flat_bytes)
+        return DoomImage(out_pil)
+    return edges
+
+
+def image_otsu_threshold(img: Any) -> Dict[str, Any]:
+    """Otsu automated binarization threshold maximizing inter-class variance."""
+    grid, w, h = _to_gray_grid(img)
+    total_pixels = w * h
+    if total_pixels == 0:
+        return {"threshold": 128, "binary_image": grid}
+
+    # Histogram
+    hist = [0] * 256
+    for y in range(h):
+        for x in range(w):
+            v = max(0, min(255, int(round(grid[y][x]))))
+            hist[v] += 1
+
+    sum_all = sum(i * hist[i] for i in range(256))
+    sum_b = 0.0
+    w_b = 0.0
+    max_var = -1.0
+    best_thresholds: List[int] = [128]
+
+    for t in range(256):
+        w_b += hist[t]
+        if w_b == 0:
+            continue
+        w_f = total_pixels - w_b
+        if w_f == 0:
+            break
+
+        sum_b += t * hist[t]
+        m_b = sum_b / w_b
+        m_f = (sum_all - sum_b) / w_f
+
+        # Between class variance
+        var_between = w_b * w_f * ((m_b - m_f) ** 2)
+        if var_between > max_var + 1e-5:
+            max_var = var_between
+            best_thresholds = [t]
+        elif abs(var_between - max_var) <= 1e-5 and max_var >= 0.0:
+            best_thresholds.append(t)
+
+    best_thresh = sum(best_thresholds) // len(best_thresholds)
+    binary = [[255 if grid[y][x] >= best_thresh else 0 for x in range(w)] for y in range(h)]
+    res: Dict[str, Any] = {"threshold": best_thresh, "binary_grid": binary}
+
+    if HAS_PIL:
+        flat_bytes = bytes([binary[y][x] for y in range(h) for x in range(w)])
+        out_pil = PILImage.frombytes("L", (w, h), flat_bytes)
+        res["image"] = DoomImage(out_pil)
+
+    return res
+
+
+def image_bilateral_filter(
+    img: Any,
+    d: int = 5,
+    sigma_color: float = 30.0,
+    sigma_space: float = 30.0,
+) -> Any:
+    """Edge-preserving bilateral smoothing filter."""
+    import math
+    grid, w, h = _to_gray_grid(img)
+    rad = d // 2
+    out = [[0.0] * w for _ in range(h)]
+
+    two_sigma_color_sq = 2.0 * (sigma_color ** 2)
+    two_sigma_space_sq = 2.0 * (sigma_space ** 2)
+
+    for y in range(h):
+        for x in range(w):
+            center_val = grid[y][x]
+            weight_sum = 0.0
+            val_sum = 0.0
+
+            y_min = max(0, y - rad)
+            y_max = min(h, y + rad + 1)
+            x_min = max(0, x - rad)
+            x_max = min(w, x + rad + 1)
+
+            for ny in range(y_min, y_max):
+                for nx in range(x_min, x_max):
+                    n_val = grid[ny][nx]
+                    space_dist_sq = (x - nx) ** 2 + (y - ny) ** 2
+                    color_dist_sq = (center_val - n_val) ** 2
+
+                    w_spatial = math.exp(-space_dist_sq / two_sigma_space_sq)
+                    w_color = math.exp(-color_dist_sq / two_sigma_color_sq)
+                    weight = w_spatial * w_color
+
+                    val_sum += n_val * weight
+                    weight_sum += weight
+
+            out[y][x] = round(val_sum / (weight_sum or 1.0), 2)
+
+    if HAS_PIL:
+        flat_bytes = bytes([max(0, min(255, int(out[y][x]))) for y in range(h) for x in range(w)])
+        out_pil = PILImage.frombytes("L", (w, h), flat_bytes)
+        return DoomImage(out_pil)
+    return out
+
+
+def image_hough_lines(
+    edge_map: Any,
+    threshold: int = 20,
+    rho_res: float = 1.0,
+    theta_res_deg: float = 1.0,
+) -> List[Dict[str, Any]]:
+    """Hough Transform detecting geometric straight lines in edge maps."""
+    import math
+    grid, w, h = _to_gray_grid(edge_map)
+    diag_len = int(math.ceil(math.sqrt(w * w + h * h)))
+
+    n_thetas = int(180 / theta_res_deg)
+    thetas = [math.radians(i * theta_res_deg) for i in range(n_thetas)]
+    cos_t = [math.cos(t) for t in thetas]
+    sin_t = [math.sin(t) for t in thetas]
+
+    n_rhos = int(2 * diag_len / rho_res) + 1
+    accumulator = [[0] * n_thetas for _ in range(n_rhos)]
+
+    for y in range(h):
+        for x in range(w):
+            if grid[y][x] > 100:  # Edge pixel
+                for t_idx in range(n_thetas):
+                    rho = x * cos_t[t_idx] + y * sin_t[t_idx]
+                    rho_idx = int(round((rho + diag_len) / rho_res))
+                    if 0 <= rho_idx < n_rhos:
+                        accumulator[rho_idx][t_idx] += 1
+
+    lines = []
+    for r_idx in range(n_rhos):
+        for t_idx in range(n_thetas):
+            votes = accumulator[r_idx][t_idx]
+            if votes >= threshold:
+                rho_val = (r_idx * rho_res) - diag_len
+                theta_deg = round(t_idx * theta_res_deg, 2)
+                lines.append({
+                    "rho": round(rho_val, 2),
+                    "theta_deg": theta_deg,
+                    "votes": votes,
+                })
+
+    lines.sort(key=lambda l: l["votes"], reverse=True)
+    return lines
+
 
 

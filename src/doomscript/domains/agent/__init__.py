@@ -41,6 +41,9 @@ from doomscript.domains.agent.runtime import (
     agent_audit_conversation_safety,
     agent_count_conversation_turns,
     agent_export_chat_transcript,
+    ToolHarness,
+    AgentMemoryBuffer,
+    ReActAgent,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.agent.exporter import AgentASTExporter
@@ -201,4 +204,7 @@ __all__ = [
     "agent_audit_conversation_safety",
     "agent_count_conversation_turns",
     "agent_export_chat_transcript",
+    "ToolHarness",
+    "AgentMemoryBuffer",
+    "ReActAgent",
 ]

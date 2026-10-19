@@ -1104,3 +1104,362 @@ def opt_binary_search_peak_1d(arr: List[float]) -> Dict[str, Any]:
 
     return {"index": low, "value": vals[low]}
 
+
+class SAResult(float):
+    """Simulated Annealing result that behaves as a float (best scalar) and a dict."""
+
+    def __new__(cls, val, best_state=None, best_cost=None, history=None):
+        obj = super().__new__(cls, float(val))
+        obj.best_state = best_state or [float(val)]
+        obj.best_cost = float(best_cost) if best_cost is not None else float(val)
+        obj.history = history or [float(val)]
+        return obj
+
+    def __getitem__(self, key: str) -> Any:
+        if key == "best_state":
+            return self.best_state
+        elif key == "best_cost":
+            return self.best_cost
+        elif key == "history":
+            return self.history
+        raise KeyError(key)
+
+    def __contains__(self, key: str) -> bool:
+        return key in ("best_state", "best_cost", "history")
+
+    def get(self, key: str, default: Any = None) -> Any:
+        if key in self:
+            return self[key]
+        return default
+
+
+def opt_simulated_annealing(
+    cost_fn: Any,
+    initial_state: Union[List[float], float],
+    bounds: Optional[List[Tuple[float, float]]] = None,
+    temp_max: float = 100.0,
+    cooling_rate: float = 0.95,
+    temp_min: float = 1e-4,
+    steps_per_temp: int = 15,
+    step_size: float = 0.5,
+    seed: int = 42,
+) -> SAResult:
+    """Simulated Annealing global optimization for non-convex or noisy objectives."""
+    import random
+    rng = random.Random(seed)
+
+    if isinstance(cost_fn, str):
+        fn = eval(cost_fn)
+    else:
+        fn = cost_fn
+
+    is_scalar = isinstance(initial_state, (int, float))
+    curr_state = [float(x) for x in (initial_state if isinstance(initial_state, list) else [initial_state])]
+    dim = len(curr_state)
+
+    def eval_fn(st: List[float]) -> float:
+        if is_scalar:
+            try:
+                return float(fn(st[0]))
+            except Exception:
+                return float(fn(st))
+        else:
+            try:
+                return float(fn(st))
+            except Exception:
+                return float(fn(*st))
+
+    curr_cost = eval_fn(curr_state)
+    best_state = list(curr_state)
+    best_cost = curr_cost
+
+    temp = float(temp_max)
+    history = [best_cost]
+
+    while temp > temp_min:
+        for _ in range(steps_per_temp):
+            # Propose neighbor
+            cand = list(curr_state)
+            for d in range(dim):
+                delta = rng.gauss(0.0, step_size)
+                cand[d] += delta
+                if bounds and d < len(bounds):
+                    b_low, b_high = bounds[d]
+                    cand[d] = max(b_low, min(b_high, cand[d]))
+
+            cand_cost = eval_fn(cand)
+            diff = cand_cost - curr_cost
+
+            # Acceptance criterion
+            if diff < 0.0 or rng.random() < math.exp(-min(500.0, max(-500.0, diff / temp))):
+                curr_state = cand
+                curr_cost = cand_cost
+                if curr_cost < best_cost:
+                    best_state = list(curr_state)
+                    best_cost = curr_cost
+
+        temp *= cooling_rate
+        history.append(best_cost)
+
+    best_val = best_state[0] if is_scalar else best_cost
+    rounded_state = [round(x, 4) for x in best_state]
+    return SAResult(best_val, best_state=rounded_state, best_cost=round(best_cost, 6), history=history)
+
+
+
+def opt_genetic_algorithm(
+    fitness_fn: Callable[[List[float]], float],
+    bounds: List[Tuple[float, float]],
+    population_size: int = 40,
+    generations: int = 40,
+    crossover_prob: float = 0.8,
+    mutation_prob: float = 0.15,
+    elitism_count: int = 2,
+    maximize: bool = False,
+    seed: int = 42,
+) -> Dict[str, Any]:
+    """Continuous Genetic Algorithm (selection, crossover, Gaussian mutation, elitism)."""
+    import random
+    rng = random.Random(seed)
+    dim = len(bounds)
+
+    # Initialize population uniformly inside bounds
+    population = []
+    for _ in range(population_size):
+        ind = [rng.uniform(low, high) for low, high in bounds]
+        population.append(ind)
+
+    def evaluate(ind: List[float]) -> float:
+        val = float(fitness_fn(ind))
+        return val if maximize else -val
+
+    best_ind = list(population[0])
+    best_score = evaluate(best_ind)
+    score_history = []
+
+    for gen in range(generations):
+        scores = [evaluate(ind) for ind in population]
+        ranked_indices = sorted(range(population_size), key=lambda i: scores[i], reverse=True)
+
+        if scores[ranked_indices[0]] > best_score:
+            best_score = scores[ranked_indices[0]]
+            best_ind = list(population[ranked_indices[0]])
+
+        actual_best = best_score if maximize else -best_score
+        score_history.append(actual_best)
+
+        # Elites
+        next_gen = [list(population[i]) for i in ranked_indices[:elitism_count]]
+
+        # Tournament selection
+        def select():
+            k_inds = rng.sample(range(population_size), 3)
+            best_k = max(k_inds, key=lambda i: scores[i])
+            return population[best_k]
+
+        while len(next_gen) < population_size:
+            p1 = select()
+            p2 = select()
+
+            # Blend Crossover (BLX-alpha)
+            if rng.random() < crossover_prob:
+                c1, c2 = [], []
+                for d in range(dim):
+                    alpha = rng.random()
+                    val1 = alpha * p1[d] + (1.0 - alpha) * p2[d]
+                    val2 = (1.0 - alpha) * p1[d] + alpha * p2[d]
+                    c1.append(val1)
+                    c2.append(val2)
+            else:
+                c1, c2 = list(p1), list(p2)
+
+            # Mutation
+            for child in (c1, c2):
+                if len(next_gen) >= population_size:
+                    break
+                for d in range(dim):
+                    if rng.random() < mutation_prob:
+                        span = bounds[d][1] - bounds[d][0]
+                        child[d] += rng.gauss(0.0, span * 0.1)
+                    child[d] = max(bounds[d][0], min(bounds[d][1], child[d]))
+                next_gen.append(child)
+
+        population = next_gen
+
+    final_best = best_score if maximize else -best_score
+    return {
+        "best_state": [round(x, 4) for x in best_ind],
+        "best_cost": round(final_best, 6),
+        "history": [round(h, 6) for h in score_history],
+    }
+
+
+def opt_particle_swarm(
+    cost_fn: Callable[[List[float]], float],
+    bounds: List[Tuple[float, float]],
+    n_particles: int = 30,
+    iterations: int = 40,
+    w: float = 0.729,
+    c1: float = 1.494,
+    c2: float = 1.494,
+    seed: int = 42,
+) -> Dict[str, Any]:
+    """Particle Swarm Optimization (PSO) with inertia and cognitive/social acceleration."""
+    import random
+    rng = random.Random(seed)
+    dim = len(bounds)
+
+    particles = []
+    velocities = []
+    pbest_positions = []
+    pbest_costs = []
+
+    gbest_position = None
+    gbest_cost = float("inf")
+
+    for _ in range(n_particles):
+        pos = [rng.uniform(low, high) for low, high in bounds]
+        vel = [rng.uniform(-(high - low) * 0.1, (high - low) * 0.1) for low, high in bounds]
+        cost = float(cost_fn(pos))
+
+        particles.append(pos)
+        velocities.append(vel)
+        pbest_positions.append(list(pos))
+        pbest_costs.append(cost)
+
+        if cost < gbest_cost:
+            gbest_cost = cost
+            gbest_position = list(pos)
+
+    history = [round(gbest_cost, 6)]
+
+    for it in range(iterations):
+        for i in range(n_particles):
+            for d in range(dim):
+                r1 = rng.random()
+                r2 = rng.random()
+                cog = c1 * r1 * (pbest_positions[i][d] - particles[i][d])
+                soc = c2 * r2 * (gbest_position[d] - particles[i][d])
+                velocities[i][d] = w * velocities[i][d] + cog + soc
+
+                # Clamp velocity
+                span = bounds[d][1] - bounds[d][0]
+                max_v = span * 0.2
+                velocities[i][d] = max(-max_v, min(max_v, velocities[i][d]))
+
+                # Update position
+                particles[i][d] += velocities[i][d]
+                particles[i][d] = max(bounds[d][0], min(bounds[d][1], particles[i][d]))
+
+            cost = float(cost_fn(particles[i]))
+            if cost < pbest_costs[i]:
+                pbest_costs[i] = cost
+                pbest_positions[i] = list(particles[i])
+                if cost < gbest_cost:
+                    gbest_cost = cost
+                    gbest_position = list(particles[i])
+
+        history.append(round(gbest_cost, 6))
+
+    return {
+        "best_state": [round(x, 4) for x in gbest_position] if gbest_position else [],
+        "best_cost": round(gbest_cost, 6),
+        "history": history,
+    }
+
+
+def opt_nelder_mead(
+    cost_fn: Callable[[List[float]], float],
+    initial_point: List[float],
+    step: float = 0.5,
+    alpha: float = 1.0,
+    gamma: float = 2.0,
+    rho: float = 0.5,
+    sigma: float = 0.5,
+    max_iter: int = 150,
+    tol: float = 1e-6,
+) -> Dict[str, Any]:
+    """Nelder-Mead downhill simplex direct search optimization."""
+    x0 = [float(x) for x in initial_point]
+    n = len(x0)
+    if n == 0:
+        return {"best_state": [], "best_cost": 0.0, "iterations": 0}
+
+    # Initialize simplex of n+1 vertices
+    simplex = [list(x0)]
+    for i in range(n):
+        vertex = list(x0)
+        vertex[i] += step
+        simplex.append(vertex)
+
+    costs = [float(cost_fn(v)) for v in simplex]
+    iterations = 0
+
+    for it in range(max_iter):
+        iterations += 1
+        # Sort simplex vertices by cost
+        order = sorted(range(n + 1), key=lambda i: costs[i])
+        simplex = [simplex[i] for i in order]
+        costs = [costs[i] for i in order]
+
+        # Check termination condition
+        mean_cost = sum(costs) / (n + 1)
+        var = sum((c - mean_cost) ** 2 for c in costs) / (n + 1)
+        if math.sqrt(var) < tol:
+            break
+
+        # Centroid of all vertices except worst
+        centroid = [sum(simplex[i][d] for i in range(n)) / n for d in range(n)]
+
+        # 1. Reflection
+        xr = [centroid[d] + alpha * (centroid[d] - simplex[n][d]) for d in range(n)]
+        fxr = float(cost_fn(xr))
+
+        if costs[0] <= fxr < costs[n - 1]:
+            simplex[n] = xr
+            costs[n] = fxr
+            continue
+
+        # 2. Expansion
+        if fxr < costs[0]:
+            xe = [centroid[d] + gamma * (xr[d] - centroid[d]) for d in range(n)]
+            fxe = float(cost_fn(xe))
+            if fxe < fxr:
+                simplex[n] = xe
+                costs[n] = fxe
+            else:
+                simplex[n] = xr
+                costs[n] = fxr
+            continue
+
+        # 3. Contraction
+        if fxr < costs[n]:
+            # Outside contraction
+            xc = [centroid[d] + rho * (xr[d] - centroid[d]) for d in range(n)]
+            fxc = float(cost_fn(xc))
+            if fxc <= fxr:
+                simplex[n] = xc
+                costs[n] = fxc
+                continue
+        else:
+            # Inside contraction
+            xcc = [centroid[d] + rho * (simplex[n][d] - centroid[d]) for d in range(n)]
+            fxcc = float(cost_fn(xcc))
+            if fxcc < costs[n]:
+                simplex[n] = xcc
+                costs[n] = fxcc
+                continue
+
+        # 4. Shrink
+        for i in range(1, n + 1):
+            simplex[i] = [simplex[0][d] + sigma * (simplex[i][d] - simplex[0][d]) for d in range(n)]
+            costs[i] = float(cost_fn(simplex[i]))
+
+    best_idx = 0
+    return {
+        "best_state": [round(x, 4) for x in simplex[best_idx]],
+        "best_cost": round(costs[best_idx], 6),
+        "iterations": iterations,
+    }
+
+

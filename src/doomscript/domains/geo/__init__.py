@@ -45,6 +45,12 @@ from doomscript.domains.geo.runtime import (
     geo_utm_zone_number,
     geo_rhumb_line_distance,
     geo_rhumb_line_bearing,
+    geo_vincenty_distance,
+    geo_point_in_polygon,
+    geo_polygon_area_sq_km,
+    geo_geohash_encode,
+    geo_geohash_decode,
+    SpatialRTree,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.geo.exporter import GeoASTExporter
@@ -212,5 +218,11 @@ __all__ = [
     "geo_utm_zone_number",
     "geo_rhumb_line_distance",
     "geo_rhumb_line_bearing",
+    "geo_vincenty_distance",
+    "geo_point_in_polygon",
+    "geo_polygon_area_sq_km",
+    "geo_geohash_encode",
+    "geo_geohash_decode",
+    "SpatialRTree",
 ]
 

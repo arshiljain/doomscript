@@ -20,6 +20,10 @@ from doomscript.domains.finance.runtime import (
     calculate_sharpe_ratio,
     backtest_strategy,
     execute_finance_ir,
+    fin_black_litterman,
+    fin_var_cvar_monte_carlo,
+    fin_hull_white_trinomial,
+    fin_ichimoku_cloud,
 )
 from doomscript.domains.finance.exporter import FinanceASTExporter
 from doomscript.domains.matcher import VerbSpec
@@ -157,4 +161,9 @@ __all__ = [
     "calculate_sharpe_ratio",
     "backtest_strategy",
     "execute_finance_ir",
+    "fin_black_litterman",
+    "fin_var_cvar_monte_carlo",
+    "fin_hull_white_trinomial",
+    "fin_ichimoku_cloud",
 ]
+

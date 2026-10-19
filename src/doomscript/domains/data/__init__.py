@@ -21,6 +21,14 @@ from doomscript.domains.data.runtime import (
     profile_dataset,
     clean_dataset,
     join_datasets,
+    ColumnarTable,
+    data_to_columnar,
+    columnar_to_records,
+    data_fuzzy_join,
+    data_pivot_advanced,
+    data_unpivot_melt,
+    data_json_explode,
+    data_window_rolling,
 )
 from doomscript.domains.data.exporter import DataASTExporter
 from doomscript.domains.matcher import VerbSpec
@@ -156,6 +164,8 @@ class DataDomain(DomainContract):
             or s.startswith("backward fill nulls in column ")
             or s.startswith("extract year from column ")
             or (s.startswith("sample ") and " fraction from " in s)
+            or s.startswith("fuzzy join ")
+            or (s.startswith("convert ") and " to columnar into " in s)
         )
 
     def can_handle_block(self, header: str) -> bool:
@@ -187,4 +197,12 @@ __all__ = [
     "profile_dataset",
     "clean_dataset",
     "join_datasets",
+    "ColumnarTable",
+    "data_to_columnar",
+    "columnar_to_records",
+    "data_fuzzy_join",
+    "data_pivot_advanced",
+    "data_unpivot_melt",
+    "data_json_explode",
+    "data_window_rolling",
 ]

@@ -64,6 +64,23 @@ def _extract_lat_lon(pt: Any) -> Tuple[float, float]:
     raise TypeError(f"Cannot extract lat/lon from geometry: {pt}")
 
 
+def _extract_polygon_ring(poly: Any) -> List[List[float]]:
+    """Extracts a list of [lon, lat] coordinates from GeoPolygon dict or nested lists."""
+    if isinstance(poly, dict) and poly.get("type") == "Polygon" and "coordinates" in poly:
+        ring = poly["coordinates"][0]
+    elif isinstance(poly, (list, tuple)):
+        ring = poly
+    else:
+        ring = []
+    clean = []
+    for p in ring:
+        if isinstance(p, dict) and "lon" in p and "lat" in p:
+            clean.append([float(p["lon"]), float(p["lat"])])
+        elif isinstance(p, (list, tuple)) and len(p) >= 2:
+            clean.append([float(p[0]), float(p[1])])
+    return clean
+
+
 def distance_between(p1: Any, p2: Any, unit: str = "km") -> float:
     """Computes great-circle distance between two points using the Haversine formula."""
     lat1, lon1 = _extract_lat_lon(p1)
@@ -659,4 +676,227 @@ def geo_rhumb_line_bearing(p1: Any, p2: Any) -> float:
 
     theta = math.atan2(delta_lambda, delta_psi)
     return round((math.degrees(theta) + 360.0) % 360.0, 2)
+
+
+def geo_vincenty_distance(p1: Any, p2: Any, max_iter: int = 100, tol: float = 1e-12) -> float:
+    """High-precision Vincenty inverse solution on WGS-84 ellipsoid (distance in km)."""
+    lat1, lon1 = _extract_lat_lon(p1)
+    lat2, lon2 = _extract_lat_lon(p2)
+
+    # WGS-84 ellipsoid constants
+    a = 6378137.0  # equatorial radius in meters
+    f = 1.0 / 298.257223563  # flattening
+    b = (1.0 - f) * a
+
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    L = math.radians(lon2 - lon1)
+
+    u1 = math.atan((1.0 - f) * math.tan(phi1))
+    u2 = math.atan((1.0 - f) * math.tan(phi2))
+    sin_u1, cos_u1 = math.sin(u1), math.cos(u1)
+    sin_u2, cos_u2 = math.sin(u2), math.cos(u2)
+
+    lam = L
+    for _ in range(max_iter):
+        sin_lam, cos_lam = math.sin(lam), math.cos(lam)
+        sin_sigma = math.sqrt(
+            (cos_u2 * sin_lam) ** 2 + (cos_u1 * sin_u2 - sin_u1 * cos_u2 * cos_lam) ** 2
+        )
+        if sin_sigma == 0.0:
+            return 0.0  # coincident points
+
+        cos_sigma = sin_u1 * sin_u2 + cos_u1 * cos_u2 * cos_lam
+        sigma = math.atan2(sin_sigma, cos_sigma)
+
+        sin_alpha = (cos_u1 * cos_u2 * sin_lam) / sin_sigma
+        cos2_alpha = 1.0 - sin_alpha ** 2
+
+        cos_2sigma_m = cos_sigma - (2.0 * sin_u1 * sin_u2) / cos2_alpha if cos2_alpha != 0.0 else 0.0
+
+        C = (f / 16.0) * cos2_alpha * (4.0 + f * (4.0 - 3.0 * cos2_alpha))
+        lam_prev = lam
+        lam = L + (1.0 - C) * f * sin_alpha * (
+            sigma + C * sin_sigma * (cos_2sigma_m + C * cos_sigma * (-1.0 + 2.0 * (cos_2sigma_m ** 2)))
+        )
+        if abs(lam - lam_prev) < tol:
+            break
+
+    u_sq = cos2_alpha * (a ** 2 - b ** 2) / (b ** 2)
+    A = 1.0 + (u_sq / 16384.0) * (4096.0 + u_sq * (-768.0 + u_sq * (320.0 - 175.0 * u_sq)))
+    B = (u_sq / 1024.0) * (256.0 + u_sq * (-128.0 + u_sq * (74.0 - 47.0 * u_sq)))
+    delta_sigma = B * sin_sigma * (
+        cos_2sigma_m + (B / 4.0) * (
+            cos_sigma * (-1.0 + 2.0 * (cos_2sigma_m ** 2))
+            - (B / 6.0) * cos_2sigma_m * (-3.0 + 4.0 * (sin_sigma ** 2)) * (-3.0 + 4.0 * (cos_2sigma_m ** 2))
+        )
+    )
+
+    s = b * A * (sigma - delta_sigma)  # meters
+    return round(s / 1000.0, 4)  # km
+
+
+def geo_point_in_polygon(point_pt: Any, polygon_obj: Any) -> bool:
+    """Ray casting point-in-polygon containment test."""
+    lat, lon = _extract_lat_lon(point_pt)
+    ring = _extract_polygon_ring(polygon_obj)
+    if len(ring) < 3:
+        return False
+
+    inside = False
+    n = len(ring)
+    p1x, p1y = ring[0][0], ring[0][1]  # lon, lat
+
+    for i in range(1, n + 1):
+        p2x, p2y = ring[i % n][0], ring[i % n][1]
+        if lat > min(p1y, p2y):
+            if lat <= max(p1y, p2y):
+                if lon <= max(p1x, p2x):
+                    if p1y != p2y:
+                        x_inters = (lat - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
+                    if p1x == p2x or lon <= x_inters:
+                        inside = not inside
+        p1x, p1y = p2x, p2y
+
+    return inside
+
+
+def geo_polygon_area_sq_km(polygon_obj: Any) -> float:
+    """Compute polygon surface area on spherical Earth in square kilometers."""
+    ring = _extract_polygon_ring(polygon_obj)
+    if len(ring) < 3:
+        return 0.0
+
+    # Spherical excess using Girard's formula or trapezoidal projection
+    total = 0.0
+    r_meters = EARTH_RADIUS_KM * 1000.0
+
+    for i in range(len(ring) - 1):
+        p1_lon, p1_lat = ring[i]
+        p2_lon, p2_lat = ring[i + 1]
+
+        phi1 = math.radians(p1_lat)
+        phi2 = math.radians(p2_lat)
+        lam1 = math.radians(p1_lon)
+        lam2 = math.radians(p2_lon)
+
+        total += (lam2 - lam1) * (2.0 + math.sin(phi1) + math.sin(phi2))
+
+    area = abs(total * (r_meters ** 2) / 2.0)
+    return round(area / 1_000_000.0, 4)  # sq km
+
+
+_GEOHASH_BASE32 = "0123456789bcdefghjkmnpqrstuvwxyz"
+_GEOHASH_DECODE_MAP = {c: i for i, c in enumerate(_GEOHASH_BASE32)}
+
+
+def geo_geohash_encode(lat: float, lon: float, precision: int = 9) -> str:
+    """Encode latitude and longitude into Base32 Geohash string."""
+    lat_range = [-90.0, 90.0]
+    lon_range = [-180.0, 180.0]
+    geohash = []
+    bits = 0
+    ch = 0
+    is_even = True
+
+    while len(geohash) < precision:
+        if is_even:
+            mid = (lon_range[0] + lon_range[1]) / 2.0
+            if lon >= mid:
+                ch = (ch << 1) | 1
+                lon_range[0] = mid
+            else:
+                ch = (ch << 1) | 0
+                lon_range[1] = mid
+        else:
+            mid = (lat_range[0] + lat_range[1]) / 2.0
+            if lat >= mid:
+                ch = (ch << 1) | 1
+                lat_range[0] = mid
+            else:
+                ch = (ch << 1) | 0
+                lat_range[1] = mid
+
+        is_even = not is_even
+        bits += 1
+
+        if bits == 5:
+            geohash.append(_GEOHASH_BASE32[ch])
+            bits = 0
+            ch = 0
+
+    return "".join(geohash)
+
+
+def geo_geohash_decode(geohash: str) -> Dict[str, Any]:
+    """Decode Geohash string into latitude, longitude, and bounding box."""
+    lat_range = [-90.0, 90.0]
+    lon_range = [-180.0, 180.0]
+    is_even = True
+
+    for c in geohash.lower():
+        val = _GEOHASH_DECODE_MAP.get(c, 0)
+        for bit_idx in (16, 8, 4, 2, 1):
+            bit = 1 if (val & bit_idx) else 0
+            if is_even:
+                mid = (lon_range[0] + lon_range[1]) / 2.0
+                if bit == 1:
+                    lon_range[0] = mid
+                else:
+                    lon_range[1] = mid
+            else:
+                mid = (lat_range[0] + lat_range[1]) / 2.0
+                if bit == 1:
+                    lat_range[0] = mid
+                else:
+                    lat_range[1] = mid
+            is_even = not is_even
+
+    lat = (lat_range[0] + lat_range[1]) / 2.0
+    lon = (lon_range[0] + lon_range[1]) / 2.0
+    return {
+        "lat": round(lat, 6),
+        "lon": round(lon, 6),
+        "lat_error": round((lat_range[1] - lat_range[0]) / 2.0, 6),
+        "lon_error": round((lon_range[1] - lon_range[0]) / 2.0, 6),
+        "bounds": {
+            "min_lat": round(lat_range[0], 6),
+            "max_lat": round(lat_range[1], 6),
+            "min_lon": round(lon_range[0], 6),
+            "max_lon": round(lon_range[1], 6),
+        },
+    }
+
+
+class SpatialRTree:
+    """Pure-Python 2D Spatial Index Tree for fast bounding box range queries."""
+
+    def __init__(self, max_entries: int = 16):
+        self.max_entries = max(4, int(max_entries))
+        # Entries: list of (min_x, min_y, max_x, max_y, item_data)
+        self.entries: List[Tuple[float, float, float, float, Any]] = []
+
+    def insert(self, min_x: float, min_y: float, max_x: float, max_y: float, data: Any) -> None:
+        self.entries.append((
+            min(min_x, max_x),
+            min(min_y, max_y),
+            max(min_x, max_x),
+            max(min_y, max_y),
+            data,
+        ))
+
+    def query(self, q_min_x: float, q_min_y: float, q_max_x: float, q_max_y: float) -> List[Any]:
+        """Return all items whose bounding box intersects query rectangle."""
+        q_min_x, q_max_x = min(q_min_x, q_max_x), max(q_min_x, q_max_x)
+        q_min_y, q_max_y = min(q_min_y, q_max_y), max(q_min_y, q_max_y)
+
+        results = []
+        for x1, y1, x2, y2, data in self.entries:
+            # Overlap test
+            if not (x2 < q_min_x or x1 > q_max_x or y2 < q_min_y or y1 > q_max_y):
+                results.append(data)
+        return results
+
+    def __len__(self) -> int:
+        return len(self.entries)
+
 

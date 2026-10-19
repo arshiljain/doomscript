@@ -27,6 +27,13 @@ from doomscript.domains.finance import FINANCE_DOMAIN
 from doomscript.domains.graph import GRAPH_DOMAIN
 from doomscript.domains.office import OFFICE_DOMAIN
 from doomscript.domains.cloud import CLOUD_DOMAIN
+from doomscript.domains.bio import BIO_DOMAIN
+from doomscript.domains.physics import PHYSICS_DOMAIN
+from doomscript.domains.sec import SEC_DOMAIN
+from doomscript.domains.game import GAME_DOMAIN
+from doomscript.domains.quantum import QUANTUM_DOMAIN
+from doomscript.domains.circuit import CIRCUIT_DOMAIN
+from doomscript.domains.chain import CHAIN_DOMAIN
 
 __all__ = [
     "DomainContract",
@@ -55,4 +62,11 @@ __all__ = [
     "GRAPH_DOMAIN",
     "OFFICE_DOMAIN",
     "CLOUD_DOMAIN",
+    "BIO_DOMAIN",
+    "PHYSICS_DOMAIN",
+    "SEC_DOMAIN",
+    "GAME_DOMAIN",
+    "QUANTUM_DOMAIN",
+    "CIRCUIT_DOMAIN",
+    "CHAIN_DOMAIN",
 ]

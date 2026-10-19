@@ -43,6 +43,12 @@ from doomscript.domains.audio.runtime import (
     audio_delay_echo,
     audio_time_stretch_naive,
     audio_generate_silence,
+    audio_fft,
+    audio_ifft,
+    audio_stft_spectrogram,
+    audio_mel_spectrogram,
+    audio_mfcc,
+    audio_biquad_filter,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.audio.exporter import AudioASTExporter
@@ -228,4 +234,11 @@ __all__ = [
     "audio_delay_echo",
     "audio_time_stretch_naive",
     "audio_generate_silence",
+    "audio_fft",
+    "audio_ifft",
+    "audio_stft_spectrogram",
+    "audio_mel_spectrogram",
+    "audio_mfcc",
+    "audio_biquad_filter",
 ]
+

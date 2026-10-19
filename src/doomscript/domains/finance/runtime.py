@@ -703,3 +703,274 @@ def fin_var_historical(returns: Any, confidence: Any = 0.95) -> float:
     """Historical Value at Risk."""
     return finance_value_at_risk(returns, confidence=float(confidence) * (100.0 if float(confidence) <= 1.0 else 1.0))
 
+
+# =========================================================================
+# Deepened Quantitative Finance Models & Indicators
+# =========================================================================
+
+def _mat_inv(A: List[List[float]]) -> List[List[float]]:
+    """Matrix inverse via Gauss-Jordan elimination with partial pivoting."""
+    n = len(A)
+    aug = [row[:] + [1.0 if i == j else 0.0 for j in range(n)] for i, row in enumerate(A)]
+    for i in range(n):
+        pivot_r = max(range(i, n), key=lambda r: abs(aug[r][i]))
+        if abs(aug[pivot_r][i]) < 1e-12:
+            raise ValueError("Singular matrix in inversion")
+        aug[i], aug[pivot_r] = aug[pivot_r], aug[i]
+
+        p_val = aug[i][i]
+        for c in range(2 * n):
+            aug[i][c] /= p_val
+
+        for r in range(n):
+            if r != i:
+                f = aug[r][i]
+                for c in range(2 * n):
+                    aug[r][c] -= f * aug[i][c]
+
+    return [[round(aug[r][c + n], 8) for c in range(n)] for r in range(n)]
+
+
+def _mat_mul(A: List[List[float]], B: List[List[float]]) -> List[List[float]]:
+    rows_A, cols_A = len(A), len(A[0])
+    rows_B, cols_B = len(B), len(B[0])
+    res = [[0.0] * cols_B for _ in range(rows_A)]
+    for i in range(rows_A):
+        for k in range(cols_A):
+            for j in range(cols_B):
+                res[i][j] += A[i][k] * B[k][j]
+    return res
+
+
+def _mat_vec_mul(A: List[List[float]], v: List[float]) -> List[float]:
+    return [sum(row[c] * v[c] for c in range(len(v))) for row in A]
+
+
+def fin_black_litterman(
+    market_weights: List[float],
+    cov_matrix: List[List[float]],
+    views_p: List[List[float]],
+    views_q: List[float],
+    tau: float = 0.05,
+    risk_aversion: float = 2.5,
+    view_confidences: Optional[List[float]] = None,
+) -> Dict[str, Any]:
+    """Black-Litterman asset allocation combining market prior with investor views."""
+    n = len(market_weights)
+    k = len(views_q)
+    w_mkt = [float(w) for w in market_weights]
+    sigma = [[float(val) for val in row] for row in cov_matrix]
+    P = [[float(val) for val in row] for row in views_p]
+    Q = [float(q) for q in views_q]
+
+    # Implied equilibrium excess returns Pi = lambda * Sigma * w_mkt
+    Pi = [risk_aversion * val for val in _mat_vec_mul(sigma, w_mkt)]
+
+    # tau * Sigma
+    tau_sigma = [[tau * val for val in row] for row in sigma]
+    tau_sigma_inv = _mat_inv(tau_sigma)
+
+    # View uncertainty Omega = diag(P * (tau * Sigma) * P^T)
+    omega = [[0.0] * k for _ in range(k)]
+    P_tau_sigma = _mat_mul(P, tau_sigma)
+    P_tau_sigma_PT = _mat_mul(P_tau_sigma, [[P[j][i] for j in range(k)] for i in range(n)])
+
+    for i in range(k):
+        if view_confidences and i < len(view_confidences) and view_confidences[i] > 0:
+            omega[i][i] = 1.0 / float(view_confidences[i])
+        else:
+            omega[i][i] = max(1e-6, P_tau_sigma_PT[i][i])
+
+    omega_inv = _mat_inv(omega)
+
+    # P^T * Omega^-1 * P
+    PT = [[P[j][i] for j in range(k)] for i in range(n)]
+    PT_omega_inv = _mat_mul(PT, omega_inv)
+    PT_omega_inv_P = _mat_mul(PT_omega_inv, P)
+
+    # Precision matrix M = (tau*Sigma)^-1 + P^T * Omega^-1 * P
+    M = [[tau_sigma_inv[i][j] + PT_omega_inv_P[i][j] for j in range(n)] for i in range(n)]
+    M_inv = _mat_inv(M)
+
+    # Right hand side: (tau*Sigma)^-1 * Pi + P^T * Omega^-1 * Q
+    rhs1 = _mat_vec_mul(tau_sigma_inv, Pi)
+    rhs2 = _mat_vec_mul(PT_omega_inv, Q)
+    rhs = [rhs1[i] + rhs2[i] for i in range(n)]
+
+    # Posterior returns E[R] = M^-1 * rhs
+    post_returns = _mat_vec_mul(M_inv, rhs)
+
+    # Posterior weights w* = (lambda * Sigma)^-1 * E[R]
+    sigma_inv = _mat_inv(sigma)
+    raw_weights = [(1.0 / risk_aversion) * val for val in _mat_vec_mul(sigma_inv, post_returns)]
+    tot_w = sum(raw_weights) or 1.0
+    norm_weights = [round(w / tot_w, 4) for w in raw_weights]
+
+    return {
+        "implied_equilibrium_returns": [round(r, 4) for r in Pi],
+        "posterior_returns": [round(r, 4) for r in post_returns],
+        "posterior_weights": norm_weights,
+    }
+
+
+def fin_var_cvar_monte_carlo(
+    current_val: float,
+    mu: float,
+    sigma: float,
+    horizon_days: int = 10,
+    simulations: int = 5000,
+    confidence: float = 0.95,
+    seed: int = 42,
+) -> Dict[str, Any]:
+    """Monte Carlo Value at Risk and Conditional Value at Risk (Expected Shortfall)."""
+    import random
+    rng = random.Random(seed)
+    dt = float(horizon_days) / 252.0
+    cur_v = float(current_val)
+    drift = (float(mu) - 0.5 * (float(sigma) ** 2)) * dt
+    vol = float(sigma) * math.sqrt(dt)
+
+    losses = []
+    # Box-Muller simulation
+    for _ in range(max(10, simulations // 2)):
+        u1 = max(1e-12, rng.random())
+        u2 = rng.random()
+        r_box = math.sqrt(-2.0 * math.log(u1))
+        z1 = r_box * math.cos(2.0 * math.pi * u2)
+        z2 = r_box * math.sin(2.0 * math.pi * u2)
+
+        s_t1 = cur_v * math.exp(drift + vol * z1)
+        s_t2 = cur_v * math.exp(drift + vol * z2)
+        losses.append(cur_v - s_t1)
+        losses.append(cur_v - s_t2)
+
+    losses.sort()
+    idx = int(round(float(confidence) * len(losses)))
+    idx = min(idx, len(losses) - 1)
+    var = max(0.0, losses[idx])
+    tail_losses = [l for l in losses[idx:] if l > 0]
+    cvar = sum(tail_losses) / len(tail_losses) if tail_losses else var
+
+    return {
+        "var": round(var, 2),
+        "cvar": round(cvar, 2),
+        "mean_loss": round(sum(losses) / len(losses), 2),
+        "confidence": float(confidence),
+        "horizon_days": int(horizon_days),
+        "simulations": len(losses),
+    }
+
+
+def fin_hull_white_trinomial(
+    r0: float,
+    a: float,
+    sigma: float,
+    n_steps: int = 10,
+    dt: float = 0.25,
+) -> Dict[str, Any]:
+    """1-Factor Hull-White short rate trinomial tree for zero-coupon bond pricing."""
+    n = max(2, int(n_steps))
+    delta_t = float(dt)
+    r_init = float(r0)
+    rev_a = float(a)
+    vol = float(sigma)
+
+    delta_r = vol * math.sqrt(3.0 * delta_t)
+
+    # State values at maturity N: V[N][j] = 1.0 for all j in [-N, N]
+    # Initialize backward induction
+    values = {j: 1.0 for j in range(-n, n + 1)}
+
+    for step in reversed(range(n)):
+        next_values = {}
+        for j in range(-step, step + 1):
+            r_val = r_init + j * delta_r
+            # Drift calculation
+            drift = -rev_a * j * delta_r * delta_t
+            # Branching probabilities
+            term1 = (drift ** 2) / (2.0 * (delta_r ** 2))
+            term2 = drift / (2.0 * delta_r)
+            pu = max(0.0, min(1.0, 1.0 / 6.0 + term1 + term2))
+            pm = max(0.0, min(1.0, 2.0 / 3.0 - 2.0 * term1))
+            pd = max(0.0, min(1.0, 1.0 / 6.0 + term1 - term2))
+
+            sum_p = pu + pm + pd or 1.0
+            pu, pm, pd = pu / sum_p, pm / sum_p, pd / sum_p
+
+            expected_v = (
+                pu * values.get(j + 1, 1.0)
+                + pm * values.get(j, 1.0)
+                + pd * values.get(j - 1, 1.0)
+            )
+            discount = math.exp(-r_val * delta_t)
+            next_values[j] = discount * expected_v
+        values = next_values
+
+    bond_price = round(values[0], 6)
+    return {
+        "lattice_steps": n,
+        "dt": delta_t,
+        "bond_price": bond_price,
+        "yield_to_maturity": round(-math.log(max(1e-6, bond_price)) / (n * delta_t), 4),
+        "short_rate": r_init,
+    }
+
+
+def fin_ichimoku_cloud(
+    highs: Any,
+    lows: Any,
+    closes: Any,
+    tenkan_period: int = 9,
+    kijun_period: int = 26,
+    senkou_b_period: int = 52,
+    displacement: int = 26,
+) -> Dict[str, List[Optional[float]]]:
+    """Ichimoku Kinko Hyo indicator (Tenkan, Kijun, Senkou A/B, Chikou)."""
+    hs = _extract_values(highs)
+    ls = _extract_values(lows)
+    cs = _extract_values(closes)
+    n = min(len(hs), len(ls), len(cs))
+    if n == 0:
+        return {"tenkan": [], "kijun": [], "senkou_a": [], "senkou_b": [], "chikou": []}
+
+    tenkan: List[Optional[float]] = []
+    kijun: List[Optional[float]] = []
+    senkou_a: List[Optional[float]] = [None] * n
+    senkou_b: List[Optional[float]] = [None] * n
+    chikou: List[Optional[float]] = [None] * n
+
+    for i in range(n):
+        # Tenkan-sen (Conversion Line)
+        t_start = max(0, i - tenkan_period + 1)
+        t_val = round((max(hs[t_start : i + 1]) + min(ls[t_start : i + 1])) / 2.0, 4)
+        tenkan.append(t_val)
+
+        # Kijun-sen (Base Line)
+        k_start = max(0, i - kijun_period + 1)
+        k_val = round((max(hs[k_start : i + 1]) + min(ls[k_start : i + 1])) / 2.0, 4)
+        kijun.append(k_val)
+
+        # Senkou Span A (Leading Span A) plotted displacement ahead
+        lead_idx = i + displacement
+        if lead_idx < n:
+            senkou_a[lead_idx] = round((t_val + k_val) / 2.0, 4)
+
+        # Senkou Span B plotted displacement ahead
+        sb_start = max(0, i - senkou_b_period + 1)
+        sb_val = round((max(hs[sb_start : i + 1]) + min(ls[sb_start : i + 1])) / 2.0, 4)
+        if lead_idx < n:
+            senkou_b[lead_idx] = sb_val
+
+        # Chikou Span (Lagging Span) plotted displacement behind
+        lag_idx = i - displacement
+        if lag_idx >= 0:
+            chikou[lag_idx] = round(cs[i], 4)
+
+    return {
+        "tenkan": tenkan,
+        "kijun": kijun,
+        "senkou_a": senkou_a,
+        "senkou_b": senkou_b,
+        "chikou": chikou,
+    }
+

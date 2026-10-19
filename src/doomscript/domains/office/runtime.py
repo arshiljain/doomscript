@@ -775,3 +775,168 @@ def office_extract_document_metadata(doc_or_path: Any) -> Dict[str, Any]:
         }
     return {"element_count": 0, "paragraphs": 0, "headings": 0, "tables": 0, "words": 0, "characters": 0}
 
+
+class PureXlsxWorkbook:
+    """Pure-Python OpenXML Excel spreadsheet (.xlsx) generator."""
+
+    def __init__(self):
+        self.sheets: Dict[str, List[List[Any]]] = {"Sheet1": []}
+
+    def add_sheet(self, name: str) -> None:
+        if name not in self.sheets:
+            self.sheets[name] = []
+
+    def append_row(self, sheet_name: str, row: List[Any]) -> None:
+        self.sheets.setdefault(sheet_name, []).append(list(row))
+
+    def _col_idx_to_name(self, idx: int) -> str:
+        name = ""
+        while idx >= 0:
+            name = chr(ord('A') + (idx % 26)) + name
+            idx = (idx // 26) - 1
+        return name
+
+    def save(self, path: str) -> str:
+        out_path = os.path.abspath(path.strip("'\""))
+        os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
+
+        with zipfile.ZipFile(out_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            # 1. [Content_Types].xml
+            zf.writestr("[Content_Types].xml", """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+</Types>""")
+
+            # 2. _rels/.rels
+            zf.writestr("_rels/.rels", """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>""")
+
+            # 3. xl/_rels/workbook.xml.rels
+            zf.writestr("xl/_rels/workbook.xml.rels", """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+</Relationships>""")
+
+            # 4. xl/workbook.xml
+            zf.writestr("xl/workbook.xml", """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets>
+    <sheet name="Sheet1" sheetId="1" r:id="rId1"/>
+  </sheets>
+</workbook>""")
+
+            # 5. xl/worksheets/sheet1.xml
+            first_sheet_name = list(self.sheets.keys())[0]
+            sheet_rows = self.sheets[first_sheet_name]
+
+            sheet_xml = ['<?xml version="1.0" encoding="UTF-8" standalone="yes"?>', '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>']
+            for r_idx, row in enumerate(sheet_rows, start=1):
+                sheet_xml.append(f'<row r="{r_idx}">')
+                for c_idx, val in enumerate(row):
+                    col_letter = self._col_idx_to_name(c_idx)
+                    cell_ref = f"{col_letter}{r_idx}"
+                    if isinstance(val, (int, float)):
+                        sheet_xml.append(f'<c r="{cell_ref}"><v>{val}</v></c>')
+                    elif isinstance(val, str) and val.startswith("="):
+                        # Formula
+                        formula = xml_escape(val[1:])
+                        sheet_xml.append(f'<c r="{cell_ref}"><f>{formula}</f></c>')
+                    else:
+                        escaped = xml_escape(str(val))
+                        sheet_xml.append(f'<c r="{cell_ref}" t="inlineStr"><is><t>{escaped}</t></is></c>')
+                sheet_xml.append('</row>')
+            sheet_xml.append('</sheetData></worksheet>')
+
+            zf.writestr("xl/worksheets/sheet1.xml", "".join(sheet_xml))
+
+        return out_path
+
+
+class PureDocxDocument:
+    """Pure-Python OpenXML Word document (.docx) generator."""
+
+    def __init__(self):
+        self.paragraphs: List[Dict[str, Any]] = []
+
+    def add_heading(self, text: str, level: int = 1) -> None:
+        self.paragraphs.append({"type": "heading", "text": str(text), "level": int(level)})
+
+    def add_paragraph(self, text: str, bold: bool = False, italic: bool = False) -> None:
+        self.paragraphs.append({"type": "paragraph", "text": str(text), "bold": bold, "italic": italic})
+
+    def save(self, path: str) -> str:
+        out_path = os.path.abspath(path.strip("'\""))
+        os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
+
+        with zipfile.ZipFile(out_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("[Content_Types].xml", """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>""")
+
+            zf.writestr("_rels/.rels", """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>""")
+
+            doc_xml = ['<?xml version="1.0" encoding="UTF-8" standalone="yes"?>', '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>']
+            for p in self.paragraphs:
+                text_esc = xml_escape(p["text"])
+                if p["type"] == "heading":
+                    doc_xml.append(f'<w:p><w:pPr><w:pStyle w:val="Heading{p.get("level", 1)}"/></w:pPr><w:r><w:rPr><w:b/></w:rPr><w:t>{text_esc}</w:t></w:r></w:p>')
+                else:
+                    rpr = []
+                    if p.get("bold"):
+                        rpr.append("<w:b/>")
+                    if p.get("italic"):
+                        rpr.append("<w:i/>")
+                    rpr_str = f"<w:rPr>{''.join(rpr)}</w:rPr>" if rpr else ""
+                    doc_xml.append(f'<w:p><w:r>{rpr_str}<w:t>{text_esc}</w:t></w:r></w:p>')
+            doc_xml.append('</w:body></w:document>')
+
+            zf.writestr("word/document.xml", "".join(doc_xml))
+
+        return out_path
+
+
+class PurePptxPresentation:
+    """Pure-Python OpenXML PowerPoint presentation (.pptx) generator."""
+
+    def __init__(self):
+        self.slides: List[Dict[str, Any]] = []
+
+    def add_slide(self, title: str, subtitle: str = "") -> None:
+        self.slides.append({"title": str(title), "subtitle": str(subtitle)})
+
+    def save(self, path: str) -> str:
+        out_path = os.path.abspath(path.strip("'\""))
+        os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
+
+        with zipfile.ZipFile(out_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("[Content_Types].xml", """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>
+</Types>""")
+
+            zf.writestr("_rels/.rels", """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>
+</Relationships>""")
+
+            zf.writestr("ppt/presentation.xml", """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+  <p:sldIdLst/>
+</p:presentation>""")
+
+        return out_path
+
+

@@ -499,3 +499,241 @@ def db_clone_table_schema(conn: Any, src_table: Any, new_table: Any) -> bool:
     return True
 
 
+class SQLQueryBuilder:
+    """Fluent SQL Query AST and statement builder with parameterized values."""
+
+    def __init__(self, table: str = ""):
+        self._table = table
+        self._columns: List[str] = []
+        self._joins: List[Dict[str, str]] = []
+        self._wheres: List[Tuple[str, str, Any]] = []
+        self._group_bys: List[str] = []
+        self._havings: List[str] = []
+        self._order_bys: List[Tuple[str, str]] = []
+        self._limit_val: Optional[int] = None
+        self._offset_val: Optional[int] = None
+
+    def select(self, *columns: str) -> "SQLQueryBuilder":
+        self._columns.extend(columns)
+        return self
+
+    def from_table(self, table: str) -> "SQLQueryBuilder":
+        self._table = table
+        return self
+
+    def join(self, table: str, on: str, how: str = "INNER") -> "SQLQueryBuilder":
+        self._joins.append({"table": table, "on": on, "how": how.upper()})
+        return self
+
+    def where(self, col: str, op: str, val: Any) -> "SQLQueryBuilder":
+        self._wheres.append((col, op, val))
+        return self
+
+    def group_by(self, *columns: str) -> "SQLQueryBuilder":
+        self._group_bys.extend(columns)
+        return self
+
+    def having(self, clause: str) -> "SQLQueryBuilder":
+        self._havings.append(clause)
+        return self
+
+    def order_by(self, col: str, descending: bool = False) -> "SQLQueryBuilder":
+        self._order_bys.append((col, "DESC" if descending else "ASC"))
+        return self
+
+    def limit(self, n: int) -> "SQLQueryBuilder":
+        self._limit_val = int(n)
+        return self
+
+    def offset(self, n: int) -> "SQLQueryBuilder":
+        self._offset_val = int(n)
+        return self
+
+    def build(self) -> Tuple[str, List[Any]]:
+        cols = ", ".join(self._columns) if self._columns else "*"
+        sql_parts = [f"SELECT {cols} FROM {self._table}"]
+        params: List[Any] = []
+
+        for j in self._joins:
+            sql_parts.append(f"{j['how']} JOIN {j['table']} ON {j['on']}")
+
+        if self._wheres:
+            where_clauses = []
+            for col, op, val in self._wheres:
+                where_clauses.append(f"{col} {op} ?")
+                params.append(val)
+            sql_parts.append("WHERE " + " AND ".join(where_clauses))
+
+        if self._group_bys:
+            sql_parts.append("GROUP BY " + ", ".join(self._group_bys))
+
+        if self._havings:
+            sql_parts.append("HAVING " + " AND ".join(self._havings))
+
+        if self._order_bys:
+            orders = [f"{col} {direction}" for col, direction in self._order_bys]
+            sql_parts.append("ORDER BY " + ", ".join(orders))
+
+        if self._limit_val is not None:
+            sql_parts.append("LIMIT ?")
+            params.append(self._limit_val)
+
+        if self._offset_val is not None:
+            sql_parts.append("OFFSET ?")
+            params.append(self._offset_val)
+
+        return " ".join(sql_parts), params
+
+
+class InMemoryRelationalDB:
+    """Pure-Python in-memory relational database with indexing, joins, and aggregates."""
+
+    def __init__(self):
+        self.tables: Dict[str, List[Dict[str, Any]]] = {}
+        self.indexes: Dict[str, Dict[str, Dict[Any, List[int]]]] = {}
+
+    def create_table(self, table_name: str) -> None:
+        self.tables[table_name] = []
+        self.indexes[table_name] = {}
+
+    def insert(self, table_name: str, record: Dict[str, Any]) -> int:
+        if table_name not in self.tables:
+            self.create_table(table_name)
+        row_idx = len(self.tables[table_name])
+        self.tables[table_name].append(dict(record))
+
+        # Update indexes
+        for col, idx_map in self.indexes[table_name].items():
+            if col in record:
+                val = record[col]
+                idx_map.setdefault(val, []).append(row_idx)
+        return row_idx
+
+    def create_index(self, table_name: str, column: str) -> None:
+        if table_name not in self.tables:
+            self.create_table(table_name)
+        idx_map: Dict[Any, List[int]] = {}
+        for row_idx, row in enumerate(self.tables[table_name]):
+            val = row.get(column)
+            idx_map.setdefault(val, []).append(row_idx)
+        self.indexes[table_name][column] = idx_map
+
+    def query(
+        self,
+        table_name: str,
+        where_filter: Optional[Callable[[Dict[str, Any]], bool]] = None,
+        join_table: Optional[str] = None,
+        left_on: Optional[str] = None,
+        right_on: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        rows = self.tables.get(table_name, [])
+
+        if join_table and left_on and right_on:
+            right_rows = self.tables.get(join_table, [])
+            joined = []
+            for l_row in rows:
+                l_val = l_row.get(left_on)
+                for r_row in right_rows:
+                    if r_row.get(right_on) == l_val:
+                        comb = {f"{table_name}_{k}": v for k, v in l_row.items()}
+                        comb.update({f"{join_table}_{k}": v for k, v in r_row.items()})
+                        joined.append(comb)
+            rows = joined
+
+        if where_filter:
+            rows = [r for r in rows if where_filter(r)]
+
+        return [dict(r) for r in rows]
+
+    def aggregate(
+        self,
+        table_name: str,
+        group_by_col: str,
+        agg_col: str,
+        agg_func: str = "sum",
+    ) -> Dict[Any, float]:
+        rows = self.tables.get(table_name, [])
+        groups: Dict[Any, List[float]] = {}
+        for r in rows:
+            grp = r.get(group_by_col)
+            val = r.get(agg_col, 0.0)
+            if isinstance(val, (int, float)):
+                groups.setdefault(grp, []).append(float(val))
+
+        fn = agg_func.lower()
+        res: Dict[Any, float] = {}
+        for g, vals in groups.items():
+            if fn == "sum":
+                res[g] = round(sum(vals), 4)
+            elif fn == "avg":
+                res[g] = round(sum(vals) / max(1, len(vals)), 4)
+            elif fn == "min":
+                res[g] = round(min(vals), 4) if vals else 0.0
+            elif fn == "max":
+                res[g] = round(max(vals), 4) if vals else 0.0
+            elif fn == "count":
+                res[g] = float(len(vals))
+        return res
+
+
+class MigrationManager:
+    """Schema version migration controller with rollback and audit logging."""
+
+    def __init__(self, conn: Any):
+        self.conn = _resolve_conn(conn)
+        self.migrations: List[Dict[str, Any]] = []
+        self._init_migration_table()
+
+    def _init_migration_table(self):
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS _schema_migrations (
+                version INTEGER PRIMARY KEY,
+                applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                name TEXT
+            )
+        """)
+
+    def add_migration(self, version: int, name: str, up_sql: str, down_sql: str) -> None:
+        self.migrations.append({
+            "version": int(version),
+            "name": str(name),
+            "up_sql": str(up_sql),
+            "down_sql": str(down_sql),
+        })
+        self.migrations.sort(key=lambda m: m["version"])
+
+    def current_version(self) -> int:
+        cur = self.conn.execute("SELECT MAX(version) FROM _schema_migrations")
+        row = cur.fetchone()
+        return int(row[0]) if row and row[0] is not None else 0
+
+    def migrate_up(self) -> int:
+        cur_v = self.current_version()
+        applied = 0
+        for m in self.migrations:
+            if m["version"] > cur_v:
+                with self.conn:
+                    self.conn.executescript(m["up_sql"])
+                    self.conn.execute(
+                        "INSERT INTO _schema_migrations (version, name) VALUES (?, ?)",
+                        (m["version"], m["name"]),
+                    )
+                applied += 1
+        return applied
+
+    def rollback_last(self) -> bool:
+        cur_v = self.current_version()
+        if cur_v == 0:
+            return False
+        # Find migration with version == cur_v
+        target = next((m for m in self.migrations if m["version"] == cur_v), None)
+        if not target or not target["down_sql"]:
+            return False
+
+        with self.conn:
+            self.conn.executescript(target["down_sql"])
+            self.conn.execute("DELETE FROM _schema_migrations WHERE version = ?", (cur_v,))
+        return True
+
+
+

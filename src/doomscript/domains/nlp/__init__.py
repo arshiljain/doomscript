@@ -19,6 +19,10 @@ from doomscript.domains.nlp.runtime import (
     analyze_sentiment,
     calculate_tfidf,
     extract_entities,
+    BPETokenizer,
+    HMMPOSTagger,
+    Word2VecSimple,
+    TextRankSummarizer,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.nlp.exporter import NLPASTExporter
@@ -181,4 +185,9 @@ __all__ = [
     "nlp_character_ngrams",
     "nlp_collocations",
     "nlp_word_wrap",
+    "BPETokenizer",
+    "HMMPOSTagger",
+    "Word2VecSimple",
+    "TextRankSummarizer",
 ]
+

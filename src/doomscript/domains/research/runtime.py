@@ -3,6 +3,7 @@
 from typing import Any, Dict, List, Optional, Set, Tuple
 import hashlib
 import heapq
+import re
 from collections import deque
 from doomscript.domains.base import DomainRuntime, DomainIR
 from doomscript.research.graph import (
@@ -510,3 +511,167 @@ def research_degree_distribution(graph: Any) -> Dict[str, Dict[int, int]]:
         in_counts[d] = in_counts.get(d, 0) + 1
 
     return {"in_degrees": in_counts, "out_degrees": out_counts}
+
+
+class BibTeXEngine:
+    """Zero-dependency BibTeX parser and multi-style citation formatter."""
+
+    @staticmethod
+    def parse(bibtex_str: str) -> List[Dict[str, Any]]:
+        entries: List[Dict[str, Any]] = []
+        # Match @type{key, fields...}
+        entry_blocks = re.findall(r"@(\w+)\s*\{\s*([^,]+),\s*(.*?)\n\s*\}", bibtex_str, re.DOTALL)
+        for entry_type, cite_key, body in entry_blocks:
+            fields: Dict[str, str] = {"entry_type": entry_type.lower(), "cite_key": cite_key.strip()}
+            # Extract key = {val} or key = "val"
+            field_matches = re.findall(r'(\w+)\s*=\s*[\{"\'](.*?)[\}"\']\s*(?:,|$)', body, re.DOTALL)
+            for k, v in field_matches:
+                clean_val = re.sub(r"\s+", " ", v).strip()
+                fields[k.lower()] = clean_val
+            entries.append(fields)
+        return entries
+
+    @classmethod
+    def format_citation(cls, entry: Dict[str, Any], style: str = "apa") -> str:
+        s = style.lower()
+        authors = entry.get("author", "Unknown Author")
+        title = entry.get("title", "Untitled")
+        year = entry.get("year", "n.d.")
+        journal = entry.get("journal") or entry.get("booktitle", "")
+        volume = entry.get("volume", "")
+        pages = entry.get("pages", "")
+
+        if s == "apa":
+            # Author, A. (Year). Title. Journal, volume, pages.
+            j_part = f" {journal}," if journal else ""
+            v_part = f" {volume}," if volume else ""
+            p_part = f" {pages}." if pages else "."
+            return f"{authors} ({year}). {title}.{j_part}{v_part}{p_part}".strip()
+        elif s == "ieee":
+            # [1] Author, "Title," Journal, vol. X, pp. Y, Year.
+            parts = [f'{authors}, "{title},"']
+            if journal:
+                parts.append(journal + ",")
+            if volume:
+                parts.append(f"vol. {volume},")
+            if pages:
+                parts.append(f"pp. {pages},")
+            parts.append(f"{year}.")
+            return " ".join(parts)
+        elif s == "harvard":
+            return f"{authors}, {year}. {title}. {journal}."
+        return f"{authors} ({year}) {title}."
+
+
+class CitationNetwork:
+    """Scientometrics and Academic Citation Graph Analyzer."""
+
+    def __init__(self):
+        # adjacency: paper_id -> set of papers it cites
+        self.cites: Dict[str, Set[str]] = {}
+        # reverse: paper_id -> set of papers that cite it
+        self.cited_by: Dict[str, Set[str]] = {}
+        # metadata: paper_id -> {title, author, year}
+        self.papers: Dict[str, Dict[str, Any]] = {}
+
+    def add_paper(self, paper_id: str, title: str = "", author: str = "", year: int = 2024) -> None:
+        pid = str(paper_id)
+        if pid not in self.papers:
+            self.papers[pid] = {"id": pid, "title": title, "author": author, "year": int(year)}
+        else:
+            if title:
+                self.papers[pid]["title"] = title
+            if author:
+                self.papers[pid]["author"] = author
+            if year != 2024 or self.papers[pid]["year"] == 2024:
+                self.papers[pid]["year"] = int(year)
+        self.cites.setdefault(pid, set())
+        self.cited_by.setdefault(pid, set())
+
+    def add_citation(self, citing_paper: str, cited_paper: str) -> None:
+        p_from = str(citing_paper)
+        p_to = str(cited_paper)
+        self.add_paper(p_from)
+        self.add_paper(p_to)
+        self.cites[p_from].add(p_to)
+        self.cited_by[p_to].add(p_from)
+
+    def calculate_h_index(self, author: str) -> int:
+        """Calculate Hirsch index for an author."""
+        author_papers = [pid for pid, meta in self.papers.items() if meta["author"].lower() == author.lower()]
+        citations = [len(self.cited_by.get(pid, set())) for pid in author_papers]
+        citations.sort(reverse=True)
+        h = 0
+        for i, c in enumerate(citations, start=1):
+            if c >= i:
+                h = i
+            else:
+                break
+        return h
+
+    def calculate_i10_index(self, author: str) -> int:
+        """Papers with at least 10 citations."""
+        author_papers = [pid for pid, meta in self.papers.items() if meta["author"].lower() == author.lower()]
+        return sum(1 for pid in author_papers if len(self.cited_by.get(pid, set())) >= 10)
+
+    def compute_pagerank(self, damping: float = 0.85, max_iter: int = 50) -> Dict[str, float]:
+        """Compute citation prestige / PageRank score for each paper."""
+        nodes = list(self.papers.keys())
+        n = len(nodes)
+        if n == 0:
+            return {}
+
+        ranks = {node: 1.0 / n for node in nodes}
+        for _ in range(max_iter):
+            new_ranks = {}
+            for u in nodes:
+                incoming_sum = 0.0
+                for v in self.cited_by.get(u, set()):
+                    out_degree = len(self.cites.get(v, set()))
+                    if out_degree > 0:
+                        incoming_sum += ranks[v] / out_degree
+                new_ranks[u] = (1.0 - damping) / n + damping * incoming_sum
+            ranks = new_ranks
+
+        # Normalize to sum to 1.0
+        total = sum(ranks.values()) or 1.0
+        return {k: round(v / total, 6) for k, v in ranks.items()}
+
+
+class AcademicLiteratureSynthesizer:
+    """Scientific literature clustering, keyword relevance ranking, and summarization."""
+
+    def __init__(self):
+        self.corpus: List[Dict[str, Any]] = []
+
+    def add_document(self, doc_id: str, title: str, abstract: str) -> None:
+        self.corpus.append({
+            "id": str(doc_id),
+            "title": str(title),
+            "abstract": str(abstract),
+        })
+
+    def search_by_relevance(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+        terms = set(re.findall(r"\b\w+\b", str(query).lower()))
+        results = []
+
+        for doc in self.corpus:
+            title_words = set(re.findall(r"\b\w+\b", doc["title"].lower()))
+            abs_words = re.findall(r"\b\w+\b", doc["abstract"].lower())
+
+            # Title matches count triple
+            title_hits = len(terms & title_words) * 3
+            abs_hits = sum(1 for w in abs_words if w in terms)
+            score = title_hits + abs_hits
+
+            if score > 0:
+                results.append({
+                    "id": doc["id"],
+                    "title": doc["title"],
+                    "score": score,
+                    "snippet": doc["abstract"][:120] + "...",
+                })
+
+        results.sort(key=lambda x: x["score"], reverse=True)
+        return results[:top_k]
+

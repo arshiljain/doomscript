@@ -45,6 +45,9 @@ from doomscript.domains.cloud.runtime import (
     cloud_write_object_text,
     cloud_get_storage_class,
     cloud_set_storage_class,
+    CloudStorageManager,
+    IAMPolicyEngine,
+    CloudCostCalculator,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.cloud.exporter import CloudASTExporter
@@ -203,4 +206,7 @@ __all__ = [
     "cloud_write_object_text",
     "cloud_get_storage_class",
     "cloud_set_storage_class",
+    "CloudStorageManager",
+    "IAMPolicyEngine",
+    "CloudCostCalculator",
 ]

@@ -438,7 +438,32 @@ class DataDomainParser(DomainParser):
             frac, data_var, target = frac_m.group(1).strip(), frac_m.group(2).strip(), frac_m.group(3).strip()
             return f"set {target} to data_sample_fraction({data_var}, {frac})"
 
+        # fuzzy join <left> and <right> on <lkey> and <rkey> [threshold <thresh>] into <target>
+        fj_m = re.match(
+            r"^fuzzy\s+join\s+([A-Za-z_]\w*)\s+(?:and|with)\s+([A-Za-z_]\w*)\s+on\s+[\"']?([A-Za-z_]\w*)[\"']?\s+and\s+[\"']?([A-Za-z_]\w*)[\"']?(?:\s+threshold\s+([0-9\.]+))?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if fj_m:
+            l_var, r_var = fj_m.group(1), fj_m.group(2)
+            l_on, r_on = fj_m.group(3), fj_m.group(4)
+            thresh = fj_m.group(5) or "0.8"
+            target = fj_m.group(6)
+            return f'set {target} to data_fuzzy_join({l_var}, {r_var}, left_on="{l_on}", right_on="{r_on}", threshold={thresh})'
+
+        # convert <data> to columnar into <target>
+        col_m = re.match(
+            r"^convert\s+([A-Za-z_]\w*)\s+to\s+columnar\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if col_m:
+            data_var = col_m.group(1)
+            target = col_m.group(2)
+            return f"set {target} to data_to_columnar({data_var})"
+
         return None
+
 
     def parse_block(
         self, header: str, body_lines: List[Tuple[int, str]], indent: int = 0

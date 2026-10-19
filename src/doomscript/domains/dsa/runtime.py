@@ -1872,3 +1872,512 @@ def dsa_tarjan_bridges(adj_or_edges: Any, num_nodes: Optional[int] = None) -> Li
             _dfs(n)
     return sorted(bridges)
 
+
+# ===========================================================================
+# 1. Self-Balancing AVL Tree
+# ===========================================================================
+
+class AVLNode:
+    """Node in an AVL self-balancing binary search tree."""
+
+    def __init__(self, key: Any, val: Any = None):
+        self.key = key
+        self.val = val if val is not None else key
+        self.height: int = 1
+        self.left: Optional["AVLNode"] = None
+        self.right: Optional["AVLNode"] = None
+
+
+class AVLTree:
+    """AVL Tree maintaining strict logarithmic balance via rotations."""
+
+    def __init__(self):
+        self.root: Optional[AVLNode] = None
+        self.size: int = 0
+
+    def _height(self, node: Optional[AVLNode]) -> int:
+        return node.height if node else 0
+
+    def _update_height(self, node: AVLNode) -> None:
+        node.height = 1 + max(self._height(node.left), self._height(node.right))
+
+    def _balance_factor(self, node: Optional[AVLNode]) -> int:
+        return (self._height(node.left) - self._height(node.right)) if node else 0
+
+    def _rotate_right(self, y: AVLNode) -> AVLNode:
+        x = y.left
+        assert x is not None
+        T2 = x.right
+        x.right = y
+        y.left = T2
+        self._update_height(y)
+        self._update_height(x)
+        return x
+
+    def _rotate_left(self, x: AVLNode) -> AVLNode:
+        y = x.right
+        assert y is not None
+        T2 = y.left
+        y.left = x
+        x.right = T2
+        self._update_height(x)
+        self._update_height(y)
+        return y
+
+    def _rebalance(self, node: AVLNode) -> AVLNode:
+        self._update_height(node)
+        bf = self._balance_factor(node)
+        if bf > 1:
+            if self._balance_factor(node.left) < 0:
+                node.left = self._rotate_left(node.left)
+            return self._rotate_right(node)
+        if bf < -1:
+            if self._balance_factor(node.right) > 0:
+                node.right = self._rotate_right(node.right)
+            return self._rotate_left(node)
+        return node
+
+    def insert(self, key: Any, val: Any = None) -> None:
+        def _ins(curr: Optional[AVLNode], k: Any, v: Any) -> AVLNode:
+            if not curr:
+                self.size += 1
+                return AVLNode(k, v)
+            if k < curr.key:
+                curr.left = _ins(curr.left, k, v)
+            elif k > curr.key:
+                curr.right = _ins(curr.right, k, v)
+            else:
+                curr.val = v
+                return curr
+            return self._rebalance(curr)
+
+        self.root = _ins(self.root, key, val)
+
+    def _min_value_node(self, node: AVLNode) -> AVLNode:
+        curr = node
+        while curr.left:
+            curr = curr.left
+        return curr
+
+    def delete(self, key: Any) -> None:
+        def _del(curr: Optional[AVLNode], k: Any) -> Optional[AVLNode]:
+            if not curr:
+                return None
+            if k < curr.key:
+                curr.left = _del(curr.left, k)
+            elif k > curr.key:
+                curr.right = _del(curr.right, k)
+            else:
+                self.size -= 1
+                if not curr.left:
+                    return curr.right
+                elif not curr.right:
+                    return curr.left
+                temp = self._min_value_node(curr.right)
+                curr.key = temp.key
+                curr.val = temp.val
+                self.size += 1
+                curr.right = _del(curr.right, temp.key)
+            return self._rebalance(curr)
+
+        self.root = _del(self.root, key)
+
+    def contains(self, key: Any) -> bool:
+        curr = self.root
+        while curr:
+            if key == curr.key:
+                return True
+            curr = curr.left if key < curr.key else curr.right
+        return False
+
+    def inorder(self) -> List[Any]:
+        res = []
+        def _in(node: Optional[AVLNode]):
+            if node:
+                _in(node.left)
+                res.append(node.key)
+                _in(node.right)
+        _in(self.root)
+        return res
+
+    def height(self) -> int:
+        return self._height(self.root)
+
+
+def dsa_avl_create(items: Optional[List[Any]] = None) -> AVLTree:
+    tree = AVLTree()
+    if items:
+        for x in items:
+            tree.insert(x)
+    return tree
+
+def dsa_avl_insert(tree: AVLTree, key: Any, val: Any = None) -> AVLTree:
+    tree.insert(key, val)
+    return tree
+
+def dsa_avl_delete(tree: AVLTree, key: Any) -> AVLTree:
+    tree.delete(key)
+    return tree
+
+def dsa_avl_contains(tree: AVLTree, key: Any) -> bool:
+    return tree.contains(key)
+
+def dsa_avl_inorder(tree: AVLTree) -> List[Any]:
+    return tree.inorder()
+
+def dsa_avl_height(tree: AVLTree) -> int:
+    return tree.height()
+
+
+# ===========================================================================
+# 2. Suffix Automaton (Linear Time Substring Machine)
+# ===========================================================================
+
+class SAMState:
+    """State in a Suffix Automaton."""
+
+    def __init__(self, length: int = 0, link: int = -1):
+        self.len = length
+        self.link = link
+        self.next: Dict[str, int] = {}
+
+
+class SuffixAutomaton:
+    """Linear time O(N) Directed Acyclic Word Graph representing all substrings."""
+
+    def __init__(self, s: str = ""):
+        self.states: List[SAMState] = [SAMState(0, -1)]
+        self.last: int = 0
+        if s:
+            for ch in str(s):
+                self.extend(ch)
+
+    def extend(self, ch: str) -> None:
+        cur = len(self.states)
+        self.states.append(SAMState(self.states[self.last].len + 1))
+        p = self.last
+        while p != -1 and ch not in self.states[p].next:
+            self.states[p].next[ch] = cur
+            p = self.states[p].link
+
+        if p == -1:
+            self.states[cur].link = 0
+        else:
+            q = self.states[p].next[ch]
+            if self.states[p].len + 1 == self.states[q].len:
+                self.states[cur].link = q
+            else:
+                clone = len(self.states)
+                clone_state = SAMState(self.states[p].len + 1, self.states[q].link)
+                clone_state.next = dict(self.states[q].next)
+                self.states.append(clone_state)
+                while p != -1 and self.states[p].next.get(ch) == q:
+                    self.states[p].next[ch] = clone
+                    p = self.states[p].link
+                self.states[q].link = clone
+                self.states[cur].link = clone
+        self.last = cur
+
+    def contains_substring(self, sub: str) -> bool:
+        curr = 0
+        for ch in str(sub):
+            if ch not in self.states[curr].next:
+                return False
+            curr = self.states[curr].next[ch]
+        return True
+
+    def count_distinct_substrings(self) -> int:
+        return sum(self.states[i].len - self.states[self.states[i].link].len for i in range(1, len(self.states)))
+
+    def longest_common_substring(self, s2: str) -> str:
+        curr = 0
+        cur_len = 0
+        best_len = 0
+        best_end = 0
+        for i, ch in enumerate(str(s2)):
+            while curr > 0 and ch not in self.states[curr].next:
+                curr = self.states[curr].link
+                cur_len = self.states[curr].len
+            if ch in self.states[curr].next:
+                curr = self.states[curr].next[ch]
+                cur_len += 1
+            if cur_len > best_len:
+                best_len = cur_len
+                best_end = i + 1
+        return s2[best_end - best_len:best_end]
+
+
+def dsa_suffix_automaton_create(s: str) -> SuffixAutomaton:
+    return SuffixAutomaton(s)
+
+def dsa_sam_contains_substring(sam: SuffixAutomaton, sub: str) -> bool:
+    return sam.contains_substring(sub)
+
+def dsa_sam_distinct_substrings(sam: SuffixAutomaton) -> int:
+    return sam.count_distinct_substrings()
+
+def dsa_sam_longest_common_substring(sam: SuffixAutomaton, s2: str) -> str:
+    return sam.longest_common_substring(s2)
+
+
+# ===========================================================================
+# 3. Aho-Corasick Multi-Pattern Search Automaton
+# ===========================================================================
+
+class AhoCorasickNode:
+    def __init__(self):
+        self.children: Dict[str, AhoCorasickNode] = {}
+        self.fail: Optional["AhoCorasickNode"] = None
+        self.output: List[str] = []
+
+
+class AhoCorasick:
+    """Multi-pattern dictionary matching automaton with fail links."""
+
+    def __init__(self, patterns: Optional[List[str]] = None):
+        self.root = AhoCorasickNode()
+        if patterns:
+            for p in patterns:
+                self.add_pattern(p)
+            self.build()
+
+    def add_pattern(self, pattern: str) -> None:
+        p = str(pattern)
+        if not p:
+            return
+        curr = self.root
+        for ch in p:
+            if ch not in curr.children:
+                curr.children[ch] = AhoCorasickNode()
+            curr = curr.children[ch]
+        curr.output.append(p)
+
+    def build(self) -> None:
+        from collections import deque
+        queue = deque()
+        for ch, child in self.root.children.items():
+            child.fail = self.root
+            queue.append(child)
+
+        while queue:
+            curr = queue.popleft()
+            for ch, child in curr.children.items():
+                f = curr.fail
+                while f and ch not in f.children:
+                    f = f.fail
+                child.fail = f.children[ch] if f and ch in f.children else self.root
+                child.output.extend(child.fail.output)
+                queue.append(child)
+
+    def search(self, text: str) -> List[Dict[str, Any]]:
+        results: List[Dict[str, Any]] = []
+        curr = self.root
+        for idx, ch in enumerate(str(text)):
+            while curr and ch not in curr.children:
+                curr = curr.fail
+            if not curr:
+                curr = self.root
+                continue
+            curr = curr.children[ch]
+            for pat in curr.output:
+                results.append({
+                    "pattern": pat,
+                    "word": pat,
+                    "start": idx - len(pat) + 1,
+                    "end": idx + 1
+                })
+        return results
+
+
+def dsa_aho_corasick_create(patterns: List[str]) -> AhoCorasick:
+    return AhoCorasick(patterns)
+
+def dsa_aho_corasick_search(ac: AhoCorasick, text: str) -> List[Dict[str, Any]]:
+    return ac.search(text)
+
+
+# ===========================================================================
+# 4. Cartesian Treap (Randomized BST + Max-Heap)
+# ===========================================================================
+
+class TreapNode:
+    def __init__(self, key: Any, val: Any = None, priority: Optional[float] = None):
+        self.key = key
+        self.val = val if val is not None else key
+        self.priority = random.random() if priority is None else float(priority)
+        self.left: Optional["TreapNode"] = None
+        self.right: Optional["TreapNode"] = None
+        self.size: int = 1
+
+    def update_size(self):
+        s = 1
+        if self.left:
+            s += self.left.size
+        if self.right:
+            s += self.right.size
+        self.size = s
+
+
+class Treap:
+    """Randomized self-balancing Treap combining BST keys with Heap priorities."""
+
+    def __init__(self):
+        self.root: Optional[TreapNode] = None
+
+    def _split(self, node: Optional[TreapNode], key: Any) -> Tuple[Optional[TreapNode], Optional[TreapNode]]:
+        if not node:
+            return None, None
+        if node.key <= key:
+            left, right = self._split(node.right, key)
+            node.right = left
+            node.update_size()
+            return node, right
+        else:
+            left, right = self._split(node.left, key)
+            node.left = right
+            node.update_size()
+            return left, node
+
+    def _merge(self, left: Optional[TreapNode], right: Optional[TreapNode]) -> Optional[TreapNode]:
+        if not left or not right:
+            return left or right
+        if left.priority > right.priority:
+            left.right = self._merge(left.right, right)
+            left.update_size()
+            return left
+        else:
+            right.left = self._merge(left, right.left)
+            right.update_size()
+            return right
+
+    def insert(self, key: Any, val: Any = None) -> None:
+        left, right = self._split(self.root, key)
+        new_node = TreapNode(key, val)
+        self.root = self._merge(self._merge(left, new_node), right)
+
+    def delete(self, key: Any) -> None:
+        left, temp = self._split(self.root, key)
+        # split temp by key - epsilon (exact key removal)
+        l2, right = self._split(left, key - 1e-9 if isinstance(key, (int, float)) else key)
+        self.root = self._merge(l2, temp)
+
+    def contains(self, key: Any) -> bool:
+        curr = self.root
+        while curr:
+            if curr.key == key:
+                return True
+            curr = curr.left if key < curr.key else curr.right
+        return False
+
+    def to_list(self) -> List[Any]:
+        res = []
+        def _in(node: Optional[TreapNode]):
+            if node:
+                _in(node.left)
+                res.append(node.key)
+                _in(node.right)
+        _in(self.root)
+        return res
+
+
+def dsa_treap_create(items: Optional[List[Any]] = None) -> Treap:
+    t = Treap()
+    if items:
+        for x in items:
+            t.insert(x)
+    return t
+
+def dsa_treap_insert(t: Treap, key: Any) -> Treap:
+    t.insert(key)
+    return t
+
+def dsa_treap_contains(t: Treap, key: Any) -> bool:
+    return t.contains(key)
+
+def dsa_treap_to_list(t: Treap) -> List[Any]:
+    return t.to_list()
+
+
+# ===========================================================================
+# 5. Dinic's Algorithm (Fast Network Flow & Min Cut)
+# ===========================================================================
+
+class DinicFlowEdge:
+    def __init__(self, u: int, v: int, cap: float, flow: float = 0.0):
+        self.u = u
+        self.v = v
+        self.cap = cap
+        self.flow = flow
+
+
+class DinicMaxFlow:
+    """Dinic's blocking flow algorithm with level graphs and push-relabel pointers."""
+
+    def __init__(self, n: int):
+        self.n = max(1, int(n))
+        self.edges: List[DinicFlowEdge] = []
+        self.adj: List[List[int]] = [[] for _ in range(self.n)]
+        self.level: List[int] = [-1] * self.n
+        self.ptr: List[int] = [0] * self.n
+
+    def add_edge(self, u: int, v: int, cap: float) -> None:
+        u_idx, v_idx = int(u), int(v)
+        if 0 <= u_idx < self.n and 0 <= v_idx < self.n:
+            e1 = len(self.edges)
+            self.edges.append(DinicFlowEdge(u_idx, v_idx, float(cap)))
+            self.adj[u_idx].append(e1)
+            e2 = len(self.edges)
+            self.edges.append(DinicFlowEdge(v_idx, u_idx, 0.0))
+            self.adj[v_idx].append(e2)
+
+    def _bfs(self, s: int, t: int) -> bool:
+        from collections import deque
+        self.level = [-1] * self.n
+        self.level[s] = 0
+        q = deque([s])
+        while q:
+            v = q.popleft()
+            for edge_id in self.adj[v]:
+                e = self.edges[edge_id]
+                if e.cap - e.flow > 1e-9 and self.level[e.v] == -1:
+                    self.level[e.v] = self.level[v] + 1
+                    q.append(e.v)
+        return self.level[t] != -1
+
+    def _dfs(self, v: int, t: int, pushed: float) -> float:
+        if pushed <= 1e-9 or v == t:
+            return pushed
+        for cid in range(self.ptr[v], len(self.adj[v])):
+            self.ptr[v] = cid
+            edge_id = self.adj[v][cid]
+            e = self.edges[edge_id]
+            tr = e.v
+            if self.level[v] + 1 != self.level[tr] or e.cap - e.flow <= 1e-9:
+                continue
+            tr_pushed = self._dfs(tr, t, min(pushed, e.cap - e.flow))
+            if tr_pushed > 1e-9:
+                e.flow += tr_pushed
+                self.edges[edge_id ^ 1].flow -= tr_pushed
+                return tr_pushed
+        return 0.0
+
+    def compute_max_flow(self, s: int, t: int) -> float:
+        flow = 0.0
+        while self._bfs(int(s), int(t)):
+            self.ptr = [0] * self.n
+            while True:
+                pushed = self._dfs(int(s), int(t), float("inf"))
+                if pushed <= 1e-9:
+                    break
+                flow += pushed
+        return round(flow, 4)
+
+    max_flow = compute_max_flow
+
+
+def dsa_dinic_max_flow(n: int, edges: List[Tuple[int, int, float]], source: int, sink: int) -> float:
+    dinic = DinicMaxFlow(n)
+    for e in edges:
+        dinic.add_edge(e[0], e[1], e[2])
+    return dinic.compute_max_flow(source, sink)
+

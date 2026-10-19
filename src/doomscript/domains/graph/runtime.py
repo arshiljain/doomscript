@@ -913,3 +913,242 @@ def graph_laplacian_matrix(g: Any) -> List[List[float]]:
     return L
 
 
+# =========================================================================
+# Deepened Network Science & Graph Theory Algorithms
+# =========================================================================
+
+def graph_bron_kerbosch_cliques(g: Any) -> List[List[str]]:
+    """Find all maximal cliques using Bron-Kerbosch algorithm with pivoting."""
+    graph = _ensure_graph(g)
+    adj_sets = {u: set(graph.adj.get(u, {}).keys()) for u in graph.nodes}
+    cliques = []
+
+    def bron_kerbosch(r: Set[str], p: Set[str], x: Set[str]):
+        if not p and not x:
+            cliques.append(sorted(list(r)))
+            return
+        # Pivot choice: max degree in P | X
+        u_pivot = max(p | x, key=lambda node: len(adj_sets.get(node, set())))
+        for v in list(p - adj_sets.get(u_pivot, set())):
+            nbrs = adj_sets.get(v, set())
+            bron_kerbosch(r | {v}, p & nbrs, x & nbrs)
+            p.remove(v)
+            x.add(v)
+
+    all_nodes = set(graph.nodes.keys())
+    bron_kerbosch(set(), all_nodes, set())
+    cliques.sort(key=lambda c: (-len(c), c))
+    return cliques
+
+
+def graph_betweenness_centrality(g: Any, normalized: bool = True) -> Dict[str, float]:
+    """Compute Brandes betweenness centrality in O(V * E) time."""
+    from collections import deque
+    graph = _ensure_graph(g)
+    nodes = list(graph.nodes.keys())
+    cb = {node: 0.0 for node in nodes}
+
+    for s in nodes:
+        stack = []
+        pred = {w: [] for w in nodes}
+        sigma = {w: 0.0 for w in nodes}
+        sigma[s] = 1.0
+        dist = {w: -1 for w in nodes}
+        dist[s] = 0
+        q = deque([s])
+
+        while q:
+            v = q.popleft()
+            stack.append(v)
+            for w in graph.adj.get(v, {}):
+                # Path discovery
+                if dist[w] < 0:
+                    dist[w] = dist[v] + 1
+                    q.append(w)
+                # Path counting
+                if dist[w] == dist[v] + 1:
+                    sigma[w] += sigma[v]
+                    pred[w].append(v)
+
+        delta = {w: 0.0 for w in nodes}
+        while stack:
+            w = stack.pop()
+            for v in pred[w]:
+                delta[v] += (sigma[v] / (sigma[w] or 1.0)) * (1.0 + delta[w])
+            if w != s:
+                cb[w] += delta[w]
+
+    # Halve for undirected graphs
+    if not graph.directed:
+        for node in cb:
+            cb[node] /= 2.0
+
+    n = len(nodes)
+    if normalized and n > 2:
+        denom = ((n - 1) * (n - 2)) / (2.0 if not graph.directed else 1.0)
+        return {node: round(val / denom, 4) for node, val in cb.items()}
+
+    return {node: round(val, 4) for node, val in cb.items()}
+
+
+def graph_louvain_communities(g: Any, resolution: float = 1.0) -> List[List[str]]:
+    """Louvain modularity community detection."""
+    graph = _ensure_graph(g)
+    nodes = sorted(list(graph.nodes.keys()))
+    if not nodes:
+        return []
+
+    # Total weight of all edges
+    m = 0.0
+    k_i = {}
+    for u in nodes:
+        deg = sum(graph.adj.get(u, {}).values())
+        k_i[u] = deg
+        m += deg
+    m /= 2.0
+    if m <= 0.0:
+        return [[n] for n in nodes]
+
+    # Initial community assignment: each node in its own community
+    community = {u: u for u in nodes}
+
+    changed = True
+    passes = 0
+    while changed and passes < 20:
+        changed = False
+        passes += 1
+        for u in nodes:
+            current_c = community[u]
+            k_u = k_i[u]
+
+            # Temporarily remove u from current community
+            community[u] = None
+
+            nbrs = graph.adj.get(u, {})
+            c_weights: Dict[str, float] = {}
+            for v, w in nbrs.items():
+                c_v = community[v]
+                if c_v is not None:
+                    c_weights[c_v] = c_weights.get(c_v, 0.0) + w
+
+            best_c = current_c
+            k_i_curr = c_weights.get(current_c, 0.0)
+            tot_curr = sum(k_i[x] for x in nodes if community[x] == current_c)
+            best_gain = (k_i_curr / m) - (resolution * tot_curr * k_u) / (2.0 * (m ** 2)) if k_i_curr > 0 else 0.0
+            if best_gain < 0.0:
+                best_gain = 0.0
+                best_c = u
+
+            for c_cand, k_i_in in c_weights.items():
+                if c_cand == current_c:
+                    continue
+                tot_cand = sum(k_i[x] for x in nodes if community[x] == c_cand)
+                gain = (k_i_in / m) - (resolution * tot_cand * k_u) / (2.0 * (m ** 2))
+                if gain > best_gain:
+                    best_gain = gain
+                    best_c = c_cand
+
+            community[u] = best_c
+            if best_c != current_c:
+                changed = True
+
+    # Group into communities
+    comm_groups: Dict[str, List[str]] = {}
+    for u, c in community.items():
+        comm_groups.setdefault(c, []).append(u)
+
+    result = [sorted(grp) for grp in comm_groups.values()]
+    result.sort(key=lambda grp: (-len(grp), grp[0]))
+    return result
+
+
+def graph_tarjan_scc(g: Any) -> List[List[str]]:
+    """Tarjan's algorithm for Strongly Connected Components (directed graphs)."""
+    graph = _ensure_graph(g)
+    index = 0
+    indices: Dict[str, int] = {}
+    lowlink: Dict[str, int] = {}
+    on_stack: Set[str] = set()
+    stack: List[str] = []
+    sccs: List[List[str]] = []
+
+    def strongconnect(u: str):
+        nonlocal index
+        indices[u] = index
+        lowlink[u] = index
+        index += 1
+        stack.append(u)
+        on_stack.add(u)
+
+        for v in graph.adj.get(u, {}):
+            if v not in indices:
+                strongconnect(v)
+                lowlink[u] = min(lowlink[u], lowlink[v])
+            elif v in on_stack:
+                lowlink[u] = min(lowlink[u], indices[v])
+
+        if lowlink[u] == indices[u]:
+            component = []
+            while True:
+                w = stack.pop()
+                on_stack.remove(w)
+                component.append(w)
+                if w == u:
+                    break
+            sccs.append(sorted(component))
+
+    for node in graph.nodes:
+        if node not in indices:
+            strongconnect(node)
+
+    sccs.sort(key=lambda c: (-len(c), c[0] if c else ""))
+    return sccs
+
+
+def graph_mst(g: Any) -> Dict[str, Any]:
+    """Kruskal's algorithm for Minimum Spanning Tree (MST)."""
+    graph = _ensure_graph(g)
+    # Collect all unique edges
+    edge_list = []
+    seen = set()
+    for u in graph.nodes:
+        for v, w in graph.adj.get(u, {}).items():
+            pair = tuple(sorted([u, v]))
+            if pair not in seen:
+                seen.add(pair)
+                edge_list.append((float(w), pair[0], pair[1]))
+
+    edge_list.sort()
+
+    parent = {u: u for u in graph.nodes}
+
+    def find(i):
+        if parent[i] == i:
+            return i
+        parent[i] = find(parent[i])
+        return parent[i]
+
+    def union(i, j):
+        root_i = find(i)
+        root_j = find(j)
+        if root_i != root_j:
+            parent[root_i] = root_j
+            return True
+        return False
+
+    mst_edges = []
+    total_w = 0.0
+
+    for w, u, v in edge_list:
+        if union(u, v):
+            mst_edges.append((u, v, w))
+            total_w += w
+
+    return {
+        "edges": mst_edges,
+        "total_weight": round(total_w, 4),
+        "edge_count": len(mst_edges),
+    }
+
+
+

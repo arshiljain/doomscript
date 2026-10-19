@@ -41,6 +41,10 @@ from doomscript.domains.web.runtime import (
     web_parse_content_type,
     web_is_valid_url,
     web_generate_curl_command,
+    DOMNode,
+    HTMLDOMSelector,
+    web_extract_metadata,
+    RobotsTxtParser,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.web.exporter import WebASTExporter
@@ -219,4 +223,8 @@ __all__ = [
     "web_parse_content_type",
     "web_is_valid_url",
     "web_generate_curl_command",
+    "DOMNode",
+    "HTMLDOMSelector",
+    "web_extract_metadata",
+    "RobotsTxtParser",
 ]

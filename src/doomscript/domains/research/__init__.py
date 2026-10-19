@@ -31,6 +31,9 @@ from doomscript.domains.research.runtime import (
     research_transitive_reduction,
     research_find_negative_cycle,
     research_degree_distribution,
+    BibTeXEngine,
+    CitationNetwork,
+    AcademicLiteratureSynthesizer,
 )
 
 
@@ -148,4 +151,7 @@ __all__ = [
     "research_transitive_reduction",
     "research_find_negative_cycle",
     "research_degree_distribution",
+    "BibTeXEngine",
+    "CitationNetwork",
+    "AcademicLiteratureSynthesizer",
 ]

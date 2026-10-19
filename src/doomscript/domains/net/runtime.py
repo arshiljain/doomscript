@@ -514,3 +514,256 @@ def net_download_file(url: Any, target_path: Any) -> str:
             out.write(f"downloaded content from {u}".encode("utf-8"))
     return tp
 
+
+class HTTP2FrameParser:
+    """RFC 7540 HTTP/2 Binary Frame Serializer and Parser."""
+
+    FRAME_TYPES = {
+        0x0: "DATA",
+        0x1: "HEADERS",
+        0x2: "PRIORITY",
+        0x3: "RST_STREAM",
+        0x4: "SETTINGS",
+        0x5: "PUSH_PROMISE",
+        0x6: "PING",
+        0x7: "GOAWAY",
+        0x8: "WINDOW_UPDATE",
+        0x9: "CONTINUATION",
+    }
+    FRAME_NAMES = {v: k for k, v in FRAME_TYPES.items()}
+
+    @classmethod
+    def serialize_frame(
+        cls,
+        frame_type: Union[int, str],
+        flags: int,
+        stream_id: int,
+        payload: bytes = b"",
+    ) -> bytes:
+        t_int = cls.FRAME_NAMES.get(str(frame_type).upper(), int(frame_type) if isinstance(frame_type, int) else 0)
+        length = len(payload)
+        if length > 0xFFFFFF:
+            raise ValueError("HTTP/2 frame payload exceeds 24-bit maximum")
+
+        # 9-byte header: 3 bytes length, 1 byte type, 1 byte flags, 4 bytes stream_id (R bit 0)
+        hdr = bytearray(9)
+        hdr[0] = (length >> 16) & 0xFF
+        hdr[1] = (length >> 8) & 0xFF
+        hdr[2] = length & 0xFF
+        hdr[3] = t_int & 0xFF
+        hdr[4] = flags & 0xFF
+        hdr[5] = (stream_id >> 24) & 0x7F  # Clear reserved R bit
+        hdr[6] = (stream_id >> 16) & 0xFF
+        hdr[7] = (stream_id >> 8) & 0xFF
+        hdr[8] = stream_id & 0xFF
+        return bytes(hdr) + payload
+
+    @classmethod
+    def parse_frame(cls, raw_data: bytes) -> Dict[str, Any]:
+        if len(raw_data) < 9:
+            raise ValueError(f"HTTP/2 frame requires at least 9 bytes header, got {len(raw_data)}")
+
+        length = (raw_data[0] << 16) | (raw_data[1] << 8) | raw_data[2]
+        frame_type_int = raw_data[3]
+        flags = raw_data[4]
+        stream_id = ((raw_data[5] & 0x7F) << 24) | (raw_data[6] << 16) | (raw_data[7] << 8) | raw_data[8]
+        payload = raw_data[9: 9 + length]
+
+        return {
+            "length": length,
+            "type_int": frame_type_int,
+            "type": cls.FRAME_TYPES.get(frame_type_int, f"UNKNOWN_{frame_type_int}"),
+            "flags": flags,
+            "stream_id": stream_id,
+            "payload": payload,
+        }
+
+
+class PacketDissector:
+    """Binary Network Packet Protocol Dissector (Ethernet, IPv4, TCP, UDP)."""
+
+    @staticmethod
+    def calculate_ip_checksum(header_bytes: bytes) -> int:
+        """Standard 16-bit one's complement Internet checksum."""
+        if len(header_bytes) % 2 == 1:
+            header_bytes += b"\x00"
+        total = 0
+        for i in range(0, len(header_bytes), 2):
+            w = (header_bytes[i] << 8) | header_bytes[i + 1]
+            total += w
+            total = (total & 0xFFFF) + (total >> 16)
+        return (~total) & 0xFFFF
+
+    @classmethod
+    def dissect_ipv4_header(cls, packet_bytes: bytes) -> Dict[str, Any]:
+        if len(packet_bytes) < 20:
+            raise ValueError("IPv4 header requires at least 20 bytes")
+
+        v_ihl = packet_bytes[0]
+        version = (v_ihl >> 4) & 0x0F
+        ihl = v_ihl & 0x0F
+        ihl_bytes = ihl * 4
+
+        tos = packet_bytes[1]
+        total_len = (packet_bytes[2] << 8) | packet_bytes[3]
+        ident = (packet_bytes[4] << 8) | packet_bytes[5]
+        flags_offset = (packet_bytes[6] << 8) | packet_bytes[7]
+        ttl = packet_bytes[8]
+        protocol = packet_bytes[9]
+        checksum = (packet_bytes[10] << 8) | packet_bytes[11]
+
+        src_ip = ".".join(str(b) for b in packet_bytes[12:16])
+        dst_ip = ".".join(str(b) for b in packet_bytes[16:20])
+
+        proto_names = {1: "ICMP", 6: "TCP", 17: "UDP"}
+
+        return {
+            "version": version,
+            "ihl": ihl_bytes,
+            "tos": tos,
+            "total_length": total_len,
+            "identification": ident,
+            "ttl": ttl,
+            "protocol": protocol,
+            "protocol_name": proto_names.get(protocol, f"PROTO_{protocol}"),
+            "checksum": hex(checksum),
+            "src_ip": src_ip,
+            "dst_ip": dst_ip,
+            "payload": packet_bytes[ihl_bytes:total_len if total_len else len(packet_bytes)],
+        }
+
+    @classmethod
+    def dissect_tcp_header(cls, tcp_bytes: bytes) -> Dict[str, Any]:
+        if len(tcp_bytes) < 20:
+            raise ValueError("TCP header requires at least 20 bytes")
+
+        src_port = (tcp_bytes[0] << 8) | tcp_bytes[1]
+        dst_port = (tcp_bytes[2] << 8) | tcp_bytes[3]
+        seq = (tcp_bytes[4] << 24) | (tcp_bytes[5] << 16) | (tcp_bytes[6] << 8) | tcp_bytes[7]
+        ack = (tcp_bytes[8] << 24) | (tcp_bytes[9] << 16) | (tcp_bytes[10] << 8) | tcp_bytes[11]
+
+        offset_res = tcp_bytes[12]
+        data_offset = ((offset_res >> 4) & 0x0F) * 4
+
+        flags = tcp_bytes[13]
+        flag_dict = {
+            "FIN": bool(flags & 0x01),
+            "SYN": bool(flags & 0x02),
+            "RST": bool(flags & 0x04),
+            "PSH": bool(flags & 0x08),
+            "ACK": bool(flags & 0x10),
+            "URG": bool(flags & 0x20),
+        }
+        window_size = (tcp_bytes[14] << 8) | tcp_bytes[15]
+        return {
+            "src_port": src_port,
+            "dst_port": dst_port,
+            "sequence": seq,
+            "acknowledgment": ack,
+            "data_offset": data_offset,
+            "flags": flag_dict,
+            "window_size": window_size,
+            "payload": tcp_bytes[data_offset:],
+        }
+
+
+class WebSocketCodec:
+    """RFC 6455 WebSocket binary frame encoder and decoder."""
+
+    OPCODES = {
+        0x1: "TEXT",
+        0x2: "BINARY",
+        0x8: "CLOSE",
+        0x9: "PING",
+        0xA: "PONG",
+    }
+    OPCODE_MAP = {v: k for k, v in OPCODES.items()}
+
+    @classmethod
+    def encode_frame(
+        cls,
+        payload: Union[str, bytes],
+        opcode: Union[str, int] = "TEXT",
+        masked: bool = False,
+        mask_key: Optional[bytes] = None,
+    ) -> bytes:
+        data = payload.encode("utf-8") if isinstance(payload, str) else payload
+        length = len(data)
+
+        op = cls.OPCODE_MAP.get(str(opcode).upper(), int(opcode) if isinstance(opcode, int) else 0x1)
+        b1 = 0x80 | (op & 0x0F)  # FIN bit set
+
+        out = bytearray([b1])
+        mask_bit = 0x80 if masked else 0x00
+
+        if length <= 125:
+            out.append(mask_bit | length)
+        elif length <= 0xFFFF:
+            out.append(mask_bit | 126)
+            out.extend([(length >> 8) & 0xFF, length & 0xFF])
+        else:
+            out.append(mask_bit | 127)
+            for shift in (56, 48, 40, 32, 24, 16, 8, 0):
+                out.append((length >> shift) & 0xFF)
+
+        if masked:
+            m_key = mask_key or os.urandom(4)
+            out.extend(m_key)
+            masked_payload = bytearray(length)
+            for i in range(length):
+                masked_payload[i] = data[i] ^ m_key[i % 4]
+            out.extend(masked_payload)
+        else:
+            out.extend(data)
+
+        return bytes(out)
+
+    @classmethod
+    def decode_frame(cls, frame_bytes: bytes) -> Dict[str, Any]:
+        if len(frame_bytes) < 2:
+            raise ValueError("WebSocket frame requires at least 2 bytes")
+
+        b1, b2 = frame_bytes[0], frame_bytes[1]
+        fin = bool(b1 & 0x80)
+        opcode_int = b1 & 0x0F
+        masked = bool(b2 & 0x80)
+        payload_len = b2 & 0x7F
+
+        idx = 2
+        if payload_len == 126:
+            payload_len = (frame_bytes[idx] << 8) | frame_bytes[idx + 1]
+            idx += 2
+        elif payload_len == 127:
+            payload_len = 0
+            for shift in range(8):
+                payload_len = (payload_len << 8) | frame_bytes[idx + shift]
+            idx += 8
+
+        if masked:
+            mask_key = frame_bytes[idx:idx + 4]
+            idx += 4
+            raw_payload = frame_bytes[idx:idx + payload_len]
+            unmasked = bytearray(len(raw_payload))
+            for i in range(len(raw_payload)):
+                unmasked[i] = raw_payload[i] ^ mask_key[i % 4]
+            final_data = bytes(unmasked)
+        else:
+            final_data = frame_bytes[idx:idx + payload_len]
+
+        text_val = None
+        if opcode_int == 0x1:
+            try:
+                text_val = final_data.decode("utf-8")
+            except UnicodeDecodeError:
+                pass
+
+        return {
+            "fin": fin,
+            "opcode": cls.OPCODES.get(opcode_int, f"UNKNOWN_{opcode_int}"),
+            "masked": masked,
+            "payload_length": len(final_data),
+            "payload_bytes": final_data,
+            "text": text_val,
+        }
+
+

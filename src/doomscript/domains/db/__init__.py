@@ -38,6 +38,9 @@ from doomscript.domains.db.runtime import (
     db_database_size_bytes,
     db_count_distinct_values,
     db_clone_table_schema,
+    SQLQueryBuilder,
+    InMemoryRelationalDB,
+    MigrationManager,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.db.exporter import DBASTExporter
@@ -188,4 +191,7 @@ __all__ = [
     "db_database_size_bytes",
     "db_count_distinct_values",
     "db_clone_table_schema",
+    "SQLQueryBuilder",
+    "InMemoryRelationalDB",
+    "MigrationManager",
 ]

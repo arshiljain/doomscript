@@ -12,6 +12,11 @@ from doomscript.domains.ml.fallback import (
     NativeDecisionTree,
     NativeRandomForest,
     NativeKMeans,
+    MLPClassifier,
+    MLPRegressor,
+    CARTDecisionTree,
+    GBDTModel,
+    IsolationForestModel,
     train_test_split,
     accuracy_score,
     mean_squared_error,
@@ -153,6 +158,25 @@ def train_model(model_or_name: Any, scope: Optional[Dict[str, Any]] = None) -> M
     elif algo in ("k_means", "kmeans", "clustering"):
         k = spec.hyperparameters.get("k", 3)
         model = NativeKMeans(k=k)
+        model.fit(X_train)
+    elif algo in ("mlp", "neural_network", "mlp_classifier"):
+        hidden = spec.hyperparameters.get("hidden_layer_sizes", (16,))
+        model = MLPClassifier(hidden_layer_sizes=hidden)
+        model.fit(X_train, y_train)
+    elif algo in ("mlp_regressor", "mlp_regression"):
+        hidden = spec.hyperparameters.get("hidden_layer_sizes", (16,))
+        model = MLPRegressor(hidden_layer_sizes=hidden)
+        model.fit(X_train, [float(v) for v in y_train])
+    elif algo in ("cart", "cart_tree"):
+        is_cls = spec.task == "classification" or not all(isinstance(v, (int, float)) for v in y_train)
+        model = CARTDecisionTree(is_classifier=is_cls)
+        model.fit(X_train, y_train if is_cls else [float(v) for v in y_train])
+    elif algo in ("gbdt", "gradient_boosting", "gbm"):
+        is_cls = spec.task == "classification" or not all(isinstance(v, (int, float)) for v in y_train)
+        model = GBDTModel(is_classifier=is_cls)
+        model.fit(X_train, y_train if is_cls else [float(v) for v in y_train])
+    elif algo in ("isolation_forest", "anomaly_detection"):
+        model = IsolationForestModel()
         model.fit(X_train)
     else:
         # Default to NativeRandomForest for general robustness
@@ -996,4 +1020,88 @@ def ml_gradient_clip_norm(gradients: Any, max_norm: Any = 1.0) -> List[float]:
         scale = m_norm / total_norm
         return [round(g * scale, 6) for g in grads]
     return [round(g, 6) for g in grads]
+
+
+# =========================================================================
+# Deepened ML Helper Functions
+# =========================================================================
+
+def ml_train_mlp(
+    X: Any,
+    y: Any,
+    hidden_layers: Tuple[int, ...] = (16,),
+    is_classifier: bool = True,
+    lr: float = 0.01,
+    max_iter: int = 200,
+) -> Any:
+    """Train a pure-Python Multi-Layer Perceptron neural network."""
+    X_mat = [list(r) for r in X]
+    if is_classifier:
+        model = MLPClassifier(hidden_layer_sizes=hidden_layers, lr=lr, max_iter=max_iter)
+        model.fit(X_mat, list(y))
+    else:
+        model = MLPRegressor(hidden_layer_sizes=hidden_layers, lr=lr, max_iter=max_iter)
+        model.fit(X_mat, [float(v) for v in y])
+    return model
+
+
+def ml_train_cart(
+    X: Any,
+    y: Any,
+    is_classifier: bool = True,
+    max_depth: int = 5,
+    min_samples_split: int = 2,
+) -> CARTDecisionTree:
+    """Train a CART Classification or Regression tree."""
+    X_mat = [list(r) for r in X]
+    tree = CARTDecisionTree(
+        is_classifier=is_classifier,
+        max_depth=max_depth,
+        min_samples_split=min_samples_split,
+    )
+    if is_classifier:
+        tree.fit(X_mat, list(y))
+    else:
+        tree.fit(X_mat, [float(v) for v in y])
+    return tree
+
+
+def ml_train_gbdt(
+    X: Any,
+    y: Any,
+    is_classifier: bool = False,
+    n_estimators: int = 10,
+    lr: float = 0.1,
+    max_depth: int = 3,
+) -> GBDTModel:
+    """Train a pure-Python Gradient Boosted Decision Tree ensemble."""
+    X_mat = [list(r) for r in X]
+    model = GBDTModel(
+        is_classifier=is_classifier,
+        n_estimators=n_estimators,
+        learning_rate=lr,
+        max_depth=max_depth,
+    )
+    if is_classifier:
+        model.fit(X_mat, list(y))
+    else:
+        model.fit(X_mat, [float(v) for v in y])
+    return model
+
+
+def ml_train_isolation_forest(
+    X: Any,
+    n_estimators: int = 50,
+    max_samples: int = 256,
+    contamination: float = 0.1,
+) -> IsolationForestModel:
+    """Train a pure-Python Isolation Forest for anomaly detection."""
+    X_mat = [list(r) for r in X]
+    model = IsolationForestModel(
+        n_estimators=n_estimators,
+        max_samples=max_samples,
+        contamination=contamination,
+    )
+    model.fit(X_mat)
+    return model
 

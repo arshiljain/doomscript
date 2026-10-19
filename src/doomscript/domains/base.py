@@ -3,6 +3,7 @@
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Set, Tuple
 import ast
+from doomscript.domains.matcher import VerbSpec
 
 
 class DomainIR(ABC):

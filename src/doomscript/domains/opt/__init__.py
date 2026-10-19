@@ -35,6 +35,9 @@ from doomscript.domains.opt.runtime import (
     opt_pareto_frontier,
     opt_hungarian_assignment,
     opt_binary_search_peak_1d,
+    opt_genetic_algorithm,
+    opt_particle_swarm,
+    opt_nelder_mead,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.opt.exporter import OptASTExporter
@@ -149,4 +152,7 @@ __all__ = [
     "opt_pareto_frontier",
     "opt_hungarian_assignment",
     "opt_binary_search_peak_1d",
+    "opt_genetic_algorithm",
+    "opt_particle_swarm",
+    "opt_nelder_mead",
 ]
