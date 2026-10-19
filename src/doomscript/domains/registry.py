@@ -11,6 +11,8 @@ class DomainRegistry:
         self._domains: Dict[str, DomainContract] = {}
         self._alias_map: Dict[str, str] = {}
         self._active_domains: Set[str] = set()
+        self._specs: Dict[str, DomainIR] = {}
+        self._spec_counter: int = 0
 
     def register(self, domain: DomainContract) -> None:
         """Registers a domain pack and its aliases."""
@@ -51,6 +53,21 @@ class DomainRegistry:
     def reset_active(self) -> None:
         """Resets active domains between compilation runs."""
         self._active_domains.clear()
+
+    def store_spec(self, ir: DomainIR) -> str:
+        """Stores a validated DomainIR spec and returns a unique spec identifier."""
+        self._spec_counter += 1
+        spec_id = f"ds_spec_{self._spec_counter}"
+        self._specs[spec_id] = ir
+        return spec_id
+
+    def get_spec(self, spec_id: str) -> Optional[DomainIR]:
+        """Retrieves a DomainIR spec by its unique identifier."""
+        return self._specs.get(spec_id)
+
+    def clear_specs(self) -> None:
+        """Clears stored DomainIR specs."""
+        self._specs.clear()
 
     def get_active_domains(self) -> List[DomainContract]:
         """Returns all currently active domain instances."""

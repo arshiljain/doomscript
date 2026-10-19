@@ -1478,10 +1478,22 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
     pending_routes: List[Tuple[int, str, int]] = []
     match_stack: List[Dict[str, Any]] = []
     plot_stack: List[Dict[str, Any]] = []
+    domain_block_stack: List[Dict[str, Any]] = []
     in_research_mode: bool = False
+
+    def _close_domain_block(b_info, at_line_idx):
+        ir_spec, target_var = b_info["domain"].parser.parse_block(b_info["header"], b_info["lines"], b_info["indent"])
+        from doomscript.domains.registry import get_domain_registry
+        reg = get_domain_registry()
+        spec_id = reg.store_spec(ir_spec)
+        d_name = b_info["domain"].name
+        emit(f"{b_info['parent_indent']}set {target_var} to execute_{d_name}_ir('{spec_id}')", b_info["header_line"])
 
     for line_idx, raw_line in enumerate(lines, start=1):
         if not raw_line.strip():
+            if domain_block_stack:
+                domain_block_stack[-1]["lines"].append((line_idx, raw_line))
+                continue
             emit("", line_idx)
             continue
 
@@ -1489,6 +1501,15 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
         indent_len = len(raw_line) - len(raw_line.lstrip(" "))
         indent = " " * indent_len
         scope.update_indent(indent_len)
+
+        # Pop domain_block_stack if indentation returned to parent level
+        while domain_block_stack and indent_len <= domain_block_stack[-1]["indent"]:
+            _close_domain_block(domain_block_stack.pop(), line_idx)
+
+        # If inside active domain block, buffer line and continue
+        if domain_block_stack:
+            domain_block_stack[-1]["lines"].append((line_idx, raw_line))
+            continue
 
         # Pop plot_stack if indentation returned to parent level
         while plot_stack and indent_len <= plot_stack[-1]["indent"]:
@@ -1539,6 +1560,34 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
                 in_research_mode = True
             emit(f"{indent}# use {domain_name}", line_idx)
             continue
+
+        # Check domain block header (e.g. pipeline "name" from src into target:)
+        if code.rstrip().endswith(":"):
+            from doomscript.domains.registry import get_domain_registry
+            reg = get_domain_registry()
+            matched_domain_block = reg.find_domain_for_block(code)
+            if matched_domain_block:
+                domain_block_stack.append({
+                    "domain": matched_domain_block,
+                    "header": code,
+                    "indent": indent_len,
+                    "parent_indent": indent,
+                    "header_line": line_idx,
+                    "lines": [],
+                })
+                continue
+
+        # Check domain single-line statement (Level 1 / Level 2 inspect, clean, join, etc.)
+        from doomscript.domains.registry import get_domain_registry
+        reg = get_domain_registry()
+        matched_domain_line = reg.find_domain_for_line(code)
+        if matched_domain_line:
+            parsed_domain_code = matched_domain_line.parser.parse_inspect(code, line_idx)
+            if parsed_domain_code is None:
+                parsed_domain_code = matched_domain_line.parser.parse_operation(code, line_idx)
+            if parsed_domain_code is not None:
+                emit(f"{indent}{parsed_domain_code}", line_idx)
+                continue
 
         # If in research mode, apply declarative research phrase normalization first
         if in_research_mode:
@@ -1964,6 +2013,9 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
         p_info = plot_stack.pop(0)
         if p_info.get("deferred_draw"):
             emit(f"{p_info['parent_indent']}{p_info['var']}.draw('{p_info['deferred_draw']}')", len(lines))
+
+    while domain_block_stack:
+        _close_domain_block(domain_block_stack.pop(0), len(lines))
 
     res_str = "\n".join(output_lines) + ("\n" if source.endswith("\n") else "")
     return res_str, line_map

@@ -2009,3 +2009,36 @@ def save_plot(obj, path, width=None, height=None, dpi=None):
         return obj.save(path, width=width, height=height, dpi=dpi)
     raise TypeError(f"Object of type {type(obj).__name__} does not support save().")
 
+
+# ---------------------------------------------------------------------------
+# Data Engineering Domain Integration
+# ---------------------------------------------------------------------------
+from doomscript.domains.data import (
+    PipelineSpec,
+    ValidationRule,
+    DedupeStep,
+    FilterStep,
+    FillNaStep,
+    DeriveStep,
+    JoinStep,
+    GroupByStep,
+    SortStep,
+    SinkStep,
+    inspect_dataset,
+    profile_dataset,
+    clean_dataset,
+    join_datasets,
+)
+
+def execute_data_ir(spec):
+    import sys
+    from doomscript.domains.data.runtime import DataPipelineRuntime
+    from doomscript.domains.registry import get_domain_registry
+    if isinstance(spec, str):
+        spec = get_domain_registry().get_spec(spec)
+    caller_frame = sys._getframe(1)
+    scope = dict(caller_frame.f_globals)
+    scope.update(caller_frame.f_locals)
+    return DataPipelineRuntime().execute_pipeline(spec, scope)
+
+
