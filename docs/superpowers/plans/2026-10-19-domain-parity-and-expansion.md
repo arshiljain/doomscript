@@ -312,11 +312,11 @@
   - Solves linear programs and extracts optimal variable values and objective value
   - Pure Python Simplex solver with Scipy `scipy.optimize.linprog` exporter
 
-- [ ] **Step 1: Write failing unit and integration tests for Optimization domain**
-- [ ] **Step 2: Create `OptimizationSpec`, `OptParser`, `OptRuntime` (with Simplex solver), and `OptASTExporter`**
-- [ ] **Step 3: Register `OptDomain` in `get_domain_registry()` and add phrase mappings in `phrases.py`**
-- [ ] **Step 4: Run tests and verify Optimization execution and Python export parity**
-- [ ] **Step 5: Commit changes**
+- [x] **Step 1: Write failing unit and integration tests for Optimization domain**
+- [x] **Step 2: Create `OptimizationSpec`, `OptParser`, `OptRuntime` (with Simplex solver), and `OptASTExporter`**
+- [x] **Step 3: Register `OptDomain` in `get_domain_registry()` and add phrase mappings in `phrases.py`**
+- [x] **Step 4: Run tests and verify Optimization execution and Python export parity**
+- [x] **Step 5: Commit changes**
 
 ---
 
@@ -334,12 +334,12 @@
   - Complete documentation and CLI listing of domain status
   - Updated `pyproject.toml` optional dependencies for all domains
 
-- [ ] **Step 1: Write test verifying all registered domains declare valid maturity level and optional dependencies**
-- [ ] **Step 2: Update `DomainContract` with maturity metadata and update all domain implementations**
-- [ ] **Step 3: Update `pyproject.toml` with `nlp`, `geo`, `opt`, and `all` extras**
-- [ ] **Step 4: Write comprehensive `docs/DOMAIN_MATURITY.md` table and guide**
-- [ ] **Step 5: Run tests and verify they pass**
-- [ ] **Step 6: Commit changes**
+- [x] **Step 1: Write test verifying all registered domains declare valid maturity level and optional dependencies**
+- [x] **Step 2: Update `DomainContract` with maturity metadata and update all domain implementations**
+- [x] **Step 3: Update `pyproject.toml` with `nlp`, `geo`, `opt`, and `all` extras**
+- [x] **Step 4: Write comprehensive `docs/DOMAIN_MATURITY.md` table and guide**
+- [x] **Step 5: Run tests and verify they pass**
+- [x] **Step 6: Commit changes**
 
 ---
 
@@ -352,7 +352,7 @@
 **Interfaces:**
 - Verifies all 9 domains pass isolated wheel packaging tests and full test suite
 
-- [ ] **Step 1: Build wheel with all package data and dependencies**
-- [ ] **Step 2: Execute comprehensive multi-domain program in clean isolated virtualenv**
-- [ ] **Step 3: Run full pytest suite across all 400+ tests**
-- [ ] **Step 4: Commit changes and push to origin/main**
+- [x] **Step 1: Build wheel with all package data and dependencies**
+- [x] **Step 2: Execute comprehensive multi-domain program in clean isolated virtualenv**
+- [x] **Step 3: Run full pytest suite across all 400+ tests**
+- [x] **Step 4: Commit changes and push to origin/main**
