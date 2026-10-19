@@ -31,6 +31,42 @@ class OptDomainParser(DomainParser):
     def parse_block(
         self, header: str, body_lines: List[Tuple[int, str]], indent: int = 0
     ) -> Tuple[LinearProgramSpec, str]:
+        # direct objective block: maximize/minimize <obj> [into <target>] [where]:
+        h_strip = header.strip().rstrip(":")
+        direct_m = re.match(r"^(maximize|minimize)\s+(.+)$", h_strip, re.IGNORECASE)
+        if direct_m:
+            sense = direct_m.group(1).lower()
+            rest = direct_m.group(2).strip()
+            target = "lp_solution"
+
+            # Check for 'into <target>'
+            into_match = re.search(r"\binto\s+([A-Za-z_]\w*)\b", rest, re.IGNORECASE)
+            if into_match:
+                target = into_match.group(1)
+                rest = re.sub(r"\binto\s+[A-Za-z_]\w*\b", "", rest, flags=re.IGNORECASE).strip()
+
+            # Remove optional 'where' keyword
+            rest = re.sub(r"\bwhere\b", "", rest, flags=re.IGNORECASE).strip()
+            obj_expr = rest
+
+            lp_name = "direct_lp"
+            spec = LinearProgramSpec(name=lp_name, target_var=target, sense=sense, objective=obj_expr)
+            for _, raw_line in body_lines:
+                line = raw_line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                into_m = re.match(r"^into\s+([A-Za-z_]\w*)$", line, re.IGNORECASE)
+                if into_m:
+                    target = into_m.group(1)
+                    spec.target_var = target
+                    continue
+                if any(op in line for op in ("<=", ">=", "=", "<", ">")):
+                    spec.constraints.append(line)
+            errors = spec.validate()
+            if errors:
+                raise SyntaxError(f"Linear program validation error: {'; '.join(errors)}")
+            return spec, target
+
         # linear program <name> [into <target>]:
         m = re.match(
             r"^(?:linear\s+program|optimize)\s+([A-Za-z_]\w*)(?:\s+into\s+([A-Za-z_]\w*))?:?$",

@@ -30,6 +30,10 @@ class DBRuntime(DomainRuntime):
     def get_connection(self) -> sqlite3.Connection:
         return self._conn
 
+    @property
+    def connection(self) -> sqlite3.Connection:
+        return self._conn
+
     def execute_ir(self, ir: DomainIR, scope: Dict[str, Any]) -> List[Dict[str, Any]]:
         if not isinstance(ir, QuerySpec):
             raise TypeError(f"DBRuntime expects QuerySpec, got {type(ir).__name__}")

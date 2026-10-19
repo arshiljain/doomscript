@@ -17,9 +17,9 @@ class NLPDomainParser(DomainParser):
     """Independent parser for NLP and Text Analytics syntax."""
 
     def parse_inspect(self, line: str, line_no: int) -> Optional[str]:
-        # analyze sentiment of <expr> [into <target>]
+        # [analyze] sentiment of <expr> [into <target>]
         m_sent = re.match(
-            r"^analyze\s+sentiment\s+of\s+(.+?)(?:\s+into\s+([A-Za-z_]\w*))?$",
+            r"^(?:analyze\s+)?sentiment\s+of\s+(.+?)(?:\s+into\s+([A-Za-z_]\w*))?$",
             line.strip(),
             re.IGNORECASE,
         )
@@ -32,6 +32,41 @@ class NLPDomainParser(DomainParser):
 
     def parse_operation(self, line: str, line_no: int) -> Optional[str]:
         s = line.strip()
+
+        # words in <expr> into <target>
+        m_words = re.match(
+            r"^words\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_words:
+            expr = m_words.group(1).strip()
+            target = m_words.group(2).strip()
+            return f'set {target} to tokenize_text({expr}, mode="word")'
+
+        # sentences in <expr> into <target>
+        m_sents = re.match(
+            r"^sentences\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_sents:
+            expr = m_sents.group(1).strip()
+            target = m_sents.group(2).strip()
+            return f'set {target} to tokenize_text({expr}, mode="sentence")'
+
+        # bigrams / trigrams of <expr> into <target>
+        m_bi_tri = re.match(
+            r"^(?:extract\s+)?(bigrams|trigrams)\s+(?:of|from)\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_bi_tri:
+            kind = m_bi_tri.group(1).lower()
+            deg = 2 if "bi" in kind else 3
+            expr = m_bi_tri.group(2).strip()
+            target = m_bi_tri.group(3).strip()
+            return f"set {target} to extract_ngrams({expr}, n={deg})"
 
         # clean text [in] <expr> [removing stopwords] into <target>
         # or clean <expr> [removing stopwords] into <target>
@@ -70,9 +105,9 @@ class NLPDomainParser(DomainParser):
             target = m_ng.group(3).strip()
             return f"set {target} to extract_ngrams({expr}, n={n_deg})"
 
-        # calculate tfidf of <corpus> [with max_features <n>] into <target>
+        # tfidf of / calculate tfidf of <corpus> [with max_features <n>] into <target>
         m_tfidf = re.match(
-            r"^calculate\s+tfidf\s+of\s+(.+?)(?:\s+with\s+max_features\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            r"^(?:calculate\s+)?tfidf\s+of\s+(.+?)(?:\s+with\s+max_features\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )
@@ -84,9 +119,9 @@ class NLPDomainParser(DomainParser):
                 return f"set {target} to calculate_tfidf({corpus}, max_features={max_f})"
             return f"set {target} to calculate_tfidf({corpus})"
 
-        # extract entities from <expr> into <target>
+        # entities in / extract entities from <expr> into <target>
         m_ent = re.match(
-            r"^extract\s+entities\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            r"^(?:extract\s+entities\s+from|entities\s+in)\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )

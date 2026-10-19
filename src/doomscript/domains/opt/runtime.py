@@ -152,6 +152,7 @@ class SimplexSolver:
         return {
             "status": "optimal",
             "optimal_value": opt_val,
+            "objective_value": opt_val,
             "variables": primal_vars,
             "sense": self.sense,
         }
@@ -270,6 +271,7 @@ class SimplexSolver:
         return {
             "status": "optimal",
             "optimal_value": round(opt_val, 4),
+            "objective_value": round(opt_val, 4),
             "variables": sol_vars,
             "sense": self.sense,
             "_slacks": slacks,
@@ -325,6 +327,11 @@ class OptRuntime(DomainRuntime):
 
     def execute_ir(self, ir: DomainIR, scope: Dict[str, Any]) -> Any:
         if isinstance(ir, LinearProgramSpec):
+            if ir.name == "direct_lp":
+                res = solve_linear_program(ir, scope=scope)
+                if ir.target_var:
+                    scope[ir.target_var] = res
+                return res
             # Store spec in scope
             res = {"name": ir.name, "_spec": ir}
             scope[ir.name] = res

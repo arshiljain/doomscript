@@ -48,9 +48,9 @@ class DsaDomainParser(DomainParser):
             target = prof_m.group(3)
             return f'set {target} to profile_memory_of_function("{fn}", {inp})'
 
-        # benchmark <fn> with sizes <sizes> into <target>
+        # benchmark <fn> with/on sizes <sizes> into <target>
         bm_m = re.match(
-            r"^benchmark\s+([A-Za-z_]\w*)\s+with\s+sizes\s+(.+?)(?:\s+into\s+([A-Za-z_]\w*))?$",
+            r"^benchmark\s+([A-Za-z_]\w*)\s+(?:with|on)\s+sizes\s+(.+?)(?:\s+into\s+([A-Za-z_]\w*))?$",
             line.strip(),
             re.IGNORECASE,
         )
@@ -59,6 +59,61 @@ class DsaDomainParser(DomainParser):
             sizes = bm_m.group(2).strip()
             target = bm_m.group(3) or f"{fn}_bench"
             return f'set {target} to run_benchmark_with_sizes("{fn}", {sizes})'
+
+        # push <item> into heap <heap>
+        heap_push_m = re.match(
+            r"^push\s+(.+?)\s+(?:into|to)\s+heap\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if heap_push_m:
+            item = heap_push_m.group(1).strip()
+            heap_var = heap_push_m.group(2).strip()
+            return f"dsa_heap_push({heap_var}, {item})"
+
+        # push <item> into <container>
+        push_m = re.match(
+            r"^push\s+(.+?)\s+(?:into|to)\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if push_m:
+            item = push_m.group(1).strip()
+            container = push_m.group(2).strip()
+            return f"dsa_push({container}, {item})"
+
+        # pop min from <heap> into <target>
+        pop_min_m = re.match(
+            r"^pop\s+min(?:imum)?\s+from\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if pop_min_m:
+            heap_var = pop_min_m.group(1).strip()
+            target = pop_min_m.group(2).strip()
+            return f"set {target} to dsa_heap_pop_min({heap_var})"
+
+        # pop max from <heap> into <target>
+        pop_max_m = re.match(
+            r"^pop\s+max(?:imum)?\s+from\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if pop_max_m:
+            heap_var = pop_max_m.group(1).strip()
+            target = pop_max_m.group(2).strip()
+            return f"set {target} to dsa_heap_pop_max({heap_var})"
+
+        # pop left/first from <deque> into <target>
+        pop_left_m = re.match(
+            r"^pop\s+(?:left|first)\s+from\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if pop_left_m:
+            q_var = pop_left_m.group(1).strip()
+            target = pop_left_m.group(2).strip()
+            return f"set {target} to dsa_deque_pop_left({q_var})"
 
         return None
 

@@ -30,7 +30,12 @@ class DsaDomain(DomainContract):
             or s.startswith("empirical complexity of ")
             or s.startswith("profile memory of ")
             or s.startswith("trace ")
-            or (s.startswith("benchmark ") and " with sizes " in s)
+            or (s.startswith("benchmark ") and (" with sizes " in s or " on sizes " in s))
+            or s.startswith("push ")
+            or s.startswith("pop min from ")
+            or s.startswith("pop max from ")
+            or s.startswith("pop left from ")
+            or s.startswith("pop first from ")
         )
 
     def can_handle_block(self, header: str) -> bool:

@@ -30,7 +30,15 @@ class OptDomain(DomainContract):
 
     def can_handle_block(self, header: str) -> bool:
         s = header.strip().lower()
-        return (s.startswith("linear program ") or s.startswith("optimize ")) and (":" in s)
+        return (
+            (
+                s.startswith("linear program ")
+                or s.startswith("optimize ")
+                or s.startswith("maximize ")
+                or s.startswith("minimize ")
+            )
+            and (":" in s)
+        )
 
 
 # Register with central registry

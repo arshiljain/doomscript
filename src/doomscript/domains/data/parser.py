@@ -75,9 +75,75 @@ class DataDomainParser(DomainParser):
                 return f'set {target} to clean_dataset({data_var}, dedupe_by="{col}")'
             return f"set {target} to clean_dataset({data_var})"
 
-        # join <left> and <right> on "<key>" as (inner|left|right|outer) into <target>
+        # remove duplicates from <data> [by "<col>"] [into <target>]
+        rem_dup_m = re.match(
+            r"^remove\s+duplicates\s+from\s+([A-Za-z_]\w*)(?:\s+by\s+[\"']([^\"']+)[\"'])?(?:\s+into\s+([A-Za-z_]\w*))?$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if rem_dup_m:
+            data_var = rem_dup_m.group(1)
+            col = rem_dup_m.group(2)
+            target = rem_dup_m.group(3) or data_var
+            if col:
+                return f'set {target} to clean_dataset({data_var}, dedupe_by="{col}")'
+            return f"set {target} to clean_dataset({data_var})"
+
+        # remove nulls from <data> in "<col>" [into <target>]
+        rem_null_m = re.match(
+            r"^remove\s+nulls\s+from\s+([A-Za-z_]\w*)\s+in\s+[\"']([^\"']+)[\"'](?:\s+into\s+([A-Za-z_]\w*))?$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if rem_null_m:
+            data_var = rem_null_m.group(1)
+            col = rem_null_m.group(2)
+            target = rem_null_m.group(3) or data_var
+            return f'set {target} to clean_dataset({data_var}, remove_nulls_in="{col}")'
+
+        # filter <data> where <cond> into <target>
+        filter_m = re.match(
+            r"^filter\s+([A-Za-z_]\w*)\s+where\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if filter_m:
+            data_var = filter_m.group(1)
+            cond = filter_m.group(2).strip().replace('"', '\\"')
+            target = filter_m.group(3)
+            return f'set {target} to filter_dataset({data_var}, "{cond}")'
+
+        # sort <data> by "<col>" [descending|desc] into <target>
+        sort_m = re.match(
+            r"^sort\s+([A-Za-z_]\w*)\s+by\s+[\"']?([A-Za-z_]\w*)[\"']?(?:\s+(descending|desc|ascending|asc))?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if sort_m:
+            data_var = sort_m.group(1)
+            col = sort_m.group(2)
+            direction = sort_m.group(3) or "asc"
+            descending = "True" if direction.lower() in ("desc", "descending") else "False"
+            target = sort_m.group(4)
+            return f'set {target} to sort_dataset({data_var}, "{col}", descending={descending})'
+
+        # group <data> by "<col>" (calculating|with) <agg> "<col2>" into <target>
+        group_m = re.match(
+            r"^group\s+([A-Za-z_]\w*)\s+by\s+[\"']?([A-Za-z_]\w*)[\"']?\s+(?:calculating|with)\s+([A-Za-z_]\w*)\s+[\"']?([A-Za-z_]\w*)[\"']?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if group_m:
+            data_var = group_m.group(1)
+            col = group_m.group(2)
+            agg_fn = group_m.group(3).lower()
+            agg_col = group_m.group(4)
+            target = group_m.group(5)
+            return f'set {target} to group_dataset({data_var}, "{col}", "{agg_fn}", "{agg_col}")'
+
+        # join <left> (with|and) <right> on "<key>" as (inner|left|right|outer) into <target>
         join_m = re.match(
-            r"^join\s+([A-Za-z_]\w*)\s+and\s+([A-Za-z_]\w*)\s+on\s+[\"']([^\"']+)[\"'](?:\s+as\s+(inner|left|right|outer))?(?:\s+into\s+([A-Za-z_]\w*))?$",
+            r"^join\s+([A-Za-z_]\w*)\s+(?:and|with)\s+([A-Za-z_]\w*)\s+on\s+[\"']([^\"']+)[\"'](?:\s+as\s+(inner|left|right|outer))?(?:\s+into\s+([A-Za-z_]\w*))?$",
             line.strip(),
             re.IGNORECASE,
         )
@@ -88,6 +154,17 @@ class DataDomainParser(DomainParser):
             how = join_m.group(4) or "inner"
             target = join_m.group(5) or "joined_dataset"
             return f'set {target} to join_datasets({l_var}, {r_var}, on="{key}", how="{how}")'
+
+        # pipeline (explain|dry-run) <name> [into <target>]
+        pipe_diag_m = re.match(
+            r"^(?:explain\s+pipeline|pipeline\s+(?:explain|dry-run))\s+[\"']?([A-Za-z_]\w*)[\"']?(?:\s+into\s+([A-Za-z_]\w*))?$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if pipe_diag_m:
+            p_name = pipe_diag_m.group(1)
+            target = pipe_diag_m.group(2) or "pipeline_plan"
+            return f'set {target} to explain_pipeline("{p_name}")'
 
         return None
 

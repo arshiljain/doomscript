@@ -98,7 +98,13 @@ STATEMENT_START_KEYWORDS = {
     "ask", "call", "import", "unpack", "trim", "replace", "split", "join",
     "capitalize", "convert", "sort", "round", "combine", "fetch", "post", "download",
     "break", "continue", "stop", "exit", "quit", "add", "remove", "insert", "push", "discard", "clear", "empty", "reverse",
-    "load", "filter", "group", "plot", "step", "compute", "test"
+    "load", "filter", "group", "plot", "step", "compute", "test",
+    "sleep", "delay", "pause", "shuffle", "words", "lines", "keys", "values",
+    "average", "mean", "median", "total", "sum", "maximum", "minimum", "variance", "standard",
+    "scatter", "line", "bar", "histogram", "box",
+    "train", "predict", "evaluate", "accuracy", "score",
+    "distance", "point", "polygon", "maximize", "minimize", "optimize", "benchmark", "trace", "pop",
+    "sentiment", "tokenize", "entities", "tfidf", "sample"
 }
 
 CORE_COMMAND_VERBS: List[str] = [
@@ -495,6 +501,154 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"^\s*with\s+(.+?)\s+(?:as|into)\s+([A-Za-z_]\w*)\s*:?", r"with \1 into \2:", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bask\s+(?:for\s+)?number\b", "ask number", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bask\s+(?:for\s+)?(?:boolean|yes/no|confirmation)\b", "ask boolean", masked, flags=re.IGNORECASE)
+    # Ergonomic timing
+    masked = re.sub(r"^\s*(?:sleep|delay|pause)\s+(.+?\s+(?:seconds?|ms|milliseconds))\s*$", r"wait \1", masked, flags=re.IGNORECASE)
+
+    # Ergonomic File I/O (omitting 'file' keyword)
+    read_m = re.match(r"^\s*read\s+(?!file\b|csv\b|records\b)(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if read_m:
+        path_expr = read_m.group(1).strip()
+        target_var = read_m.group(2).strip()
+        unmasked_path = unmask_strings(path_expr, strings).lower()
+        if unmasked_path.endswith('.csv"') or unmasked_path.endswith(".csv'"):
+            masked = f"read csv file {path_expr} into {target_var}"
+        else:
+            masked = f"read file {path_expr} into {target_var}"
+
+    write_m = re.match(r"^\s*(?:write|save)\s+(?!csv\b|record\b|model\b|plot\b|table\b|new\b)(.+?)\s+(?:to|into)\s+(?!file\b|screen\b|console\b)(.+)$", masked, re.IGNORECASE)
+    if write_m:
+        val_expr = write_m.group(1).strip()
+        path_expr = write_m.group(2).strip()
+        unmasked_path = unmask_strings(path_expr, strings).strip()
+        is_quoted = (unmasked_path.startswith('"') and unmasked_path.endswith('"')) or (unmasked_path.startswith("'") and unmasked_path.endswith("'"))
+        has_file_ext = "." in unmasked_path and not unmasked_path.endswith(".")
+        if is_quoted or has_file_ext:
+            unmasked_lower = unmasked_path.lower()
+            if unmasked_lower.endswith('.csv"') or unmasked_lower.endswith(".csv'") or unmasked_lower.endswith(".csv"):
+                masked = f"write csv {val_expr} into file {path_expr}"
+            else:
+                masked = f"write {val_expr} into file {path_expr}"
+
+    append_m = re.match(r"^\s*append\s+(?!file\b|csv\b)(.+?)\s+to\s+(?!file\b|the\s+list\b)(.+)$", masked, re.IGNORECASE)
+    if append_m:
+        val_expr = append_m.group(1).strip()
+        path_expr = append_m.group(2).strip()
+        unmasked_path = unmask_strings(path_expr, strings).strip()
+        is_quoted = (unmasked_path.startswith('"') and unmasked_path.endswith('"')) or (unmasked_path.startswith("'") and unmasked_path.endswith("'"))
+        has_file_ext = "." in unmasked_path and not unmasked_path.endswith(".")
+        if is_quoted or has_file_ext:
+            unmasked_lower = unmasked_path.lower()
+            if unmasked_lower.endswith('.csv"') or unmasked_lower.endswith(".csv'") or unmasked_lower.endswith(".csv"):
+                masked = f"append csv {val_expr} to file {path_expr}"
+            else:
+                masked = f"append {val_expr} to file {path_expr}"
+
+    check_m = re.match(r"^\s*check\s+if\s+(?!file\b)(.+?)\s+exists\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if check_m:
+        masked = f"check if file {check_m.group(1).strip()} exists into {check_m.group(2).strip()}"
+
+    # Ergonomic Networking & HTTP (fetch, post, download)
+    fetch_m = re.match(r"^\s*fetch\s+(?!url\b|json\b|text\b)(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if fetch_m:
+        masked = f"{fetch_m.group(2)} = fetch_url({fetch_m.group(1).strip()})"
+
+    fetch_json_m = re.match(r"^\s*fetch\s+json\s+(?!from\b)(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if fetch_json_m:
+        masked = f"fetch json from {fetch_json_m.group(1).strip()} into {fetch_json_m.group(2).strip()}"
+
+    fetch_text_m = re.match(r"^\s*fetch\s+text\s+(?!from\b)(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if fetch_text_m:
+        masked = f"fetch text from {fetch_text_m.group(1).strip()} into {fetch_text_m.group(2).strip()}"
+
+    dl_m = re.match(r"^\s*download\s+(.+?)\s+(?:to|into)\s+(?!file\b)(.+)$", masked, re.IGNORECASE)
+    if dl_m:
+        masked = f"download {dl_m.group(1).strip()} to file {dl_m.group(2).strip()}"
+
+    post_m = re.match(r"^\s*post\s+(?!json\b)(.+?)\s+to\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if post_m:
+        masked = f"{post_m.group(3).strip()} = fetch_url({post_m.group(2).strip()}, method='POST', json_body={post_m.group(1).strip()})"
+
+    # Ergonomic Statistics & Math Statements
+    stat_stmt_m = re.match(
+        r"^\s*(?:calculate\s+|compute\s+)?(average|mean|median|total|sum|maximum|highest|minimum|lowest|variance|standard\s+deviation|std_dev|stdev|count|length)\s+of\s+(?!.+?\s+in\s+bytes\b)(.+?)\s+into\s+([A-Za-z_]\w*)$",
+        masked,
+        re.IGNORECASE
+    )
+    if stat_stmt_m:
+        fn_word = stat_stmt_m.group(1).lower().replace(" ", "_")
+        val_expr = stat_stmt_m.group(2).strip()
+        target_var = stat_stmt_m.group(3).strip()
+        if fn_word in ("average", "mean"):
+            masked = f"set {target_var} to agg_avg({val_expr})"
+        elif fn_word in ("total", "sum"):
+            masked = f"set {target_var} to sum of {val_expr}"
+        elif fn_word in ("median",):
+            masked = f"set {target_var} to math_median({val_expr})"
+        elif fn_word in ("variance",):
+            masked = f"set {target_var} to variance({val_expr})"
+        elif fn_word in ("standard_deviation", "std_dev", "stdev"):
+            masked = f"set {target_var} to std_dev({val_expr})"
+        elif fn_word in ("maximum", "highest"):
+            masked = f"set {target_var} to highest in {val_expr}"
+        elif fn_word in ("minimum", "lowest"):
+            masked = f"set {target_var} to lowest in {val_expr}"
+        elif fn_word in ("count", "length"):
+            masked = f"set {target_var} to count of {val_expr}"
+
+    # Ergonomic String & Collection Operations
+    words_m = re.match(r"^\s*words\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if words_m:
+        masked = f"set {words_m.group(2)} to words_of({words_m.group(1).strip()})"
+
+    lines_m = re.match(r"^\s*lines\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if lines_m:
+        masked = f"set {lines_m.group(2)} to lines_of({lines_m.group(1).strip()})"
+
+    keys_m = re.match(r"^\s*keys\s+of\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if keys_m:
+        masked = f"set {keys_m.group(2)} to dict_keys({keys_m.group(1).strip()})"
+
+    values_m = re.match(r"^\s*values\s+of\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if values_m:
+        masked = f"set {values_m.group(2)} to dict_values({values_m.group(1).strip()})"
+
+    shuffle_m = re.match(r"^\s*shuffle\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if shuffle_m:
+        masked = f"set {shuffle_m.group(2)} to shuffle_list({shuffle_m.group(1).strip()})"
+
+    masked = re.sub(
+        r"^\s*pick\s+random\s+item\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+        r"pick random from \1 into \2",
+        masked,
+        flags=re.IGNORECASE
+    )
+
+    upper_m = re.match(r"^\s*uppercase\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if upper_m:
+        masked = f"set {upper_m.group(2)} to str_uppercase({upper_m.group(1).strip()})"
+
+    lower_m = re.match(r"^\s*lowercase\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if lower_m:
+        masked = f"set {lower_m.group(2)} to str_lowercase({lower_m.group(1).strip()})"
+
+    rev_m = re.match(r"^\s*reverse\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if rev_m:
+        masked = f"set {rev_m.group(2)} to reversed_list({rev_m.group(1).strip()})"
+
+    # Ergonomic Visualization Short Forms
+    viz_chart_m = re.match(
+        r"^\s*(scatter\s+plot|line\s+chart|bar\s+chart|histogram|box\s+plot)\s+of\s+([A-Za-z_]\w*)\s+with\s+(.+?)(?:\s+into\s+([A-Za-z_]\w*))?$",
+        masked,
+        re.IGNORECASE
+    )
+    if viz_chart_m:
+        c_type = viz_chart_m.group(1).lower()
+        dataset = viz_chart_m.group(2)
+        params = viz_chart_m.group(3).strip()
+        target = viz_chart_m.group(4) or "plot"
+        geom = "point" if "scatter" in c_type else "line" if "line" in c_type else "bar" if "bar" in c_type else "histogram" if "hist" in c_type else "boxplot"
+        masked = f'set {target} to PlotBuilder({dataset}).kind("{geom}", {params})'
+
     masked = re.sub(r"\bread\s+csv\s+(?!file\b)", "read csv file ", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bwrite\s+csv\s+(.+?)\s+to\s+file\b", r"write csv \1 into file", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bwrite\s+csv\s+(.+?)\s+to\s+(?!file\b)", r"write csv \1 into file ", masked, flags=re.IGNORECASE)
@@ -1794,20 +1948,27 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
             emit(f"{indent}show_plot({var_target})", line_idx)
             continue
 
-        # 3. save <plot> to <path> [with ...]
-        save_plot_m = re.match(
-            r"^save\s+([A-Za-z_]\w*)\s+to\s+([\"'][^\"']+[\"'])(?:\s+with\s+(.+))?$",
+        # 3. save <target> to/into <path> [with ...]
+        save_stmt_m = re.match(
+            r"^save\s+([A-Za-z_]\w*)\s+(?:to|into)\s+([\"'][^\"']+[\"'])(?:\s+with\s+(.+))?$",
             code,
             re.IGNORECASE,
         )
-        if save_plot_m:
-            plot_var = save_plot_m.group(1)
-            path_str = save_plot_m.group(2)
-            with_args = save_plot_m.group(3)
-            if with_args:
-                emit(f"{indent}save_plot({plot_var}, {path_str}, {with_args})", line_idx)
+        if save_stmt_m:
+            target_var = save_stmt_m.group(1)
+            path_str = save_stmt_m.group(2)
+            with_args = save_stmt_m.group(3)
+            unquoted_path = path_str.strip('"\'').lower()
+            plot_exts = (".png", ".svg", ".html", ".pdf", ".jpeg", ".jpg")
+            if with_args or any(unquoted_path.endswith(ext) for ext in plot_exts):
+                if with_args:
+                    emit(f"{indent}save_plot({target_var}, {path_str}, {with_args})", line_idx)
+                else:
+                    emit(f"{indent}save_plot({target_var}, {path_str})", line_idx)
+            elif unquoted_path.endswith(".csv") or unquoted_path.endswith(".tsv"):
+                emit(f"{indent}write csv {target_var} into file {path_str}", line_idx)
             else:
-                emit(f"{indent}save_plot({plot_var}, {path_str})", line_idx)
+                emit(f"{indent}write {target_var} into file {path_str}", line_idx)
             continue
 
         # 4. Level 2 single-line: plot <data> as <geom> with <params> [into <target>]

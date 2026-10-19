@@ -37,14 +37,17 @@ class GeoDomain(DomainContract):
     def can_handle_line(self, line: str) -> bool:
         s = line.strip().lower()
         return (
-            s.startswith("point at ")
+            s.startswith("point ")
+            or s.startswith("point at ")
             or s.startswith("polygon from ")
             or s.startswith("polygon with coords ")
             or s.startswith("distance between ")
+            or s.startswith("distance from ")
             or s.startswith("check if ")
+            or (s.startswith("is ") and " inside " in s)
             or s.startswith("bounding box of ")
             or s.startswith("spatial join ")
-            or s.startswith("convert ") and "to geojson" in s
+            or (s.startswith("convert ") and "to geojson" in s)
         )
 
     def can_handle_block(self, header: str) -> bool:

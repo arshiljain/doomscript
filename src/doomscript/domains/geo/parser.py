@@ -30,16 +30,16 @@ class GeoDomainParser(DomainParser):
             target = m_box.group(2).strip()
             return f"set {target} to bounding_box({geom_expr})"
 
-        # check if <pt> is inside <poly> into <target>
+        # check if <pt> is inside <poly> into <target> OR is <pt> inside <poly> into <target>
         m_cont = re.match(
-            r"^check\s+if\s+([A-Za-z_]\w*)\s+is\s+inside\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
+            r"^(?:check\s+if\s+([A-Za-z_]\w*)\s+is|is\s+([A-Za-z_]\w*))\s+inside\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )
         if m_cont:
-            pt = m_cont.group(1).strip()
-            poly = m_cont.group(2).strip()
-            target = m_cont.group(3).strip()
+            pt = (m_cont.group(1) or m_cont.group(2)).strip()
+            poly = m_cont.group(3).strip()
+            target = m_cont.group(4).strip()
             return f"set {target} to is_point_in_polygon({pt}, {poly})"
 
         return None
@@ -47,9 +47,9 @@ class GeoDomainParser(DomainParser):
     def parse_operation(self, line: str, line_no: int) -> Optional[str]:
         s = line.strip()
 
-        # point at <lat>, <lon> into <target>
+        # point [at] <lat>, <lon> into <target>
         m_pt = re.match(
-            r"^point\s+at\s+([-\d.]+)\s*,\s*([-\d.]+)\s+into\s+([A-Za-z_]\w*)$",
+            r"^point(?:\s+at)?\s+([-\d.]+)\s*,\s*([-\d.]+)\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )
@@ -70,17 +70,17 @@ class GeoDomainParser(DomainParser):
             target = m_poly.group(2).strip()
             return f"set {target} to polygon({coords})"
 
-        # distance between <p1> and <p2> [in (km|miles|meters)] into <target>
+        # distance between <p1> and <p2> / distance from <p1> to <p2> [in (km|miles|meters)] into <target>
         m_dist = re.match(
-            r"^distance\s+between\s+([A-Za-z_]\w*)\s+and\s+([A-Za-z_]\w*)(?:\s+in\s+([A-Za-z]+))?\s+into\s+([A-Za-z_]\w*)$",
+            r"^distance\s+(?:between\s+([A-Za-z_]\w*)\s+and\s+([A-Za-z_]\w*)|from\s+([A-Za-z_]\w*)\s+to\s+([A-Za-z_]\w*))(?:\s+in\s+([A-Za-z]+))?\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )
         if m_dist:
-            p1 = m_dist.group(1).strip()
-            p2 = m_dist.group(2).strip()
-            unit = m_dist.group(3) or "km"
-            target = m_dist.group(4).strip()
+            p1 = m_dist.group(1) or m_dist.group(3)
+            p2 = m_dist.group(2) or m_dist.group(4)
+            unit = m_dist.group(5) or "km"
+            target = m_dist.group(6).strip()
             return f'set {target} to distance_between({p1}, {p2}, unit="{unit}")'
 
         # spatial join <pts> with <polys> into <target>

@@ -1860,32 +1860,44 @@ def save_table(table, path):
 
 def filter_table(table, col, op, val):
     """Filter a table/DataFrame by a column condition."""
+    is_list_input = isinstance(table, list)
     import pandas as pd
     if not isinstance(table, pd.DataFrame):
         table = pd.DataFrame(table)
 
+    col = str(col).strip('"\'')
     op_str = str(op).strip().lower()
     if op_str in (">", "is greater than", "is over"):
-        return table[table[col] > val]
+        res = table[table[col] > val]
     elif op_str in (">=", "is at least", "is greater than or equal to"):
-        return table[table[col] >= val]
+        res = table[table[col] >= val]
     elif op_str in ("<", "is less than", "is under"):
-        return table[table[col] < val]
+        res = table[table[col] < val]
     elif op_str in ("<=", "is at most", "is less than or equal to"):
-        return table[table[col] <= val]
+        res = table[table[col] <= val]
     elif op_str in ("==", "equals", "is"):
-        return table[table[col] == val]
+        res = table[table[col] == val]
     elif op_str in ("!=", "is not", "isn't"):
-        return table[table[col] != val]
-    return table
+        res = table[table[col] != val]
+    else:
+        res = table
+
+    if is_list_input:
+        return [Record(r) for r in res.to_dict("records")]
+    return res
 
 
 def sort_table(table, col, ascending=True):
     """Sort a table/DataFrame by a column."""
+    is_list_input = isinstance(table, list)
     import pandas as pd
     if not isinstance(table, pd.DataFrame):
         table = pd.DataFrame(table)
-    return table.sort_values(col, ascending=ascending)
+    col = str(col).strip('"\'')
+    res = table.sort_values(col, ascending=ascending)
+    if is_list_input:
+        return [Record(r) for r in res.to_dict("records")]
+    return res
 
 
 def group_and_agg_table(table, group_col, agg_col, func="mean"):
@@ -2369,6 +2381,217 @@ def execute_opt_ir(spec):
     for k, v in scope.items():
         target_env[k] = v
     return res
+
+
+# ---------------------------------------------------------------------------
+# English-First Ergonomics & Domain Shortcuts
+# ---------------------------------------------------------------------------
+
+def words_of(val: Any) -> list:
+    """Extract words from text as a list of strings."""
+    if val is None:
+        return []
+    return str(val).split()
+
+
+def lines_of(val: Any) -> list:
+    """Extract lines from text as a list of strings."""
+    if val is None:
+        return []
+    res = []
+    for part in str(val).splitlines():
+        res.extend(part.split("\\n"))
+    return res
+
+
+def dict_keys(val: Any) -> list:
+    """Return keys of a record or dictionary."""
+    if hasattr(val, "keys"):
+        return list(val.keys())
+    return []
+
+
+def dict_values(val: Any) -> list:
+    """Return values of a record or dictionary."""
+    if hasattr(val, "values"):
+        return list(val.values())
+    return []
+
+
+def accuracy_score_fn(preds: Any, actuals: Any) -> float:
+    """Calculates accuracy score between predicted and actual values."""
+    if not preds or not actuals:
+        return 0.0
+    p_list = list(preds)
+    a_list = list(actuals)
+    if len(p_list) != len(a_list):
+        return 0.0
+    correct = sum(1 for p, a in zip(p_list, a_list) if p == a)
+    return round(correct / len(p_list), 4)
+
+
+def dsa_push(container: Any, item: Any) -> Any:
+    """Push an item into a list or deque."""
+    from collections import deque
+    if isinstance(container, deque):
+        container.append(item)
+    elif isinstance(container, list):
+        container.append(item)
+    return container
+
+
+def dsa_heap_push(heap_list: list, item: Any) -> list:
+    """Push an item into a min-heap list."""
+    import heapq
+    heapq.heappush(heap_list, item)
+    return heap_list
+
+
+def dsa_heap_pop_min(heap_list: list) -> Any:
+    """Pop the minimum item from a min-heap list."""
+    import heapq
+    if not heap_list:
+        return None
+    return heapq.heappop(heap_list)
+
+
+def dsa_heap_pop_max(heap_list: list) -> Any:
+    """Remove and return the maximum item from a collection."""
+    if not heap_list:
+        return None
+    mx = max(heap_list)
+    heap_list.remove(mx)
+    return mx
+
+
+def dsa_deque_pop_left(q: Any) -> Any:
+    """Pop the first/left element from a deque or list."""
+    from collections import deque
+    if isinstance(q, deque):
+        return q.popleft() if q else None
+    if isinstance(q, list):
+        return q.pop(0) if q else None
+    return None
+
+
+def db_find_rows(table_name: str, where_sql: Optional[str] = None) -> list:
+    """Query rows from an SQLite table in the active db session."""
+    from doomscript.domains.db.runtime import get_db_runtime
+    db_rt = get_db_runtime()
+    q = f'SELECT * FROM "{table_name}"'
+    if where_sql:
+        q += f" WHERE {where_sql}"
+    cur = db_rt.get_connection().cursor()
+    cur.execute(q)
+    cols = [d[0] for d in cur.description] if cur.description else []
+    rows = cur.fetchall()
+    return [Record(dict(zip(cols, r))) for r in rows]
+
+
+def db_count_rows(table_name: str) -> int:
+    """Count rows in an SQLite table in the active db session."""
+    from doomscript.domains.db.runtime import get_db_runtime
+    db_rt = get_db_runtime()
+    cur = db_rt.get_connection().cursor()
+    cur.execute(f'SELECT COUNT(*) FROM "{table_name}"')
+    row = cur.fetchone()
+    return row[0] if row else 0
+
+
+def sim_sample_normal(mean: float, std: float, count: int = 1000) -> list:
+    """Generate samples from a Normal (Gaussian) distribution."""
+    import random
+    return [random.gauss(float(mean), float(std)) for _ in range(int(count))]
+
+
+def sim_sample_uniform(low: float, high: float, count: int = 1000) -> list:
+    """Generate samples from a Uniform distribution."""
+    import random
+    return [random.uniform(float(low), float(high)) for _ in range(int(count))]
+
+
+def filter_dataset(data: Any, condition: str) -> list:
+    """Filter records in a dataset using safe AST expression evaluation."""
+    from doomscript.domains.data.runtime import _to_record_list
+    from doomscript.domains.data.expr_eval import SafeASTEvaluator
+    rows = _to_record_list(data)
+    evaluator = SafeASTEvaluator()
+    return [Record(r) for r in rows if evaluator.evaluate(condition, r)]
+
+
+def sort_dataset(data: Any, by_col: str, descending: bool = False) -> list:
+    """Sort records in a dataset by a given column."""
+    from doomscript.domains.data.runtime import _to_record_list
+    rows = _to_record_list(data)
+    return [
+        Record(r)
+        for r in sorted(
+            rows,
+            key=lambda r: (r.get(by_col) is None, r.get(by_col)),
+            reverse=descending,
+        )
+    ]
+
+
+def group_dataset(data: Any, by_col: str, agg_func: str, agg_col: str) -> list:
+    """Group dataset by column and compute aggregate."""
+    from doomscript.domains.data.runtime import _to_record_list
+    rows = _to_record_list(data)
+    grouped: Dict[Any, List[Any]] = {}
+    for r in rows:
+        key = r.get(by_col)
+        grouped.setdefault(key, []).append(r.get(agg_col))
+    out = []
+    fn = agg_func.lower()
+    for k, vals in grouped.items():
+        clean_vals = [v for v in vals if isinstance(v, (int, float))]
+        if fn in ("sum", "total"):
+            res = sum(clean_vals) if clean_vals else 0
+        elif fn in ("avg", "mean", "average"):
+            res = (sum(clean_vals) / len(clean_vals)) if clean_vals else 0
+        elif fn in ("min", "lowest", "minimum"):
+            res = min(clean_vals) if clean_vals else 0
+        elif fn in ("max", "highest", "maximum"):
+            res = max(clean_vals) if clean_vals else 0
+        elif fn in ("count",):
+            res = len(vals)
+        else:
+            res = len(vals)
+        out.append(Record({by_col: k, f"{fn}_{agg_col}": res}))
+    return out
+
+
+def train_direct_model(
+    algo: str,
+    data_val: Any,
+    target_col: str,
+    feature_cols: Optional[List[str]] = None,
+    scope: Optional[Dict[str, Any]] = None,
+):
+    """Direct one-liner model trainer."""
+    from doomscript.domains.data.runtime import _to_record_list
+    from doomscript.domains.ml.spec import ModelSpec
+    from doomscript.domains.ml.runtime import ModelContainer, train_model
+    rows = _to_record_list(data_val)
+    if not feature_cols and rows:
+        feature_cols = [k for k in rows[0].keys() if k != target_col]
+    spec = ModelSpec(
+        name=f"{algo}_model",
+        dataset="__direct_dataset__",
+        target=target_col,
+        features=feature_cols or [],
+        algorithm=algo,
+    )
+    container = ModelContainer(spec)
+    if scope is None:
+        import sys
+        caller_frame = sys._getframe(1)
+        scope = dict(caller_frame.f_globals)
+        if caller_frame.f_locals:
+            scope.update(caller_frame.f_locals)
+    scope["__direct_dataset__"] = data_val
+    return train_model(container, scope=scope)
+
 
 
 

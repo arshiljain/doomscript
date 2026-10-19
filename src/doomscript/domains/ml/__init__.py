@@ -30,7 +30,10 @@ class MLDomain(DomainContract):
         return (
             s.startswith("train ")
             or s.startswith("evaluate ")
+            or s.startswith("predict ")
             or s.startswith("predict with ")
+            or s.startswith("accuracy of ")
+            or s.startswith("score of ")
             or s.startswith("inspect model ")
             or s.startswith("summary of model ")
             or s.startswith("cross validate ")

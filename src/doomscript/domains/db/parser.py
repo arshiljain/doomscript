@@ -56,15 +56,53 @@ class DBDomainParser(DomainParser):
             return call_expr
 
         # insert into <table> values <expr>
-        m2 = re.match(
+        ins_m = re.match(
             r"^insert\s+into\s+([A-Za-z_]\w*)\s+values\s+(.+)$",
             line.strip(),
             re.IGNORECASE,
         )
-        if m2:
-            tbl = m2.group(1)
-            expr = m2.group(2).strip()
+        if ins_m:
+            tbl = ins_m.group(1)
+            expr = ins_m.group(2).strip()
             return f'insert_rows("{tbl}", {expr})'
+
+        # find (all)? rows in <table> [where <cond>] into <target>
+        find_m = re.match(
+            r"^find\s+(?:all\s+)?rows\s+in\s+([A-Za-z_]\w*)(?:\s+where\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if find_m:
+            tbl = find_m.group(1)
+            where_part = find_m.group(2)
+            target = find_m.group(3)
+            if where_part:
+                clean_where = where_part.strip().replace('"', '\\"')
+                return f'set {target} to db_find_rows("{tbl}", "{clean_where}")'
+            return f'set {target} to db_find_rows("{tbl}")'
+
+        # query <table> where <cond> into <target>
+        q_where_m = re.match(
+            r"^query\s+([A-Za-z_]\w*)\s+where\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if q_where_m:
+            tbl = q_where_m.group(1)
+            cond = q_where_m.group(2).strip().replace('"', '\\"')
+            target = q_where_m.group(3)
+            return f'set {target} to db_find_rows("{tbl}", "{cond}")'
+
+        # count rows in <table> into <target>
+        count_m = re.match(
+            r"^count\s+rows\s+in\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if count_m:
+            tbl = count_m.group(1)
+            target = count_m.group(2)
+            return f'set {target} to db_count_rows("{tbl}")'
 
         return None
 

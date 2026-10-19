@@ -35,6 +35,25 @@ class MLDomainParser(DomainParser):
         return None
 
     def parse_operation(self, line: str, line_no: int) -> Optional[str]:
+        # train <algo> on <dataset> predicting <target_col> [features <f1, f2>] into <target_var>
+        train_direct_m = re.match(
+            r"^train\s+([A-Za-z_]\w*)\s+on\s+([A-Za-z_]\w*)\s+predicting\s+[\"']?([A-Za-z_]\w*)[\"']?(?:\s+features\s+\[(.*?)\])?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if train_direct_m:
+            algo = train_direct_m.group(1)
+            dataset = train_direct_m.group(2)
+            target_col = train_direct_m.group(3)
+            feats_raw = train_direct_m.group(4)
+            target_var = train_direct_m.group(5)
+            if feats_raw:
+                feats_list = [f.strip().strip("\"'") for f in feats_raw.split(",") if f.strip()]
+                feats_arg = f'{feats_list}'
+            else:
+                feats_arg = "None"
+            return f'set {target_var} to train_direct_model("{algo}", {dataset}, "{target_col}", {feats_arg})'
+
         # train <model_name>
         train_m = re.match(r"^train\s+([A-Za-z_]\w*)\s*$", line.strip(), re.IGNORECASE)
         if train_m:
@@ -52,9 +71,9 @@ class MLDomainParser(DomainParser):
             target = eval_m.group(2) or f"{model_name}_eval"
             return f"set {target} to evaluate_model({model_name})"
 
-        # predict with <model_name> on <features> into <target>
+        # predict [with] <model_name> on <features> into <target>
         pred_m = re.match(
-            r"^predict\s+with\s+([A-Za-z_]\w*)\s+on\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            r"^predict(?:\s+with)?\s+([A-Za-z_]\w*)\s+on\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
             line.strip(),
             re.IGNORECASE,
         )
@@ -63,6 +82,18 @@ class MLDomainParser(DomainParser):
             data_var = pred_m.group(2)
             target = pred_m.group(3)
             return f"set {target} to predict_model({model_name}, {data_var})"
+
+        # accuracy / score of <preds> against <actuals> into <target>
+        acc_m = re.match(
+            r"^(?:accuracy|score)\s+of\s+(.+?)\s+against\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if acc_m:
+            preds_expr = acc_m.group(1).strip()
+            actuals_expr = acc_m.group(2).strip()
+            target_var = acc_m.group(3).strip()
+            return f"set {target_var} to accuracy_score_fn({preds_expr}, {actuals_expr})"
 
         # cross validate <model_name> [with <N> folds] [into <target>]
         cv_m = re.match(

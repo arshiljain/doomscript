@@ -41,12 +41,19 @@ class NetDomainParser(DomainParser):
         if re.match(r"^(?:block|disallow)\s+mutating\s+(?:network\s+)?requests$", line.strip(), re.IGNORECASE):
             return "set_mutating_requests_allowed(False)"
 
-        # request (GET|POST|PUT|DELETE|PATCH) <url> ...
+        # request (GET|POST|PUT|DELETE|PATCH) <url> ... OR directly (GET|POST|PUT|DELETE|PATCH) <url> ...
+        line_clean = line.strip()
         req_match = re.match(
             r"^request\s+(GET|POST|PUT|DELETE|PATCH)\s+([\"'][^\"']+[\"']|[A-Za-z_]\w*)(.*)$",
-            line.strip(),
+            line_clean,
             re.IGNORECASE,
         )
+        if not req_match:
+            req_match = re.match(
+                r"^(GET|POST|PUT|DELETE|PATCH)\s+([\"'][^\"']+[\"']|https?://\S+|url\b)(.*)$",
+                line_clean,
+                re.IGNORECASE,
+            )
         if req_match:
             method = req_match.group(1).upper()
             url_expr = req_match.group(2)

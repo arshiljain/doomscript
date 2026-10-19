@@ -43,6 +43,17 @@ class SimDomainParser(DomainParser):
             target = m2.group(2) or f"{var_name}_summary"
             return f"set {target} to summarize_metric({var_name})"
 
+        # summary of <var> [into <target>]
+        m_sum = re.match(
+            r"^summary\s+of\s+([A-Za-z_]\w*)(?:\s+into\s+([A-Za-z_]\w*))?$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_sum:
+            var_name = m_sum.group(1)
+            target = m_sum.group(2) or f"{var_name}_summary"
+            return f"set {target} to summarize_uncertainty({var_name})"
+
         return None
 
     def parse_operation(self, line: str, line_no: int) -> Optional[str]:
@@ -70,6 +81,32 @@ class SimDomainParser(DomainParser):
             sim_name = m_sw.group(3) or ""
             target = m_sw.group(4) or f"{param}_sweep"
             return f'set {target} to sweep_parameter("{sim_name}", "{param}", {values})'
+
+        # sample normal with mean <m> and std <s> [count <n>] into <target>
+        s_norm_m = re.match(
+            r"^sample\s+normal\s+with\s+mean\s+([-\d.]+)\s+and\s+std\s+([-\d.]+)(?:\s+count\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if s_norm_m:
+            m = float(s_norm_m.group(1))
+            s = float(s_norm_m.group(2))
+            count = int(s_norm_m.group(3)) if s_norm_m.group(3) else 1000
+            target = s_norm_m.group(4)
+            return f"set {target} to sim_sample_normal({m}, {s}, {count})"
+
+        # sample uniform between <a> and <b> [count <n>] into <target>
+        s_uni_m = re.match(
+            r"^sample\s+uniform\s+between\s+([-\d.]+)\s+and\s+([-\d.]+)(?:\s+count\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if s_uni_m:
+            a = float(s_uni_m.group(1))
+            b = float(s_uni_m.group(2))
+            count = int(s_uni_m.group(3)) if s_uni_m.group(3) else 1000
+            target = s_uni_m.group(4)
+            return f"set {target} to sim_sample_uniform({a}, {b}, {count})"
 
         # sample <dist> with rate <r> [count <n>] into <target>
         s_rate_m = re.match(

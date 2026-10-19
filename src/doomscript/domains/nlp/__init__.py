@@ -41,7 +41,14 @@ class NLPDomain(DomainContract):
             or s.startswith("tokenize ")
             or s.startswith("extract ")
             or s.startswith("analyze sentiment ")
+            or s.startswith("sentiment of ")
+            or s.startswith("words in ")
+            or s.startswith("sentences in ")
+            or s.startswith("bigrams of ")
+            or s.startswith("trigrams of ")
+            or s.startswith("entities in ")
             or s.startswith("calculate tfidf ")
+            or s.startswith("tfidf of ")
         )
 
     def can_handle_block(self, header: str) -> bool:

@@ -40,8 +40,15 @@ class DataDomain(DomainContract):
         return (
             s.startswith("inspect dataset")
             or s.startswith("profile dataset")
+            or s.startswith("profile ")
             or (s.startswith("clean ") and " by removing " in s)
-            or s.startswith("join ")
+            or s.startswith("remove duplicates from ")
+            or s.startswith("remove nulls from ")
+            or (s.startswith("group ") and " calculating " in s)
+            or (s.startswith("join ") and (" on " in s and " as " in s))
+            or s.startswith("explain pipeline ")
+            or s.startswith("pipeline explain ")
+            or s.startswith("pipeline dry-run ")
         )
 
     def can_handle_block(self, header: str) -> bool:

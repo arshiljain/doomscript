@@ -34,6 +34,10 @@ class DBDomain(DomainContract):
             or s.startswith("insert into ")
             or s.startswith("query db ")
             or s.startswith("query sql ")
+            or s.startswith("find rows in ")
+            or s.startswith("find all rows in ")
+            or s.startswith("count rows in ")
+            or (s.startswith("query ") and (" where " in s or " into " in s))
         )
 
     def can_handle_block(self, header: str) -> bool:
