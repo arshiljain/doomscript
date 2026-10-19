@@ -107,3 +107,41 @@ distance between p1 and p2 in km into d
         expected_vars=["p1", "p2", "d"],
     )
 
+
+def test_agent_conformance():
+    source = """use agent
+
+create agent Bot with role "Helper" into b
+tell agent b "Keep responses brief"
+memory of agent b into m
+"""
+    assert_execution_and_export_parity(
+        source,
+        expected_vars=["m"],
+    )
+
+
+def test_image_conformance():
+    source = """use image
+
+create blank image with width 200, height 100, color "white" into img
+dimensions of img into dims
+"""
+    assert_execution_and_export_parity(
+        source,
+        expected_vars=["dims"],
+    )
+
+
+def test_web_conformance():
+    source = """use web
+
+parse html "<html><title>Doom</title><body><a href='http://test.com'>Go</a></body></html>" into p
+title of p into t
+extract all links from p into l
+"""
+    assert_execution_and_export_parity(
+        source,
+        expected_vars=["t", "l"],
+    )
+

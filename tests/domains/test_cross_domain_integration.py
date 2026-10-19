@@ -170,3 +170,32 @@ simulate queue_sim:
     assert "pandas" in exported_py or "pd" in exported_py
     assert "sqlite3" in exported_py
     assert "SELECT" in exported_py or "filter" in exported_py
+
+
+def test_cross_domain_web_agent_image(tmp_path):
+    """Verifies seamless orchestration across web scraping, AI agents, and image manipulation."""
+    import os
+    banner_path = str(tmp_path / "article_banner.png").replace("\\", "/")
+    source = f"""
+use web
+use agent
+use image
+
+# 1. Scrape web page
+parse html "<html><title>Breakthrough AI</title><body><h1>Quantum Leap</h1><p>New quantum algorithms accelerate ML.</p></body></html>" into page
+title of page into heading
+
+# 2. Agent summarizes and devises a slogan
+create agent CreativeDirector with role "Visual Slogan Creator" into director
+ask agent director to "Generate a 2-word punchy headline" with context heading into slogan
+
+# 3. Image domain creates branded visual banner
+create blank image with width 600, height 200, color "navy" into banner
+draw text slogan on banner at 20, 80 with color "white"
+save image banner to "{banner_path}"
+"""
+    env = execute(source)
+    assert env["heading"] == "Breakthrough AI"
+    assert "slogan" in env
+    assert env["banner"].size == (600, 200)
+    assert os.path.exists(banner_path)

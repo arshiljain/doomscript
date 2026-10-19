@@ -19,6 +19,9 @@ from doomscript.domains.research import RESEARCH_DOMAIN
 from doomscript.domains.nlp import NLP_DOMAIN
 from doomscript.domains.geo import GEO_DOMAIN
 from doomscript.domains.opt import OPT_DOMAIN
+from doomscript.domains.agent import AGENT_DOMAIN
+from doomscript.domains.image import IMAGE_DOMAIN
+from doomscript.domains.web import WEB_DOMAIN
 
 __all__ = [
     "DomainContract",
@@ -39,4 +42,7 @@ __all__ = [
     "NLP_DOMAIN",
     "GEO_DOMAIN",
     "OPT_DOMAIN",
+    "AGENT_DOMAIN",
+    "IMAGE_DOMAIN",
+    "WEB_DOMAIN",
 ]

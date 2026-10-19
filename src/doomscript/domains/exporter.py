@@ -56,8 +56,13 @@ def transform_domains_ast(py_ast: ast.Module) -> ast.Module:
     if "urllib.request" in transformer.collected_imports:
         top_imports.append(ast.Import(names=[ast.alias(name="urllib.request")]))
 
+    if "PIL.Image" in transformer.collected_imports:
+        top_imports.append(ast.ImportFrom(module="PIL", names=[ast.alias(name="Image")], level=0))
+    if "bs4" in transformer.collected_imports:
+        top_imports.append(ast.ImportFrom(module="bs4", names=[ast.alias(name="BeautifulSoup")], level=0))
+
     # Other imports
-    for imp in transformer.collected_imports - {"pandas", "numpy", "sklearn", "sqlite3", "requests", "urllib.request"}:
+    for imp in transformer.collected_imports - {"pandas", "numpy", "sklearn", "sqlite3", "requests", "urllib.request", "PIL.Image", "bs4"}:
         top_imports.append(ast.Import(names=[ast.alias(name=imp)]))
 
     if top_imports:

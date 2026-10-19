@@ -1,0 +1,40 @@
+# DoomScript Agent, Image & Web Automation Demo
+# Demonstrates seamless coordination across web scraping, AI agents, and image processing.
+
+use web
+use agent
+use image
+
+say "=== Step 1: Web Scraping ==="
+html_content = "<html><head><title>Quantum Computing Breakthrough</title></head><body><h1>New Superconducting Qubits</h1><p>Researchers achieved a 99.9% gate fidelity record.</p><table id='specs'><tr><th>Metric</th><th>Score</th></tr><tr><td>Fidelity</td><td>99.9</td></tr><tr><td>Coherence</td><td>150</td></tr></table></body></html>"
+
+parse html html_content into article_page
+title of article_page into article_title
+find table containing "Score" in article_page into metrics_table
+
+say "Article Title: {article_title}"
+say "Extracted Metrics: {metrics_table}"
+
+say "=== Step 2: Multi-Agent Collaboration ==="
+define agent Analyst with role "Quantum Research Scientist":
+    instructions: "Explain technical metrics in simple terms"
+    model: "default"
+
+define agent Marketer with role "Brand Strategist":
+    instructions: "Turn research into a punchy 3-word visual headline"
+    model: "default"
+
+ask agent Analyst to "Analyze the significance of 99.9% gate fidelity" with context article_title into summary
+say "Analyst summary: {summary}"
+
+ask agent Marketer to "Create a headline for social media" with context summary into headline
+say "Marketer headline: {headline}"
+
+say "=== Step 3: Computer Vision & Media ==="
+create blank image with width 800, height 300, color "darkblue" into social_banner
+draw text headline on social_banner at 30, 120 with color "white"
+resize social_banner by 50 percent into thumbnail
+dimensions of thumbnail into thumb_dims
+
+say "Thumbnail generated with dimensions: {thumb_dims}"
+say "=== Multi-domain pipeline completed successfully ==="

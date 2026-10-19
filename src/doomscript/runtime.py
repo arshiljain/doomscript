@@ -2383,6 +2383,50 @@ def execute_opt_ir(spec):
     return res
 
 
+from doomscript.domains.agent.runtime import (
+    Agent,
+    AgentTeam,
+    create_agent,
+    create_team,
+    ask_agent,
+    tell_agent,
+    clear_agent_memory,
+    agent_memory,
+    run_team,
+    execute_agent_ir,
+)
+
+from doomscript.domains.image.runtime import (
+    DoomImage,
+    open_image,
+    create_blank_image,
+    image_dimensions,
+    image_width,
+    image_height,
+    resize_image,
+    crop_image,
+    rotate_image,
+    flip_image,
+    filter_image,
+    adjust_image,
+    draw_on_image,
+    save_image,
+    execute_image_ir,
+)
+
+from doomscript.domains.web.runtime import (
+    WebPage,
+    open_webpage,
+    parse_html,
+    webpage_title,
+    webpage_text,
+    extract_web_links,
+    extract_web_table,
+    download_web_media,
+    execute_web_ir,
+)
+
+
 # ---------------------------------------------------------------------------
 # English-First Ergonomics & Domain Shortcuts
 # ---------------------------------------------------------------------------
