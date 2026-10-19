@@ -2062,4 +2062,32 @@ def execute_ml_ir(spec):
     return MLModelRuntime().execute_ir(spec, scope)
 
 
+from doomscript.domains.db.runtime import (
+    execute_parameterized_query,
+    inspect_table_schema,
+    execute_raw_sql,
+    get_db_runtime,
+)
+
+def execute_db_ir(spec):
+    import sys
+    from doomscript.domains.db.runtime import get_db_runtime
+    from doomscript.domains.registry import get_domain_registry
+    if isinstance(spec, str):
+        spec = get_domain_registry().get_spec(spec)
+    caller_frame = sys._getframe(1)
+    scope = dict(caller_frame.f_globals)
+    scope.update(caller_frame.f_locals)
+    return get_db_runtime().execute_query_spec(spec, scope)
+
+
+def insert_rows(table_name, data):
+    import sys
+    caller_frame = sys._getframe(1)
+    scope = dict(caller_frame.f_globals)
+    scope.update(caller_frame.f_locals)
+    return get_db_runtime().insert_rows(table_name, data, scope)
+
+
+
 
