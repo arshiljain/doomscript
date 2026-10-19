@@ -2426,6 +2426,66 @@ from doomscript.domains.web.runtime import (
     execute_web_ir,
 )
 
+from doomscript.domains.audio.runtime import (
+    DoomAudio,
+    load_audio,
+    create_blank_audio,
+    audio_duration,
+    trim_audio,
+    fade_audio,
+    adjust_audio_volume,
+    combine_audio,
+    save_audio,
+    execute_audio_ir,
+)
+
+from doomscript.domains.finance.runtime import (
+    fetch_stock_prices,
+    moving_average,
+    relative_strength_index,
+    calculate_daily_returns,
+    calculate_sharpe_ratio,
+    backtest_strategy,
+    execute_finance_ir,
+)
+
+from doomscript.domains.graph.runtime import (
+    DoomGraph,
+    create_graph,
+    add_graph_node,
+    add_graph_edge,
+    graph_shortest_path,
+    graph_pagerank,
+    graph_degrees,
+    graph_communities,
+    execute_graph_ir,
+)
+
+from doomscript.domains.office.runtime import (
+    DoomSpreadsheet,
+    DoomWordDocument,
+    create_spreadsheet,
+    add_spreadsheet_row,
+    add_spreadsheet_rows,
+    save_spreadsheet,
+    create_word_document,
+    add_document_heading,
+    add_document_paragraph,
+    save_word_document,
+    execute_office_ir,
+)
+
+from doomscript.domains.cloud.runtime import (
+    CloudBucket,
+    connect_to_bucket,
+    upload_cloud_file,
+    download_cloud_file,
+    list_cloud_files,
+    generate_cloud_signed_url,
+    execute_cloud_ir,
+)
+
+
 
 # ---------------------------------------------------------------------------
 # English-First Ergonomics & Domain Shortcuts

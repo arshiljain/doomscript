@@ -199,3 +199,36 @@ save image banner to "{banner_path}"
     assert "slogan" in env
     assert env["banner"].size == (600, 200)
     assert os.path.exists(banner_path)
+
+
+def test_cross_domain_finance_office_cloud(tmp_path):
+    """Verifies end-to-end integration: quant finance -> spreadsheet creation -> cloud bucket sync."""
+    import os
+    sheet_file = str(tmp_path / "aapl_report.xlsx").replace("\\", "/")
+    source = f"""
+use finance
+use office
+use cloud
+
+# 1. Fetch stock prices and compute indicators
+fetch stock prices for "AAPL" from "2024-01-01" to "2024-01-31" into quotes
+calculate 5 day moving average of quotes into sma5
+
+# 2. Package into spreadsheet workbook
+create spreadsheet into report_sheet
+add row ["Date", "Symbol", "Close"] to report_sheet
+for q in quotes:
+    add row [q.date, q.symbol, q.close] to report_sheet
+save spreadsheet report_sheet to "{sheet_file}"
+
+# 3. Synchronize to cloud object storage
+connect to bucket "financial-reports" into storage
+upload file "{sheet_file}" to bucket storage as "2024/aapl_report.xlsx"
+list all files in storage matching "*.xlsx" into cloud_sheets
+generate signed url for "2024/aapl_report.xlsx" in storage into download_link
+"""
+    env = execute(source)
+    assert os.path.exists(sheet_file)
+    assert "2024/aapl_report.xlsx" in env["cloud_sheets"]
+    assert env["download_link"].startswith("https://financial-reports.s3.amazonaws.com/")
+    assert len(env["quotes"]) > 10

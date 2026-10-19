@@ -22,6 +22,11 @@ from doomscript.domains.opt import OPT_DOMAIN
 from doomscript.domains.agent import AGENT_DOMAIN
 from doomscript.domains.image import IMAGE_DOMAIN
 from doomscript.domains.web import WEB_DOMAIN
+from doomscript.domains.audio import AUDIO_DOMAIN
+from doomscript.domains.finance import FINANCE_DOMAIN
+from doomscript.domains.graph import GRAPH_DOMAIN
+from doomscript.domains.office import OFFICE_DOMAIN
+from doomscript.domains.cloud import CLOUD_DOMAIN
 
 __all__ = [
     "DomainContract",
@@ -45,4 +50,9 @@ __all__ = [
     "AGENT_DOMAIN",
     "IMAGE_DOMAIN",
     "WEB_DOMAIN",
+    "AUDIO_DOMAIN",
+    "FINANCE_DOMAIN",
+    "GRAPH_DOMAIN",
+    "OFFICE_DOMAIN",
+    "CLOUD_DOMAIN",
 ]

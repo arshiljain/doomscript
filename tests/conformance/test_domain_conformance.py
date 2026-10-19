@@ -145,3 +145,70 @@ extract all links from p into l
         expected_vars=["t", "l"],
     )
 
+
+def test_audio_conformance():
+    source = """use audio
+
+create blank audio with duration 1.0 into clip
+trim clip from 0.2 to 0.8 into part
+duration of part into d
+"""
+    assert_execution_and_export_parity(
+        source,
+        expected_vars=["d"],
+    )
+
+
+def test_finance_conformance():
+    source = """use finance
+
+quotes = [100.0, 102.0, 101.0, 105.0, 107.0, 110.0]
+calculate 3 day moving average of quotes into sma
+calculate daily returns of quotes into rets
+"""
+    assert_execution_and_export_parity(
+        source,
+        expected_vars=["sma", "rets"],
+    )
+
+
+def test_graph_conformance():
+    source = """use graph
+
+create graph into g
+connect "A" to "B" with weight 1.0 in g
+connect "B" to "C" with weight 2.0 in g
+shortest path from "A" to "C" in g into sp
+degrees of nodes in g into degs
+"""
+    assert_execution_and_export_parity(
+        source,
+        expected_vars=["sp", "degs"],
+    )
+
+
+def test_office_conformance():
+    source = """use office
+
+create spreadsheet into s
+add row ["Item", "Count"] to s
+add row ["Apples", 42] to s
+num_rows = count of s.rows
+"""
+    assert_execution_and_export_parity(
+        source,
+        expected_vars=["num_rows"],
+    )
+
+
+def test_cloud_conformance():
+    source = """use cloud
+
+connect to bucket "conformance-store" into b
+generate signed url for "data.csv" in b into link
+"""
+    assert_execution_and_export_parity(
+        source,
+        expected_vars=["link"],
+    )
+
