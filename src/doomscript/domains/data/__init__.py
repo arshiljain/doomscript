@@ -23,6 +23,7 @@ from doomscript.domains.data.runtime import (
     join_datasets,
 )
 from doomscript.domains.data.exporter import DataASTExporter
+from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.registry import get_domain_registry
 
 
@@ -31,9 +32,85 @@ class DataDomain(DomainContract):
 
     name = "data"
     aliases = ["etl", "pipeline"]
+    description = "Data Engineering pipelines, cleaning, relational joins, and aggregations"
     parser = DataDomainParser()
     runtime = DataPipelineRuntime()
     exporter = DataASTExporter()
+    capabilities = ["etl", "cleaning", "joins", "profiling", "sorting"]
+    optional_dependencies = ["pandas", "pyarrow"]
+
+    verbs = [
+        VerbSpec(
+            name="read_file",
+            pattern="read (csv|json|text) file {path:expr} into {target:ident}",
+            arg_schema={"path": "expr", "target": "ident"},
+            returns="Table",
+            description="Read tabular CSV, JSON, or text data file into Table",
+        ),
+        VerbSpec(
+            name="write_file",
+            pattern="write (csv|json) {source:ident} into [file] {path:expr}",
+            arg_schema={"source": "ident", "path": "expr"},
+            returns="None",
+            description="Serialize and write Table/records to file",
+        ),
+        VerbSpec(
+            name="filter",
+            pattern="{source:ident} where {condition:expr} into {target:ident}",
+            arg_schema={"source": "ident", "condition": "expr", "target": "ident"},
+            returns="Table",
+            description="Filter table or record list rows matching condition expression",
+        ),
+        VerbSpec(
+            name="sort",
+            pattern="sort {source:ident} by {field:ident} [(descending|ascending)]",
+            arg_schema={"source": "ident", "field": "ident"},
+            returns="Table",
+            description="Sort table or record list by column",
+        ),
+        VerbSpec(
+            name="inspect_dataset",
+            pattern="inspect dataset {source:ident} [into {target:ident}]",
+            arg_schema={"source": "ident", "target": "ident"},
+            returns="Record",
+            description="Inspect schema, shape, and null counts of a dataset",
+        ),
+        VerbSpec(
+            name="profile_dataset",
+            pattern="profile dataset {source:ident} [into {target:ident}]",
+            arg_schema={"source": "ident", "target": "ident"},
+            returns="Record",
+            description="Compute summary statistics and data quality metrics",
+        ),
+        VerbSpec(
+            name="remove_duplicates",
+            pattern="remove duplicates from {source:ident} [by {field:ident}] into {target:ident}",
+            arg_schema={"source": "ident", "field": "ident", "target": "ident"},
+            returns="Table",
+            description="Deduplicate rows by primary key or all fields",
+        ),
+        VerbSpec(
+            name="remove_nulls",
+            pattern="remove nulls from {source:ident} [in {field:ident}] into {target:ident}",
+            arg_schema={"source": "ident", "field": "ident", "target": "ident"},
+            returns="Table",
+            description="Drop rows containing null or missing values",
+        ),
+        VerbSpec(
+            name="group_by",
+            pattern="group {source:ident} by {group_col:ident} calculating {agg_fn:ident} of {val_col:ident} into {target:ident}",
+            arg_schema={"source": "ident", "group_col": "ident", "agg_fn": "ident", "val_col": "ident", "target": "ident"},
+            returns="Table",
+            description="Group dataset by key column and aggregate metric",
+        ),
+        VerbSpec(
+            name="join",
+            pattern="join {left:ident} and {right:ident} on {key:ident} as (inner|left|right|outer) into {target:ident}",
+            arg_schema={"left": "ident", "right": "ident", "key": "ident", "target": "ident"},
+            returns="Table",
+            description="Relational join between two datasets",
+        ),
+    ]
 
     def can_handle_line(self, line: str) -> bool:
         s = line.strip().lower()
