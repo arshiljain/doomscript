@@ -1599,6 +1599,10 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
             emit(f"{indent}# use {domain_name}", line_idx)
             continue
 
+        if re.match(r"^target\s+leetcode$", code.strip(), re.IGNORECASE):
+            emit(f"{indent}# target leetcode", line_idx)
+            continue
+
         # Check domain block header (e.g. pipeline "name" from src into target:)
         if code.rstrip().endswith(":"):
             from doomscript.domains.registry import get_domain_registry

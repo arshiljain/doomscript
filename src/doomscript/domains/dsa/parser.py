@@ -24,6 +24,18 @@ class DsaDomainParser(DomainParser):
         return None
 
     def parse_operation(self, line: str, line_no: int) -> Optional[str]:
+        # trace <fn> on/with <input> into <target>
+        trace_m = re.match(
+            r"^trace\s+([A-Za-z_]\w*)\s+(?:on|with)\s+(.+?)(?:\s+into\s+([A-Za-z_]\w*))?$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if trace_m:
+            fn = trace_m.group(1)
+            inp = trace_m.group(2).strip()
+            target = trace_m.group(3) or f"{fn}_trace"
+            return f'set {target} to trace_recursion("{fn}", {inp})'
+
         # profile memory of <fn> with <input> into <target>
         prof_m = re.match(
             r"^profile\s+memory\s+of\s+([A-Za-z_]\w*)\s+with\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",

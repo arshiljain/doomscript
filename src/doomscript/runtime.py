@@ -2249,6 +2249,9 @@ def run_dsa_benchmark(fn_name, input_sizes, repeat=3, generator="sorted_integers
     return run_benchmark(spec, scope)
 
 
+from doomscript.domains.dsa.runtime import ListNode, TreeNode, trace_recursion
+
+
 
 
 

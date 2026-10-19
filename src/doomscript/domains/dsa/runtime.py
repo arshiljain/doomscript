@@ -9,6 +9,116 @@ from doomscript.domains.base import DomainRuntime, DomainIR
 from doomscript.domains.dsa.spec import BenchmarkSpec, ComplexityReport
 
 
+class ListNode:
+    """Standard LeetCode singly-linked list node."""
+
+    def __init__(self, val: int = 0, next: Optional["ListNode"] = None):
+        self.val = val
+        self.next = next
+
+    def to_list(self) -> List[Any]:
+        res = []
+        curr = self
+        while curr:
+            res.append(curr.val)
+            curr = curr.next
+        return res
+
+    @classmethod
+    def from_list(cls, items: List[Any]) -> Optional["ListNode"]:
+        if not items:
+            return None
+        head = cls(items[0])
+        curr = head
+        for x in items[1:]:
+            curr.next = cls(x)
+            curr = curr.next
+        return head
+
+    def __repr__(self):
+        return f"ListNode({self.to_list()})"
+
+
+class TreeNode:
+    """Standard LeetCode binary tree node."""
+
+    def __init__(
+        self,
+        val: int = 0,
+        left: Optional["TreeNode"] = None,
+        right: Optional["TreeNode"] = None,
+    ):
+        self.val = val
+        self.left = left
+        self.right = right
+
+    def inorder(self) -> List[Any]:
+        res = []
+        if self.left:
+            res.extend(self.left.inorder())
+        res.append(self.val)
+        if self.right:
+            res.extend(self.right.inorder())
+        return res
+
+    def __repr__(self):
+        return f"TreeNode({self.val})"
+
+
+def trace_recursion(fn_or_name: Any, *args, scope: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Executes a recursive function while instrumenting call tree, depth, and frames."""
+    import sys
+    f = sys._getframe(1)
+    if scope is None:
+        target_dict = f.f_globals if (f.f_globals is not None and fn_or_name in f.f_globals) else f.f_locals
+    else:
+        target_dict = scope
+
+    if isinstance(fn_or_name, str):
+        fn = target_dict.get(fn_or_name)
+        fn_name = fn_or_name
+    else:
+        fn = fn_or_name
+        fn_name = getattr(fn, "__name__", "fn")
+
+    if not callable(fn):
+        raise ValueError(f"Target '{fn_or_name}' is not callable")
+
+    events = []
+    call_count = 0
+    max_depth = 0
+    current_depth = 0
+
+    orig_fn = fn
+    def wrapped(*call_args, **call_kwargs):
+        nonlocal call_count, max_depth, current_depth
+        call_count += 1
+        current_depth += 1
+        if current_depth > max_depth:
+            max_depth = current_depth
+        events.append({"type": "call", "depth": current_depth, "args": call_args})
+        try:
+            res = orig_fn(*call_args, **call_kwargs)
+            events.append({"type": "return", "depth": current_depth, "result": res})
+            return res
+        finally:
+            current_depth -= 1
+
+    target_dict[fn_name] = wrapped
+    try:
+        final_res = wrapped(*args)
+    finally:
+        target_dict[fn_name] = orig_fn
+
+    return {
+        "fn_name": fn_name,
+        "call_count": call_count,
+        "max_depth": max_depth,
+        "result": final_res,
+        "events": events,
+    }
+
+
 def _generate_input(generator: str, size: int) -> List[int]:
     gen = generator.lower()
     if gen in ("sorted_integers", "sorted"):

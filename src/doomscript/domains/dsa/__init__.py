@@ -29,8 +29,8 @@ class DsaDomain(DomainContract):
             s.startswith("complexity of ")
             or s.startswith("empirical complexity of ")
             or s.startswith("profile memory of ")
-            or s.startswith("benchmark ")
-            and " with sizes " in s
+            or s.startswith("trace ")
+            or (s.startswith("benchmark ") and " with sizes " in s)
         )
 
     def can_handle_block(self, header: str) -> bool:
