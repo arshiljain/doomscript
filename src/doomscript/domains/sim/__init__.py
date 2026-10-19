@@ -2,14 +2,17 @@
 
 import re
 from doomscript.domains.base import DomainContract
-from doomscript.domains.sim.spec import SimulationSpec, OptimizationSpec
+from doomscript.domains.sim.spec import SimulationSpec, OptimizationSpec, TrialsSpec, SweepSpec
 from doomscript.domains.sim.parser import SimDomainParser
 from doomscript.domains.sim.runtime import (
     SimRuntime,
     summarize_metric,
+    summarize_uncertainty,
     sample_distribution,
     DiscreteEventQueueEngine,
     NelderMeadOptimizer,
+    run_trials,
+    sweep_parameter,
 )
 from doomscript.domains.sim.exporter import SimASTExporter
 from doomscript.domains.registry import get_domain_registry
@@ -31,6 +34,8 @@ class SimDomain(DomainContract):
             or s.startswith("summarize ")
             or s.startswith("sample ")
             or s.startswith("optimize ")
+            or (s.startswith("run ") and "trials of" in s)
+            or s.startswith("sweep ")
         )
 
     def can_handle_block(self, header: str) -> bool:
@@ -46,12 +51,17 @@ __all__ = [
     "SimDomain",
     "SIM_DOMAIN",
     "SimulationSpec",
+    "TrialsSpec",
+    "SweepSpec",
     "OptimizationSpec",
     "SimDomainParser",
     "SimRuntime",
     "SimASTExporter",
     "summarize_metric",
+    "summarize_uncertainty",
     "sample_distribution",
     "DiscreteEventQueueEngine",
     "NelderMeadOptimizer",
+    "run_trials",
+    "sweep_parameter",
 ]

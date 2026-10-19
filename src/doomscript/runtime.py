@@ -2142,11 +2142,14 @@ def execute_net_ir(spec):
 from doomscript.domains.sim.runtime import (
     SimRuntime,
     summarize_metric,
+    summarize_uncertainty,
     sample_distribution,
     DiscreteEventQueueEngine,
     NelderMeadOptimizer,
+    run_trials as _sim_run_trials,
+    sweep_parameter as _sim_sweep_parameter,
 )
-from doomscript.domains.sim.spec import OptimizationSpec
+from doomscript.domains.sim.spec import OptimizationSpec, TrialsSpec, SweepSpec
 
 def execute_sim_ir(spec):
     import sys
@@ -2163,6 +2166,28 @@ def execute_sim_ir(spec):
     for k, v in scope.items():
         target_env[k] = v
     return res
+
+
+def run_trials(sim_name, trials=100, seed=42):
+    import sys
+    caller_frame = sys._getframe(1)
+    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
+    scope = dict(target_env)
+    if caller_frame.f_locals:
+        scope.update(caller_frame.f_locals)
+    return _sim_run_trials(sim_name, trials=trials, seed=seed, scope=scope)
+
+
+def sweep_parameter(sim_name, param, values, trials_per_value=5, seed=42):
+    import sys
+    caller_frame = sys._getframe(1)
+    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
+    scope = dict(target_env)
+    if caller_frame.f_locals:
+        scope.update(caller_frame.f_locals)
+    return _sim_sweep_parameter(
+        sim_name, param, values, trials_per_value=trials_per_value, seed=seed, scope=scope
+    )
 
 
 def optimize_function(fn_name, initial_guess=None):

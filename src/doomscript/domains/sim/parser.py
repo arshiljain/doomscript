@@ -21,6 +21,17 @@ class SimDomainParser(DomainParser):
             target = m.group(2) or "sim_inspection"
             return f'set {target} to ({sim_name}["summary"])'
 
+        # summarize uncertainty of <var> [into <target>]
+        m_unc = re.match(
+            r"^summarize\s+uncertainty\s+of\s+([A-Za-z_]\w*)(?:\s+into\s+([A-Za-z_]\w*))?$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_unc:
+            var_name = m_unc.group(1)
+            target = m_unc.group(2) or f"{var_name}_uncertainty"
+            return f"set {target} to summarize_uncertainty({var_name})"
+
         # summarize <var> [into <target>]
         m2 = re.match(
             r"^summarize\s+([A-Za-z_]\w*)(?:\s+into\s+([A-Za-z_]\w*))?$",
@@ -35,6 +46,31 @@ class SimDomainParser(DomainParser):
         return None
 
     def parse_operation(self, line: str, line_no: int) -> Optional[str]:
+        # run <n> trials of <sim> [into <target>]
+        m_tr = re.match(
+            r"^run\s+(\d+)\s+trials\s+of\s+([A-Za-z_]\w*)(?:\s+into\s+([A-Za-z_]\w*))?$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_tr:
+            trials_cnt = int(m_tr.group(1))
+            sim_name = m_tr.group(2)
+            target = m_tr.group(3) or f"{sim_name}_trials"
+            return f'set {target} to run_trials("{sim_name}", trials={trials_cnt})'
+
+        # sweep <param> over <values> [for <sim>] [into <target>]
+        m_sw = re.match(
+            r"^sweep\s+([A-Za-z_]\w*)\s+over\s+(.+?)(?:\s+(?:for|on)\s+([A-Za-z_]\w+))?(?:\s+into\s+([A-Za-z_]\w+))?$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_sw:
+            param = m_sw.group(1)
+            values = m_sw.group(2).strip()
+            sim_name = m_sw.group(3) or ""
+            target = m_sw.group(4) or f"{param}_sweep"
+            return f'set {target} to sweep_parameter("{sim_name}", "{param}", {values})'
+
         # sample <dist> with rate <r> [count <n>] into <target>
         s_rate_m = re.match(
             r"^sample\s+([A-Za-z_]\w+)\s+with\s+rate\s+(\d+(?:\.\d+)?)(?:\s+count\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
@@ -118,6 +154,12 @@ class SimDomainParser(DomainParser):
             srv_cnt_m = re.match(r"^servers\s*:\s*(\d+)", line, re.IGNORECASE)
             if srv_cnt_m:
                 spec.servers = int(srv_cnt_m.group(1))
+                continue
+
+            # seed: <n>
+            seed_m = re.match(r"^seed\s*(?::|\s+simulation\s+with)\s*(\d+)", line, re.IGNORECASE)
+            if seed_m:
+                spec.seed = int(seed_m.group(1))
                 continue
 
         errors = spec.validate()

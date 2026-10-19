@@ -16,6 +16,7 @@ class SimulationSpec(DomainIR):
     service_params: Dict[str, float] = field(default_factory=lambda: {"rate": 12.0})
     duration: int = 1000  # number of events or duration
     servers: int = 1
+    seed: Optional[int] = 42
     metrics: List[str] = field(default_factory=lambda: ["waiting_time", "service_time", "queue_length"])
     target_var: str = "sim_results"
 
@@ -27,6 +28,46 @@ class SimulationSpec(DomainIR):
             errors.append(f"Simulation duration must be positive, got {self.duration}")
         if self.servers <= 0:
             errors.append(f"Server count must be >= 1, got {self.servers}")
+        return errors
+
+
+@dataclass
+class TrialsSpec(DomainIR):
+    """Specification for running multiple stochastic replications of a simulation."""
+
+    sim_name: str
+    trials: int = 100
+    seed: int = 42
+    target_var: str = "trials_results"
+
+    def validate(self) -> List[str]:
+        errors = []
+        if not self.sim_name:
+            errors.append("Simulation name cannot be empty")
+        if self.trials <= 0:
+            errors.append(f"Trial count must be > 0, got {self.trials}")
+        return errors
+
+
+@dataclass
+class SweepSpec(DomainIR):
+    """Specification for sweeping a parameter across multiple values in a simulation."""
+
+    sim_name: str
+    param_name: str
+    values: List[Any] = field(default_factory=list)
+    trials_per_val: int = 5
+    seed: int = 42
+    target_var: str = "sweep_results"
+
+    def validate(self) -> List[str]:
+        errors = []
+        if not self.sim_name:
+            errors.append("Simulation name cannot be empty")
+        if not self.param_name:
+            errors.append("Parameter name cannot be empty")
+        if not self.values:
+            errors.append("Values list cannot be empty")
         return errors
 
 
@@ -45,3 +86,4 @@ class OptimizationSpec(DomainIR):
         if not self.objective:
             errors.append("Optimization objective function cannot be empty")
         return errors
+
