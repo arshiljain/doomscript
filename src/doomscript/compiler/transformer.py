@@ -1237,6 +1237,9 @@ class DoomToPython(Transformer):
     def expr_reversed(self, args):
         return ast.Call(func=ast.Name(id='reversed_list', ctx=ast.Load()), args=[args[0]], keywords=[])
 
+    def expr_copy(self, args):
+        return ast.Call(func=ast.Name(id='copy_value', ctx=ast.Load()), args=[args[0]], keywords=[])
+
     def expr_unique(self, args):
         return ast.Call(func=ast.Name(id='unique_items', ctx=ast.Load()), args=[args[0]], keywords=[])
 

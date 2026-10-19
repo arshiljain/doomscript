@@ -351,6 +351,7 @@ data_op_expr: "uppercase" "of" factor                     -> expr_uppercase
             | ("trim" | "trimmed") "of" factor            -> expr_trim
             | "sorted" "of" factor                        -> expr_sorted
             | "reversed" "of" factor                      -> expr_reversed
+            | "copy" "of" factor                          -> expr_copy
             | "unique" ["items"] "of" factor              -> expr_unique
             | ("round" | "rounded") "of" factor "to" factor "decimals"  -> expr_round_dec
             | ("round" | "rounded") "of" factor                         -> expr_round

@@ -836,6 +836,14 @@ def reversed_list(collection):
     return list(reversed(collection))
 
 
+def copy_value(val):
+    """Returns a copy of the collection, record or object."""
+    if hasattr(val, "copy"):
+        return val.copy()
+    import copy
+    return copy.copy(val)
+
+
 def unique_items(collection):
     """Returns items with duplicates removed while preserving order."""
     seen = []
