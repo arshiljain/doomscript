@@ -51,6 +51,15 @@ class Record(dict):
         except KeyError:
             raise AttributeError(f"Record has no field '{key}'") from None
 
+from doomscript.taxonomy import (
+    Table,
+    RecordList,
+    ValueKind,
+    classify_value,
+    to_table,
+    to_records,
+)
+
 
 def sleep(seconds):
     """Pause execution for a given number of seconds."""
