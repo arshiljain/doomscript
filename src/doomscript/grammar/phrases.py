@@ -1520,10 +1520,24 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
             emit(raw_line, line_idx)
             continue
 
-        # Research Mode Activation
-        if code.strip().lower() in ("use research", "enable research", "import research", "using research"):
-            in_research_mode = True
-            emit(f"{indent}# use research", line_idx)
+        # Domain Activation: use <domain>, using <domain>, import <domain>, enable <domain>
+        use_domain_m = re.match(
+            r"^(?:use|using|import|enable)\s+([A-Za-z_]\w*)$",
+            code.strip(),
+            re.IGNORECASE,
+        )
+        if use_domain_m:
+            domain_name = use_domain_m.group(1).lower()
+            try:
+                from doomscript.domains.registry import get_domain_registry
+                reg = get_domain_registry()
+                if reg.has_domain(domain_name):
+                    reg.activate(domain_name)
+            except Exception:
+                pass
+            if domain_name == "research":
+                in_research_mode = True
+            emit(f"{indent}# use {domain_name}", line_idx)
             continue
 
         # If in research mode, apply declarative research phrase normalization first
