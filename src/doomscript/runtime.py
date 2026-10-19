@@ -2045,9 +2045,14 @@ def execute_data_ir(spec):
     if isinstance(spec, str):
         spec = get_domain_registry().get_spec(spec)
     caller_frame = sys._getframe(1)
-    scope = dict(caller_frame.f_globals)
-    scope.update(caller_frame.f_locals)
-    return DataPipelineRuntime().execute_pipeline(spec, scope)
+    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
+    scope = dict(target_env)
+    if caller_frame.f_locals:
+        scope.update(caller_frame.f_locals)
+    res = DataPipelineRuntime().execute_pipeline(spec, scope)
+    for k, v in scope.items():
+        target_env[k] = v
+    return res
 
 
 def execute_ml_ir(spec):
@@ -2057,9 +2062,14 @@ def execute_ml_ir(spec):
     if isinstance(spec, str):
         spec = get_domain_registry().get_spec(spec)
     caller_frame = sys._getframe(1)
-    scope = dict(caller_frame.f_globals)
-    scope.update(caller_frame.f_locals)
-    return MLModelRuntime().execute_ir(spec, scope)
+    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
+    scope = dict(target_env)
+    if caller_frame.f_locals:
+        scope.update(caller_frame.f_locals)
+    res = MLModelRuntime().execute_ir(spec, scope)
+    for k, v in scope.items():
+        target_env[k] = v
+    return res
 
 
 from doomscript.domains.db.runtime import (
@@ -2076,9 +2086,14 @@ def execute_db_ir(spec):
     if isinstance(spec, str):
         spec = get_domain_registry().get_spec(spec)
     caller_frame = sys._getframe(1)
-    scope = dict(caller_frame.f_globals)
-    scope.update(caller_frame.f_locals)
-    return get_db_runtime().execute_query_spec(spec, scope)
+    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
+    scope = dict(target_env)
+    if caller_frame.f_locals:
+        scope.update(caller_frame.f_locals)
+    res = get_db_runtime().execute_query_spec(spec, scope)
+    for k, v in scope.items():
+        target_env[k] = v
+    return res
 
 
 def insert_rows(table_name, data):
@@ -2087,6 +2102,34 @@ def insert_rows(table_name, data):
     scope = dict(caller_frame.f_globals)
     scope.update(caller_frame.f_locals)
     return get_db_runtime().insert_rows(table_name, data, scope)
+
+
+from doomscript.domains.net.runtime import (
+    NetRuntime,
+    HttpResponseContainer,
+    execute_http_request,
+    inspect_response,
+    parse_response_content,
+    save_response_content,
+)
+
+def execute_net_ir(spec):
+    import sys
+    from doomscript.domains.net.runtime import NetRuntime
+    from doomscript.domains.registry import get_domain_registry
+    if isinstance(spec, str):
+        spec = get_domain_registry().get_spec(spec)
+    caller_frame = sys._getframe(1)
+    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
+    scope = dict(target_env)
+    if caller_frame.f_locals:
+        scope.update(caller_frame.f_locals)
+    res = NetRuntime().execute_workflow(spec, scope)
+    for k, v in scope.items():
+        target_env[k] = v
+    return res
+
+
 
 
 
