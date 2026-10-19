@@ -130,6 +130,267 @@ class NLPDomainParser(DomainParser):
             target = m_ent.group(2).strip()
             return f"set {target} to extract_entities({expr})"
 
+        # extractive summary of <text> with <n> sentences into <target>
+        m_sum = re.match(
+            r"^extractive\s+summary\s+of\s+(.+?)\s+with\s+(.+?)\s+sentences?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_sum:
+            text, n, target = m_sum.group(1), m_sum.group(2), m_sum.group(3)
+            return f"set {target} to nlp_extractive_summary({text}, num_sentences={n})"
+
+        # remove stopwords from <text> into <target>
+        m_stop = re.match(
+            r"^remove\s+stopwords\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_stop:
+            text, target = m_stop.group(1), m_stop.group(2)
+            return f"set {target} to nlp_remove_stopwords({text})"
+
+        # word frequencies of <text> into <target>
+        m_wfreq = re.match(
+            r"^word\s+frequencies\s+of\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_wfreq:
+            text, target = m_wfreq.group(1), m_wfreq.group(2)
+            return f"set {target} to nlp_word_frequencies({text})"
+
+        # text similarity between <s1> and <s2> into <target>
+        m_sim = re.match(
+            r"^text\s+similarity\s+between\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_sim:
+            s1, s2, target = m_sim.group(1), m_sim.group(2), m_sim.group(3)
+            return f"set {target} to nlp_text_similarity({s1}, {s2})"
+
+        # jaccard similarity of <s1> and <s2> into <target>
+        m_jacc = re.match(
+            r"^jaccard\s+similarity\s+of\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_jacc:
+            s1, s2, target = m_jacc.group(1), m_jacc.group(2), m_jacc.group(3)
+            return f"set {target} to nlp_jaccard_similarity({s1}, {s2})"
+
+        # extract top <k> keywords from <text> into <target>
+        m_kw = re.match(
+            r"^extract\s+top\s+(.+?)\s+keywords\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_kw:
+            k, text, target = m_kw.group(1), m_kw.group(2), m_kw.group(3)
+            return f"set {target} to nlp_extract_keywords({text}, {k})"
+
+        # extract all matches of pattern <pat> in <text> into <target>
+        m_match = re.match(
+            r"^extract\s+all\s+matches\s+of\s+pattern\s+(.+?)\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_match:
+            pat, text, target = m_match.group(1), m_match.group(2), m_match.group(3)
+            return f"set {target} to nlp_extract_matches({text}, {pat})"
+
+        # 350-Expansion NLP Operations
+        bm25_m = re.match(
+            r"^(?:rank\s+corpus\s+(.+?)\s+for\s+query\s+(.+?)\s+using\s+bm25|bm25\s+score\s+for\s+(.+?)\s+with\s+query\s+(.+?))\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if bm25_m:
+            if bm25_m.group(1) is not None:
+                corpus, q, target = bm25_m.group(1).strip(), bm25_m.group(2).strip(), bm25_m.group(5).strip()
+            else:
+                corpus, q, target = bm25_m.group(3).strip(), bm25_m.group(4).strip(), bm25_m.group(5).strip()
+            return f"set {target} to nlp_bm25_score({corpus}, {q})"
+
+        lev_m = re.match(
+            r"^levenshtein\s+distance\s+between\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if lev_m:
+            s1, s2, target = lev_m.group(1).strip(), lev_m.group(2).strip(), lev_m.group(3).strip()
+            return f"set {target} to nlp_levenshtein_distance({s1}, {s2})"
+
+        hamm_m = re.match(
+            r"^hamming\s+distance\s+between\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if hamm_m:
+            s1, s2, target = hamm_m.group(1).strip(), hamm_m.group(2).strip(), hamm_m.group(3).strip()
+            return f"set {target} to nlp_hamming_distance({s1}, {s2})"
+
+        stem_m = re.match(
+            r"^porter\s+stem\s+of\s+(?:word\s+)?(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if stem_m:
+            w, target = stem_m.group(1).strip(), stem_m.group(2).strip()
+            return f"set {target} to nlp_stem_porter({w})"
+
+        sound_m = re.match(
+            r"^soundex\s+(?:phonetic\s+code\s+of\s+)?(?:of\s+)?(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if sound_m:
+            w, target = sound_m.group(1).strip(), sound_m.group(2).strip()
+            return f"set {target} to nlp_soundex({w})"
+
+        meta_m = re.match(
+            r"^metaphone\s+(?:phonetic\s+key\s+of\s+)?(?:of\s+)?(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if meta_m:
+            w, target = meta_m.group(1).strip(), meta_m.group(2).strip()
+            return f"set {target} to nlp_metaphone({w})"
+
+        rouge_m = re.match(
+            r"^rouge[- ]?l\s+score\s+between\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if rouge_m:
+            c, r, target = rouge_m.group(1).strip(), rouge_m.group(2).strip(), rouge_m.group(3).strip()
+            return f"set {target} to nlp_rouge_l({c}, {r})"
+
+        bleu_m = re.match(
+            r"^bleu\s+score\s+between\s+(?:candidate\s+)?(.+?)\s+and\s+(?:reference\s+)?(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if bleu_m:
+            c, r, target = bleu_m.group(1).strip(), bleu_m.group(2).strip(), bleu_m.group(3).strip()
+            return f"set {target} to nlp_bleu_score({c}, {r})"
+
+        cos_tf_m = re.match(
+            r"^(?:term\s+frequency\s+cosine\s+similarity|tf\s+cosine\s+similarity)\s+between\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if cos_tf_m:
+            t1, t2, target = cos_tf_m.group(1).strip(), cos_tf_m.group(2).strip(), cos_tf_m.group(3).strip()
+            return f"set {target} to nlp_cosine_similarity_tf({t1}, {t2})"
+
+        exp_cont_m = re.match(
+            r"^expand\s+contractions\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if exp_cont_m:
+            text, target = exp_cont_m.group(1).strip(), exp_cont_m.group(2).strip()
+            return f"set {target} to nlp_expand_contractions({text})"
+
+        mask_m = re.match(
+            r"^mask\s+sensitive\s+entities\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if mask_m:
+            text, target = mask_m.group(1).strip(), mask_m.group(2).strip()
+            return f"set {target} to nlp_mask_sensitive_entities({text})"
+
+        flesch_m = re.match(
+            r"^flesch\s+reading\s+ease\s+of\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if flesch_m:
+            text, target = flesch_m.group(1).strip(), flesch_m.group(2).strip()
+            return f"set {target} to nlp_readability_flesch({text})"
+
+        fog_m = re.match(
+            r"^gunning\s+fog\s+index\s+of\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if fog_m:
+            text, target = fog_m.group(1).strip(), fog_m.group(2).strip()
+            return f"set {target} to nlp_readability_gunning_fog({text})"
+
+        syll_m = re.match(
+            r"^count\s+syllables\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if syll_m:
+            word, target = syll_m.group(1).strip(), syll_m.group(2).strip()
+            return f"set {target} to nlp_syllable_count({word})"
+
+        s_split_m = re.match(
+            r"^(?:split\s+(.+?)\s+into\s+sentences|split\s+into\s+sentences\s+(.+?))\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if s_split_m:
+            text = (s_split_m.group(1) or s_split_m.group(2)).strip()
+            target = s_split_m.group(3).strip()
+            return f"set {target} to nlp_sentence_split({text})"
+
+        pos_m = re.match(
+            r"^(?:tag\s+parts\s+of\s+speech\s+in|pos\s+tag)\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if pos_m:
+            toks, target = pos_m.group(1).strip(), pos_m.group(2).strip()
+            return f"set {target} to nlp_pos_tag_rule_based({toks})"
+
+        vader_m = re.match(
+            r"^(?:heuristic\s+sentiment\s+score\s+for|vader\s+sentiment\s+of)\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if vader_m:
+            text, target = vader_m.group(1).strip(), vader_m.group(2).strip()
+            return f"set {target} to nlp_sentiment_vader_heuristic({text})"
+
+        c_ngram_m = re.match(
+            r"^(?:extract\s+(\d+)-character\s+ngrams\s+from\s+(.+?)|character\s+ngrams\s+from\s+(.+?)\s+with\s+n\s+(\d+))\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if c_ngram_m:
+            if c_ngram_m.group(1) is not None:
+                n_val, text = c_ngram_m.group(1).strip(), c_ngram_m.group(2).strip()
+            else:
+                text, n_val = c_ngram_m.group(3).strip(), c_ngram_m.group(4).strip()
+            target = c_ngram_m.group(5).strip()
+            return f"set {target} to nlp_character_ngrams({text}, n={n_val})"
+
+        colloc_m = re.match(
+            r"^(?:find\s+collocations\s+in|collocations\s+in)\s+(.+?)(?:\s+with\s+min\s+frequency\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if colloc_m:
+            toks = colloc_m.group(1).strip()
+            k_val = colloc_m.group(2) or "2"
+            target = colloc_m.group(3).strip()
+            return f"set {target} to nlp_collocations({toks}, min_freq={k_val})"
+
+        wrap_m = re.match(
+            r"^(?:wrap\s+text|word\s+wrap)\s+(.+?)\s+(?:at|with)\s+width\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if wrap_m:
+            text, w, target = wrap_m.group(1).strip(), wrap_m.group(2).strip(), wrap_m.group(3).strip()
+            return f"set {target} to nlp_word_wrap({text}, width={w})"
+
         return None
 
     def parse_block(

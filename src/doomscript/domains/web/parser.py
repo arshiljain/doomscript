@@ -116,6 +116,279 @@ class WebDomainParser(DomainParser):
             target = m_dl.group(4).strip()
             return f"set {target} to download_web_media({p_var}, pattern={pat_expr}, folder={folder_expr})"
 
+        # select all <sel> in html <html_var> into <target>
+        # select all <sel> [elements] in/from [html] <html_var> into <target>
+        m_sel = re.match(
+            r"^select\s+all\s+(.+?)(?:\s+elements)?\s+(?:in\s+html|from\s+html|from)\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_sel:
+            sel, html_var, target = m_sel.group(1).strip(), m_sel.group(2).strip(), m_sel.group(3).strip()
+            return f"set {target} to web_select_all({html_var}, {sel})"
+
+        # extract [all] [html] tables from <html_var> into <target>
+        m_etbl = re.match(
+            r"^extract\s+(?:all\s+)?(?:html\s+)?tables\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_etbl:
+            html_var, target = m_etbl.group(1).strip(), m_etbl.group(2).strip()
+            return f"set {target} to web_extract_tables({html_var})"
+
+        # parse query params of url/from <url> into <target>
+        m_pqp = re.match(
+            r"^parse\s+query\s+params\s+(?:of\s+url\s+|from\s+)(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_pqp:
+            url_var, target = m_pqp.group(1).strip(), m_pqp.group(2).strip()
+            return f"set {target} to web_parse_query_params({url_var})"
+
+        # build url <base> with params <params> into <target>
+        m_burl = re.match(
+            r"^build\s+url\s+(.+?)\s+with\s+params\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_burl:
+            base, params, target = m_burl.group(1).strip(), m_burl.group(2).strip(), m_burl.group(3).strip()
+            return f"set {target} to web_build_url({base}, {params})"
+
+        # strip html tags from <text> into <target>
+        m_strip = re.match(
+            r"^strip\s+html\s+tags\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_strip:
+            text_var, target = m_strip.group(1).strip(), m_strip.group(2).strip()
+            return f"set {target} to web_strip_tags({text_var})"
+
+        # extract meta tags from [html] <html_var> into <target>
+        m_meta = re.match(
+            r"^extract\s+meta\s+tags\s+from\s+(?:html\s+)?(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_meta:
+            html_var, target = m_meta.group(1).strip(), m_meta.group(2).strip()
+            return f"set {target} to web_extract_meta_tags({html_var})"
+
+        # check if response <resp> is successful into <target>
+        m_succ = re.match(
+            r"^(?:check\s+if\s+)?response\s+(.+?)\s+is\s+successful\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_succ:
+            resp_var, target = m_succ.group(1).strip(), m_succ.group(2).strip()
+            return f"set {target} to web_response_is_successful({resp_var})"
+
+        # extract images from [html] <html_var> into <target>
+        m_imgs = re.match(
+            r"^extract\s+images\s+from\s+(?:html\s+)?(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_imgs:
+            h, target = m_imgs.group(1).strip(), m_imgs.group(2).strip()
+            return f"set {target} to web_extract_images({h})"
+
+        # extract forms from [html] <html_var> into <target>
+        m_forms = re.match(
+            r"^extract\s+forms\s+from\s+(?:html\s+)?(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_forms:
+            h, target = m_forms.group(1).strip(), m_forms.group(2).strip()
+            return f"set {target} to web_extract_forms({h})"
+
+        # encode form data <params> into <target>
+        m_enc_f = re.match(
+            r"^encode\s+form\s+data\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_enc_f:
+            p, target = m_enc_f.group(1).strip(), m_enc_f.group(2).strip()
+            return f"set {target} to web_encode_form_data({p})"
+
+        # decode form data <query_str> into <target>
+        m_dec_f = re.match(
+            r"^decode\s+form\s+data\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_dec_f:
+            q, target = m_dec_f.group(1).strip(), m_dec_f.group(2).strip()
+            return f"set {target} to web_decode_form_data({q})"
+
+        # parse sitemap [xml] <sitemap_var> into <target>
+        m_sm = re.match(
+            r"^parse\s+sitemap\s+(?:xml\s+)?(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_sm:
+            sm, target = m_sm.group(1).strip(), m_sm.group(2).strip()
+            return f"set {target} to web_parse_sitemap_xml({sm})"
+
+        # check robots txt <robots_var> for user agent <ua> and path <p> into <target>
+        m_rob = re.match(
+            r"^(?:check\s+robots\s+txt|evaluate\s+robots\s+txt)\s+(.+?)\s+for\s+user\s+agent\s+(.+?)\s+and\s+path\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_rob:
+            rob, ua, p, target = m_rob.group(1).strip(), m_rob.group(2).strip(), m_rob.group(3).strip(), m_rob.group(4).strip()
+            return f"set {target} to web_parse_robots_txt({rob}, user_agent={ua}, path={p})"
+
+        # canonicalize url <base> with <relative> into <target>
+        m_canon = re.match(
+            r"^canonicalize\s+url\s+(.+?)\s+with\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_canon:
+            b, rel, target = m_canon.group(1).strip(), m_canon.group(2).strip(), m_canon.group(3).strip()
+            return f"set {target} to web_canonicalize_url({b}, {rel})"
+
+        # extract meta description from [html] <html_var> into <target>
+        m_mdesc = re.match(
+            r"^extract\s+meta\s+description\s+from\s+(?:html\s+)?(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_mdesc:
+            h, target = m_mdesc.group(1).strip(), m_mdesc.group(2).strip()
+            return f"set {target} to web_extract_meta_description({h})"
+
+        # extract headings from [html] <html_var> into <target>
+        m_head = re.match(
+            r"^extract\s+headings\s+from\s+(?:html\s+)?(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_head:
+            h, target = m_head.group(1).strip(), m_head.group(2).strip()
+            return f"set {target} to web_extract_headings({h})"
+
+        # check ssl expiry for <domain> into <target>
+        m_ssl = re.match(
+            r"^check\s+ssl\s+expiry\s+(?:for|of)\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_ssl:
+            dom, target = m_ssl.group(1).strip(), m_ssl.group(2).strip()
+            return f"set {target} to web_check_ssl_expiry({dom})"
+
+        # parse cookie header <header_str> into <target>
+        m_pcook = re.match(
+            r"^parse\s+cookie\s+header\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_pcook:
+            hdr, target = m_pcook.group(1).strip(), m_pcook.group(2).strip()
+            return f"set {target} to web_parse_cookie_header({hdr})"
+
+        # build cookie header from <cookies_dict> into <target>
+        m_bcook = re.match(
+            r"^build\s+cookie\s+header\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_bcook:
+            cd, target = m_bcook.group(1).strip(), m_bcook.group(2).strip()
+            return f"set {target} to web_build_cookie_header({cd})"
+
+        # extract json ld from [html] <html_var> into <target>
+        m_jld = re.match(
+            r"^extract\s+json\s+ld\s+from\s+(?:html\s+)?(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_jld:
+            h, target = m_jld.group(1).strip(), m_jld.group(2).strip()
+            return f"set {target} to web_extract_json_ld({h})"
+
+        # strip query parameters from <url> into <target>
+        m_sqp = re.match(
+            r"^strip\s+query\s+(?:params|parameters)\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_sqp:
+            u, target = m_sqp.group(1).strip(), m_sqp.group(2).strip()
+            return f"set {target} to web_strip_query_params({u})"
+
+        # count tag <tag_name> in [html] <html_var> into <target>
+        m_ctag = re.match(
+            r"^count\s+(?:element\s+)?tag\s+(.+?)\s+in\s+(?:html\s+)?(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_ctag:
+            tag, h, target = m_ctag.group(1).strip(), m_ctag.group(2).strip(), m_ctag.group(3).strip()
+            return f"set {target} to web_count_element_tags({h}, {tag})"
+
+        # extract text with class <cls> from [html] <html_var> into <target>
+        m_tcls = re.match(
+            r"^extract\s+text\s+(?:with|by)\s+class\s+(.+?)\s+from\s+(?:html\s+)?(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_tcls:
+            cls_name, h, target = m_tcls.group(1).strip(), m_tcls.group(2).strip(), m_tcls.group(3).strip()
+            return f"set {target} to web_extract_text_by_class({h}, {cls_name})"
+
+        # extract element with id <id> from [html] <html_var> into <target>
+        m_eid = re.match(
+            r"^extract\s+element\s+(?:with|by)\s+id\s+(.+?)\s+from\s+(?:html\s+)?(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_eid:
+            id_name, h, target = m_eid.group(1).strip(), m_eid.group(2).strip(), m_eid.group(3).strip()
+            return f"set {target} to web_extract_element_by_id({h}, {id_name})"
+
+        # parse content type header <header_str> into <target>
+        m_pcth = re.match(
+            r"^parse\s+content\s+type\s+(?:header\s+)?(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_pcth:
+            hdr, target = m_pcth.group(1).strip(), m_pcth.group(2).strip()
+            return f"set {target} to web_parse_content_type({hdr})"
+
+        # check if url <url> is valid into <target>
+        m_vurl = re.match(
+            r"^(?:check\s+if\s+)?url\s+(.+?)\s+is\s+valid\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_vurl:
+            u, target = m_vurl.group(1).strip(), m_vurl.group(2).strip()
+            return f"set {target} to web_is_valid_url({u})"
+
+        # generate curl command for <method> to <url> into <target>
+        m_curl = re.match(
+            r"^generate\s+curl\s+command\s+for\s+(.+?)\s+to\s+(.+?)(?:\s+with\s+headers\s+(.+?))?(?:\s+and\s+body\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_curl:
+            method, url, hdrs, body, target = m_curl.group(1).strip(), m_curl.group(2).strip(), m_curl.group(3), m_curl.group(4), m_curl.group(5).strip()
+            h_arg = f", headers={hdrs.strip()}" if hdrs else ""
+            b_arg = f", body={body.strip()}" if body else ""
+            return f"set {target} to web_generate_curl_command({method}, {url}{h_arg}{b_arg})"
+
         return None
 
     def parse_block(

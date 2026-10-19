@@ -16,6 +16,31 @@ from doomscript.domains.agent.runtime import (
     agent_memory,
     run_team,
     execute_agent_ir,
+    agent_broadcast_message,
+    agent_consensus_vote,
+    agent_prioritize_tasks,
+    agent_dispatch_task,
+    agent_aggregate_responses,
+    agent_filter_memory,
+    agent_evaluate_response_quality,
+    agent_format_chat_history,
+    agent_summarize_memory,
+    agent_route_task_by_keywords,
+    agent_retry_with_backoff,
+    agent_validate_json_output,
+    agent_extract_action_calls,
+    agent_chain_of_thought_step,
+    agent_calculate_consensus_agreement,
+    agent_debate_round,
+    agent_plan_task_breakdown,
+    agent_filter_memory_by_date,
+    agent_merge_agent_memories,
+    agent_register_dynamic_tool,
+    agent_inspect_available_tools,
+    agent_set_system_persona,
+    agent_audit_conversation_safety,
+    agent_count_conversation_turns,
+    agent_export_chat_transcript,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.agent.exporter import AgentASTExporter
@@ -96,6 +121,31 @@ class AgentDomain(DomainContract):
             or s.startswith("run team ")
             or s.startswith("clear memory of agent ")
             or s.startswith("memory of agent ")
+            or s.startswith("broadcast message ")
+            or s.startswith("tally consensus votes ")
+            or s.startswith("prioritize agent tasks ")
+            or s.startswith("dispatch task ")
+            or s.startswith("aggregate agent responses ")
+            or s.startswith("filter memory of agent ")
+            or s.startswith("evaluate response quality ")
+            or s.startswith("format chat history ")
+            or s.startswith("summarize memory of ")
+            or s.startswith("route task ")
+            or s.startswith("retry task ")
+            or s.startswith("validate json output ")
+            or s.startswith("extract action calls ")
+            or s.startswith("chain of thought prompt ")
+            or s.startswith("calculate consensus agreement ")
+            or s.startswith("debate topic ")
+            or s.startswith("plan task breakdown ")
+            or s.startswith("filter memory of ")
+            or s.startswith("merge memories of ")
+            or s.startswith("register tool ")
+            or s.startswith("inspect available tools of ")
+            or s.startswith("set persona of agent ")
+            or s.startswith("audit conversation safety ")
+            or s.startswith("count conversation turns ")
+            or s.startswith("export chat transcript ")
         )
 
     def can_handle_block(self, header: str) -> bool:
@@ -126,4 +176,29 @@ __all__ = [
     "agent_memory",
     "run_team",
     "execute_agent_ir",
+    "agent_broadcast_message",
+    "agent_consensus_vote",
+    "agent_prioritize_tasks",
+    "agent_dispatch_task",
+    "agent_aggregate_responses",
+    "agent_filter_memory",
+    "agent_evaluate_response_quality",
+    "agent_format_chat_history",
+    "agent_summarize_memory",
+    "agent_route_task_by_keywords",
+    "agent_retry_with_backoff",
+    "agent_validate_json_output",
+    "agent_extract_action_calls",
+    "agent_chain_of_thought_step",
+    "agent_calculate_consensus_agreement",
+    "agent_debate_round",
+    "agent_plan_task_breakdown",
+    "agent_filter_memory_by_date",
+    "agent_merge_agent_memories",
+    "agent_register_dynamic_tool",
+    "agent_inspect_available_tools",
+    "agent_set_system_persona",
+    "agent_audit_conversation_safety",
+    "agent_count_conversation_turns",
+    "agent_export_chat_transcript",
 ]

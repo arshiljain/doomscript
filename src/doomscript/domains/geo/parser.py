@@ -106,6 +106,261 @@ class GeoDomainParser(DomainParser):
             target = m_gj.group(2).strip()
             return f"set {target} to to_geojson({geom})"
 
+        # calculate haversine distance from <p1> to <p2> [in <unit>] into <target>
+        hav_m = re.match(
+            r"^(?:calculate\s+)?haversine\s+distance\s+from\s+(.+?)\s+to\s+(.+?)(?:\s+in\s+([A-Za-z]+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if hav_m:
+            p1 = hav_m.group(1).strip()
+            p2 = hav_m.group(2).strip()
+            unit = hav_m.group(3) or "km"
+            target = hav_m.group(4).strip()
+            return f'set {target} to geo_haversine_distance({p1}, {p2}, unit="{unit}")'
+
+        # check if bounding box <bbox> contains <pt> into <target>
+        bbox_m = re.match(
+            r"^check\s+if\s+bounding\s+box\s+(.+?)\s+contains\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if bbox_m:
+            bbox, pt, target = bbox_m.group(1).strip(), bbox_m.group(2).strip(), bbox_m.group(3).strip()
+            return f"set {target} to geo_bounding_box_contains({bbox}, {pt})"
+
+        # calculate centroid of [coordinates] <coords> into <target>
+        cent_m = re.match(
+            r"^(?:calculate\s+)?centroid\s+of\s+(?:coordinates\s+)?(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if cent_m:
+            coords, target = cent_m.group(1).strip(), cent_m.group(2).strip()
+            return f"set {target} to geo_centroid({coords})"
+
+        # calculate polygon area for/of [coordinates] <coords> into <target>
+        parea_m = re.match(
+            r"^(?:calculate\s+)?polygon\s+area\s+(?:for|of)\s+(?:coordinates\s+)?(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if parea_m:
+            coords, target = parea_m.group(1).strip(), parea_m.group(2).strip()
+            return f"set {target} to geo_polygon_area({coords})"
+
+        # convert coordinate <pt> to geojson point into <target>
+        gjp_m = re.match(
+            r"^convert\s+coordinate\s+(.+?)\s+to\s+geojson\s+point\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if gjp_m:
+            pt, target = gjp_m.group(1).strip(), gjp_m.group(2).strip()
+            return f"set {target} to geo_to_geojson_point({pt})"
+
+        # find nearest coordinate to <pt> from <list> into <target>
+        near_m = re.match(
+            r"^find\s+nearest\s+coordinate\s+to\s+(.+?)\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if near_m:
+            pt, candidates, target = near_m.group(1).strip(), near_m.group(2).strip(), near_m.group(3).strip()
+            return f"set {target} to geo_nearest_coordinate({pt}, {candidates})"
+
+        # encode geohash lat <lat> lon <lon> [with precision <p>] into <target>
+        m_egh = re.match(
+            r"^encode\s+geohash\s+lat\s+(.+?)\s+lon\s+(.+?)(?:\s+with\s+precision\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_egh:
+            lt, ln, prec, target = m_egh.group(1).strip(), m_egh.group(2).strip(), m_egh.group(3), m_egh.group(4).strip()
+            p_val = prec if prec else "12"
+            return f"set {target} to geo_encode_geohash({lt}, {ln}, {p_val})"
+
+        # decode geohash <gh> into <target>
+        m_dgh = re.match(
+            r"^decode\s+geohash\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_dgh:
+            gh, target = m_dgh.group(1).strip(), m_dgh.group(2).strip()
+            return f"set {target} to geo_decode_geohash({gh})"
+
+        # cross track distance of <pt> from <start> to <end> into <target>
+        m_xtd = re.match(
+            r"^cross\s+track\s+distance\s+of\s+(.+?)\s+from\s+(.+?)\s+to\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_xtd:
+            pt, st, end, target = m_xtd.group(1).strip(), m_xtd.group(2).strip(), m_xtd.group(3).strip(), m_xtd.group(4).strip()
+            return f"set {target} to geo_cross_track_distance({pt}, {st}, {end})"
+
+        # destination point from lat <lat> lon <lon> distance <d> bearing <brng> into <target>
+        m_dest = re.match(
+            r"^destination\s+point\s+from\s+lat\s+(.+?)\s+lon\s+(.+?)\s+distance\s+(.+?)\s+bearing\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_dest:
+            lt, ln, d, brng, target = m_dest.group(1).strip(), m_dest.group(2).strip(), m_dest.group(3).strip(), m_dest.group(4).strip(), m_dest.group(5).strip()
+            return f"set {target} to geo_destination_point({lt}, {ln}, {d}, {brng})"
+
+        # initial bearing from <p1> to <p2> into <target>
+        m_ib = re.match(
+            r"^initial\s+bearing\s+from\s+(.+?)\s+to\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_ib:
+            p1, p2, target = m_ib.group(1).strip(), m_ib.group(2).strip(), m_ib.group(3).strip()
+            return f"set {target} to geo_initial_bearing({p1}, {p2})"
+
+        # final bearing from <p1> to <p2> into <target>
+        m_fb = re.match(
+            r"^final\s+bearing\s+from\s+(.+?)\s+to\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_fb:
+            p1, p2, target = m_fb.group(1).strip(), m_fb.group(2).strip(), m_fb.group(3).strip()
+            return f"set {target} to geo_final_bearing({p1}, {p2})"
+
+        # midpoint between <p1> and <p2> into <target>
+        m_mid = re.match(
+            r"^midpoint\s+between\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_mid:
+            p1, p2, target = m_mid.group(1).strip(), m_mid.group(2).strip(), m_mid.group(3).strip()
+            return f"set {target} to geo_midpoint({p1}, {p2})"
+
+        # bounding box intersection of <b1> and <b2> into <target>
+        m_bbi = re.match(
+            r"^bounding\s+box\s+intersection\s+of\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_bbi:
+            b1, b2, target = m_bbi.group(1).strip(), m_bbi.group(2).strip(), m_bbi.group(3).strip()
+            return f"set {target} to geo_bounding_box_intersection({b1}, {b2})"
+
+        # bounding box union of <b1> and <b2> into <target>
+        m_bbu = re.match(
+            r"^bounding\s+box\s+union\s+of\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_bbu:
+            b1, b2, target = m_bbu.group(1).strip(), m_bbu.group(2).strip(), m_bbu.group(3).strip()
+            return f"set {target} to geo_bounding_box_union({b1}, {b2})"
+
+        # convex hull of <coords> into <target>
+        m_hull = re.match(
+            r"^convex\s+hull\s+of\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_hull:
+            coords, target = m_hull.group(1).strip(), m_hull.group(2).strip()
+            return f"set {target} to geo_convex_hull_graham({coords})"
+
+        # distance from point <pt> to line segment from <ls> to <le> into <target>
+        m_ptl = re.match(
+            r"^distance\s+from\s+point\s+(.+?)\s+to\s+line\s+segment\s+from\s+(.+?)\s+to\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_ptl:
+            pt, ls, le, target = m_ptl.group(1).strip(), m_ptl.group(2).strip(), m_ptl.group(3).strip(), m_ptl.group(4).strip()
+            return f"set {target} to geo_point_to_line_distance({pt}, {ls}, {le})"
+
+        # simplify polyline <coords> with tolerance <eps> into <target>
+        m_simp = re.match(
+            r"^simplify\s+polyline\s+(.+?)\s+with\s+tolerance\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_simp:
+            coords, eps, target = m_simp.group(1).strip(), m_simp.group(2).strip(), m_simp.group(3).strip()
+            return f"set {target} to geo_simplify_douglas_peucker({coords}, {eps})"
+
+        # convert coordinates <coords> to geojson polygon into <target>
+        m_gpoly = re.match(
+            r"^convert\s+coordinates\s+(.+?)\s+to\s+geojson\s+polygon\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_gpoly:
+            coords, target = m_gpoly.group(1).strip(), m_gpoly.group(2).strip()
+            return f"set {target} to geo_to_geojson_polygon({coords})"
+
+        # convert features <features> to geojson feature collection into <target>
+        m_gfc = re.match(
+            r"^convert\s+features\s+(.+?)\s+to\s+geojson\s+feature\s+collection\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_gfc:
+            feats, target = m_gfc.group(1).strip(), m_gfc.group(2).strip()
+            return f"set {target} to geo_to_geojson_feature_collection({feats})"
+
+        # calculate perimeter of polygon <coords> into <target>
+        m_perim = re.match(
+            r"^(?:calculate\s+)?perimeter\s+of\s+polygon\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_perim:
+            coords, target = m_perim.group(1).strip(), m_perim.group(2).strip()
+            return f"set {target} to geo_polygon_perimeter({coords})"
+
+        # circular buffer around <pt> with radius <r> [and <n> points] into <target>
+        m_circ = re.match(
+            r"^circular\s+buffer\s+around\s+(.+?)\s+with\s+radius\s+(.+?)(?:\s+and\s+(\d+)\s+points)?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_circ:
+            pt, r, n, target = m_circ.group(1).strip(), m_circ.group(2).strip(), m_circ.group(3), m_circ.group(4).strip()
+            n_val = n if n else "32"
+            return f"set {target} to geo_buffer_point_circle({pt}, {r}, {n_val})"
+
+        # utm zone for longitude <lon> into <target>
+        m_utm = re.match(
+            r"^utm\s+zone\s+for\s+longitude\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_utm:
+            lon, target = m_utm.group(1).strip(), m_utm.group(2).strip()
+            return f"set {target} to geo_utm_zone_number({lon})"
+
+        # rhumb line distance between <p1> and <p2> into <target>
+        m_rld = re.match(
+            r"^rhumb\s+line\s+distance\s+between\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_rld:
+            p1, p2, target = m_rld.group(1).strip(), m_rld.group(2).strip(), m_rld.group(3).strip()
+            return f"set {target} to geo_rhumb_line_distance({p1}, {p2})"
+
+        # rhumb line bearing from <p1> to <p2> into <target>
+        m_rlb = re.match(
+            r"^rhumb\s+line\s+bearing\s+from\s+(.+?)\s+to\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_rlb:
+            p1, p2, target = m_rlb.group(1).strip(), m_rlb.group(2).strip(), m_rlb.group(3).strip()
+            return f"set {target} to geo_rhumb_line_bearing({p1}, {p2})"
+
         return None
 
     def parse_block(

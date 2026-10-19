@@ -344,3 +344,763 @@ class OptRuntime(DomainRuntime):
                 scope[ir.target_var] = res
             return res
         raise TypeError(f"Unknown Opt IR: {type(ir).__name__}")
+
+
+# --- Batch 15 Spoken English Mathematical Optimization Verbs ---
+
+def opt_minimize_1d(fn: Any, a: Any, b: Any, tol: Any = 1e-4) -> float:
+    """Minimize 1D scalar function on interval [a, b] using Golden Section Search."""
+    f = fn if callable(fn) else eval(f"lambda x: {fn}")
+    left, right = float(a), float(b)
+    t = float(tol)
+    invphi = (math.sqrt(5) - 1) / 2
+    invphi2 = (3 - math.sqrt(5)) / 2
+
+    c = left + invphi2 * (right - left)
+    d = left + invphi * (right - left)
+    fc = f(c)
+    fd = f(d)
+
+    while (right - left) > t:
+        if fc < fd:
+            right = d
+            d = c
+            fd = fc
+            c = left + invphi2 * (right - left)
+            fc = f(c)
+        else:
+            left = c
+            c = d
+            fc = fd
+            d = left + invphi * (right - left)
+            fd = f(d)
+    return round((left + right) / 2.0, 6)
+
+
+def opt_grid_search(param_grid: Any, score_fn: Any) -> Dict[str, Any]:
+    """Exhaustive grid search across parameter dictionary to minimize score_fn."""
+    import itertools
+    grid = dict(param_grid)
+    keys = list(grid.keys())
+    values_list = [list(grid[k]) for k in keys]
+    best_params = None
+    best_score = float("inf")
+
+    for combo in itertools.product(*values_list):
+        candidate = dict(zip(keys, combo))
+        try:
+            score = float(score_fn(candidate))
+        except TypeError:
+            score = float(score_fn(**candidate))
+        if score < best_score:
+            best_score = score
+            best_params = candidate
+    return {"best_params": best_params, "best_score": round(best_score, 6)}
+
+
+def opt_fractional_knapsack(weights: Any, values: Any, capacity: Any) -> Dict[str, Any]:
+    """Solve classic fractional knapsack problem optimally via greedy value-to-weight ratio."""
+    w = [float(x) for x in weights]
+    v = [float(x) for x in values]
+    cap = float(capacity)
+    items = sorted(range(len(w)), key=lambda i: v[i] / w[i] if w[i] > 0 else float("inf"), reverse=True)
+
+    total_val = 0.0
+    fractions = [0.0] * len(w)
+    rem = cap
+
+    for i in items:
+        if rem <= 0:
+            break
+        take_w = min(w[i], rem)
+        frac = take_w / w[i] if w[i] > 0 else 1.0
+        fractions[i] = round(frac, 4)
+        total_val += frac * v[i]
+        rem -= take_w
+
+    return {"total_value": round(total_val, 4), "fractions": fractions}
+
+
+def opt_activity_selection(start_times: Any, end_times: Any) -> List[int]:
+    """Optimal greedy activity selection maximizing non-overlapping activities."""
+    s = [float(x) for x in start_times]
+    e = [float(x) for x in end_times]
+    activities = sorted(range(len(s)), key=lambda i: e[i])
+
+    selected = []
+    last_end = -float("inf")
+    for i in activities:
+        if s[i] >= last_end:
+            selected.append(i)
+            last_end = e[i]
+    return selected
+
+
+def opt_gradient_descent_step(point: Any, gradient: Any, learning_rate: Any = 0.01) -> Any:
+    """Perform a gradient descent update step: x_next = x - lr * grad (supports scalars and vectors)."""
+    lr = float(learning_rate)
+    if isinstance(point, (int, float)) and isinstance(gradient, (int, float)):
+        return round(float(point) - lr * float(gradient), 6)
+    pt = [float(x) for x in point]
+    grad = [float(g) for g in gradient]
+    return [round(pt[i] - lr * grad[i], 6) for i in range(min(len(pt), len(grad)))]
+
+
+def opt_bisection_root(fn: Any, a: Any, b: Any, tol: Any = 1e-5) -> float:
+    """Find root of continuous 1D function f(x) = 0 on [a, b] using Bolzano's bisection method."""
+    f = fn if callable(fn) else eval(f"lambda x: {fn}")
+    left, right = float(a), float(b)
+    t = float(tol)
+    fa, fb = f(left), f(right)
+    if fa * fb > 0:
+        raise ValueError(f"Function must have opposite signs at interval endpoints: f({left})={fa}, f({right})={fb}")
+
+    while (right - left) / 2.0 > t:
+        mid = (left + right) / 2.0
+        fmid = f(mid)
+        if abs(fmid) < 1e-12:
+            return round(mid, 6)
+        if fa * fmid < 0:
+            right = mid
+            fb = fmid
+        else:
+            left = mid
+            fa = fmid
+    return round((left + right) / 2.0, 6)
+
+
+def _make_callable_1d(fn_or_expr: Any) -> Callable:
+    """Safely convert string expressions or lambdas to callables."""
+    if callable(fn_or_expr):
+        return fn_or_expr
+    s = str(fn_or_expr).strip()
+    if s.startswith("lambda"):
+        return eval(s)
+    return eval(f"lambda x: {s}")
+
+
+def opt_simulated_annealing(cost_fn: Any, initial_state: Any, neighbor_fn: Any = None, temp: Any = 100.0, cooling_rate: Any = 0.95, max_iter: Any = 100) -> Any:
+    """Simulated Annealing heuristic search for minimizing an objective cost function."""
+    import random
+    fn = _make_callable_1d(cost_fn)
+    t = float(temp)
+    alpha = float(cooling_rate)
+    iterations = int(max_iter)
+
+    current_state = initial_state
+    current_cost = fn(current_state)
+    best_state = current_state
+    best_cost = current_cost
+
+    for _ in range(iterations):
+        if t <= 1e-8:
+            break
+        # Generate neighbor
+        if neighbor_fn is not None:
+            n_fn = _make_callable_1d(neighbor_fn)
+            next_state = n_fn(current_state)
+        elif isinstance(current_state, (int, float)):
+            next_state = current_state + random.uniform(-1.0, 1.0)
+        elif isinstance(current_state, list):
+            next_state = list(current_state)
+            if len(next_state) > 1:
+                i, j = random.sample(range(len(next_state)), 2)
+                next_state[i], next_state[j] = next_state[j], next_state[i]
+        else:
+            next_state = current_state
+
+        next_cost = fn(next_state)
+        delta = next_cost - current_cost
+
+        if delta < 0 or random.random() < math.exp(-delta / t):
+            current_state = next_state
+            current_cost = next_cost
+            if current_cost < best_cost:
+                best_cost = current_cost
+                best_state = current_state
+
+        t *= alpha
+
+    return best_state
+
+
+def opt_golden_section_search(fn: Any, a: Any, b: Any, tol: Any = 1e-5) -> float:
+    """1D unimodal function minimizer on [a, b] using Golden Section Search."""
+    f = _make_callable_1d(fn)
+    left, right = float(a), float(b)
+    t = float(tol)
+    phi = (math.sqrt(5.0) - 1.0) / 2.0  # ~0.6180339887
+
+    c = right - phi * (right - left)
+    d = left + phi * (right - left)
+    fc = f(c)
+    fd = f(d)
+
+    while abs(right - left) > t:
+        if fc < fd:
+            right = d
+            d = c
+            fd = fc
+            c = right - phi * (right - left)
+            fc = f(c)
+        else:
+            left = c
+            c = d
+            fc = fd
+            d = left + phi * (right - left)
+            fd = f(d)
+
+    return round((left + right) / 2.0, 6)
+
+
+def opt_knapsack_01_dp(weights: List[int], values: List[float], capacity: int) -> Dict[str, Any]:
+    """Exact 0/1 knapsack optimization using dynamic programming."""
+    n = len(weights)
+    cap = int(capacity)
+    w_list = [int(w) for w in weights]
+    v_list = [float(v) for v in values]
+
+    dp = [[0.0] * (cap + 1) for _ in range(n + 1)]
+
+    for i in range(1, n + 1):
+        wi = w_list[i - 1]
+        vi = v_list[i - 1]
+        for w in range(cap + 1):
+            if wi <= w:
+                dp[i][w] = max(dp[i - 1][w], dp[i - 1][w - wi] + vi)
+            else:
+                dp[i][w] = dp[i - 1][w]
+
+    # Backtrace
+    selected = []
+    curr_w = cap
+    for i in range(n, 0, -1):
+        if dp[i][curr_w] != dp[i - 1][curr_w]:
+            selected.append(i - 1)
+            curr_w -= w_list[i - 1]
+    selected.reverse()
+
+    return {
+        "max_value": round(dp[n][cap], 4),
+        "selected_indices": selected,
+    }
+
+
+def opt_longest_increasing_subsequence(arr: List[Any]) -> List[Any]:
+    """Find the longest increasing subsequence in O(n log n) using patience sorting."""
+    import bisect
+    if not arr:
+        return []
+
+    tails = []
+    tail_indices = []
+    parent = [-1] * len(arr)
+
+    for i, x in enumerate(arr):
+        idx = bisect.bisect_left(tails, x)
+        if idx == len(tails):
+            tails.append(x)
+            tail_indices.append(i)
+        else:
+            tails[idx] = x
+            tail_indices[idx] = i
+
+        if idx > 0:
+            parent[i] = tail_indices[idx - 1]
+
+    # Reconstruct LIS
+    curr = tail_indices[-1]
+    lis = []
+    while curr != -1:
+        lis.append(arr[curr])
+        curr = parent[curr]
+    lis.reverse()
+    return lis
+
+
+def opt_coin_change_minimum(coins: List[int], amount: int) -> int:
+    """Fewest coins needed to make change for amount, or -1 if impossible."""
+    amt = int(amount)
+    if amt < 0:
+        return -1
+    if amt == 0:
+        return 0
+
+    dp = [float("inf")] * (amt + 1)
+    dp[0] = 0
+
+    for c in coins:
+        c_val = int(c)
+        for i in range(c_val, amt + 1):
+            if dp[i - c_val] != float("inf"):
+                dp[i] = min(dp[i], dp[i - c_val] + 1)
+
+    return int(dp[amt]) if dp[amt] != float("inf") else -1
+
+
+def opt_coin_change_combinations(coins: List[int], amount: int) -> int:
+    """Total distinct combinations to make change for amount."""
+    amt = int(amount)
+    if amt < 0:
+        return 0
+    dp = [0] * (amt + 1)
+    dp[0] = 1
+
+    for c in coins:
+        c_val = int(c)
+        for i in range(c_val, amt + 1):
+            dp[i] += dp[i - c_val]
+
+    return int(dp[amt])
+
+
+def opt_job_scheduling_deadline(jobs: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Maximize profit for jobs with integer deadlines and single-slot execution."""
+    if not jobs:
+        return {"total_profit": 0.0, "scheduled_jobs": []}
+
+    parsed_jobs = []
+    for j in jobs:
+        if isinstance(j, dict):
+            j_id = j.get("id", j.get("name", "job"))
+            dl = int(j.get("deadline", 1))
+            profit = float(j.get("profit", 0.0))
+        elif isinstance(j, (list, tuple)) and len(j) >= 3:
+            j_id, dl, profit = j[0], int(j[1]), float(j[2])
+        else:
+            continue
+        parsed_jobs.append({"id": j_id, "deadline": dl, "profit": profit})
+
+    # Sort descending by profit
+    parsed_jobs.sort(key=lambda x: x["profit"], reverse=True)
+    max_deadline = max(j["deadline"] for j in parsed_jobs) if parsed_jobs else 0
+    slots = [None] * (max_deadline + 1)
+
+    total_profit = 0.0
+    scheduled = []
+
+    for job in parsed_jobs:
+        for t in range(min(max_deadline, job["deadline"]), 0, -1):
+            if slots[t] is None:
+                slots[t] = job["id"]
+                total_profit += job["profit"]
+                scheduled.append(job["id"])
+                break
+
+    return {
+        "total_profit": round(total_profit, 4),
+        "scheduled_jobs": scheduled,
+    }
+
+
+def opt_huffman_encoding(char_frequencies: Dict[str, int]) -> Dict[str, str]:
+    """Generate optimal prefix Huffman codes for character frequency mapping."""
+    import heapq
+    if not char_frequencies:
+        return {}
+    if len(char_frequencies) == 1:
+        char = next(iter(char_frequencies))
+        return {char: "0"}
+
+    # Heap elements: (frequency, counter, node)
+    heap = []
+    counter = 0
+    for ch, freq in char_frequencies.items():
+        heapq.heappush(heap, (int(freq), counter, ch))
+        counter += 1
+
+    tree = {}
+    while len(heap) > 1:
+        f1, _, left = heapq.heappop(heap)
+        f2, _, right = heapq.heappop(heap)
+        parent_id = f"node_{counter}"
+        tree[parent_id] = (left, right)
+        heapq.heappush(heap, (f1 + f2, counter, parent_id))
+        counter += 1
+
+    # Traverse tree to extract codes
+    codes = {}
+    root = heap[0][2]
+
+    def _traverse(node: str, code_str: str):
+        if node in tree:
+            left, right = tree[node]
+            _traverse(left, code_str + "0")
+            _traverse(right, code_str + "1")
+        else:
+            codes[node] = code_str
+
+    _traverse(root, "")
+    return codes
+
+
+def opt_matrix_chain_multiplication(dimensions: List[int]) -> Dict[str, Any]:
+    """Find minimum scalar multiplications order for a sequence of matrix dimensions."""
+    dims = [int(d) for d in dimensions]
+    n = len(dims) - 1
+    if n <= 1:
+        return {"min_multiplications": 0, "dimensions": dims}
+
+    dp = [[0] * (n + 1) for _ in range(n + 1)]
+
+    for length in range(2, n + 1):
+        for i in range(1, n - length + 2):
+            j = i + length - 1
+            dp[i][j] = float("inf")
+            for k in range(i, j):
+                q = dp[i][k] + dp[k + 1][j] + dims[i - 1] * dims[k] * dims[j]
+                if q < dp[i][j]:
+                    dp[i][j] = q
+
+    return {
+        "min_multiplications": int(dp[1][n]),
+        "dimensions": dims,
+    }
+
+
+def opt_levenshtein_alignment(s1: str, s2: str) -> Dict[str, Any]:
+    """Compute global sequence alignment backtrace between two strings."""
+    m, n = len(s1), len(s2)
+    dp = [[0] * (n + 1) for _ in range(m + 1)]
+
+    for i in range(m + 1):
+        dp[i][0] = i
+    for j in range(n + 1):
+        dp[0][j] = j
+
+    for i in range(1, m + 1):
+        for j in range(1, n + 1):
+            if s1[i - 1] == s2[j - 1]:
+                dp[i][j] = dp[i - 1][j - 1]
+            else:
+                dp[i][j] = 1 + min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1])
+
+    # Backtrace
+    align1 = []
+    align2 = []
+    i, j = m, n
+    while i > 0 or j > 0:
+        if i > 0 and j > 0 and s1[i - 1] == s2[j - 1]:
+            align1.append(s1[i - 1])
+            align2.append(s2[j - 1])
+            i -= 1
+            j -= 1
+        elif i > 0 and j > 0 and dp[i][j] == dp[i - 1][j - 1] + 1:
+            align1.append(s1[i - 1])
+            align2.append(s2[j - 1])
+            i -= 1
+            j -= 1
+        elif i > 0 and dp[i][j] == dp[i - 1][j] + 1:
+            align1.append(s1[i - 1])
+            align2.append("-")
+            i -= 1
+        else:
+            align1.append("-")
+            align2.append(s2[j - 1])
+            j -= 1
+
+    return {
+        "aligned_s1": "".join(reversed(align1)),
+        "aligned_s2": "".join(reversed(align2)),
+        "distance": int(dp[m][n]),
+    }
+
+
+def opt_subset_sum_exists(arr: List[int], target_sum: int) -> bool:
+    """Check if any subset of integer elements sums exactly to target_sum."""
+    target = int(target_sum)
+    if target == 0:
+        return True
+    int_arr = [int(x) for x in arr]
+    if target < 0:
+        return False
+
+    possible = 1
+    for x in int_arr:
+        if x >= 0:
+            possible |= (possible << x)
+    return bool((possible >> target) & 1)
+
+
+def opt_subset_sum_find(arr: List[int], target_sum: int) -> List[int]:
+    """Find a subset of elements summing to target_sum, or empty list if none."""
+    target = int(target_sum)
+    int_arr = [int(x) for x in arr]
+    if target == 0:
+        return []
+    if target < 0:
+        return []
+
+    dp = {0: []}
+    for x in int_arr:
+        new_dp = dict(dp)
+        for s, subset in dp.items():
+            new_s = s + x
+            if new_s == target:
+                return subset + [x]
+            if new_s < target and new_s not in new_dp:
+                new_dp[new_s] = subset + [x]
+        dp = new_dp
+
+    return dp.get(target, [])
+
+
+def opt_rod_cutting(prices: List[float], rod_length: int) -> Dict[str, Any]:
+    """Maximum revenue rod cutting dynamic programming."""
+    length = int(rod_length)
+    if length <= 0 or not prices:
+        return {"max_revenue": 0.0, "cuts": []}
+
+    dp = [0.0] * (length + 1)
+    first_cut = [0] * (length + 1)
+
+    for j in range(1, length + 1):
+        max_val = -float("inf")
+        for i in range(1, min(j, len(prices)) + 1):
+            val = float(prices[i - 1]) + dp[j - i]
+            if val > max_val:
+                max_val = val
+                first_cut[j] = i
+        dp[j] = max_val
+
+    # Reconstruct cuts
+    cuts = []
+    rem = length
+    while rem > 0:
+        cuts.append(first_cut[rem])
+        rem -= first_cut[rem]
+
+    return {
+        "max_revenue": round(dp[length], 4),
+        "cuts": cuts,
+    }
+
+
+def opt_two_opt_tsp(coords: List[List[float]], max_iterations: Any = 100) -> Dict[str, Any]:
+    """2-opt Traveling Salesperson heuristic tour optimization."""
+    n = len(coords)
+    if n <= 1:
+        return {"tour": list(range(n)), "distance": 0.0}
+
+    def _dist(p1, p2):
+        return math.hypot(p1[0] - p2[0], p1[1] - p2[1])
+
+    tour = list(range(n)) + [0]
+
+    def _tour_distance(t):
+        return sum(_dist(coords[t[i]], coords[t[i + 1]]) for i in range(len(t) - 1))
+
+    improved = True
+    iteration = 0
+    max_iter = int(max_iterations)
+
+    while improved and iteration < max_iter:
+        improved = False
+        iteration += 1
+        for i in range(1, n - 1):
+            for j in range(i + 1, n):
+                old_d = _dist(coords[tour[i - 1]], coords[tour[i]]) + _dist(coords[tour[j]], coords[tour[j + 1]])
+                new_d = _dist(coords[tour[i - 1]], coords[tour[j]]) + _dist(coords[tour[i]], coords[tour[j + 1]])
+                if new_d < old_d - 1e-9:
+                    tour[i:j + 1] = reversed(tour[i:j + 1])
+                    improved = True
+                    break
+            if improved:
+                break
+
+    return {
+        "tour": tour[:-1],
+        "distance": round(_tour_distance(tour), 4),
+    }
+
+
+def opt_linear_interpolation(x_points: List[float], y_points: List[float], target_x: float) -> float:
+    """1D piecewise linear interpolation at target_x."""
+    tx = float(target_x)
+    pairs = sorted(zip([float(x) for x in x_points], [float(y) for y in y_points]), key=lambda p: p[0])
+    if not pairs:
+        return 0.0
+    if tx <= pairs[0][0]:
+        return round(pairs[0][1], 6)
+    if tx >= pairs[-1][0]:
+        return round(pairs[-1][1], 6)
+
+    for i in range(len(pairs) - 1):
+        x1, y1 = pairs[i]
+        x2, y2 = pairs[i + 1]
+        if x1 <= tx <= x2:
+            if abs(x2 - x1) < 1e-12:
+                return round(y1, 6)
+            interpolated = y1 + (tx - x1) * (y2 - y1) / (x2 - x1)
+            return round(interpolated, 6)
+
+    return round(pairs[-1][1], 6)
+
+
+def opt_weighted_interval_scheduling(intervals_with_weights: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Dynamic programming weighted interval scheduling."""
+    if not intervals_with_weights:
+        return {"max_weight": 0.0, "selected_intervals": []}
+
+    items = []
+    for it in intervals_with_weights:
+        if isinstance(it, dict):
+            s = float(it.get("start", 0))
+            e = float(it.get("end", 0))
+            w = float(it.get("weight", 0))
+        elif isinstance(it, (list, tuple)) and len(it) >= 3:
+            s, e, w = float(it[0]), float(it[1]), float(it[2])
+        else:
+            continue
+        items.append({"start": s, "end": e, "weight": w, "raw": it})
+
+    # Sort by end time
+    items.sort(key=lambda x: x["end"])
+    n = len(items)
+
+    # Precompute p(j) - latest non-conflicting interval
+    p = [-1] * n
+    for j in range(n):
+        for k in range(j - 1, -1, -1):
+            if items[k]["end"] <= items[j]["start"]:
+                p[j] = k
+                break
+
+    dp = [0.0] * (n + 1)
+    for j in range(1, n + 1):
+        incl = items[j - 1]["weight"] + (dp[p[j - 1] + 1] if p[j - 1] != -1 else 0.0)
+        excl = dp[j - 1]
+        dp[j] = max(incl, excl)
+
+    # Backtrace
+    selected = []
+    curr = n
+    while curr > 0:
+        incl = items[curr - 1]["weight"] + (dp[p[curr - 1] + 1] if p[curr - 1] != -1 else 0.0)
+        if incl >= dp[curr - 1]:
+            selected.append(items[curr - 1]["raw"])
+            curr = p[curr - 1] + 1 if p[curr - 1] != -1 else 0
+        else:
+            curr -= 1
+
+    selected.reverse()
+    return {
+        "max_weight": round(dp[n], 4),
+        "selected_intervals": selected,
+    }
+
+
+def opt_pareto_frontier(points: List[List[float]]) -> List[List[float]]:
+    """Extract non-dominated Pareto optimal frontier points (assuming maximization)."""
+    clean_points = [[float(c) for c in pt] for pt in points]
+    frontier = []
+
+    for i, p1 in enumerate(clean_points):
+        dominated = False
+        for j, p2 in enumerate(clean_points):
+            if i == j:
+                continue
+            # p2 dominates p1 if all coords of p2 >= p1 and at least one > p1
+            if all(c2 >= c1 for c1, c2 in zip(p1, p2)) and any(c2 > c1 for c1, c2 in zip(p1, p2)):
+                dominated = True
+                break
+        if not dominated:
+            frontier.append(p1)
+
+    return frontier
+
+
+def opt_hungarian_assignment(cost_matrix: List[List[float]]) -> Dict[str, Any]:
+    """Optimal bipartite assignment min-cost matching via Kuhn-Munkres algorithm."""
+    # Build clean square matrix
+    rows = len(cost_matrix)
+    cols = len(cost_matrix[0]) if rows > 0 else 0
+    n = max(rows, cols)
+    if n == 0:
+        return {"min_cost": 0.0, "assignment": []}
+
+    mat = [[0.0] * n for _ in range(n)]
+    for r in range(rows):
+        for c in range(cols):
+            mat[r][c] = float(cost_matrix[r][c])
+
+    u = [0.0] * (n + 1)
+    v = [0.0] * (n + 1)
+    p = [0] * (n + 1)
+    way = [0] * (n + 1)
+
+    for i in range(1, n + 1):
+        p[0] = i
+        j0 = 0
+        minv = [float("inf")] * (n + 1)
+        used = [False] * (n + 1)
+        while True:
+            used[j0] = True
+            i0 = p[j0]
+            delta = float("inf")
+            j1 = 0
+            for j in range(1, n + 1):
+                if not used[j]:
+                    cur = mat[i0 - 1][j - 1] - u[i0] - v[j]
+                    if cur < minv[j]:
+                        minv[j] = cur
+                        way[j] = j0
+                    if minv[j] < delta:
+                        delta = minv[j]
+                        j1 = j
+            for j in range(n + 1):
+                if used[j]:
+                    u[p[j]] += delta
+                    v[j] -= delta
+                else:
+                    minv[j] -= delta
+            j0 = j1
+            if p[j0] == 0:
+                break
+        while True:
+            j1 = way[j0]
+            p[j0] = p[j1]
+            j0 = j1
+            if j0 == 0:
+                break
+
+    assignment = []
+    total_cost = 0.0
+    for j in range(1, n + 1):
+        if p[j] <= rows and j <= cols:
+            r_idx = p[j] - 1
+            c_idx = j - 1
+            assignment.append((r_idx, c_idx))
+            total_cost += float(cost_matrix[r_idx][c_idx])
+
+    assignment.sort(key=lambda x: x[0])
+    return {
+        "min_cost": round(total_cost, 4),
+        "assignment": assignment,
+    }
+
+
+def opt_binary_search_peak_1d(arr: List[float]) -> Dict[str, Any]:
+    """Find a local peak element index in O(log n)."""
+    vals = [float(x) for x in arr]
+    n = len(vals)
+    if n == 0:
+        return {"index": -1, "value": None}
+    if n == 1:
+        return {"index": 0, "value": vals[0]}
+
+    low, high = 0, n - 1
+    while low <= high:
+        mid = (low + high) // 2
+        left_val = vals[mid - 1] if mid > 0 else -float("inf")
+        right_val = vals[mid + 1] if mid < n - 1 else -float("inf")
+
+        if vals[mid] >= left_val and vals[mid] >= right_val:
+            return {"index": mid, "value": vals[mid]}
+        elif mid < n - 1 and vals[mid] < vals[mid + 1]:
+            low = mid + 1
+        else:
+            high = mid - 1
+
+    return {"index": low, "value": vals[low]}
+

@@ -166,6 +166,278 @@ class DataDomainParser(DomainParser):
             target = pipe_diag_m.group(2) or "pipeline_plan"
             return f'set {target} to explain_pipeline("{p_name}")'
 
+        # Batch 2: Advanced Spoken English Tabular Operations
+        # pivot table <df> with index <idx>, columns <cols>, values <vals>[, agg <agg>] into <target>
+        piv_m = re.match(
+            r"^pivot\s+table\s+([A-Za-z_]\w*)\s+with\s+index\s+(.+?),\s*columns\s+(.+?),\s*values\s+(.+?)(?:,\s*agg\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if piv_m:
+            df, idx, cols, vals, agg, target = piv_m.group(1), piv_m.group(2), piv_m.group(3), piv_m.group(4), piv_m.group(5) or '"sum"', piv_m.group(6)
+            return f"set {target} to data_pivot_table({df}, {idx}, {cols}, {vals}, {agg})"
+
+        # melt table <df> with id_vars <ids>, value_vars <vals> into <target>
+        melt_m = re.match(
+            r"^melt\s+table\s+([A-Za-z_]\w*)\s+with\s+id_vars\s+(.+?),\s*value_vars\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if melt_m:
+            df, ids, vals, target = melt_m.group(1), melt_m.group(2), melt_m.group(3), melt_m.group(4)
+            return f"set {target} to data_melt_table({df}, {ids}, {vals})"
+
+        # fill missing values in <df> for column <col> with <fill> into <target>
+        fill_m = re.match(
+            r"^fill\s+missing\s+values\s+in\s+([A-Za-z_]\w*)\s+for\s+column\s+(.+?)\s+with\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if fill_m:
+            df, col, fill, target = fill_m.group(1), fill_m.group(2), fill_m.group(3), fill_m.group(4)
+            return f"set {target} to data_fill_missing({df}, {col}, {fill})"
+
+        # drop duplicate rows in <df> [by subset <cols>] into <target>
+        drop_m = re.match(
+            r"^drop\s+duplicate\s+rows\s+in\s+([A-Za-z_]\w*)(?:\s+by\s+subset\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if drop_m:
+            df, cols, target = drop_m.group(1), drop_m.group(2) or "None", drop_m.group(3)
+            return f"set {target} to data_drop_duplicates({df}, {cols})"
+
+        # sample <n> rows from <df> stratified by <col> into <target>
+        sample_m = re.match(
+            r"^sample\s+(.+?)\s+rows\s+from\s+([A-Za-z_]\w*)\s+stratified\s+by\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if sample_m:
+            n, df, col, target = sample_m.group(1), sample_m.group(2), sample_m.group(3), sample_m.group(4)
+            return f"set {target} to data_stratified_sample({df}, {col}, {n})"
+
+        # rolling mean in <df> for <col> with window <w> into <target>
+        roll_m = re.match(
+            r"^rolling\s+mean\s+in\s+([A-Za-z_]\w*)\s+for\s+(.+?)\s+with\s+window\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if roll_m:
+            df, col, w, target = roll_m.group(1), roll_m.group(2), roll_m.group(3), roll_m.group(4)
+            return f"set {target} to data_rolling_mean({df}, {col}, {w})"
+
+        # explode column <col> in <df> into <target>
+        exp_m = re.match(
+            r"^explode\s+column\s+(.+?)\s+in\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if exp_m:
+            col, df, target = exp_m.group(1), exp_m.group(2), exp_m.group(3)
+            return f"set {target} to data_explode_column({df}, {col})"
+
+        # merge tables <a> and <b> on <key> with kind <kind> into <target>
+        merge_m = re.match(
+            r"^merge\s+tables\s+([A-Za-z_]\w*)\s+and\s+([A-Za-z_]\w*)\s+on\s+(.+?)\s+with\s+kind\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if merge_m:
+            a, b, key, kind, target = merge_m.group(1), merge_m.group(2), merge_m.group(3), merge_m.group(4), merge_m.group(5)
+            return f"set {target} to data_merge_tables({a}, {b}, {key}, {kind})"
+
+        # 350-Expansion Data Operations
+        rank_m = re.match(
+            r"^rank\s+column\s+(.+?)\s+in\s+([A-Za-z_]\w*)(?:\s+using\s+([A-Za-z_]\w*))?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if rank_m:
+            col, data_var = rank_m.group(1).strip(), rank_m.group(2).strip()
+            method = f'"{rank_m.group(3).strip()}"' if rank_m.group(3) else '"average"'
+            target = rank_m.group(4).strip()
+            return f"set {target} to data_rank_column({data_var}, {col}, method={method})"
+
+        lag_m = re.match(
+            r"^lag\s+column\s+(.+?)\s+in\s+([A-Za-z_]\w*)(?:\s+by\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if lag_m:
+            col, data_var = lag_m.group(1).strip(), lag_m.group(2).strip()
+            n_shift = lag_m.group(3).strip() if lag_m.group(3) else "1"
+            target = lag_m.group(4).strip()
+            return f"set {target} to data_lag_column({data_var}, {col}, n={n_shift})"
+
+        lead_m = re.match(
+            r"^lead\s+column\s+(.+?)\s+in\s+([A-Za-z_]\w*)(?:\s+by\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if lead_m:
+            col, data_var = lead_m.group(1).strip(), lead_m.group(2).strip()
+            n_shift = lead_m.group(3).strip() if lead_m.group(3) else "1"
+            target = lead_m.group(4).strip()
+            return f"set {target} to data_lead_column({data_var}, {col}, n={n_shift})"
+
+        cumsum_m = re.match(
+            r"^cumulative\s+sum\s+of\s+column\s+(.+?)\s+in\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if cumsum_m:
+            col, data_var, target = cumsum_m.group(1).strip(), cumsum_m.group(2).strip(), cumsum_m.group(3).strip()
+            return f"set {target} to data_cumulative_sum({data_var}, {col})"
+
+        cummax_m = re.match(
+            r"^cumulative\s+max(?:imum)?\s+of\s+column\s+(.+?)\s+in\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if cummax_m:
+            col, data_var, target = cummax_m.group(1).strip(), cummax_m.group(2).strip(), cummax_m.group(3).strip()
+            return f"set {target} to data_cumulative_max({data_var}, {col})"
+
+        cummin_m = re.match(
+            r"^cumulative\s+min(?:imum)?\s+of\s+column\s+(.+?)\s+in\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if cummin_m:
+            col, data_var, target = cummin_m.group(1).strip(), cummin_m.group(2).strip(), cummin_m.group(3).strip()
+            return f"set {target} to data_cumulative_min({data_var}, {col})"
+
+        coal_m = re.match(
+            r"^coalesce\s+columns\s+(.+?)\s+in\s+([A-Za-z_]\w*)\s+into\s+column\s+(.+?)(?:\s+into\s+([A-Za-z_]\w*))?$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if coal_m:
+            cols, data_var = coal_m.group(1).strip(), coal_m.group(2).strip()
+            tgt_col = coal_m.group(3).strip()
+            target = coal_m.group(4).strip() if coal_m.group(4) else data_var
+            return f"set {target} to data_coalesce_columns({data_var}, {cols}, {tgt_col})"
+
+        msort_m = re.match(
+            r"^sort\s+table\s+([A-Za-z_]\w*)\s+by\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if msort_m:
+            data_var, keys, target = msort_m.group(1).strip(), msort_m.group(2).strip(), msort_m.group(3).strip()
+            return f"set {target} to data_multi_sort({data_var}, {keys})"
+
+        cjoin_m = re.match(
+            r"^cross\s+join\s+([A-Za-z_]\w*)\s+and\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if cjoin_m:
+            d1, d2, target = cjoin_m.group(1).strip(), cjoin_m.group(2).strip(), cjoin_m.group(3).strip()
+            return f"set {target} to data_cross_join({d1}, {d2})"
+
+        vsch_m = re.match(
+            r"^validate\s+schema\s+of\s+([A-Za-z_]\w*)\s+against\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if vsch_m:
+            data_var, sch, target = vsch_m.group(1).strip(), vsch_m.group(2).strip(), vsch_m.group(3).strip()
+            return f"set {target} to data_validate_schema({data_var}, {sch})"
+
+        ren_m = re.match(
+            r"^rename\s+columns\s+in\s+([A-Za-z_]\w*)\s+using\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if ren_m:
+            data_var, mp, target = ren_m.group(1).strip(), ren_m.group(2).strip(), ren_m.group(3).strip()
+            return f"set {target} to data_rename_columns({data_var}, {mp})"
+
+        clip_m = re.match(
+            r"^clip\s+column\s+(.+?)\s+in\s+([A-Za-z_]\w*)\s+between\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if clip_m:
+            col, data_var = clip_m.group(1).strip(), clip_m.group(2).strip()
+            low, high, target = clip_m.group(3).strip(), clip_m.group(4).strip(), clip_m.group(5).strip()
+            return f"set {target} to data_clip_column({data_var}, {col}, {low}, {high})"
+
+        fdate_m = re.match(
+            r"^format\s+date\s+column\s+(.+?)\s+in\s+([A-Za-z_]\w*)\s+as\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if fdate_m:
+            col, data_var = fdate_m.group(1).strip(), fdate_m.group(2).strip()
+            fmt, target = fdate_m.group(3).strip(), fdate_m.group(4).strip()
+            return f"set {target} to data_format_date_column({data_var}, {col}, {fmt})"
+
+        trim_m = re.match(
+            r"^trim\s+whitespace\s+in\s+column\s+(.+?)\s+of\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if trim_m:
+            col, data_var, target = trim_m.group(1).strip(), trim_m.group(2).strip(), trim_m.group(3).strip()
+            return f"set {target} to data_string_trim({data_var}, {col})"
+
+        upper_m = re.match(
+            r"^uppercase\s+text\s+in\s+column\s+(.+?)\s+of\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if upper_m:
+            col, data_var, target = upper_m.group(1).strip(), upper_m.group(2).strip(), upper_m.group(3).strip()
+            return f"set {target} to data_string_upper({data_var}, {col})"
+
+        lower_m = re.match(
+            r"^lowercase\s+text\s+in\s+column\s+(.+?)\s+of\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if lower_m:
+            col, data_var, target = lower_m.group(1).strip(), lower_m.group(2).strip(), lower_m.group(3).strip()
+            return f"set {target} to data_string_lower({data_var}, {col})"
+
+        ffill_m = re.match(
+            r"^forward\s+fill\s+nulls\s+in\s+column\s+(.+?)\s+of\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if ffill_m:
+            col, data_var, target = ffill_m.group(1).strip(), ffill_m.group(2).strip(), ffill_m.group(3).strip()
+            return f"set {target} to data_fill_null_forward({data_var}, {col})"
+
+        bfill_m = re.match(
+            r"^backward\s+fill\s+nulls\s+in\s+column\s+(.+?)\s+of\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if bfill_m:
+            col, data_var, target = bfill_m.group(1).strip(), bfill_m.group(2).strip(), bfill_m.group(3).strip()
+            return f"set {target} to data_fill_null_backward({data_var}, {col})"
+
+        year_m = re.match(
+            r"^extract\s+year\s+from\s+column\s+(.+?)\s+in\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if year_m:
+            col, data_var, target = year_m.group(1).strip(), year_m.group(2).strip(), year_m.group(3).strip()
+            return f"set {target} to data_extract_year({data_var}, {col})"
+
+        frac_m = re.match(
+            r"^sample\s+(.+?)\s+fraction\s+from\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if frac_m:
+            frac, data_var, target = frac_m.group(1).strip(), frac_m.group(2).strip(), frac_m.group(3).strip()
+            return f"set {target} to data_sample_fraction({data_var}, {frac})"
+
         return None
 
     def parse_block(

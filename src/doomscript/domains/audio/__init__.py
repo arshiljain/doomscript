@@ -24,6 +24,25 @@ from doomscript.domains.audio.runtime import (
     combine_audio,
     save_audio,
     execute_audio_ir,
+    audio_generate_square,
+    audio_generate_sawtooth,
+    audio_generate_triangle,
+    audio_generate_white_noise,
+    audio_adjust_gain_db,
+    audio_trim_silence,
+    audio_apply_fade_out,
+    audio_mix_tracks,
+    audio_pan_stereo,
+    audio_low_pass_filter,
+    audio_high_pass_filter,
+    audio_peak_amplitude,
+    audio_rms_energy,
+    audio_zero_crossing_rate,
+    audio_clip_samples,
+    audio_loop_track,
+    audio_delay_echo,
+    audio_time_stretch_naive,
+    audio_generate_silence,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.audio.exporter import AudioASTExporter
@@ -109,6 +128,39 @@ class AudioDomain(DomainContract):
             or s.startswith("combine audio ")
             or s.startswith("save audio ")
             or s.startswith("adjust volume of ")
+            or s.startswith("generate sine tone ")
+            or s.startswith("normalize audio ")
+            or s.startswith("audio duration of ")
+            or s.startswith("get duration of ")
+            or s.startswith("fade in audio ")
+            or s.startswith("apply fade in ")
+            or s.startswith("reverse audio ")
+            or s.startswith("concatenate audio ")
+            or s.startswith("generate square wave ")
+            or s.startswith("generate sawtooth wave ")
+            or s.startswith("generate triangle wave ")
+            or s.startswith("generate white noise ")
+            or s.startswith("adjust gain of ")
+            or s.startswith("trim silence from ")
+            or s.startswith("apply fade out ")
+            or s.startswith("fade out ")
+            or s.startswith("mix audio tracks ")
+            or s.startswith("mix tracks ")
+            or s.startswith("pan audio ")
+            or s.startswith("pan stereo ")
+            or s.startswith("apply low pass filter ")
+            or s.startswith("low pass filter ")
+            or s.startswith("apply high pass filter ")
+            or s.startswith("high pass filter ")
+            or s.startswith("peak amplitude of ")
+            or s.startswith("rms energy of ")
+            or s.startswith("zero crossing rate of ")
+            or s.startswith("clip audio ")
+            or s.startswith("loop audio ")
+            or s.startswith("apply echo delay ")
+            or s.startswith("apply delay echo ")
+            or s.startswith("time stretch ")
+            or s.startswith("generate silence ")
         ):
             return True
 
@@ -157,4 +209,23 @@ __all__ = [
     "combine_audio",
     "save_audio",
     "execute_audio_ir",
+    "audio_generate_square",
+    "audio_generate_sawtooth",
+    "audio_generate_triangle",
+    "audio_generate_white_noise",
+    "audio_adjust_gain_db",
+    "audio_trim_silence",
+    "audio_apply_fade_out",
+    "audio_mix_tracks",
+    "audio_pan_stereo",
+    "audio_low_pass_filter",
+    "audio_high_pass_filter",
+    "audio_peak_amplitude",
+    "audio_rms_energy",
+    "audio_zero_crossing_rate",
+    "audio_clip_samples",
+    "audio_loop_track",
+    "audio_delay_echo",
+    "audio_time_stretch_naive",
+    "audio_generate_silence",
 ]

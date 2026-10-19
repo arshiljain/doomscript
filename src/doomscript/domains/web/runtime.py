@@ -304,3 +304,335 @@ def execute_web_ir(spec_id: str) -> Any:
     if spec is None:
         raise KeyError(f"Web spec not found: {spec_id}")
     return WebRuntime().execute_ir(spec, {})
+
+
+# --- Batch 9 Spoken English Web Verbs ---
+
+def web_select_all(html_or_page: Any, selector: Any) -> List[str]:
+    """CSS selector extraction returning inner text of all matches."""
+    html = html_or_page.html if isinstance(html_or_page, WebPage) else str(html_or_page)
+    sel_str = str(selector).strip("'\"")
+    if HAS_BS4:
+        soup = BeautifulSoup(html, "html.parser")
+        return [el.get_text().strip() for el in soup.select(sel_str)]
+    # Lightweight regex fallback
+    if sel_str.startswith("."):
+        cls = sel_str[1:]
+        return [re.sub(r"<[^>]+>", "", m).strip() for m in re.findall(rf'class="[^"]*{cls}[^"]*"[^>]*>(.*?)<', html, re.DOTALL)]
+    tag = sel_str.lstrip("#.")
+    return [re.sub(r"<[^>]+>", "", m).strip() for m in re.findall(rf'<{tag}[^>]*>(.*?)</{tag}>', html, re.DOTALL | re.IGNORECASE)]
+
+
+def web_extract_tables(html_or_page: Any) -> List[List[Dict[str, Any]]]:
+    """Extract all HTML tables into structured record lists."""
+    html = html_or_page.html if isinstance(html_or_page, WebPage) else str(html_or_page)
+    tables = []
+    # Find all table blocks
+    table_blocks = re.findall(r"<table[^>]*>(.*?)</table>", html, re.DOTALL | re.IGNORECASE)
+    for tbl in table_blocks:
+        headers = [re.sub(r"<[^>]+>", "", th).strip() for th in re.findall(r"<th[^>]*>(.*?)</th>", tbl, re.DOTALL | re.IGNORECASE)]
+        row_blocks = re.findall(r"<tr[^>]*>(.*?)</tr>", tbl, re.DOTALL | re.IGNORECASE)
+        records = []
+        for r_block in row_blocks:
+            cells = [re.sub(r"<[^>]+>", "", td).strip() for td in re.findall(r"<td[^>]*>(.*?)</td>", r_block, re.DOTALL | re.IGNORECASE)]
+            if cells:
+                if headers and len(cells) == len(headers):
+                    records.append({headers[i]: cells[i] for i in range(len(headers))})
+                else:
+                    records.append({f"col_{i}": cells[i] for i in range(len(cells))})
+        if records:
+            tables.append(records)
+    return tables[0] if len(tables) == 1 else tables
+
+
+def web_parse_query_params(url: Any) -> Dict[str, Any]:
+    """Parse URL query parameters into dictionary."""
+    u = urllib.parse.urlparse(str(url).strip("'\""))
+    qs = urllib.parse.parse_qs(u.query)
+    return {k: v[0] if len(v) == 1 else v for k, v in qs.items()}
+
+
+def web_build_url(base: Any, params: Any) -> str:
+    """Build URL string with encoded parameters dictionary."""
+    base_str = str(base).strip("'\"")
+    if isinstance(params, dict):
+        qs = urllib.parse.urlencode(params)
+        sep = "&" if "?" in base_str else "?"
+        return f"{base_str}{sep}{qs}"
+    return base_str
+
+
+def web_strip_tags(text: Any) -> str:
+    """Strip all HTML tags from markup text."""
+    return re.sub(r"<[^>]+>", "", str(text)).strip()
+
+
+def web_extract_meta_tags(html_or_page: Any) -> Dict[str, str]:
+    """Extract document meta tags (name/property -> content)."""
+    html = html_or_page.html if isinstance(html_or_page, WebPage) else str(html_or_page)
+    meta_dict = {}
+    matches = re.findall(r'<meta\s+[^>]*(?:name|property)=["\']([^"\']+)["\'][^>]*content=["\']([^"\']*)["\']', html, re.IGNORECASE)
+    for name, content in matches:
+        meta_dict[name] = content
+    # Also inverted order content=... name=...
+    inv_matches = re.findall(r'<meta\s+[^>]*content=["\']([^"\']*)["\'][^>]*(?:name|property)=["\']([^"\']+)["\']', html, re.IGNORECASE)
+    for content, name in inv_matches:
+        meta_dict[name] = content
+    return meta_dict
+
+
+def web_response_is_successful(resp: Any) -> bool:
+    """Check if HTTP response indicates success (2xx)."""
+    if isinstance(resp, dict):
+        status = resp.get("status", resp.get("status_code", 200))
+    elif hasattr(resp, "status_code"):
+        status = resp.status_code
+    elif isinstance(resp, (int, float)):
+        status = int(resp)
+    else:
+        status = 200
+    return 200 <= status < 300
+
+
+# --- 350-Expansion 20 Web Operations ---
+
+def _unwrap_html(html_or_page: Any) -> str:
+    if isinstance(html_or_page, WebPage):
+        return html_or_page.html
+    return str(html_or_page)
+
+
+def web_extract_images(html_or_page: Any) -> List[Dict[str, str]]:
+    """Find all image tags and return list of dicts with src and alt."""
+    html = _unwrap_html(html_or_page)
+    imgs = []
+    for m in re.finditer(r'<img\s+([^>]*?)>', html, re.IGNORECASE):
+        attrs = m.group(1)
+        src_m = re.search(r'src=["\']([^"\']+)["\']', attrs, re.IGNORECASE)
+        alt_m = re.search(r'alt=["\']([^"\']*)["\']', attrs, re.IGNORECASE)
+        if src_m:
+            imgs.append({"src": src_m.group(1), "alt": alt_m.group(1) if alt_m else ""})
+    return imgs
+
+
+def web_extract_forms(html_or_page: Any) -> List[Dict[str, Any]]:
+    """Extract form tags, actions, methods, and input controls."""
+    html = _unwrap_html(html_or_page)
+    forms = []
+    form_matches = re.finditer(r'<form\s*([^>]*)>(.*?)</form>', html, re.DOTALL | re.IGNORECASE)
+    for fm in form_matches:
+        f_attrs = fm.group(1)
+        body = fm.group(2)
+        act_m = re.search(r'action=["\']([^"\']*)["\']', f_attrs, re.IGNORECASE)
+        meth_m = re.search(r'method=["\']([^"\']*)["\']', f_attrs, re.IGNORECASE)
+        action = act_m.group(1) if act_m else ""
+        method = meth_m.group(1).upper() if meth_m else "GET"
+        inputs = []
+        for inp in re.finditer(r'<input\s+([^>]*?)>', body, re.IGNORECASE):
+            attrs = inp.group(1)
+            nm = re.search(r'name=["\']([^"\']*)["\']', attrs, re.IGNORECASE)
+            tm = re.search(r'type=["\']([^"\']*)["\']', attrs, re.IGNORECASE)
+            vm = re.search(r'value=["\']([^"\']*)["\']', attrs, re.IGNORECASE)
+            if nm:
+                inputs.append({
+                    "name": nm.group(1),
+                    "type": tm.group(1).lower() if tm else "text",
+                    "value": vm.group(1) if vm else "",
+                })
+        forms.append({"action": action, "method": method, "inputs": inputs})
+    return forms
+
+
+def web_encode_form_data(params: Dict[str, Any]) -> str:
+    """URL-encode dictionary into application/x-www-form-urlencoded."""
+    return urllib.parse.urlencode(params)
+
+
+def web_decode_form_data(query_str: str) -> Dict[str, Any]:
+    """Parse URL-encoded form data into dictionary."""
+    s = str(query_str).lstrip("?")
+    parsed = urllib.parse.parse_qs(s)
+    return {k: v[0] if len(v) == 1 else v for k, v in parsed.items()}
+
+
+def web_parse_sitemap_xml(sitemap_xml: str) -> List[str]:
+    """Extract all <loc> entries from an XML sitemap."""
+    matches = re.findall(r'<loc\b[^>]*>(.*?)</loc>', str(sitemap_xml), re.DOTALL | re.IGNORECASE)
+    return [m.strip() for m in matches if m.strip()]
+
+
+def web_parse_robots_txt(robots_txt: str, user_agent: str = "*", path: str = "/") -> bool:
+    """Evaluate whether path is allowed under robots.txt for user agent."""
+    lines = str(robots_txt).replace("\\n", "\n").replace("\\r", "\r").splitlines()
+    target_ua = user_agent.lower()
+    current_ua = None
+    disallowed = []
+    allowed = []
+    for line in lines:
+        line = line.split("#")[0].strip()
+        if not line:
+            continue
+        if ":" in line:
+            key, val = line.split(":", 1)
+            k = key.strip().lower()
+            v = val.strip()
+            if k == "user-agent":
+                current_ua = v.lower()
+            elif current_ua in (target_ua, "*"):
+                if k == "disallow":
+                    if v:
+                        disallowed.append(v)
+                elif k == "allow":
+                    if v:
+                        allowed.append(v)
+    # Check allow rules first
+    for a in allowed:
+        if path.startswith(a):
+            return True
+    for d in disallowed:
+        if path.startswith(d):
+            return False
+    return True
+
+
+def web_canonicalize_url(base_url: str, relative_url: str) -> str:
+    """Resolve relative link against a base URL."""
+    return urllib.parse.urljoin(str(base_url), str(relative_url))
+
+
+def web_extract_meta_description(html_or_page: Any) -> str:
+    """Extract <meta name="description" content="..."> text."""
+    html = _unwrap_html(html_or_page)
+    m = re.search(r'<meta\s+[^>]*name=["\']description["\'][^>]*content=["\']([^"\']*)["\']', html, re.IGNORECASE)
+    if not m:
+        m = re.search(r'<meta\s+[^>]*content=["\']([^"\']*)["\'][^>]*name=["\']description["\']', html, re.IGNORECASE)
+    return m.group(1).strip() if m else ""
+
+
+def web_extract_headings(html_or_page: Any) -> List[Dict[str, str]]:
+    """Extract hierarchical list of all h1-h6 headings."""
+    html = _unwrap_html(html_or_page)
+    headings = []
+    for m in re.finditer(r'<(h[1-6])\b[^>]*>(.*?)</\1>', html, re.DOTALL | re.IGNORECASE):
+        tag = m.group(1).lower()
+        text = re.sub(r'<[^>]+>', '', m.group(2)).strip()
+        headings.append({"level": tag, "text": text})
+    return headings
+
+
+def web_check_ssl_expiry(domain: str) -> int:
+    """Query TLS socket and return days until certificate expiration."""
+    import ssl
+    import socket
+    from datetime import datetime, timezone
+    host = str(domain).strip().split("/")[0].split(":")[0]
+    try:
+        ctx = ssl.create_default_context()
+        with ctx.wrap_socket(socket.socket(), server_hostname=host) as s:
+            s.settimeout(3.0)
+            s.connect((host, 443))
+            cert = s.getpeercert()
+            if cert and "notAfter" in cert:
+                expire_date = datetime.strptime(cert["notAfter"], "%b %d %H:%M:%S %Y %Z")
+                delta = expire_date - datetime.now(timezone.utc).replace(tzinfo=None)
+                return max(0, delta.days)
+    except Exception:
+        pass
+    return -1
+
+
+def web_parse_cookie_header(header_str: str) -> Dict[str, str]:
+    """Parse HTTP Cookie or Set-Cookie header into key-value pairs."""
+    cookies = {}
+    parts = str(header_str).split(";")
+    for p in parts:
+        p = p.strip()
+        if "=" in p:
+            k, v = p.split("=", 1)
+            cookies[k.strip()] = v.strip()
+    return cookies
+
+
+def web_build_cookie_header(cookies_dict: Dict[str, Any]) -> str:
+    """Format dictionary into standard Cookie header value."""
+    return "; ".join(f"{k}={v}" for k, v in cookies_dict.items())
+
+
+def web_extract_json_ld(html_or_page: Any) -> List[Any]:
+    """Extract and parse all JSON-LD schemas from HTML script tags."""
+    import json
+    html = _unwrap_html(html_or_page)
+    results = []
+    for m in re.finditer(r'<script\s+[^>]*type=["\']application/ld\+json["\'][^>]*>(.*?)</script>', html, re.DOTALL | re.IGNORECASE):
+        raw_json = m.group(1).strip()
+        if raw_json:
+            try:
+                results.append(json.loads(raw_json))
+            except Exception:
+                pass
+    return results
+
+
+def web_strip_query_params(url: str) -> str:
+    """Clean URL by removing query strings and anchor fragments."""
+    u = urllib.parse.urlparse(str(url))
+    return urllib.parse.urlunparse((u.scheme, u.netloc, u.path, '', '', ''))
+
+
+def web_count_element_tags(html_or_page: Any, tag_name: str) -> int:
+    """Count occurrences of a specific HTML tag."""
+    html = _unwrap_html(html_or_page)
+    tag = str(tag_name).strip().lstrip("<").rstrip(">")
+    return len(re.findall(rf'<{tag}\b', html, re.IGNORECASE))
+
+
+def web_extract_text_by_class(html_or_page: Any, class_name: str) -> List[str]:
+    """Extract text from elements having the specified CSS class."""
+    html = _unwrap_html(html_or_page)
+    cls = str(class_name).strip().lstrip(".")
+    pattern = rf'<[^>]+class=["\'][^"\']*\b{re.escape(cls)}\b[^"\']*["\'][^>]*>(.*?)</[^>]+>'
+    matches = re.findall(pattern, html, re.DOTALL | re.IGNORECASE)
+    return [re.sub(r'<[^>]+>', '', m).strip() for m in matches]
+
+
+def web_extract_element_by_id(html_or_page: Any, id_name: str) -> str:
+    """Extract element inner text by HTML id."""
+    html = _unwrap_html(html_or_page)
+    el_id = str(id_name).strip().lstrip("#")
+    pattern = rf'<[^>]+id=["\']{re.escape(el_id)}["\'][^>]*>(.*?)</[^>]+>'
+    m = re.search(pattern, html, re.DOTALL | re.IGNORECASE)
+    if m:
+        return re.sub(r'<[^>]+>', '', m.group(1)).strip()
+    return ""
+
+
+def web_parse_content_type(header_str: str) -> Dict[str, str]:
+    """Extract mime-type and charset from HTTP Content-Type header."""
+    s = str(header_str)
+    parts = s.split(";")
+    mime = parts[0].strip().lower()
+    charset = ""
+    for p in parts[1:]:
+        p = p.strip()
+        if p.lower().startswith("charset="):
+            charset = p.split("=", 1)[1].strip("'\"")
+    return {"mime_type": mime, "charset": charset}
+
+
+def web_is_valid_url(url: str) -> bool:
+    """Validate RFC well-formed URL structure."""
+    u = urllib.parse.urlparse(str(url))
+    return bool(u.scheme in ("http", "https", "ftp", "ws", "wss") and u.netloc)
+
+
+def web_generate_curl_command(method: str, url: str, headers: Optional[Dict[str, str]] = None, body: Optional[str] = None) -> str:
+    """Format cURL command equivalent string."""
+    parts = [f'curl -X {method.upper()} "{url}"']
+    if headers:
+        for k, v in headers.items():
+            parts.append(f'-H "{k}: {v}"')
+    if body:
+        parts.append(f"-d '{body}'")
+    return " ".join(parts)
+
+

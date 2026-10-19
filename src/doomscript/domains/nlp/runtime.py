@@ -293,3 +293,434 @@ class NLPRuntime(DomainRuntime):
                 scope[ir.target_var] = res
             return res
         raise TypeError(f"Unknown NLP IR: {type(ir).__name__}")
+
+
+# --- Batch 5 Spoken English NLP Verbs ---
+
+def nlp_extractive_summary(text: Any, num_sentences: Any = 2) -> str:
+    """Extractive sentence scoring summary preserving chronological order."""
+    t = str(text).strip()
+    n = int(num_sentences)
+    sentences = tokenize_text(t, mode="sentence")
+    if len(sentences) <= n:
+        return t
+
+    # Compute word frequencies across document
+    words = [w.lower() for w in tokenize_text(t, mode="word") if w.lower() not in ENGLISH_STOPWORDS]
+    freqs: Dict[str, int] = {}
+    for w in words:
+        freqs[w] = freqs.get(w, 0) + 1
+
+    # Score each sentence
+    scored = []
+    for i, s in enumerate(sentences):
+        s_words = [w.lower() for w in tokenize_text(s, mode="word") if w.lower() not in ENGLISH_STOPWORDS]
+        score = sum(freqs.get(w, 0) for w in s_words)
+        scored.append((score, i, s))
+
+    # Pick top n by score, then sort back by original index
+    top = sorted(sorted(scored, key=lambda x: x[0], reverse=True)[:n], key=lambda x: x[1])
+    return " ".join(item[2] for item in top)
+
+
+def nlp_remove_stopwords(text: Any) -> str:
+    """Strip standard English stopwords from text."""
+    return clean_text(str(text), remove_stopwords=True)
+
+
+def nlp_word_frequencies(text: Any) -> Dict[str, int]:
+    """Calculate token frequency distribution sorted descending."""
+    words = [w.lower() for w in tokenize_text(str(text), mode="word")]
+    freqs: Dict[str, int] = {}
+    for w in words:
+        freqs[w] = freqs.get(w, 0) + 1
+    return dict(sorted(freqs.items(), key=lambda kv: kv[1], reverse=True))
+
+
+def nlp_text_similarity(s1: Any, s2: Any) -> float:
+    """Cosine similarity of bag-of-words vectors between two texts."""
+    v1_words = [w.lower() for w in tokenize_text(str(s1), mode="word")]
+    v2_words = [w.lower() for w in tokenize_text(str(s2), mode="word")]
+    if not v1_words or not v2_words:
+        return 0.0
+
+    all_vocab = list(set(v1_words + v2_words))
+    f1 = {w: v1_words.count(w) for w in all_vocab}
+    f2 = {w: v2_words.count(w) for w in all_vocab}
+
+    dot = sum(f1[w] * f2[w] for w in all_vocab)
+    norm1 = math.sqrt(sum(f1[w] ** 2 for w in all_vocab))
+    norm2 = math.sqrt(sum(f2[w] ** 2 for w in all_vocab))
+    if norm1 == 0 or norm2 == 0:
+        return 0.0
+    return round(dot / (norm1 * norm2), 4)
+
+
+def nlp_jaccard_similarity(s1: Any, s2: Any) -> float:
+    """Jaccard set similarity between two texts."""
+    set1 = set(w.lower() for w in tokenize_text(str(s1), mode="word"))
+    set2 = set(w.lower() for w in tokenize_text(str(s2), mode="word"))
+    if not set1 and not set2:
+        return 1.0
+    union = set1 | set2
+    if not union:
+        return 0.0
+    return round(len(set1 & set2) / len(union), 4)
+
+
+def nlp_extract_keywords(text: Any, k: Any = 5) -> List[str]:
+    """Extract top k salient non-stopword tokens by frequency."""
+    k_int = int(k)
+    words = [w.lower() for w in tokenize_text(str(text), mode="word") if w.lower() not in ENGLISH_STOPWORDS and len(w) > 2]
+    freqs: Dict[str, int] = {}
+    for w in words:
+        freqs[w] = freqs.get(w, 0) + 1
+    sorted_words = [w for w, _ in sorted(freqs.items(), key=lambda kv: kv[1], reverse=True)]
+    return sorted_words[:k_int]
+
+
+def nlp_extract_matches(text: Any, pattern: Any) -> List[str]:
+    """Find all regex pattern matches in text."""
+    pat_str = str(pattern).strip("'\"")
+    return re.findall(pat_str, str(text))
+
+
+# 350-Expansion NLP Operations
+
+def nlp_bm25_score(corpus: Any, query: Any, k1: Any = 1.5, b: Any = 0.75) -> List[Dict[str, Any]]:
+    """Rank corpus documents against query using BM25 scoring."""
+    docs = [str(d) for d in corpus] if isinstance(corpus, (list, tuple)) else [str(corpus)]
+    q_words = [w.lower() for w in tokenize_text(str(query), mode="word")]
+    n_docs = len(docs)
+    if n_docs == 0:
+        return []
+    doc_words = [[w.lower() for w in tokenize_text(d, mode="word")] for d in docs]
+    avgdl = sum(len(dw) for dw in doc_words) / n_docs or 1.0
+    k1_val = float(k1)
+    b_val = float(b)
+    idf: Dict[str, float] = {}
+    for q in q_words:
+        n_q = sum(1 for dw in doc_words if q in dw)
+        idf[q] = math.log(((n_docs - n_q + 0.5) / (n_q + 0.5)) + 1.0)
+    scores = []
+    for idx, dw in enumerate(doc_words):
+        dl = len(dw)
+        score = 0.0
+        counts: Dict[str, int] = {}
+        for w in dw:
+            counts[w] = counts.get(w, 0) + 1
+        for q in q_words:
+            f = counts.get(q, 0)
+            if f > 0:
+                num = f * (k1_val + 1.0)
+                denom = f + k1_val * (1.0 - b_val + b_val * (dl / avgdl))
+                score += idf[q] * (num / denom)
+        scores.append({"index": idx, "doc": docs[idx], "score": round(score, 4)})
+    return sorted(scores, key=lambda x: x["score"], reverse=True)
+
+
+def nlp_levenshtein_distance(s1: Any, s2: Any) -> int:
+    """Calculate minimum Levenshtein edit distance."""
+    str1, str2 = str(s1), str(s2)
+    m, n = len(str1), len(str2)
+    dp = [[0] * (n + 1) for _ in range(m + 1)]
+    for i in range(m + 1):
+        dp[i][0] = i
+    for j in range(n + 1):
+        dp[0][j] = j
+    for i in range(1, m + 1):
+        for j in range(1, n + 1):
+            if str1[i - 1] == str2[j - 1]:
+                dp[i][j] = dp[i - 1][j - 1]
+            else:
+                dp[i][j] = 1 + min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1])
+    return dp[m][n]
+
+
+def nlp_hamming_distance(s1: Any, s2: Any) -> int:
+    """Calculate Hamming distance between two strings."""
+    str1, str2 = str(s1), str(s2)
+    dist = sum(1 for c1, c2 in zip(str1, str2) if c1 != c2)
+    dist += abs(len(str1) - len(str2))
+    return dist
+
+
+def nlp_stem_porter(word: Any) -> str:
+    """Lightweight rule-based word stemmer."""
+    w = str(word).lower().strip()
+    if len(w) <= 3:
+        return w
+    for suffix in ("sses", "ies", "ss", "s"):
+        if w.endswith(suffix):
+            w = w[:-len(suffix)] + ("ss" if suffix == "sses" else "i" if suffix == "ies" else "ss" if suffix == "ss" else "")
+            break
+    for suffix in ("eed", "ing", "ed"):
+        if w.endswith(suffix):
+            base = w[:-len(suffix)]
+            if any(c in "aeiouy" for c in base):
+                w = base
+                if w.endswith(("at", "bl", "iz")):
+                    w += "e"
+                elif len(w) >= 2 and w[-1] == w[-2] and w[-1] not in ("l", "s", "z"):
+                    w = w[:-1]
+            break
+    for suffix in ("fully", "ness", "ment", "ly"):
+        if w.endswith(suffix):
+            w = w[:-len(suffix)]
+            break
+    return w
+
+
+def nlp_soundex(word: Any) -> str:
+    """Compute American Soundex phonetic algorithm code."""
+    w = re.sub(r"[^A-Za-z]", "", str(word)).upper()
+    if not w:
+        return "0000"
+    mapping = {
+        "B": "1", "F": "1", "P": "1", "V": "1",
+        "C": "2", "G": "2", "J": "2", "K": "2", "Q": "2", "S": "2", "X": "2", "Z": "2",
+        "D": "3", "T": "3",
+        "L": "4",
+        "M": "5", "N": "5",
+        "R": "6",
+    }
+    first_letter = w[0]
+    encoded = [first_letter]
+    last_code = mapping.get(first_letter, "")
+    for char in w[1:]:
+        code = mapping.get(char, "")
+        if code and code != last_code:
+            encoded.append(code)
+            last_code = code
+        elif char not in ("H", "W"):
+            last_code = ""
+    res = "".join(encoded).replace("0", "")
+    return (res + "0000")[:4]
+
+
+def nlp_metaphone(word: Any) -> str:
+    """Simplified Metaphone phonetic representation."""
+    w = re.sub(r"[^A-Za-z]", "", str(word)).upper()
+    if not w:
+        return ""
+    if w.startswith(("KN", "GN", "PN", "WR")):
+        w = w[1:]
+    elif w.startswith("WH"):
+        w = "W" + w[2:]
+    elif w.startswith("X"):
+        w = "S" + w[1:]
+    w = re.sub(r"PH", "F", w)
+    w = re.sub(r"CK", "K", w)
+    w = re.sub(r"SH", "X", w)
+    w = re.sub(r"CH", "X", w)
+    w = re.sub(r"TH", "0", w)
+    w = re.sub(r"C(?=[EIY])", "S", w)
+    w = re.sub(r"C", "K", w)
+    w = re.sub(r"Q", "K", w)
+    w = re.sub(r"(.)\1+", r"\1", w)
+    first = w[0]
+    rest = re.sub(r"[AEIOUY]", "", w[1:])
+    return (first if first in "AEIOU" else "") + (first if first not in "AEIOU" else "") + rest
+
+
+def nlp_rouge_l(candidate: Any, reference: Any) -> Dict[str, float]:
+    """Compute ROUGE-L Longest Common Subsequence metrics."""
+    c_words = [w.lower() for w in tokenize_text(str(candidate), mode="word")]
+    r_words = [w.lower() for w in tokenize_text(str(reference), mode="word")]
+    m, n = len(c_words), len(r_words)
+    if m == 0 or n == 0:
+        return {"precision": 0.0, "recall": 0.0, "f1": 0.0}
+    dp = [[0] * (n + 1) for _ in range(m + 1)]
+    for i in range(1, m + 1):
+        for j in range(1, n + 1):
+            if c_words[i - 1] == r_words[j - 1]:
+                dp[i][j] = dp[i - 1][j - 1] + 1
+            else:
+                dp[i][j] = max(dp[i - 1][j], dp[i][j - 1])
+    lcs_len = dp[m][n]
+    p = lcs_len / m
+    r = lcs_len / n
+    f1 = (2.0 * p * r) / (p + r) if (p + r) > 0 else 0.0
+    return {"precision": round(p, 4), "recall": round(r, 4), "f1": round(f1, 4)}
+
+
+def nlp_bleu_score(candidate: Any, reference: Any, max_n: Any = 4) -> float:
+    """Compute sentence BLEU score."""
+    c_words = [w.lower() for w in tokenize_text(str(candidate), mode="word")]
+    r_words = [w.lower() for w in tokenize_text(str(reference), mode="word")]
+    c_len, r_len = len(c_words), len(r_words)
+    if c_len == 0 or r_len == 0:
+        return 0.0
+    bp = 1.0 if c_len > r_len else math.exp(1.0 - float(r_len) / c_len)
+    precisions = []
+    n_limit = min(int(max_n), c_len)
+    for n in range(1, n_limit + 1):
+        c_ngrams = [tuple(c_words[i:i + n]) for i in range(c_len - n + 1)]
+        r_ngrams = [tuple(r_words[i:i + n]) for i in range(r_len - n + 1)]
+        r_counts: Dict[Tuple, int] = {}
+        for g in r_ngrams:
+            r_counts[g] = r_counts.get(g, 0) + 1
+        matches = 0
+        for g in c_ngrams:
+            if r_counts.get(g, 0) > 0:
+                matches += 1
+                r_counts[g] -= 1
+        p = matches / len(c_ngrams) if c_ngrams else 0.0
+        precisions.append(max(p, 1e-6))
+    geom_mean = math.exp(sum(math.log(p) for p in precisions) / len(precisions))
+    return round(bp * geom_mean, 4)
+
+
+def nlp_cosine_similarity_tf(text1: Any, text2: Any) -> float:
+    """Cosine similarity of Term Frequency vectors."""
+    return nlp_text_similarity(text1, text2)
+
+
+def nlp_expand_contractions(text: Any) -> str:
+    """Expand common English contractions."""
+    t = str(text)
+    contractions = {
+        r"\bcan't\b": "cannot",
+        r"\bwon't\b": "will not",
+        r"\bdon't\b": "do not",
+        r"\bdoesn't\b": "does not",
+        r"\bdidn't\b": "did not",
+        r"\bisn't\b": "is not",
+        r"\baren't\b": "are not",
+        r"\bwasn't\b": "was not",
+        r"\bweren't\b": "were not",
+        r"\bhaven't\b": "have not",
+        r"\bhasn't\b": "has not",
+        r"\bhadn't\b": "had not",
+        r"\bit's\b": "it is",
+        r"\bi'm\b": "i am",
+        r"\byou're\b": "you are",
+        r"\bthey're\b": "they are",
+        r"\bwe're\b": "we are",
+        r"\bthat's\b": "that is",
+        r"\bwhat's\b": "what is",
+    }
+    for pat, rep in contractions.items():
+        t = re.sub(pat, rep, t, flags=re.IGNORECASE)
+    return t
+
+
+def nlp_mask_sensitive_entities(text: Any, entity_types: Any = None) -> str:
+    """Mask PII entities (email, phone, ssn)."""
+    t = str(text)
+    t = re.sub(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b", "[EMAIL]", t)
+    t = re.sub(r"\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b", "[PHONE]", t)
+    t = re.sub(r"\b\d{3}-\d{2}-\d{4}\b", "[SSN]", t)
+    return t
+
+
+def nlp_syllable_count(word: Any) -> int:
+    """Estimate syllable count in a single word."""
+    w = str(word).lower().strip()
+    if len(w) <= 3:
+        return 1
+    w = re.sub(r"(?:[^laeiouy]|ed|es|e)$", "", w)
+    w = re.sub(r"^y", "", w)
+    matches = re.findall(r"[aeiouy]{1,2}", w)
+    return max(1, len(matches))
+
+
+def nlp_readability_flesch(text: Any) -> float:
+    """Compute Flesch Reading Ease score."""
+    t = str(text)
+    words = tokenize_text(t, mode="word")
+    sents = tokenize_text(t, mode="sentence")
+    if not words or not sents:
+        return 100.0
+    n_words = len(words)
+    n_sents = len(sents)
+    n_syllables = sum(nlp_syllable_count(w) for w in words)
+    score = 206.835 - 1.015 * (n_words / n_sents) - 84.6 * (n_syllables / n_words)
+    return round(score, 2)
+
+
+def nlp_readability_gunning_fog(text: Any) -> float:
+    """Compute Gunning Fog index."""
+    t = str(text)
+    words = tokenize_text(t, mode="word")
+    sents = tokenize_text(t, mode="sentence")
+    if not words or not sents:
+        return 0.0
+    n_words = len(words)
+    n_sents = len(sents)
+    complex_words = sum(1 for w in words if nlp_syllable_count(w) >= 3)
+    fog = 0.4 * ((n_words / n_sents) + 100.0 * (complex_words / n_words))
+    return round(fog, 2)
+
+
+def nlp_sentence_split(text: Any) -> List[str]:
+    """Split text into sentences."""
+    return tokenize_text(str(text), mode="sentence")
+
+
+def nlp_pos_tag_rule_based(tokens: Any) -> List[Tuple[str, str]]:
+    """Heuristic rule-based POS tagger."""
+    words = list(tokens) if isinstance(tokens, (list, tuple)) else tokenize_text(str(tokens), mode="word")
+    tagged = []
+    for w in words:
+        wl = str(w).lower()
+        if wl in ENGLISH_STOPWORDS:
+            tag = "DET" if wl in ("the", "a", "an", "this", "that") else "PRON" if wl in ("he", "she", "it", "they", "i", "we") else "ADP" if wl in ("in", "on", "at", "by", "for", "with") else "CONJ"
+        elif re.match(r"^\d+(?:\.\d+)?$", wl):
+            tag = "NUM"
+        elif wl.endswith(("ing", "ed", "ize", "ate")):
+            tag = "VERB"
+        elif wl.endswith(("ly",)):
+            tag = "ADV"
+        elif wl.endswith(("able", "ible", "ous", "ful", "ive", "al")):
+            tag = "ADJ"
+        else:
+            tag = "NOUN"
+        tagged.append((str(w), tag))
+    return tagged
+
+
+def nlp_sentiment_vader_heuristic(text: Any) -> Dict[str, float]:
+    """Heuristic polarity analyzer with compound score."""
+    return analyze_sentiment(str(text))
+
+
+def nlp_character_ngrams(text: Any, n: Any = 3) -> List[str]:
+    """Generate character-level n-grams from text."""
+    s = str(text)
+    n_val = int(n)
+    if len(s) < n_val:
+        return []
+    return [s[i:i + n_val] for i in range(len(s) - n_val + 1)]
+
+
+def nlp_collocations(tokens: Any, min_freq: Any = 2) -> List[Tuple[str, str]]:
+    """Extract frequent bigram collocations."""
+    words = list(tokens) if isinstance(tokens, (list, tuple)) else tokenize_text(str(tokens), mode="word")
+    m_freq = int(min_freq)
+    counts: Dict[Tuple[str, str], int] = {}
+    for i in range(len(words) - 1):
+        bg = (words[i].lower(), words[i + 1].lower())
+        counts[bg] = counts.get(bg, 0) + 1
+    return [bg for bg, c in sorted(counts.items(), key=lambda kv: kv[1], reverse=True) if c >= m_freq]
+
+
+def nlp_word_wrap(text: Any, width: Any = 80) -> str:
+    """Wrap text lines at whitespace boundary."""
+    words = str(text).split()
+    w_limit = int(width)
+    lines, cur_line = [], []
+    cur_len = 0
+    for w in words:
+        if cur_len + len(w) + (1 if cur_line else 0) <= w_limit:
+            cur_line.append(w)
+            cur_len += len(w) + (1 if cur_len > 0 else 0)
+        else:
+            if cur_line:
+                lines.append(" ".join(cur_line))
+            cur_line = [w]
+            cur_len = len(w)
+    if cur_line:
+        lines.append(" ".join(cur_line))
+    return "\n".join(lines)
+

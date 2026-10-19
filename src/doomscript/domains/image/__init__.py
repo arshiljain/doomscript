@@ -29,6 +29,26 @@ from doomscript.domains.image.runtime import (
     draw_on_image,
     save_image,
     execute_image_ir,
+    image_sobel_edge_detection,
+    image_threshold_binarize,
+    image_sharpen,
+    image_invert_colors,
+    image_adjust_contrast,
+    image_split_channels,
+    image_merge_channels,
+    image_apply_sepia,
+    image_flip_horizontal,
+    image_flip_vertical,
+    image_color_vignette,
+    image_pad_borders,
+    image_compute_mean_color,
+    image_crop_center,
+    image_gamma_correction,
+    image_emboss,
+    image_posterize,
+    image_mosaic_pixelate,
+    image_blend_overlay,
+    image_difference,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.image.exporter import ImageASTExporter
@@ -119,6 +139,34 @@ class ImageDomain(DomainContract):
             or s.startswith("adjust brightness ")
             or s.startswith("adjust contrast ")
             or s.startswith("save image ")
+            or s.startswith("convert image ")
+            or s.startswith("blur image ")
+            or s.startswith("color histogram of ")
+            or s.startswith("calculate histogram ")
+            or s.startswith("crop box ")
+            or s.startswith("sobel edge detection ")
+            or s.startswith("detect edges with sobel ")
+            or s.startswith("binarize ")
+            or s.startswith("threshold ")
+            or s.startswith("sharpen ")
+            or s.startswith("invert colors of ")
+            or s.startswith("split channels of ")
+            or s.startswith("merge channels ")
+            or s.startswith("apply sepia to ")
+            or s.startswith("apply vignette to ")
+            or s.startswith("pad borders of ")
+            or s.startswith("compute mean color of ")
+            or s.startswith("mean color of ")
+            or s.startswith("center crop ")
+            or s.startswith("crop center of ")
+            or s.startswith("apply gamma correction to ")
+            or s.startswith("apply emboss to ")
+            or s.startswith("posterize ")
+            or s.startswith("pixelate ")
+            or s.startswith("mosaic ")
+            or s.startswith("blend ")
+            or s.startswith("difference between ")
+            or s.startswith("pixel difference between ")
         ):
             return True
 
@@ -176,4 +224,24 @@ __all__ = [
     "draw_on_image",
     "save_image",
     "execute_image_ir",
+    "image_sobel_edge_detection",
+    "image_threshold_binarize",
+    "image_sharpen",
+    "image_invert_colors",
+    "image_adjust_contrast",
+    "image_split_channels",
+    "image_merge_channels",
+    "image_apply_sepia",
+    "image_flip_horizontal",
+    "image_flip_vertical",
+    "image_color_vignette",
+    "image_pad_borders",
+    "image_compute_mean_color",
+    "image_crop_center",
+    "image_gamma_correction",
+    "image_emboss",
+    "image_posterize",
+    "image_mosaic_pixelate",
+    "image_blend_overlay",
+    "image_difference",
 ]

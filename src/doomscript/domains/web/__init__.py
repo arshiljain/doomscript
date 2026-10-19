@@ -21,6 +21,26 @@ from doomscript.domains.web.runtime import (
     extract_web_table,
     download_web_media,
     execute_web_ir,
+    web_extract_images,
+    web_extract_forms,
+    web_encode_form_data,
+    web_decode_form_data,
+    web_parse_sitemap_xml,
+    web_parse_robots_txt,
+    web_canonicalize_url,
+    web_extract_meta_description,
+    web_extract_headings,
+    web_check_ssl_expiry,
+    web_parse_cookie_header,
+    web_build_cookie_header,
+    web_extract_json_ld,
+    web_strip_query_params,
+    web_count_element_tags,
+    web_extract_text_by_class,
+    web_extract_element_by_id,
+    web_parse_content_type,
+    web_is_valid_url,
+    web_generate_curl_command,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.web.exporter import WebASTExporter
@@ -106,6 +126,39 @@ class WebDomain(DomainContract):
             or (s.startswith("find table ") and " in " in s)
             or s.startswith("download all images ")
             or s.startswith("download all media ")
+            or s.startswith("select all ")
+            or s.startswith("extract all tables from ")
+            or s.startswith("extract html tables from ")
+            or s.startswith("extract tables from ")
+            or s.startswith("parse query params ")
+            or s.startswith("build url ")
+            or s.startswith("strip html tags from ")
+            or s.startswith("extract meta tags from ")
+            or ("response " in s and " is successful into " in s)
+            or s.startswith("extract images from ")
+            or s.startswith("extract forms from ")
+            or s.startswith("encode form data ")
+            or s.startswith("decode form data ")
+            or s.startswith("parse sitemap ")
+            or s.startswith("check robots txt ")
+            or s.startswith("evaluate robots txt ")
+            or s.startswith("canonicalize url ")
+            or s.startswith("extract meta description from ")
+            or s.startswith("extract headings from ")
+            or s.startswith("check ssl expiry ")
+            or s.startswith("parse cookie header ")
+            or s.startswith("build cookie header from ")
+            or s.startswith("extract json ld from ")
+            or s.startswith("strip query ")
+            or s.startswith("count tag ")
+            or s.startswith("count element tag ")
+            or s.startswith("extract text with class ")
+            or s.startswith("extract text by class ")
+            or s.startswith("extract element with id ")
+            or s.startswith("extract element by id ")
+            or s.startswith("parse content type ")
+            or ("url " in s and " is valid into " in s)
+            or s.startswith("generate curl command for ")
         ):
             return True
 
@@ -146,4 +199,24 @@ __all__ = [
     "extract_web_table",
     "download_web_media",
     "execute_web_ir",
+    "web_extract_images",
+    "web_extract_forms",
+    "web_encode_form_data",
+    "web_decode_form_data",
+    "web_parse_sitemap_xml",
+    "web_parse_robots_txt",
+    "web_canonicalize_url",
+    "web_extract_meta_description",
+    "web_extract_headings",
+    "web_check_ssl_expiry",
+    "web_parse_cookie_header",
+    "web_build_cookie_header",
+    "web_extract_json_ld",
+    "web_strip_query_params",
+    "web_count_element_tags",
+    "web_extract_text_by_class",
+    "web_extract_element_by_id",
+    "web_parse_content_type",
+    "web_is_valid_url",
+    "web_generate_curl_command",
 ]

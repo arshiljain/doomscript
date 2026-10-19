@@ -26,6 +26,263 @@ class OptDomainParser(DomainParser):
             target = m_solve.group(2).strip()
             return f'set {target} to solve_linear_program("{lp_name}")'
 
+        # minimize 1d [function] <fn> from <a> to <b> [with tolerance <tol>] into <target>
+        min1d_m = re.match(
+            r"^minimize\s+1d\s+(?:function\s+)?(.+?)\s+from\s+(.+?)\s+to\s+(.+?)(?:\s+with\s+tolerance\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if min1d_m:
+            fn, a, b, tol, target = min1d_m.group(1).strip(), min1d_m.group(2).strip(), min1d_m.group(3).strip(), min1d_m.group(4), min1d_m.group(5).strip()
+            tol_arg = f", tol={tol.strip()}" if tol else ""
+            return f"set {target} to opt_minimize_1d({fn}, {a}, {b}{tol_arg})"
+
+        # grid search [params] <grid> with <score_fn> into <target>
+        gs_m = re.match(
+            r"^grid\s+search\s+(?:params\s+)?(.+?)\s+with\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if gs_m:
+            grid, fn, target = gs_m.group(1).strip(), gs_m.group(2).strip(), gs_m.group(3).strip()
+            return f"set {target} to opt_grid_search({grid}, {fn})"
+
+        # solve fractional knapsack [items|weights] <weights> values <values> capacity <cap> into <target>
+        knap_m = re.match(
+            r"^solve\s+fractional\s+knapsack\s+(?:items\s+|weights\s+)?(.+?)\s+values\s+(.+?)\s+capacity\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if knap_m:
+            w, v, cap, target = knap_m.group(1).strip(), knap_m.group(2).strip(), knap_m.group(3).strip(), knap_m.group(4).strip()
+            return f"set {target} to opt_fractional_knapsack({w}, {v}, {cap})"
+
+        # schedule activities with <start_times> and <end_times> into <target>
+        act_m = re.match(
+            r"^schedule\s+activities\s+with\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if act_m:
+            s_times, e_times, target = act_m.group(1).strip(), act_m.group(2).strip(), act_m.group(3).strip()
+            return f"set {target} to opt_activity_selection({s_times}, {e_times})"
+
+        # gradient descent step at <pt> with gradient <grad> [learning_rate <lr>] into <target>
+        gd_m = re.match(
+            r"^gradient\s+descent\s+step\s+at\s+(.+?)\s+with\s+gradient\s+(.+?)(?:\s+(?:learning_rate|lr)\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if gd_m:
+            pt, grad, lr, target = gd_m.group(1).strip(), gd_m.group(2).strip(), gd_m.group(3), gd_m.group(4).strip()
+            lr_arg = f", learning_rate={lr.strip()}" if lr else ""
+            return f"set {target} to opt_gradient_descent_step({pt}, {grad}{lr_arg})"
+
+        # find root of [function] <fn> between <a> and <b> [with tolerance <tol>] into <target>
+        root_m = re.match(
+            r"^find\s+root\s+of\s+(?:function\s+)?(.+?)\s+between\s+(.+?)\s+and\s+(.+?)(?:\s+with\s+tolerance\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if root_m:
+            fn, a, b, tol, target = root_m.group(1).strip(), root_m.group(2).strip(), root_m.group(3).strip(), root_m.group(4), root_m.group(5).strip()
+            tol_arg = f", tol={tol.strip()}" if tol else ""
+            return f"set {target} to opt_bisection_root({fn}, {a}, {b}{tol_arg})"
+
+        # simulated annealing for <cost_fn> starting at <init> [with temp <temp>] [cooling <cool>] into <target>
+        m_sa = re.match(
+            r"^simulated\s+annealing\s+for\s+(.+?)\s+starting\s+at\s+(.+?)(?:\s+with\s+temp\s+(.+?))?(?:\s+cooling\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_sa:
+            fn, init, temp, cool, target = m_sa.group(1).strip(), m_sa.group(2).strip(), m_sa.group(3), m_sa.group(4), m_sa.group(5).strip()
+            t_val = temp.strip() if temp else "100.0"
+            c_val = cool.strip() if cool else "0.95"
+            return f"set {target} to opt_simulated_annealing({fn}, {init}, None, {t_val}, {c_val})"
+
+        # golden section search for <fn> between <a> and <b> [with tolerance <tol>] into <target>
+        m_gss = re.match(
+            r"^golden\s+section\s+search\s+for\s+(.+?)\s+between\s+(.+?)\s+and\s+(.+?)(?:\s+with\s+tolerance\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_gss:
+            fn, a, b, tol, target = m_gss.group(1).strip(), m_gss.group(2).strip(), m_gss.group(3).strip(), m_gss.group(4), m_gss.group(5).strip()
+            tol_val = tol.strip() if tol else "1e-5"
+            return f"set {target} to opt_golden_section_search({fn}, {a}, {b}, {tol_val})"
+
+        # solve 01 knapsack weights <weights> values <values> capacity <cap> into <target>
+        m_ks01 = re.match(
+            r"^solve\s+01\s+knapsack\s+weights\s+(.+?)\s+values\s+(.+?)\s+capacity\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_ks01:
+            w, v, cap, target = m_ks01.group(1).strip(), m_ks01.group(2).strip(), m_ks01.group(3).strip(), m_ks01.group(4).strip()
+            return f"set {target} to opt_knapsack_01_dp({w}, {v}, {cap})"
+
+        # longest increasing subsequence of <arr> into <target>
+        m_lis = re.match(
+            r"^longest\s+increasing\s+subsequence\s+of\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_lis:
+            arr, target = m_lis.group(1).strip(), m_lis.group(2).strip()
+            return f"set {target} to opt_longest_increasing_subsequence({arr})"
+
+        # minimum coins for amount <amount> with coins <coins> into <target>
+        m_mc = re.match(
+            r"^minimum\s+coins\s+for\s+amount\s+(.+?)\s+with\s+coins\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_mc:
+            amt, coins, target = m_mc.group(1).strip(), m_mc.group(2).strip(), m_mc.group(3).strip()
+            return f"set {target} to opt_coin_change_minimum({coins}, {amt})"
+
+        # coin combinations for amount <amount> with coins <coins> into <target>
+        m_cc = re.match(
+            r"^coin\s+combinations\s+for\s+amount\s+(.+?)\s+with\s+coins\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_cc:
+            amt, coins, target = m_cc.group(1).strip(), m_cc.group(2).strip(), m_cc.group(3).strip()
+            return f"set {target} to opt_coin_change_combinations({coins}, {amt})"
+
+        # schedule jobs by deadline <jobs> into <target>
+        m_sj = re.match(
+            r"^schedule\s+jobs\s+by\s+deadline\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_sj:
+            jobs, target = m_sj.group(1).strip(), m_sj.group(2).strip()
+            return f"set {target} to opt_job_scheduling_deadline({jobs})"
+
+        # huffman encoding for frequencies <freqs> into <target>
+        m_he = re.match(
+            r"^huffman\s+encoding\s+for\s+frequencies\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_he:
+            freqs, target = m_he.group(1).strip(), m_he.group(2).strip()
+            return f"set {target} to opt_huffman_encoding({freqs})"
+
+        # matrix chain multiplication order for dimensions <dims> into <target>
+        m_mcm = re.match(
+            r"^matrix\s+chain\s+multiplication\s+(?:order\s+)?for\s+dimensions\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_mcm:
+            dims, target = m_mcm.group(1).strip(), m_mcm.group(2).strip()
+            return f"set {target} to opt_matrix_chain_multiplication({dims})"
+
+        # levenshtein alignment between <s1> and <s2> into <target>
+        m_la = re.match(
+            r"^levenshtein\s+alignment\s+between\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_la:
+            s1, s2, target = m_la.group(1).strip(), m_la.group(2).strip(), m_la.group(3).strip()
+            return f"set {target} to opt_levenshtein_alignment({s1}, {s2})"
+
+        # check if subset sum exists in <arr> for target <target_sum> into <target>
+        m_sse = re.match(
+            r"^check\s+if\s+subset\s+sum\s+exists\s+in\s+(.+?)\s+for\s+target\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_sse:
+            arr, target_sum, target = m_sse.group(1).strip(), m_sse.group(2).strip(), m_sse.group(3).strip()
+            return f"set {target} to opt_subset_sum_exists({arr}, {target_sum})"
+
+        # find subset summing to <target_sum> from <arr> into <target>
+        m_ssf = re.match(
+            r"^find\s+subset\s+summing\s+to\s+(.+?)\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_ssf:
+            target_sum, arr, target = m_ssf.group(1).strip(), m_ssf.group(2).strip(), m_ssf.group(3).strip()
+            return f"set {target} to opt_subset_sum_find({arr}, {target_sum})"
+
+        # solve rod cutting for length <len> with prices <prices> into <target>
+        m_rc = re.match(
+            r"^solve\s+rod\s+cutting\s+for\s+length\s+(.+?)\s+with\s+prices\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_rc:
+            length, prices, target = m_rc.group(1).strip(), m_rc.group(2).strip(), m_rc.group(3).strip()
+            return f"set {target} to opt_rod_cutting({prices}, {length})"
+
+        # optimize tsp with 2opt for coordinates <coords> [iterations <iter>] into <target>
+        m_tsp = re.match(
+            r"^optimize\s+tsp\s+with\s+2opt\s+for\s+coordinates\s+(.+?)(?:\s+iterations\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_tsp:
+            coords, iters, target = m_tsp.group(1).strip(), m_tsp.group(2), m_tsp.group(3).strip()
+            iter_val = iters if iters else "100"
+            return f"set {target} to opt_two_opt_tsp({coords}, {iter_val})"
+
+        # interpolate linear value at <tx> from x <x_pts> and y <y_pts> into <target>
+        m_li = re.match(
+            r"^interpolate\s+linear\s+value\s+at\s+(.+?)\s+from\s+x\s+(.+?)\s+and\s+y\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_li:
+            tx, x_pts, y_pts, target = m_li.group(1).strip(), m_li.group(2).strip(), m_li.group(3).strip(), m_li.group(4).strip()
+            return f"set {target} to opt_linear_interpolation({x_pts}, {y_pts}, {tx})"
+
+        # weighted interval scheduling for <intervals> into <target>
+        m_wis = re.match(
+            r"^weighted\s+interval\s+scheduling\s+for\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_wis:
+            intervals, target = m_wis.group(1).strip(), m_wis.group(2).strip()
+            return f"set {target} to opt_weighted_interval_scheduling({intervals})"
+
+        # find pareto frontier for <points> into <target>
+        m_pf = re.match(
+            r"^find\s+pareto\s+frontier\s+for\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_pf:
+            points, target = m_pf.group(1).strip(), m_pf.group(2).strip()
+            return f"set {target} to opt_pareto_frontier({points})"
+
+        # hungarian assignment for cost matrix <matrix> into <target>
+        m_ha = re.match(
+            r"^hungarian\s+assignment\s+for\s+cost\s+matrix\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_ha:
+            matrix, target = m_ha.group(1).strip(), m_ha.group(2).strip()
+            return f"set {target} to opt_hungarian_assignment({matrix})"
+
+        # find peak element in <arr> into <target>
+        m_pk = re.match(
+            r"^find\s+peak\s+element\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_pk:
+            arr, target = m_pk.group(1).strip(), m_pk.group(2).strip()
+            return f"set {target} to opt_binary_search_peak_1d({arr})"
+
         return None
 
     def parse_block(

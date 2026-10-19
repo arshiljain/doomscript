@@ -13,6 +13,32 @@ from doomscript.domains.sim.runtime import (
     NelderMeadOptimizer,
     run_trials,
     sweep_parameter,
+    sim_random_walk,
+    sim_exponential,
+    sim_poisson,
+    sim_monte_carlo_pi,
+    sim_roll_dice,
+    sim_coin_tosses,
+    sim_markov_chain_step,
+    sim_markov_chain_walk,
+    sim_sample_geometric,
+    sim_sample_binomial,
+    sim_sample_triangular,
+    sim_bootstrap_mean_ci,
+    sim_permutation_test,
+    sim_mm1_queue,
+    sim_wiener_process,
+    sim_bernoulli_trial,
+    sim_sample_lognormal,
+    sim_monte_carlo_integral,
+    sim_estimate_expected_value,
+    sim_birthday_paradox_prob,
+    sim_coupon_collector_estimate,
+    sim_shuffle_deck,
+    sim_draw_cards,
+    sim_sample_weibull,
+    sim_generate_synthetic_timeline,
+    sim_survival_rate_kaplan_meier,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.sim.exporter import SimASTExporter
@@ -86,6 +112,27 @@ class SimDomain(DomainContract):
             or s.startswith("optimize ")
             or (s.startswith("run ") and "trials of" in s)
             or s.startswith("sweep ")
+            or s.startswith("simulate random walk ")
+            or s.startswith("generate exponential sample ")
+            or s.startswith("generate poisson sample ")
+            or s.startswith("estimate pi with ")
+            or (s.startswith("roll ") and " dice " in s)
+            or (s.startswith("simulate ") and " coin tosses " in s)
+            or s.startswith("simulate markov ")
+            or s.startswith("bootstrap confidence interval ")
+            or s.startswith("permutation test ")
+            or s.startswith("simulate mm1 ")
+            or s.startswith("simulate wiener ")
+            or s.startswith("simulate bernoulli ")
+            or s.startswith("integrate ")
+            or s.startswith("estimate expected value ")
+            or s.startswith("calculate birthday paradox ")
+            or s.startswith("estimate coupon collector ")
+            or s.startswith("shuffle deck")
+            or s.startswith("shuffle standard deck")
+            or (s.startswith("draw ") and " cards from deck " in s)
+            or s.startswith("generate synthetic timeline ")
+            or s.startswith("calculate kaplan meier ")
         )
 
     def can_handle_block(self, header: str) -> bool:
@@ -114,4 +161,30 @@ __all__ = [
     "NelderMeadOptimizer",
     "run_trials",
     "sweep_parameter",
+    "sim_random_walk",
+    "sim_exponential",
+    "sim_poisson",
+    "sim_monte_carlo_pi",
+    "sim_roll_dice",
+    "sim_coin_tosses",
+    "sim_markov_chain_step",
+    "sim_markov_chain_walk",
+    "sim_sample_geometric",
+    "sim_sample_binomial",
+    "sim_sample_triangular",
+    "sim_bootstrap_mean_ci",
+    "sim_permutation_test",
+    "sim_mm1_queue",
+    "sim_wiener_process",
+    "sim_bernoulli_trial",
+    "sim_sample_lognormal",
+    "sim_monte_carlo_integral",
+    "sim_estimate_expected_value",
+    "sim_birthday_paradox_prob",
+    "sim_coupon_collector_estimate",
+    "sim_shuffle_deck",
+    "sim_draw_cards",
+    "sim_sample_weibull",
+    "sim_generate_synthetic_timeline",
+    "sim_survival_rate_kaplan_meier",
 ]

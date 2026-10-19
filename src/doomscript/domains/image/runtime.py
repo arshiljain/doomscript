@@ -204,11 +204,12 @@ def open_image(path: str) -> DoomImage:
     return DoomImage(raw)
 
 
-def create_blank_image(width: int, height: int, color: str = "white") -> DoomImage:
+def create_blank_image(width: int, height: int, color: Any = "white") -> DoomImage:
+    col = tuple(color) if isinstance(color, list) else color
     if HAS_PIL:
-        raw = PILImage.new("RGB", (int(width), int(height)), color=color)
+        raw = PILImage.new("RGB", (int(width), int(height)), color=col)
     else:
-        raw = PureImage(int(width), int(height), color=color)
+        raw = PureImage(int(width), int(height), color=col)
     return DoomImage(raw)
 
 
@@ -304,3 +305,312 @@ def execute_image_ir(spec_id: str) -> Any:
     if spec is None:
         raise KeyError(f"Image spec not found: {spec_id}")
     return ImageRuntime().execute_ir(spec, {})
+
+
+# --- Batch 8 Spoken English Image Verbs ---
+
+def image_to_grayscale(img: Any) -> Any:
+    """Convert image to grayscale."""
+    if isinstance(img, DoomImage):
+        return DoomImage(img._img.convert("L"))
+    return img
+
+
+def image_blur(img: Any, radius: Any = 2) -> Any:
+    """Blur image with specified radius."""
+    if isinstance(img, DoomImage):
+        return filter_image(img, "blur", radius=float(radius))
+    return img
+
+
+def image_resize(img: Any, width: Any = 100, height: Any = 100) -> Any:
+    """Resize image to width and height."""
+    if isinstance(img, DoomImage):
+        return resize_image(img, width=int(width), height=int(height))
+    return img
+
+
+def image_crop_box(img: Any, box: Any) -> Any:
+    """Crop image with box coordinates [x1, y1, x2, y2]."""
+    if isinstance(img, DoomImage):
+        b = list(box)
+        return crop_image(img, int(b[0]), int(b[1]), int(b[2]), int(b[3]))
+    return img
+
+
+def image_rotate(img: Any, angle: Any) -> Any:
+    """Rotate image by angle in degrees."""
+    if isinstance(img, DoomImage):
+        return rotate_image(img, float(angle))
+    return img
+
+
+def image_adjust_brightness(img: Any, factor: Any) -> Any:
+    """Adjust image brightness by multiplier factor."""
+    if isinstance(img, DoomImage):
+        return adjust_image(img, brightness=float(factor))
+    return img
+
+
+def image_histogram(img: Any) -> List[int]:
+    """Calculate color channel histogram."""
+    if isinstance(img, DoomImage):
+        if HAS_PIL and hasattr(img._img, "histogram"):
+            return list(img._img.histogram())
+    return [0] * 256
+
+
+# --- 350-Expansion 20 Image Operations ---
+
+def _unwrap_img(img: Any) -> Any:
+    if isinstance(img, DoomImage):
+        return img._img
+    return img
+
+
+def image_sobel_edge_detection(img: Any) -> Any:
+    """Sobel 2D convolution edge magnitude detection."""
+    import math
+    raw = _unwrap_img(img)
+    if not (HAS_PIL and isinstance(raw, PILImage.Image)):
+        return img
+    gray = raw.convert("L")
+    w, h = gray.size
+    px = gray.load()
+    out = PILImage.new("L", (w, h), 0)
+    out_px = out.load()
+    for y in range(1, h - 1):
+        for x in range(1, w - 1):
+            gx = (-px[x - 1, y - 1] + px[x + 1, y - 1]
+                  - 2 * px[x - 1, y] + 2 * px[x + 1, y]
+                  - px[x - 1, y + 1] + px[x + 1, y + 1])
+            gy = (-px[x - 1, y - 1] - 2 * px[x, y - 1] - px[x + 1, y - 1]
+                  + px[x - 1, y + 1] + 2 * px[x, y + 1] + px[x + 1, y + 1])
+            mag = min(255, int(math.hypot(gx, gy)))
+            out_px[x, y] = mag
+    return DoomImage(out)
+
+
+def image_threshold_binarize(img: Any, threshold: Any = 128) -> Any:
+    """Binarize image to pure black/white using threshold."""
+    raw = _unwrap_img(img)
+    if not (HAS_PIL and isinstance(raw, PILImage.Image)):
+        return img
+    t = int(threshold)
+    gray = raw.convert("L")
+    out = gray.point(lambda p: 255 if p >= t else 0, mode="1")
+    return DoomImage(out.convert("RGB"))
+
+
+def image_sharpen(img: Any) -> Any:
+    """High-pass sharpening filter."""
+    raw = _unwrap_img(img)
+    if not (HAS_PIL and isinstance(raw, PILImage.Image)):
+        return img
+    return DoomImage(raw.filter(PILFilter.SHARPEN))
+
+
+def image_invert_colors(img: Any) -> Any:
+    """Negative photographic color inversion."""
+    from PIL import ImageOps
+    raw = _unwrap_img(img)
+    if not (HAS_PIL and isinstance(raw, PILImage.Image)):
+        return img
+    rgb = raw.convert("RGB")
+    return DoomImage(ImageOps.invert(rgb))
+
+
+def image_adjust_contrast(img: Any, factor: Any = 1.5) -> Any:
+    """Adjust contrast around midpoint 128."""
+    raw = _unwrap_img(img)
+    if not (HAS_PIL and isinstance(raw, PILImage.Image)):
+        return img
+    enhancer = ImageEnhance.Contrast(raw)
+    return DoomImage(enhancer.enhance(float(factor)))
+
+
+def image_split_channels(img: Any) -> Dict[str, Any]:
+    """Separate RGB image into red, green, blue channels."""
+    raw = _unwrap_img(img)
+    if not (HAS_PIL and isinstance(raw, PILImage.Image)):
+        return {"r": img, "g": img, "b": img}
+    rgb = raw.convert("RGB")
+    r, g, b = rgb.split()
+    return {"r": DoomImage(r), "g": DoomImage(g), "b": DoomImage(b)}
+
+
+def image_merge_channels(r_img: Any, g_img: Any, b_img: Any) -> Any:
+    """Combine 3 single-channel images into one RGB image."""
+    r_raw = _unwrap_img(r_img)
+    g_raw = _unwrap_img(g_img)
+    b_raw = _unwrap_img(b_img)
+    if not (HAS_PIL and isinstance(r_raw, PILImage.Image)):
+        return r_img
+    r = r_raw.convert("L")
+    g = g_raw.convert("L").resize(r.size)
+    b = b_raw.convert("L").resize(r.size)
+    merged = PILImage.merge("RGB", (r, g, b))
+    return DoomImage(merged)
+
+
+def image_apply_sepia(img: Any) -> Any:
+    """Classic warm sepia photographic transformation."""
+    raw = _unwrap_img(img)
+    if not (HAS_PIL and isinstance(raw, PILImage.Image)):
+        return img
+    rgb = raw.convert("RGB")
+    w, h = rgb.size
+    px = rgb.load()
+    out = PILImage.new("RGB", (w, h))
+    out_px = out.load()
+    for y in range(h):
+        for x in range(w):
+            r, g, b = px[x, y]
+            tr = min(255, int(0.393 * r + 0.769 * g + 0.189 * b))
+            tg = min(255, int(0.349 * r + 0.686 * g + 0.168 * b))
+            tb = min(255, int(0.272 * r + 0.534 * g + 0.131 * b))
+            out_px[x, y] = (tr, tg, tb)
+    return DoomImage(out)
+
+
+def image_flip_horizontal(img: Any) -> Any:
+    """Flip image horizontally (left-to-right)."""
+    return flip_image(img, "horizontal") if isinstance(img, DoomImage) else img
+
+
+def image_flip_vertical(img: Any) -> Any:
+    """Flip image vertically (top-to-bottom)."""
+    return flip_image(img, "vertical") if isinstance(img, DoomImage) else img
+
+
+def image_color_vignette(img: Any, radius: Any = 0.8) -> Any:
+    """Apply radial photographic vignette darkening towards edges."""
+    import math
+    raw = _unwrap_img(img)
+    if not (HAS_PIL and isinstance(raw, PILImage.Image)):
+        return img
+    rgb = raw.convert("RGB")
+    w, h = rgb.size
+    px = rgb.load()
+    out = PILImage.new("RGB", (w, h))
+    out_px = out.load()
+    cx, cy = w / 2.0, h / 2.0
+    max_d = math.hypot(cx, cy) * float(radius) or 1.0
+    for y in range(h):
+        for x in range(w):
+            d = math.hypot(x - cx, y - cy)
+            falloff = max(0.0, min(1.0, 1.0 - (d / max_d) ** 2))
+            r, g, b = px[x, y]
+            out_px[x, y] = (int(r * falloff), int(g * falloff), int(b * falloff))
+    return DoomImage(out)
+
+
+def image_pad_borders(img: Any, pad_size: Any = 10, color: Any = "black") -> Any:
+    """Pad borders of image with a solid color."""
+    from PIL import ImageOps
+    raw = _unwrap_img(img)
+    if not (HAS_PIL and isinstance(raw, PILImage.Image)):
+        return img
+    col = tuple(color) if isinstance(color, list) else color
+    out = ImageOps.expand(raw, border=int(pad_size), fill=col)
+    return DoomImage(out)
+
+
+def image_compute_mean_color(img: Any) -> List[float]:
+    """Average [R, G, B] color across all pixels."""
+    from PIL import ImageStat
+    raw = _unwrap_img(img)
+    if not (HAS_PIL and isinstance(raw, PILImage.Image)):
+        return [0.0, 0.0, 0.0]
+    stat = ImageStat.Stat(raw.convert("RGB"))
+    return [round(c, 2) for c in stat.mean[:3]]
+
+
+def image_crop_center(img: Any, width: Any = 100, height: Any = 100) -> Any:
+    """Symmetrical center crop of image to desired dimensions."""
+    raw = _unwrap_img(img)
+    if not (HAS_PIL and isinstance(raw, PILImage.Image)):
+        return img
+    w, h = raw.size
+    cw, ch = int(width), int(height)
+    left = max(0, (w - cw) // 2)
+    top = max(0, (h - ch) // 2)
+    right = min(w, left + cw)
+    bottom = min(h, top + ch)
+    return DoomImage(raw.crop((left, top, right, bottom)))
+
+
+def image_gamma_correction(img: Any, gamma: Any = 1.2) -> Any:
+    """Exponential gamma luminance correction."""
+    raw = _unwrap_img(img)
+    if not (HAS_PIL and isinstance(raw, PILImage.Image)):
+        return img
+    g = max(1e-4, float(gamma))
+    lut = [int(((i / 255.0) ** (1.0 / g)) * 255) for i in range(256)]
+    rgb = raw.convert("RGB")
+    out = rgb.point(lut * 3)
+    return DoomImage(out)
+
+
+def image_emboss(img: Any) -> Any:
+    """Directional 3D embossing convolution filter."""
+    raw = _unwrap_img(img)
+    if not (HAS_PIL and isinstance(raw, PILImage.Image)):
+        return img
+    return DoomImage(raw.filter(PILFilter.EMBOSS))
+
+
+def image_posterize(img: Any, levels: Any = 4) -> Any:
+    """Reduce color depth quantization to N discrete levels."""
+    import math
+    from PIL import ImageOps
+    raw = _unwrap_img(img)
+    if not (HAS_PIL and isinstance(raw, PILImage.Image)):
+        return img
+    lev = max(2, int(levels))
+    bits = max(1, min(8, int(round(math.log2(lev)))) or 2)
+    rgb = raw.convert("RGB")
+    out = ImageOps.posterize(rgb, bits)
+    return DoomImage(out)
+
+
+def image_mosaic_pixelate(img: Any, block_size: Any = 10) -> Any:
+    """Pixelate image into uniform mosaic tiles."""
+    raw = _unwrap_img(img)
+    if not (HAS_PIL and isinstance(raw, PILImage.Image)):
+        return img
+    bs = max(1, int(block_size))
+    w, h = raw.size
+    bw = max(1, w // bs)
+    bh = max(1, h // bs)
+    small = raw.resize((bw, bh), PILImage.Resampling.NEAREST)
+    out = small.resize((w, h), PILImage.Resampling.NEAREST)
+    return DoomImage(out)
+
+
+def image_blend_overlay(img1: Any, img2: Any, alpha: Any = 0.5) -> Any:
+    """Linear alpha blend of two images."""
+    r1 = _unwrap_img(img1)
+    r2 = _unwrap_img(img2)
+    if not (HAS_PIL and isinstance(r1, PILImage.Image) and isinstance(r2, PILImage.Image)):
+        return img1
+    rgb1 = r1.convert("RGB")
+    rgb2 = r2.convert("RGB").resize(rgb1.size)
+    a = max(0.0, min(1.0, float(alpha)))
+    out = PILImage.blend(rgb1, rgb2, a)
+    return DoomImage(out)
+
+
+def image_difference(img1: Any, img2: Any) -> Any:
+    """Absolute pixel-by-pixel difference map."""
+    from PIL import ImageChops
+    r1 = _unwrap_img(img1)
+    r2 = _unwrap_img(img2)
+    if not (HAS_PIL and isinstance(r1, PILImage.Image) and isinstance(r2, PILImage.Image)):
+        return img1
+    rgb1 = r1.convert("RGB")
+    rgb2 = r2.convert("RGB").resize(rgb1.size)
+    out = ImageChops.difference(rgb1, rgb2)
+    return DoomImage(out)
+
+

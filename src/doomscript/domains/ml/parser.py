@@ -129,6 +129,266 @@ class MLDomainParser(DomainParser):
             target = load_m.group(2).strip()
             return f"set {target} to load_model({path})"
 
+        # split data <data> into train and test with test_size <ts> into <target>
+        m_split = re.match(
+            r"^split\s+data\s+(.+?)\s+into\s+train\s+and\s+test\s+with\s+test_size\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_split:
+            data_var, ts, target = m_split.group(1), m_split.group(2), m_split.group(3)
+            return f"set {target} to ml_split_data({data_var}, test_size={ts})"
+
+        # confusion matrix of <actuals> and <preds> into <target>
+        m_cm = re.match(
+            r"^confusion\s+matrix\s+of\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_cm:
+            actuals, preds, target = m_cm.group(1), m_cm.group(2), m_cm.group(3)
+            return f"set {target} to ml_confusion_matrix({actuals}, {preds})"
+
+        # classification metrics for <actuals> and <preds> into <target>
+        m_cmet = re.match(
+            r"^classification\s+metrics\s+for\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_cmet:
+            actuals, preds, target = m_cmet.group(1), m_cmet.group(2), m_cmet.group(3)
+            return f"set {target} to ml_classification_metrics({actuals}, {preds})"
+
+        # roc auc score of <actuals> and <probs> into <target>
+        m_auc = re.match(
+            r"^roc\s+auc\s+score\s+of\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_auc:
+            actuals, probs, target = m_auc.group(1), m_auc.group(2), m_auc.group(3)
+            return f"set {target} to ml_roc_auc_score({actuals}, {probs})"
+
+        # mean squared error between <actuals> and <preds> into <target>
+        m_mse = re.match(
+            r"^mean\s+squared\s+error\s+between\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_mse:
+            actuals, preds, target = m_mse.group(1), m_mse.group(2), m_mse.group(3)
+            return f"set {target} to ml_mean_squared_error({actuals}, {preds})"
+
+        # r2 score between <actuals> and <preds> into <target>
+        m_r2 = re.match(
+            r"^r2\s+score\s+between\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_r2:
+            actuals, preds, target = m_r2.group(1), m_r2.group(2), m_r2.group(3)
+            return f"set {target} to ml_r2_score({actuals}, {preds})"
+
+        # one-hot encode column <col> in <df> into <target>
+        m_ohe = re.match(
+            r"^one-hot\s+encode\s+column\s+(.+?)\s+in\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_ohe:
+            col, df, target = m_ohe.group(1), m_ohe.group(2), m_ohe.group(3)
+            return f"set {target} to ml_one_hot_encode({df}, {col})"
+
+        # 350-Expansion ML Operations
+        knn_m = re.match(
+            r"^train\s+knn\s+classifier\s+on\s+([A-Za-z_]\w*)\s+predicting\s+(.+?)(?:\s+with\s+(.+?)\s+neighbors)?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if knn_m:
+            data_var, tgt_col = knn_m.group(1).strip(), knn_m.group(2).strip()
+            k_val = knn_m.group(3).strip() if knn_m.group(3) else "3"
+            target = knn_m.group(4).strip()
+            return f"set {target} to ml_knn_classifier({data_var}, {tgt_col}, k={k_val})"
+
+        stump_m = re.match(
+            r"^fit\s+decision\s+stump\s+on\s+([A-Za-z_]\w*)\s+predicting\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if stump_m:
+            data_var, tgt_col, target = stump_m.group(1).strip(), stump_m.group(2).strip(), stump_m.group(3).strip()
+            return f"set {target} to ml_decision_stump({data_var}, {tgt_col})"
+
+        gnb_m = re.match(
+            r"^train\s+gaussian\s+naive\s+bayes\s+on\s+([A-Za-z_]\w*)\s+predicting\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if gnb_m:
+            data_var, tgt_col, target = gnb_m.group(1).strip(), gnb_m.group(2).strip(), gnb_m.group(3).strip()
+            return f"set {target} to ml_gaussian_naive_bayes({data_var}, {tgt_col})"
+
+        bnb_m = re.match(
+            r"^train\s+bernoulli\s+naive\s+bayes\s+on\s+([A-Za-z_]\w*)\s+predicting\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if bnb_m:
+            data_var, tgt_col, target = bnb_m.group(1).strip(), bnb_m.group(2).strip(), bnb_m.group(3).strip()
+            return f"set {target} to ml_bernoulli_naive_bayes({data_var}, {tgt_col})"
+
+        km_m = re.match(
+            r"^cluster\s+([A-Za-z_]\w*)\s+with\s+kmeans\s+into\s+(.+?)\s+clusters\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if km_m:
+            data_var, k_val, target = km_m.group(1).strip(), km_m.group(2).strip(), km_m.group(3).strip()
+            return f"set {target} to ml_kmeans_clustering({data_var}, k={k_val})"
+
+        pca_m = re.match(
+            r"^reduce\s+dimensionality\s+of\s+([A-Za-z_]\w*)\s+using\s+pca\s+to\s+(.+?)\s+components\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if pca_m:
+            data_var, n_comp, target = pca_m.group(1).strip(), pca_m.group(2).strip(), pca_m.group(3).strip()
+            return f"set {target} to ml_pca_transform({data_var}, n_components={n_comp})"
+
+        logloss_m = re.match(
+            r"^compute\s+log\s+loss\s+between\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if logloss_m:
+            y_t, y_p, target = logloss_m.group(1).strip(), logloss_m.group(2).strip(), logloss_m.group(3).strip()
+            return f"set {target} to ml_log_loss({y_t}, {y_p})"
+
+        brier_m = re.match(
+            r"^compute\s+brier\s+score\s+between\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if brier_m:
+            y_t, y_p, target = brier_m.group(1).strip(), brier_m.group(2).strip(), brier_m.group(3).strip()
+            return f"set {target} to ml_brier_score({y_t}, {y_p})"
+
+        f1_m = re.match(
+            r"^compute\s+f1\s+score\s+between\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if f1_m:
+            y_t, y_p, target = f1_m.group(1).strip(), f1_m.group(2).strip(), f1_m.group(3).strip()
+            return f"set {target} to ml_f1_score({y_t}, {y_p})"
+
+        pr_m = re.match(
+            r"^compute\s+precision\s+and\s+recall\s+between\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if pr_m:
+            y_t, y_p, target = pr_m.group(1).strip(), pr_m.group(2).strip(), pr_m.group(3).strip()
+            return f"set {target} to ml_precision_recall({y_t}, {y_p})"
+
+        poly_m = re.match(
+            r"^generate\s+polynomial\s+features\s+for\s+([A-Za-z_]\w*)(?:\s+with\s+degree\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if poly_m:
+            data_var = poly_m.group(1).strip()
+            deg = poly_m.group(2).strip() if poly_m.group(2) else "2"
+            target = poly_m.group(3).strip()
+            return f"set {target} to ml_polynomial_features({data_var}, degree={deg})"
+
+        tenc_m = re.match(
+            r"^target\s+encode\s+column\s+(.+?)\s+using\s+(.+?)\s+in\s+([A-Za-z_]\w*)(?:\s+with\s+smoothing\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if tenc_m:
+            cat_col, tgt_col, data_var = tenc_m.group(1).strip(), tenc_m.group(2).strip(), tenc_m.group(3).strip()
+            smooth = tenc_m.group(4).strip() if tenc_m.group(4) else "1.0"
+            target = tenc_m.group(5).strip()
+            return f"set {target} to ml_target_encode({data_var}, {cat_col}, {tgt_col}, smoothing={smooth})"
+
+        lr_m = re.match(
+            r"^cosine\s+decay\s+learning\s+rate\s+from\s+(.+?)\s+at\s+step\s+(.+?)\s+of\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if lr_m:
+            init_lr, step, tot, target = lr_m.group(1).strip(), lr_m.group(2).strip(), lr_m.group(3).strip(), lr_m.group(4).strip()
+            return f"set {target} to ml_cosine_decay_lr({init_lr}, {step}, {tot})"
+
+        split3_m = re.match(
+            r"^split\s+([A-Za-z_]\w*)\s+into\s+train\s+val\s+test(?:\s+with\s+ratios\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if split3_m:
+            data_var = split3_m.group(1).strip()
+            target = split3_m.group(3).strip()
+            return f"set {target} to ml_train_val_test_split({data_var})"
+
+        ano_m = re.match(
+            r"^compute\s+anomaly\s+scores\s+in\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if ano_m:
+            data_var, target = ano_m.group(1).strip(), ano_m.group(2).strip()
+            return f"set {target} to ml_one_class_anomaly_score({data_var})"
+
+        sil_m = re.match(
+            r"^compute\s+silhouette\s+score\s+for\s+([A-Za-z_]\w*)\s+with\s+labels\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if sil_m:
+            data_var, lbls, target = sil_m.group(1).strip(), sil_m.group(2).strip(), sil_m.group(3).strip()
+            return f"set {target} to ml_silhouette_score_sample({data_var}, {lbls})"
+
+        hinge_m = re.match(
+            r"^compute\s+hinge\s+loss\s+between\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if hinge_m:
+            y_t, y_s, target = hinge_m.group(1).strip(), hinge_m.group(2).strip(), hinge_m.group(3).strip()
+            return f"set {target} to ml_hinge_loss({y_t}, {y_s})"
+
+        lc_m = re.match(
+            r"^compute\s+learning\s+curve\s+points\s+for\s+(.+?)\s+on\s+([A-Za-z_]\w*)\s+predicting\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if lc_m:
+            model, data_var, tgt_col, target = lc_m.group(1).strip(), lc_m.group(2).strip(), lc_m.group(3).strip(), lc_m.group(4).strip()
+            return f"set {target} to ml_learning_curve_points({model}, {data_var}, {tgt_col})"
+
+        ema_m = re.match(
+            r"^exponential\s+moving\s+average\s+of\s+weights\s+(.+?)(?:\s+with\s+decay\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if ema_m:
+            hist = ema_m.group(1).strip()
+            decay = ema_m.group(2).strip() if ema_m.group(2) else "0.99"
+            target = ema_m.group(3).strip()
+            return f"set {target} to ml_exponential_moving_average_weights({hist}, decay={decay})"
+
+        clipg_m = re.match(
+            r"^clip\s+gradients\s+(.+?)\s+by\s+norm\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if clipg_m:
+            grads, max_norm, target = clipg_m.group(1).strip(), clipg_m.group(2).strip(), clipg_m.group(3).strip()
+            return f"set {target} to ml_gradient_clip_norm({grads}, max_norm={max_norm})"
+
         return None
 
     def parse_block(

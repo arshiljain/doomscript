@@ -459,3 +459,524 @@ def dry_run_pipeline(pipeline_or_name: Any, scope: Dict[str, Any] = None) -> Dic
         "errors": errors,
         "valid": len(errors) == 0,
     }
+
+
+# =========================================================================
+# High-Leverage Spoken English Tabular Data Verbs
+# =========================================================================
+
+def data_pivot_table(data: Any, index: Any, columns: Any, values: Any, agg: Any = "sum") -> List[Dict[str, Any]]:
+    """Reshape table into cross-tabulated pivot matrix."""
+    rows = _to_record_list(data)
+    idx_col = str(index).strip("'\"")
+    cols_col = str(columns).strip("'\"")
+    val_col = str(values).strip("'\"")
+    agg_str = str(agg).strip("'\"").lower()
+
+    groups: Dict[Any, Dict[Any, List[float]]] = {}
+    col_keys = set()
+    for r in rows:
+        idx_val = r.get(idx_col)
+        col_val = r.get(cols_col)
+        v = r.get(val_col)
+        if idx_val is not None and col_val is not None:
+            col_keys.add(str(col_val))
+            groups.setdefault(idx_val, {}).setdefault(str(col_val), []).append(float(v) if v is not None else 0.0)
+
+    pivoted = []
+    sorted_cols = sorted(list(col_keys))
+    for idx_val, col_dict in sorted(groups.items(), key=lambda x: str(x[0])):
+        row_res = {idx_col: idx_val}
+        for c in sorted_cols:
+            vals = col_dict.get(c, [])
+            if not vals:
+                row_res[c] = 0.0
+            elif agg_str == "mean":
+                row_res[c] = round(sum(vals) / len(vals), 4)
+            elif agg_str == "count":
+                row_res[c] = len(vals)
+            elif agg_str in ("max", "highest"):
+                row_res[c] = max(vals)
+            elif agg_str in ("min", "lowest"):
+                row_res[c] = min(vals)
+            else:  # sum
+                row_res[c] = round(sum(vals), 4)
+        pivoted.append(row_res)
+    return pivoted
+
+
+def data_melt_table(data: Any, id_vars: Any, value_vars: Any) -> List[Dict[str, Any]]:
+    """Unpivot a table from wide format to long format."""
+    rows = _to_record_list(data)
+    ids = [id_vars] if isinstance(id_vars, str) else list(id_vars)
+    vals = [value_vars] if isinstance(value_vars, str) else list(value_vars)
+    ids = [str(x).strip("'\"") for x in ids]
+    vals = [str(x).strip("'\"") for x in vals]
+
+    melted = []
+    for r in rows:
+        base_id = {k: r.get(k) for k in ids}
+        for v_col in vals:
+            m_row = dict(base_id)
+            m_row["variable"] = v_col
+            m_row["value"] = r.get(v_col)
+            melted.append(m_row)
+    return melted
+
+
+def data_fill_missing(data: Any, column: Any, fill_val: Any = "mean") -> List[Dict[str, Any]]:
+    """Impute missing values using mean, median, zero, or constant."""
+    rows = _to_record_list(data)
+    col_name = str(column).strip("'\"")
+    fill_str = str(fill_val).strip("'\"")
+
+    replacement = fill_val
+    if fill_str == "mean":
+        valid_nums = [r[col_name] for r in rows if r.get(col_name) is not None and isinstance(r.get(col_name), (int, float))]
+        replacement = round(sum(valid_nums) / len(valid_nums), 4) if valid_nums else 0
+    elif fill_str == "median":
+        valid_nums = sorted([r[col_name] for r in rows if r.get(col_name) is not None and isinstance(r.get(col_name), (int, float))])
+        replacement = valid_nums[len(valid_nums) // 2] if valid_nums else 0
+
+    res = []
+    for r in rows:
+        copied = dict(r)
+        if copied.get(col_name) is None or copied.get(col_name) == "":
+            copied[col_name] = replacement
+        res.append(copied)
+    return res
+
+
+def data_drop_duplicates(data: Any, subset: Any = None) -> List[Dict[str, Any]]:
+    """Deduplicate records based on all columns or a subset."""
+    rows = _to_record_list(data)
+    seen = set()
+    deduped = []
+    sub_cols = None
+    if subset is not None:
+        sub_cols = [str(subset).strip("'\"")] if isinstance(subset, str) else [str(x).strip("'\"") for x in subset]
+
+    for r in rows:
+        if sub_cols:
+            key = tuple(r.get(c) for c in sub_cols)
+        else:
+            key = tuple(sorted((k, str(v)) for k, v in r.items()))
+        if key not in seen:
+            seen.add(key)
+            deduped.append(dict(r))
+    return deduped
+
+
+def data_stratified_sample(data: Any, column: Any, n: Any = 5, seed: int = 42) -> List[Dict[str, Any]]:
+    """Uniformly sample n records from each category stratum."""
+    import random
+    rng = random.Random(seed)
+    rows = _to_record_list(data)
+    col_name = str(column).strip("'\"")
+    strata: Dict[Any, List[Dict[str, Any]]] = {}
+    for r in rows:
+        strata.setdefault(r.get(col_name), []).append(r)
+    sampled = []
+    for grp_rows in strata.values():
+        k = min(int(n), len(grp_rows))
+        sampled.extend(rng.sample(grp_rows, k))
+    return sampled
+
+
+def data_rolling_mean(data: Any, column: Any, window: Any = 3) -> List[Dict[str, Any]]:
+    """Calculate moving window average for a numeric column."""
+    rows = _to_record_list(data)
+    col_name = str(column).strip("'\"")
+    win = int(window)
+    res = []
+    vals: List[float] = []
+    for r in rows:
+        copied = dict(r)
+        val = r.get(col_name)
+        if isinstance(val, (int, float)):
+            vals.append(float(val))
+            if len(vals) > win:
+                vals.pop(0)
+            copied[f"{col_name}_rolling_mean"] = round(sum(vals) / len(vals), 4)
+        else:
+            copied[f"{col_name}_rolling_mean"] = None
+        res.append(copied)
+    return res
+
+
+def data_explode_column(data: Any, column: Any) -> List[Dict[str, Any]]:
+    """Transform list-like cells into separate rows."""
+    rows = _to_record_list(data)
+    col_name = str(column).strip("'\"")
+    exploded = []
+    for r in rows:
+        val = r.get(col_name)
+        if isinstance(val, (list, tuple)) and val:
+            for item in val:
+                c = dict(r)
+                c[col_name] = item
+                exploded.append(c)
+        else:
+            exploded.append(dict(r))
+    return exploded
+
+
+def data_merge_tables(left: Any, right: Any, on: Any, kind: Any = "inner") -> List[Dict[str, Any]]:
+    """Merge two tables on key with inner, left, or outer semantics."""
+    return join_datasets(left, right, on=str(on).strip("'\""), how=str(kind).strip("'\""))
+
+
+def data_rank_column(data: Any, column: Any, method: str = "average", ascending: bool = True) -> List[Dict[str, Any]]:
+    """Compute rank of values in a column with tie-breaking."""
+    rows = _to_record_list(data)
+    col = str(column).strip("'\"")
+    valid = []
+    for idx, r in enumerate(rows):
+        val = r.get(col)
+        valid.append((val, idx))
+    valid.sort(key=lambda x: (x[0] is None, x[0]), reverse=not ascending)
+    ranks = [0.0] * len(rows)
+    i = 0
+    n = len(valid)
+    while i < n:
+        j = i
+        while j < n and valid[j][0] == valid[i][0]:
+            j += 1
+        if method == "min":
+            r_val = float(i + 1)
+        elif method == "max":
+            r_val = float(j)
+        else:
+            r_val = sum(range(i + 1, j + 1)) / (j - i)
+        for k in range(i, j):
+            ranks[valid[k][1]] = r_val
+        i = j
+    out = []
+    for idx, r in enumerate(rows):
+        c = dict(r)
+        c[f"{col}_rank"] = ranks[idx]
+        out.append(c)
+    return out
+
+
+def data_lag_column(data: Any, column: Any, n: Any = 1, default: Any = None) -> List[Dict[str, Any]]:
+    """Shift column values by n rows backwards."""
+    rows = _to_record_list(data)
+    col = str(column).strip("'\"")
+    shift = int(n)
+    out = []
+    for i, r in enumerate(rows):
+        c = dict(r)
+        src_idx = i - shift
+        c[f"{col}_lag_{shift}"] = rows[src_idx].get(col) if src_idx >= 0 else default
+        out.append(c)
+    return out
+
+
+def data_lead_column(data: Any, column: Any, n: Any = 1, default: Any = None) -> List[Dict[str, Any]]:
+    """Shift column values by n rows forward."""
+    rows = _to_record_list(data)
+    col = str(column).strip("'\"")
+    shift = int(n)
+    out = []
+    for i, r in enumerate(rows):
+        c = dict(r)
+        src_idx = i + shift
+        c[f"{col}_lead_{shift}"] = rows[src_idx].get(col) if src_idx < len(rows) else default
+        out.append(c)
+    return out
+
+
+def data_cumulative_sum(data: Any, column: Any) -> List[Dict[str, Any]]:
+    """Calculate running cumulative sum of a column."""
+    rows = _to_record_list(data)
+    col = str(column).strip("'\"")
+    out = []
+    acc = 0.0
+    for r in rows:
+        c = dict(r)
+        val = r.get(col)
+        if isinstance(val, (int, float)):
+            acc += float(val)
+            c[f"{col}_cumsum"] = acc
+        else:
+            c[f"{col}_cumsum"] = acc
+        out.append(c)
+    return out
+
+
+def data_cumulative_max(data: Any, column: Any) -> List[Dict[str, Any]]:
+    """Calculate running cumulative maximum of a column."""
+    rows = _to_record_list(data)
+    col = str(column).strip("'\"")
+    out = []
+    cur_max = float("-inf")
+    for r in rows:
+        c = dict(r)
+        val = r.get(col)
+        if isinstance(val, (int, float)):
+            cur_max = max(cur_max, float(val))
+            c[f"{col}_cummax"] = cur_max
+        else:
+            c[f"{col}_cummax"] = cur_max if cur_max != float("-inf") else None
+        out.append(c)
+    return out
+
+
+def data_cumulative_min(data: Any, column: Any) -> List[Dict[str, Any]]:
+    """Calculate running cumulative minimum of a column."""
+    rows = _to_record_list(data)
+    col = str(column).strip("'\"")
+    out = []
+    cur_min = float("inf")
+    for r in rows:
+        c = dict(r)
+        val = r.get(col)
+        if isinstance(val, (int, float)):
+            cur_min = min(cur_min, float(val))
+            c[f"{col}_cummin"] = cur_min
+        else:
+            c[f"{col}_cummin"] = cur_min if cur_min != float("inf") else None
+        out.append(c)
+    return out
+
+
+def data_coalesce_columns(data: Any, columns: Any, target_column: Any) -> List[Dict[str, Any]]:
+    """Select first non-null value among specified columns."""
+    rows = _to_record_list(data)
+    if isinstance(columns, str):
+        cols = [c.strip().strip("'\"") for c in columns.split(",")]
+    else:
+        cols = [str(c).strip("'\"") for c in columns]
+    tgt = str(target_column).strip("'\"")
+    out = []
+    for r in rows:
+        c = dict(r)
+        found = None
+        for col in cols:
+            val = r.get(col)
+            if val is not None and val != "":
+                found = val
+                break
+        c[tgt] = found
+        out.append(c)
+    return out
+
+
+def data_multi_sort(data: Any, sort_keys: Any) -> List[Dict[str, Any]]:
+    """Sort table stably by multiple keys with optional ascending/descending flags."""
+    rows = _to_record_list(data)
+    keys = []
+    if isinstance(sort_keys, str):
+        parts = [p.strip() for p in sort_keys.split(",")]
+        for p in parts:
+            tokens = p.split()
+            col = tokens[0].strip("'\"")
+            asc = True
+            if len(tokens) > 1 and tokens[1].lower() in ("desc", "descending"):
+                asc = False
+            keys.append((col, asc))
+    elif isinstance(sort_keys, (list, tuple)):
+        for item in sort_keys:
+            if isinstance(item, (list, tuple)):
+                keys.append((str(item[0]).strip("'\""), bool(item[1]) if len(item) > 1 else True))
+            else:
+                keys.append((str(item).strip("'\""), True))
+    res = list(rows)
+    for col, asc in reversed(keys):
+        res.sort(key=lambda r: (r.get(col) is None, r.get(col)), reverse=not asc)
+    return [dict(r) for r in res]
+
+
+def data_cross_join(data1: Any, data2: Any) -> List[Dict[str, Any]]:
+    """Cartesian product of two datasets."""
+    r1 = _to_record_list(data1)
+    r2 = _to_record_list(data2)
+    out = []
+    for left in r1:
+        for right in r2:
+            merged = dict(left)
+            for k, v in right.items():
+                if k in merged:
+                    merged[f"right_{k}"] = v
+                else:
+                    merged[k] = v
+            out.append(merged)
+    return out
+
+
+def data_validate_schema(data: Any, schema: Any) -> Dict[str, Any]:
+    """Validate dataset fields and types against a schema contract."""
+    rows = _to_record_list(data)
+    errors = []
+    if not isinstance(schema, dict):
+        return {"valid": False, "errors": ["Schema must be a dictionary of field -> type"]}
+    for i, r in enumerate(rows):
+        for field, exp_type in schema.items():
+            if field not in r:
+                errors.append(f"Row {i} missing field '{field}'")
+            elif r[field] is not None:
+                val = r[field]
+                if exp_type in (int, "int", "integer") and not isinstance(val, int):
+                    errors.append(f"Row {i} field '{field}' expected int, got {type(val).__name__}")
+                elif exp_type in (float, "float", "number") and not isinstance(val, (int, float)):
+                    errors.append(f"Row {i} field '{field}' expected number, got {type(val).__name__}")
+                elif exp_type in (str, "str", "string", "text") and not isinstance(val, str):
+                    errors.append(f"Row {i} field '{field}' expected string, got {type(val).__name__}")
+    return {"valid": len(errors) == 0, "errors": errors}
+
+
+def data_rename_columns(data: Any, mapping: Any) -> List[Dict[str, Any]]:
+    """Rename columns according to mapping dictionary."""
+    rows = _to_record_list(data)
+    mp = dict(mapping) if isinstance(mapping, dict) else {}
+    out = []
+    for r in rows:
+        c = {}
+        for k, v in r.items():
+            new_key = mp.get(k, k)
+            c[new_key] = v
+        out.append(c)
+    return out
+
+
+def data_clip_column(data: Any, column: Any, lower: Any, upper: Any) -> List[Dict[str, Any]]:
+    """Clip numeric values in a column between bounds."""
+    rows = _to_record_list(data)
+    col = str(column).strip("'\"")
+    low = float(lower)
+    high = float(upper)
+    out = []
+    for r in rows:
+        c = dict(r)
+        val = r.get(col)
+        if isinstance(val, (int, float)):
+            c[col] = max(low, min(high, float(val)))
+        out.append(c)
+    return out
+
+
+def data_format_date_column(data: Any, column: Any, fmt: Any) -> List[Dict[str, Any]]:
+    """Format date strings in a column to a target format string."""
+    from datetime import datetime
+    rows = _to_record_list(data)
+    col = str(column).strip("'\"")
+    f_str = str(fmt).strip("'\"")
+    out = []
+    for r in rows:
+        c = dict(r)
+        val = r.get(col)
+        if isinstance(val, str):
+            for in_fmt in ("%Y-%m-%d", "%Y-%m-%d %H:%M:%S", "%Y/%m/%d", "%m/%d/%Y"):
+                try:
+                    dt = datetime.strptime(val.strip(), in_fmt)
+                    c[col] = dt.strftime(f_str)
+                    break
+                except ValueError:
+                    pass
+        elif hasattr(val, "strftime"):
+            c[col] = val.strftime(f_str)
+        out.append(c)
+    return out
+
+
+def data_string_trim(data: Any, column: Any) -> List[Dict[str, Any]]:
+    """Trim leading and trailing whitespace from string column values."""
+    rows = _to_record_list(data)
+    col = str(column).strip("'\"")
+    out = []
+    for r in rows:
+        c = dict(r)
+        val = r.get(col)
+        if isinstance(val, str):
+            c[col] = val.strip()
+        out.append(c)
+    return out
+
+
+def data_string_upper(data: Any, column: Any) -> List[Dict[str, Any]]:
+    """Convert text in a column to uppercase."""
+    rows = _to_record_list(data)
+    col = str(column).strip("'\"")
+    out = []
+    for r in rows:
+        c = dict(r)
+        val = r.get(col)
+        if isinstance(val, str):
+            c[col] = val.upper()
+        out.append(c)
+    return out
+
+
+def data_string_lower(data: Any, column: Any) -> List[Dict[str, Any]]:
+    """Convert text in a column to lowercase."""
+    rows = _to_record_list(data)
+    col = str(column).strip("'\"")
+    out = []
+    for r in rows:
+        c = dict(r)
+        val = r.get(col)
+        if isinstance(val, str):
+            c[col] = val.lower()
+        out.append(c)
+    return out
+
+
+def data_fill_null_forward(data: Any, column: Any) -> List[Dict[str, Any]]:
+    """Forward-fill missing or empty values in a column."""
+    rows = _to_record_list(data)
+    col = str(column).strip("'\"")
+    last_val = None
+    out = []
+    for r in rows:
+        c = dict(r)
+        val = r.get(col)
+        if val is not None and val != "":
+            last_val = val
+        else:
+            c[col] = last_val
+        out.append(c)
+    return out
+
+
+def data_fill_null_backward(data: Any, column: Any) -> List[Dict[str, Any]]:
+    """Backward-fill missing or empty values in a column."""
+    rows = _to_record_list(data)
+    col = str(column).strip("'\"")
+    next_val = None
+    temp = []
+    for r in reversed(rows):
+        c = dict(r)
+        val = r.get(col)
+        if val is not None and val != "":
+            next_val = val
+        else:
+            c[col] = next_val
+        temp.append(c)
+    return list(reversed(temp))
+
+
+def data_extract_year(data: Any, column: Any) -> List[Dict[str, Any]]:
+    """Extract 4-digit calendar year from date text into a new column."""
+    import re
+    rows = _to_record_list(data)
+    col = str(column).strip("'\"")
+    out = []
+    for r in rows:
+        c = dict(r)
+        val = str(r.get(col, ""))
+        m = re.search(r"\b(19\d\d|20\d\d)\b", val)
+        c[f"{col}_year"] = int(m.group(1)) if m else None
+        out.append(c)
+    return out
+
+
+def data_sample_fraction(data: Any, fraction: Any, seed: Any = 42) -> List[Dict[str, Any]]:
+    """Randomly sample a fraction of rows from dataset."""
+    import random
+    rows = _to_record_list(data)
+    frac = max(0.0, min(1.0, float(fraction)))
+    k = int(round(len(rows) * frac))
+    rng = random.Random(seed)
+    return rng.sample(rows, k)
+

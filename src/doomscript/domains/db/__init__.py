@@ -11,6 +11,33 @@ from doomscript.domains.db.runtime import (
     inspect_table_schema,
     execute_raw_sql,
     db_transaction,
+    db_connect,
+    db_inspect_schema,
+    db_upsert_record,
+    db_optimize,
+    db_backup,
+    db_truncate_table,
+    db_count_rows_where,
+    db_create_index,
+    db_drop_index,
+    db_add_column,
+    db_drop_column_sqlite,
+    db_vacuum,
+    db_analyze,
+    db_list_tables,
+    db_list_views,
+    db_list_indices,
+    db_table_exists,
+    db_bulk_insert,
+    db_export_table_to_csv,
+    db_import_csv_to_table,
+    db_get_foreign_keys,
+    db_check_foreign_key_integrity,
+    db_export_ddl,
+    db_table_column_types,
+    db_database_size_bytes,
+    db_count_distinct_values,
+    db_clone_table_schema,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.db.exporter import DBASTExporter
@@ -80,6 +107,36 @@ class DBDomain(DomainContract):
             or s.startswith("find all rows in ")
             or s.startswith("count rows in ")
             or (s.startswith("query ") and (" where " in s or " into " in s))
+            or s.startswith("upsert record ")
+            or s.startswith("optimize database")
+            or s.startswith("backup database")
+            or s.startswith("truncate table ")
+            or s.startswith("inspect schema of ")
+            or s.startswith("inspect database schema ")
+            or s.startswith("connect to sqlite ")
+            or s.startswith("connect to database ")
+            or s.startswith("create index ")
+            or s.startswith("drop index ")
+            or s.startswith("add column ")
+            or s.startswith("drop column ")
+            or s.startswith("vacuum database")
+            or s.startswith("analyze database")
+            or s.startswith("list tables")
+            or s.startswith("list views")
+            or s.startswith("list indices")
+            or s.startswith("table ")
+            or s.startswith("check if table ")
+            or s.startswith("bulk insert ")
+            or s.startswith("export table ")
+            or s.startswith("import csv ")
+            or s.startswith("get foreign keys ")
+            or s.startswith("check foreign key ")
+            or s.startswith("export ddl ")
+            or s.startswith("column types ")
+            or s.startswith("database size ")
+            or s.startswith("get database size ")
+            or s.startswith("count distinct ")
+            or s.startswith("clone schema ")
         )
 
     def can_handle_block(self, header: str) -> bool:
@@ -104,4 +161,31 @@ __all__ = [
     "inspect_table_schema",
     "execute_raw_sql",
     "db_transaction",
+    "db_connect",
+    "db_inspect_schema",
+    "db_upsert_record",
+    "db_optimize",
+    "db_backup",
+    "db_truncate_table",
+    "db_count_rows_where",
+    "db_create_index",
+    "db_drop_index",
+    "db_add_column",
+    "db_drop_column_sqlite",
+    "db_vacuum",
+    "db_analyze",
+    "db_list_tables",
+    "db_list_views",
+    "db_list_indices",
+    "db_table_exists",
+    "db_bulk_insert",
+    "db_export_table_to_csv",
+    "db_import_csv_to_table",
+    "db_get_foreign_keys",
+    "db_check_foreign_key_integrity",
+    "db_export_ddl",
+    "db_table_column_types",
+    "db_database_size_bytes",
+    "db_count_distinct_values",
+    "db_clone_table_schema",
 ]

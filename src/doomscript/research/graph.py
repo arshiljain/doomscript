@@ -74,6 +74,9 @@ class ResearchGraph:
     def __contains__(self, node: Any) -> bool:
         return node in self._nodes
 
+    def topological_sort(self) -> List[Any]:
+        return topological_sort(self)
+
     def __repr__(self) -> str:
         return f"ResearchGraph({len(self._nodes)} nodes, {len(self.edges())} edges)"
 

@@ -23,6 +23,31 @@ from doomscript.domains.graph.runtime import (
     graph_degrees,
     graph_communities,
     execute_graph_ir,
+    graph_eigenvector_centrality,
+    graph_dijkstra_shortest_path,
+    graph_bellman_ford,
+    graph_floyd_warshall,
+    graph_kruskal_mst,
+    graph_prim_mst,
+    graph_articulation_points,
+    graph_bipartite_check,
+    graph_max_flow_edmonds_karp,
+    graph_radius,
+    graph_clustering_coefficient,
+    graph_transitivity,
+    graph_density,
+    graph_degree_histogram,
+    graph_jaccard_similarity,
+    graph_find_articulation_points,
+    graph_jaccard_coefficient,
+    graph_average_clustering_coefficient,
+    graph_find_bridges,
+    graph_eccentricity,
+    graph_center,
+    graph_is_tree,
+    graph_transitive_closure,
+    graph_k_core,
+    graph_laplacian_matrix,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.graph.exporter import GraphASTExporter
@@ -103,12 +128,47 @@ class GraphDomain(DomainContract):
             or s.startswith("pagerank of ")
             or s.startswith("degrees of nodes in ")
             or s.startswith("detect communities in ")
+            or s.startswith("degree centrality of ")
+            or s.startswith("betweenness centrality of ")
+            or s.startswith("closeness centrality of ")
+            or (" is bipartite into " in s)
+            or s.startswith("find eulerian path in ")
+            or s.startswith("eulerian path in ")
+            or s.startswith("strongly connected components of ")
+            or s.startswith("diameter of ")
+            or s.startswith("eigenvector centrality of ")
+            or s.startswith("bellman ford ")
+            or s.startswith("floyd warshall in ")
+            or s.startswith("all pairs shortest paths using floyd warshall in ")
+            or s.startswith("minimum spanning tree of ")
+            or s.startswith("kruskal ")
+            or s.startswith("prim ")
+            or s.startswith("articulation points of ")
+            or s.startswith("find articulation points of ")
+            or s.startswith("bridges in ")
+            or s.startswith("find bridges in ")
+            or s.startswith("maximum flow in ")
+            or s.startswith("max flow in ")
+            or s.startswith("radius of ")
+            or s.startswith("center of ")
+            or s.startswith("clustering coefficient of ")
+            or s.startswith("transitivity of ")
+            or s.startswith("density of ")
+            or s.startswith("degree histogram of ")
+            or s.startswith("jaccard similarity ")
+            or s.startswith("eccentricity of ")
+            or (" is tree into " in s)
+            or s.startswith("transitive closure of ")
+            or s.startswith("k core of ")
+            or s.startswith("laplacian matrix of ")
         ):
             return True
 
         if s.startswith("connect ") and " to " in s and " in " in s:
             return True
-        if s.startswith("shortest path from ") and " to " in s and " in " in s:
+        if s.startswith("shortest path ") and " in " in s:
+            return True
+        if s.startswith("dijkstra shortest path in ") and " in " in s:
             return True
 
         return False
@@ -143,4 +203,29 @@ __all__ = [
     "graph_degrees",
     "graph_communities",
     "execute_graph_ir",
+    "graph_eigenvector_centrality",
+    "graph_dijkstra_shortest_path",
+    "graph_bellman_ford",
+    "graph_floyd_warshall",
+    "graph_kruskal_mst",
+    "graph_prim_mst",
+    "graph_articulation_points",
+    "graph_bipartite_check",
+    "graph_max_flow_edmonds_karp",
+    "graph_radius",
+    "graph_clustering_coefficient",
+    "graph_transitivity",
+    "graph_density",
+    "graph_degree_histogram",
+    "graph_jaccard_similarity",
+    "graph_find_articulation_points",
+    "graph_jaccard_coefficient",
+    "graph_average_clustering_coefficient",
+    "graph_find_bridges",
+    "graph_eccentricity",
+    "graph_center",
+    "graph_is_tree",
+    "graph_transitive_closure",
+    "graph_k_core",
+    "graph_laplacian_matrix",
 ]

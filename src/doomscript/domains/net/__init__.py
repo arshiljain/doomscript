@@ -12,7 +12,32 @@ from doomscript.domains.net.runtime import (
     parse_response_content,
     save_response_content,
     set_mutating_requests_allowed,
-    is_mutating_requests_allowed,
+    net_ping_host,
+    net_resolve_dns,
+    net_check_port,
+    net_create_basic_auth,
+    net_create_bearer_auth,
+    net_is_connected,
+    net_cidr_to_netmask,
+    net_ip_in_subnet,
+    net_expand_cidr_range,
+    net_is_valid_ipv4,
+    net_is_valid_ipv6,
+    net_format_mac_address,
+    net_whois_domain,
+    net_http_status_message,
+    net_build_query_string,
+    net_parse_url_components,
+    net_exponential_backoff_delay,
+    net_check_multiple_ports,
+    net_reverse_dns_lookup,
+    net_generate_multipart_boundary,
+    net_encode_basic_auth_header,
+    net_decode_basic_auth_header,
+    net_parse_http_headers,
+    net_format_http_headers,
+    net_is_private_ip,
+    net_download_file,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.net.exporter import NetASTExporter
@@ -75,6 +100,44 @@ class NetDomain(DomainContract):
             or s.startswith("allow mutating ")
             or s.startswith("block mutating ")
             or s.startswith("disallow mutating ")
+            or s.startswith("ping host ")
+            or s.startswith("resolve dns ")
+            or s.startswith("check port ")
+            or s.startswith("create basic auth ")
+            or s.startswith("create bearer auth ")
+            or s.startswith("check connectivity")
+            or s.startswith("check internet connectivity")
+            or s.startswith("convert cidr ")
+            or s.startswith("cidr ")
+            or s.startswith("check if ip ")
+            or s.startswith("is ip ")
+            or s.startswith("ip ")
+            or s.startswith("expand cidr ")
+            or s.startswith("expand subnet ")
+            or s.startswith("validate ipv4 ")
+            or s.startswith("is valid ipv4 ")
+            or s.startswith("validate ipv6 ")
+            or s.startswith("is valid ipv6 ")
+            or s.startswith("normalize mac address ")
+            or s.startswith("format mac address ")
+            or s.startswith("whois lookup ")
+            or s.startswith("whois domain ")
+            or s.startswith("http status message ")
+            or s.startswith("http status text ")
+            or s.startswith("build query string ")
+            or s.startswith("parse url ")
+            or s.startswith("calculate backoff delay ")
+            or s.startswith("scan ports ")
+            or s.startswith("reverse dns lookup ")
+            or s.startswith("generate multipart boundary")
+            or s.startswith("encode basic auth header ")
+            or s.startswith("decode basic auth header ")
+            or s.startswith("parse raw http headers ")
+            or s.startswith("format http headers ")
+            or s.startswith("check if private ip ")
+            or s.startswith("is private ip ")
+            or s.startswith("private ip ")
+            or s.startswith("download file from ")
         ):
             return True
         if re.match(r"^save\s+(?:response|resp)\s+to\s+", s):
@@ -107,4 +170,30 @@ __all__ = [
     "save_response_content",
     "set_mutating_requests_allowed",
     "is_mutating_requests_allowed",
+    "net_ping_host",
+    "net_resolve_dns",
+    "net_check_port",
+    "net_create_basic_auth",
+    "net_create_bearer_auth",
+    "net_is_connected",
+    "net_cidr_to_netmask",
+    "net_ip_in_subnet",
+    "net_expand_cidr_range",
+    "net_is_valid_ipv4",
+    "net_is_valid_ipv6",
+    "net_format_mac_address",
+    "net_whois_domain",
+    "net_http_status_message",
+    "net_build_query_string",
+    "net_parse_url_components",
+    "net_exponential_backoff_delay",
+    "net_check_multiple_ports",
+    "net_reverse_dns_lookup",
+    "net_generate_multipart_boundary",
+    "net_encode_basic_auth_header",
+    "net_decode_basic_auth_header",
+    "net_parse_http_headers",
+    "net_format_http_headers",
+    "net_is_private_ip",
+    "net_download_file",
 ]

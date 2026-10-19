@@ -618,6 +618,14 @@ def dsa_graph_has_cycle(g: Any) -> bool:
 def dsa_graph_topological_sort(g: Any) -> List[Any]:
     if isinstance(g, DsaGraph):
         return g.topological_sort()
+    if hasattr(g, "topological_sort") and callable(g.topological_sort):
+        return g.topological_sort()
+    try:
+        from doomscript.research.graph import ResearchGraph, topological_sort as res_topo_sort
+        if isinstance(g, ResearchGraph):
+            return res_topo_sort(g)
+    except Exception:
+        pass
     return []
 
 
@@ -771,6 +779,9 @@ class DsaTrie:
             curr = curr[char]
         return self.end_symbol in curr
 
+    def search(self, word: str) -> bool:
+        return self.contains(word)
+
     def starts_with(self, prefix: str) -> bool:
         curr = self.root
         for char in str(prefix):
@@ -808,10 +819,14 @@ def dsa_trie_insert(trie: Any, word: Any) -> Any:
     return trie
 
 
-def dsa_trie_contains(trie: Any, word: Any) -> bool:
+def dsa_trie_search(trie: Any, word: Any) -> bool:
     if isinstance(trie, DsaTrie):
         return trie.contains(str(word))
     return False
+
+
+dsa_trie_create = dsa_create_trie
+dsa_trie_contains = dsa_trie_search
 
 
 def dsa_trie_starts_with(trie: Any, prefix: Any) -> bool:
@@ -1353,3 +1368,507 @@ def dsa_longest_palindromic_substring(text: Any) -> str:
 def dsa_is_palindrome(text: Any) -> bool:
     s = str(text)
     return s == s[::-1]
+
+
+# --- Advanced Trees & Sequence Algorithms ---
+
+class DsaSegmentTree:
+    """Segment Tree for efficient O(log n) range sum queries and point updates."""
+
+    def __init__(self, arr: List[Any]):
+        self.n = len(arr)
+        self.tree = [0] * (4 * max(self.n, 1))
+        self.arr = list(arr)
+        if self.n > 0:
+            self._build(1, 0, self.n - 1)
+
+    def _build(self, node: int, start: int, end: int):
+        if start == end:
+            self.tree[node] = self.arr[start]
+            return
+        mid = (start + end) // 2
+        self._build(2 * node, start, mid)
+        self._build(2 * node + 1, mid + 1, end)
+        self.tree[node] = self.tree[2 * node] + self.tree[2 * node + 1]
+
+    def update(self, idx: int, val: Any):
+        def _update(node: int, start: int, end: int):
+            if start == end:
+                self.arr[idx] = val
+                self.tree[node] = val
+                return
+            mid = (start + end) // 2
+            if start <= idx <= mid:
+                _update(2 * node, start, mid)
+            else:
+                _update(2 * node + 1, mid + 1, end)
+            self.tree[node] = self.tree[2 * node] + self.tree[2 * node + 1]
+        if 0 <= idx < self.n:
+            _update(1, 0, self.n - 1)
+
+    def query(self, l: int, r: int) -> Any:
+        def _query(node: int, start: int, end: int, ql: int, qr: int) -> Any:
+            if qr < start or end < ql:
+                return 0
+            if ql <= start and end <= qr:
+                return self.tree[node]
+            mid = (start + end) // 2
+            return _query(2 * node, start, mid, ql, qr) + _query(2 * node + 1, mid + 1, end, ql, qr)
+        if self.n == 0:
+            return 0
+        return _query(1, 0, self.n - 1, max(0, l), min(self.n - 1, r))
+
+
+def dsa_create_segment_tree(arr: Any) -> DsaSegmentTree:
+    return DsaSegmentTree(list(arr))
+
+
+def dsa_segment_tree_query(st: Any, l: Any, r: Any) -> Any:
+    if isinstance(st, DsaSegmentTree):
+        return st.query(int(l), int(r))
+    return 0
+
+
+def dsa_segment_tree_update(st: Any, idx: Any, val: Any) -> Any:
+    if isinstance(st, DsaSegmentTree):
+        st.update(int(idx), val)
+    return st
+
+
+class DsaFenwickTree:
+    """Binary Indexed Tree (Fenwick Tree) for O(log n) prefix sums and point updates."""
+
+    def __init__(self, arr: List[Any]):
+        self.n = len(arr)
+        self.bit = [0] * (self.n + 1)
+        for i, val in enumerate(arr):
+            self.update(i, val)
+
+    def update(self, idx: int, delta: Any):
+        i = int(idx) + 1
+        while i <= self.n:
+            self.bit[i] += delta
+            i += i & (-i)
+
+    def prefix_sum(self, idx: int) -> Any:
+        res = 0
+        i = min(int(idx) + 1, self.n)
+        while i > 0:
+            res += self.bit[i]
+            i -= i & (-i)
+        return res
+
+
+def dsa_create_fenwick_tree(arr: Any) -> DsaFenwickTree:
+    return DsaFenwickTree(list(arr))
+
+
+def dsa_fenwick_prefix_sum(bit: Any, idx: Any) -> Any:
+    if isinstance(bit, DsaFenwickTree):
+        return bit.prefix_sum(int(idx))
+    return 0
+
+
+def dsa_fenwick_update(bit: Any, idx: Any, delta: Any) -> Any:
+    if isinstance(bit, DsaFenwickTree):
+        bit.update(int(idx), delta)
+    return bit
+
+
+def dsa_reservoir_sample(stream: Any, k: Any, seed: int = 42) -> List[Any]:
+    """Uniform random sampling of k elements from an unknown/infinite stream."""
+    import random
+    rng = random.Random(seed)
+    k_int = int(k)
+    reservoir = []
+    for i, item in enumerate(stream):
+        if i < k_int:
+            reservoir.append(item)
+        else:
+            j = rng.randint(0, i)
+            if j < k_int:
+                reservoir[j] = item
+    return reservoir
+
+
+def dsa_lcs(a: Any, b: Any) -> str:
+    """Compute the Longest Common Subsequence of two sequences in O(m * n) DP time."""
+    s1, s2 = str(a), str(b)
+    m, n = len(s1), len(s2)
+    dp = [["" for _ in range(n + 1)] for _ in range(m + 1)]
+    for i in range(1, m + 1):
+        for j in range(1, n + 1):
+            if s1[i - 1] == s2[j - 1]:
+                dp[i][j] = dp[i - 1][j - 1] + s1[i - 1]
+            else:
+                dp[i][j] = dp[i - 1][j] if len(dp[i - 1][j]) >= len(dp[i][j - 1]) else dp[i][j - 1]
+    return dp[m][n]
+
+
+# --- Math & Statistics Operations ---
+
+def dsa_correlation(x: Any, y: Any) -> float:
+    """Pearson correlation coefficient between two numeric collections."""
+    import math
+    if not x or not y or len(x) != len(y) or len(x) < 2:
+        return 0.0
+    mx = sum(x) / len(x)
+    my = sum(y) / len(y)
+    num = sum((a - mx) * (b - my) for a, b in zip(x, y))
+    den = math.sqrt(sum((a - mx) ** 2 for a in x) * sum((b - my) ** 2 for b in y))
+    return round(num / den, 4) if den != 0 else 0.0
+
+
+def dsa_linear_regression(y: Any, x: Any) -> Dict[str, float]:
+    """Ordinary Least Squares simple linear regression returning slope, intercept, and R^2."""
+    n = len(x)
+    if n < 2 or len(y) != n:
+        return {"slope": 0.0, "intercept": 0.0, "r2": 0.0}
+    mx, my = sum(x) / n, sum(y) / n
+    cov_xy = sum((a - mx) * (b - my) for a, b in zip(x, y))
+    var_x = sum((a - mx) ** 2 for a in x)
+    slope = cov_xy / var_x if var_x != 0 else 0.0
+    intercept = my - slope * mx
+    preds = [slope * a + intercept for a in x]
+    ss_res = sum((b - p) ** 2 for b, p in zip(y, preds))
+    ss_tot = sum((b - my) ** 2 for b in y)
+    r2 = 1.0 - (ss_res / ss_tot) if ss_tot != 0 else 1.0
+    return {"slope": round(slope, 4), "intercept": round(intercept, 4), "r2": round(r2, 4)}
+
+
+def dsa_moving_median(arr: Any, w: Any) -> List[float]:
+    """Rolling / moving median filter over a numeric sequence."""
+    win = int(w)
+    if not arr or win <= 0:
+        return []
+    res = []
+    for i in range(len(arr) - win + 1):
+        chunk = sorted(arr[i : i + win])
+        mid = win // 2
+        med = float(chunk[mid] if win % 2 != 0 else (chunk[mid - 1] + chunk[mid]) / 2.0)
+        res.append(med)
+    return res
+
+
+def dsa_percentile(arr: Any, p: Any) -> float:
+    """Calculate the p-th percentile of a numeric collection with linear interpolation."""
+    import math
+    if not arr:
+        return 0.0
+    s_arr = sorted(arr)
+    k = (len(s_arr) - 1) * (float(p) / 100.0)
+    f = math.floor(k)
+    c = math.ceil(k)
+    if f == c:
+        return float(s_arr[int(k)])
+    return round(float(s_arr[int(f)] * (c - k) + s_arr[int(c)] * (k - f)), 4)
+
+
+def dsa_z_score_normalize(arr: Any) -> List[float]:
+    """Standardize data to zero mean and unit variance."""
+    import math
+    if not arr:
+        return []
+    m = sum(arr) / len(arr)
+    std = math.sqrt(sum((x - m) ** 2 for x in arr) / len(arr))
+    if std == 0:
+        return [0.0] * len(arr)
+    return [round((x - m) / std, 4) for x in arr]
+
+
+def dsa_min_max_scale(arr: Any) -> List[float]:
+    """Rescale features to a [0, 1] range."""
+    if not arr:
+        return []
+    mn, mx = min(arr), max(arr)
+    if mx == mn:
+        return [0.0] * len(arr)
+    return [round((x - mn) / (mx - mn), 4) for x in arr]
+
+
+def dsa_empirical_cdf(arr: Any, x: Any) -> float:
+    """Evaluate empirical cumulative distribution function P(X <= x)."""
+    if not arr:
+        return 0.0
+    count_le = sum(1 for v in arr if v <= float(x))
+    return round(count_le / len(arr), 4)
+
+
+# --- 350 Expansion Batch 1: Advanced DSA & String Algorithms ---
+
+
+class DsaDSU:
+    """Disjoint Set Union (Union-Find) with path compression and rank optimization."""
+    def __init__(self, size: int):
+        self.parent = list(range(int(size)))
+        self.rank = [0] * int(size)
+
+    def find(self, x: int) -> int:
+        if self.parent[x] != x:
+            self.parent[x] = self.find(self.parent[x])
+        return self.parent[x]
+
+    def union(self, x: int, y: int) -> bool:
+        root_x, root_y = self.find(int(x)), self.find(int(y))
+        if root_x == root_y:
+            return False
+        if self.rank[root_x] < self.rank[root_y]:
+            root_x, root_y = root_y, root_x
+        self.parent[root_y] = root_x
+        if self.rank[root_x] == self.rank[root_y]:
+            self.rank[root_x] += 1
+        return True
+
+
+def dsa_dsu_create(size: Any) -> DsaDSU:
+    return DsaDSU(int(size))
+
+
+def dsa_dsu_find(dsu: DsaDSU, x: Any) -> int:
+    return dsu.find(int(x))
+
+
+def dsa_dsu_union(dsu: DsaDSU, x: Any, y: Any) -> bool:
+    return dsu.union(int(x), int(y))
+
+
+from collections import OrderedDict
+
+class DsaLRUCache:
+    """O(1) Least Recently Used cache implementation."""
+    def __init__(self, capacity: int = 128):
+        self.capacity = max(1, int(capacity))
+        self.cache: OrderedDict = OrderedDict()
+
+    def get(self, key: Any, default: Any = None) -> Any:
+        if key not in self.cache:
+            return default
+        self.cache.move_to_end(key)
+        return self.cache[key]
+
+    def put(self, key: Any, value: Any) -> None:
+        if key in self.cache:
+            self.cache.move_to_end(key)
+        self.cache[key] = value
+        if len(self.cache) > self.capacity:
+            self.cache.popitem(last=False)
+
+
+def dsa_lru_create(capacity: Any = 128) -> DsaLRUCache:
+    return DsaLRUCache(int(capacity))
+
+
+def dsa_lru_get(cache: DsaLRUCache, key: Any, default: Any = None) -> Any:
+    return cache.get(key, default)
+
+
+def dsa_lru_put(cache: DsaLRUCache, key: Any, value: Any) -> DsaLRUCache:
+    cache.put(key, value)
+    return cache
+
+
+def dsa_binary_search_left(arr: Any, target: Any) -> int:
+    """Locate insertion point for target in arr to maintain sorted order (leftmost)."""
+    import bisect
+    return bisect.bisect_left(list(arr), target)
+
+
+def dsa_binary_search_right(arr: Any, target: Any) -> int:
+    """Locate insertion point for target in arr to maintain sorted order (rightmost)."""
+    import bisect
+    return bisect.bisect_right(list(arr), target)
+
+
+def dsa_quickselect(arr: Any, k: Any) -> Any:
+    """Select the k-th smallest element from an array in O(n) average time (0-indexed)."""
+    k_idx = int(k)
+    nums = list(arr)
+    if not (0 <= k_idx < len(nums)):
+        raise IndexError("k is out of bounds for quickselect")
+    def _select(left, right, target_k):
+        if left == right:
+            return nums[left]
+        pivot = nums[right]
+        p_idx = left
+        for i in range(left, right):
+            if nums[i] <= pivot:
+                nums[p_idx], nums[i] = nums[i], nums[p_idx]
+                p_idx += 1
+        nums[p_idx], nums[right] = nums[right], nums[p_idx]
+        if p_idx == target_k:
+            return nums[p_idx]
+        elif p_idx < target_k:
+            return _select(p_idx + 1, right, target_k)
+        else:
+            return _select(left, p_idx - 1, target_k)
+    return _select(0, len(nums) - 1, k_idx)
+
+
+def dsa_kadane_2d(matrix: Any) -> Dict[str, Any]:
+    """Find maximum sum rectangular submatrix in 2D grid."""
+    mat = [list(row) for row in matrix]
+    if not mat or not mat[0]:
+        return {"max_sum": 0, "bounds": {"top": 0, "bottom": 0, "left": 0, "right": 0}}
+    R, C = len(mat), len(mat[0])
+    max_sum = float("-inf")
+    best_coords = {"top": 0, "bottom": 0, "left": 0, "right": 0}
+    for left in range(C):
+        temp = [0] * R
+        for right in range(left, C):
+            for i in range(R):
+                temp[i] += mat[i][right]
+            curr_sum = 0
+            start_row = 0
+            for r in range(R):
+                curr_sum += temp[r]
+                if curr_sum > max_sum:
+                    max_sum = curr_sum
+                    best_coords = {"top": start_row, "bottom": r, "left": left, "right": right}
+                if curr_sum < 0:
+                    curr_sum = 0
+                    start_row = r + 1
+    return {"max_sum": max_sum, "bounds": best_coords}
+
+
+def dsa_count_inversions(arr: Any) -> int:
+    """Count number of inversions in a sequence using divide-and-conquer."""
+    nums = list(arr)
+    def _merge_sort(a):
+        if len(a) <= 1:
+            return a, 0
+        mid = len(a) // 2
+        left, left_inv = _merge_sort(a[:mid])
+        right, right_inv = _merge_sort(a[mid:])
+        merged = []
+        inv = left_inv + right_inv
+        i = j = 0
+        while i < len(left) and j < len(right):
+            if left[i] <= right[j]:
+                merged.append(left[i])
+                i += 1
+            else:
+                merged.append(right[j])
+                inv += len(left) - i
+                j += 1
+        merged.extend(left[i:])
+        merged.extend(right[j:])
+        return merged, inv
+    _, total_inv = _merge_sort(nums)
+    return total_inv
+
+
+def dsa_next_permutation(arr: Any) -> List[Any]:
+    """Rearrange list into lexicographically next greater permutation."""
+    nums = list(arr)
+    i = len(nums) - 2
+    while i >= 0 and nums[i] >= nums[i + 1]:
+        i -= 1
+    if i >= 0:
+        j = len(nums) - 1
+        while nums[j] <= nums[i]:
+            j -= 1
+        nums[i], nums[j] = nums[j], nums[i]
+    nums[i + 1:] = reversed(nums[i + 1:])
+    return nums
+
+
+def dsa_prev_permutation(arr: Any) -> List[Any]:
+    """Rearrange list into lexicographically previous smaller permutation."""
+    nums = list(arr)
+    i = len(nums) - 2
+    while i >= 0 and nums[i] <= nums[i + 1]:
+        i -= 1
+    if i >= 0:
+        j = len(nums) - 1
+        while nums[j] >= nums[i]:
+            j -= 1
+        nums[i], nums[j] = nums[j], nums[i]
+    nums[i + 1:] = reversed(nums[i + 1:])
+    return nums
+
+
+def dsa_rabin_karp_search(text: Any, pattern: Any) -> List[int]:
+    """Search for pattern in text using Rabin-Karp polynomial rolling hash."""
+    txt, pat = str(text), str(pattern)
+    n, m = len(txt), len(pat)
+    if m == 0 or n < m:
+        return []
+    base = 256
+    mod = 1000000007
+    p_hash = 0
+    t_hash = 0
+    h = pow(base, m - 1, mod)
+    for i in range(m):
+        p_hash = (base * p_hash + ord(pat[i])) % mod
+        t_hash = (base * t_hash + ord(txt[i])) % mod
+    matches = []
+    for i in range(n - m + 1):
+        if p_hash == t_hash:
+            if txt[i:i + m] == pat:
+                matches.append(i)
+        if i < n - m:
+            t_hash = (base * (t_hash - ord(txt[i]) * h) + ord(txt[i + m])) % mod
+            t_hash = (t_hash + mod) % mod
+    return matches
+
+
+def dsa_manacher(text: Any) -> str:
+    """Find longest palindromic substring in O(n) time using Manacher's algorithm."""
+    s = str(text)
+    if not s:
+        return ""
+    t = "^#" + "#".join(s) + "#$"
+    p = [0] * len(t)
+    c = r = 0
+    for i in range(1, len(t) - 1):
+        i_mirror = 2 * c - i
+        if r > i:
+            p[i] = min(r - i, p[i_mirror])
+        while t[i + 1 + p[i]] == t[i - 1 - p[i]]:
+            p[i] += 1
+        if i + p[i] > r:
+            c = i
+            r = i + p[i]
+    max_len, center_idx = max((n, i) for i, n in enumerate(p))
+    start = (center_idx - max_len) // 2
+    return s[start:start + max_len]
+
+
+def dsa_tarjan_bridges(adj_or_edges: Any, num_nodes: Optional[int] = None) -> List[Tuple[int, int]]:
+    """Find all critical bridge edges in an undirected graph."""
+    adj: Dict[int, List[int]] = {}
+    if isinstance(adj_or_edges, dict):
+        adj = {int(u): [int(v) for v in vs] for u, vs in adj_or_edges.items()}
+    elif isinstance(adj_or_edges, (list, tuple)):
+        for edge in adj_or_edges:
+            u, v = int(edge[0]), int(edge[1])
+            adj.setdefault(u, []).append(v)
+            adj.setdefault(v, []).append(u)
+    nodes = list(adj.keys())
+    tin: Dict[int, int] = {}
+    low: Dict[int, int] = {}
+    timer = 0
+    bridges: List[Tuple[int, int]] = []
+    visited: Set[int] = set()
+
+    def _dfs(v, p=-1):
+        nonlocal timer
+        visited.add(v)
+        timer += 1
+        tin[v] = low[v] = timer
+        for to in adj.get(v, []):
+            if to == p:
+                continue
+            if to in visited:
+                low[v] = min(low[v], tin[to])
+            else:
+                _dfs(to, v)
+                low[v] = min(low[v], low[to])
+                if low[to] > tin[v]:
+                    bridges.append((min(v, to), max(v, to)))
+
+    for n in nodes:
+        if n not in visited:
+            _dfs(n)
+    return sorted(bridges)
+

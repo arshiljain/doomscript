@@ -199,3 +199,290 @@ def execute_audio_ir(spec_id: str) -> Any:
     if spec is None:
         raise KeyError(f"Audio spec not found: {spec_id}")
     return AudioRuntime().execute_ir(spec, {})
+
+
+# --- Batch 10 Spoken English Audio Verbs ---
+
+def audio_generate_sine(freq: Any, dur: Any, sample_rate: int = 44100) -> DoomAudio:
+    """Generate pure sine tone at given frequency and duration."""
+    f = float(freq)
+    d = float(dur)
+    total_samples = int(d * sample_rate)
+    samples = [math.sin(2.0 * math.pi * f * i / sample_rate) for i in range(total_samples)]
+    return DoomAudio(samples=samples, sample_rate=sample_rate, channels=1)
+
+
+def audio_normalize(track: Any) -> DoomAudio:
+    """Peak-normalize audio track to [-1.0, 1.0] amplitude range."""
+    if not isinstance(track, DoomAudio) or not track.samples:
+        return track
+    peak = max(abs(s) for s in track.samples)
+    if peak == 0.0 or peak == 1.0:
+        return track
+    norm_samples = [s / peak for s in track.samples]
+    return DoomAudio(samples=norm_samples, sample_rate=track.sample_rate, channels=track.channels)
+
+
+def audio_duration(track: Any) -> float:
+    """Get duration of audio clip in seconds."""
+    if isinstance(track, DoomAudio):
+        return round(track.duration, 4)
+    return 0.0
+
+
+def audio_fade_in(track: Any, sec: Any) -> DoomAudio:
+    """Apply linear fade-in to audio track."""
+    if isinstance(track, DoomAudio):
+        return track.fade(fade_in_sec=float(sec))
+    return track
+
+
+def audio_reverse(track: Any) -> DoomAudio:
+    """Reverse waveform samples of audio track."""
+    if isinstance(track, DoomAudio):
+        return DoomAudio(samples=list(reversed(track.samples)), sample_rate=track.sample_rate, channels=track.channels)
+    return track
+
+
+def audio_concatenate(tracks: Any) -> DoomAudio:
+    """Concatenate a sequence of audio tracks end-to-end."""
+    track_list = list(tracks)
+    if not track_list:
+        return DoomAudio()
+    first = track_list[0]
+    if isinstance(first, DoomAudio):
+        return first.combine(track_list[1:])
+    return DoomAudio()
+
+
+# --- 350-Expansion 19 Audio Operations ---
+
+def _unwrap_audio(audio: Any) -> DoomAudio:
+    if isinstance(audio, DoomAudio):
+        return audio
+    if isinstance(audio, list):
+        return DoomAudio(samples=list(audio))
+    return DoomAudio()
+
+
+def audio_generate_square(freq: Any, duration: Any, sample_rate: int = 44100) -> DoomAudio:
+    """Square wave synthesizer."""
+    f = float(freq)
+    d = float(duration)
+    total_samples = int(d * sample_rate)
+    samples = [1.0 if math.sin(2.0 * math.pi * f * i / sample_rate) >= 0.0 else -1.0 for i in range(total_samples)]
+    return DoomAudio(samples=samples, sample_rate=sample_rate, channels=1)
+
+
+def audio_generate_sawtooth(freq: Any, duration: Any, sample_rate: int = 44100) -> DoomAudio:
+    """Sawtooth wave synthesizer."""
+    f = float(freq)
+    d = float(duration)
+    total_samples = int(d * sample_rate)
+    samples = []
+    for i in range(total_samples):
+        t = i / float(sample_rate)
+        # 2 * (t * f - floor(t * f + 0.5))
+        tf = t * f
+        samples.append(2.0 * (tf - math.floor(tf + 0.5)))
+    return DoomAudio(samples=samples, sample_rate=sample_rate, channels=1)
+
+
+def audio_generate_triangle(freq: Any, duration: Any, sample_rate: int = 44100) -> DoomAudio:
+    """Triangle wave synthesizer."""
+    f = float(freq)
+    d = float(duration)
+    total_samples = int(d * sample_rate)
+    samples = []
+    for i in range(total_samples):
+        t = i / float(sample_rate)
+        tf = t * f
+        saw = 2.0 * (tf - math.floor(tf + 0.5))
+        tri = 2.0 * abs(saw) - 1.0
+        samples.append(tri)
+    return DoomAudio(samples=samples, sample_rate=sample_rate, channels=1)
+
+
+def audio_generate_white_noise(duration: Any, sample_rate: int = 44100) -> DoomAudio:
+    """White noise generator with uniform amplitude."""
+    import random
+    d = float(duration)
+    total_samples = int(d * sample_rate)
+    samples = [random.uniform(-1.0, 1.0) for _ in range(total_samples)]
+    return DoomAudio(samples=samples, sample_rate=sample_rate, channels=1)
+
+
+def audio_adjust_gain_db(audio: Any, decibels: Any) -> DoomAudio:
+    """Adjust audio gain by decibel scale."""
+    t = _unwrap_audio(audio)
+    return t.adjust_volume(float(decibels))
+
+
+def audio_trim_silence(audio: Any, threshold: Any = 0.01) -> DoomAudio:
+    """Trim leading and trailing silence below amplitude threshold."""
+    t = _unwrap_audio(audio)
+    th = float(threshold)
+    s = t.samples
+    start = 0
+    while start < len(s) and abs(s[start]) < th:
+        start += 1
+    end = len(s)
+    while end > start and abs(s[end - 1]) < th:
+        end -= 1
+    return DoomAudio(samples=s[start:end], sample_rate=t.sample_rate, channels=t.channels)
+
+
+def audio_apply_fade_out(audio: Any, duration: Any) -> DoomAudio:
+    """Apply linear fade-out to end of track."""
+    t = _unwrap_audio(audio)
+    return t.fade(fade_out_sec=float(duration))
+
+
+def audio_mix_tracks(track1: Any, track2: Any, weight1: Any = 1.0, weight2: Any = 1.0) -> DoomAudio:
+    """Mix two audio tracks with relative weights."""
+    t1 = _unwrap_audio(track1)
+    t2 = _unwrap_audio(track2)
+    w1, w2 = float(weight1), float(weight2)
+    max_len = max(len(t1.samples), len(t2.samples))
+    mixed = []
+    for i in range(max_len):
+        s1 = t1.samples[i] if i < len(t1.samples) else 0.0
+        s2 = t2.samples[i] if i < len(t2.samples) else 0.0
+        m = max(-1.0, min(1.0, s1 * w1 + s2 * w2))
+        mixed.append(m)
+    sr = t1.sample_rate or t2.sample_rate or 44100
+    return DoomAudio(samples=mixed, sample_rate=sr, channels=max(t1.channels, t2.channels))
+
+
+def audio_pan_stereo(audio: Any, pan: Any = 0.0) -> DoomAudio:
+    """Pan mono audio into interleaved stereo (-1.0=Left, +1.0=Right)."""
+    t = _unwrap_audio(audio)
+    p = max(-1.0, min(1.0, float(pan)))
+    # Constant power panning
+    l_gain = math.cos((p + 1.0) * math.pi / 4.0)
+    r_gain = math.sin((p + 1.0) * math.pi / 4.0)
+    stereo = []
+    for s in t.samples:
+        stereo.append(round(s * l_gain, 6))
+        stereo.append(round(s * r_gain, 6))
+    return DoomAudio(samples=stereo, sample_rate=t.sample_rate, channels=2)
+
+
+def audio_low_pass_filter(audio: Any, cutoff_freq: Any = 1000.0) -> DoomAudio:
+    """Single-pole IIR low-pass filter."""
+    t = _unwrap_audio(audio)
+    fc = float(cutoff_freq)
+    sr = t.sample_rate or 44100
+    dt = 1.0 / sr
+    rc = 1.0 / (2.0 * math.pi * fc)
+    alpha = dt / (rc + dt)
+    filtered = []
+    prev = 0.0
+    for s in t.samples:
+        cur = prev + alpha * (s - prev)
+        filtered.append(cur)
+        prev = cur
+    return DoomAudio(samples=filtered, sample_rate=sr, channels=t.channels)
+
+
+def audio_high_pass_filter(audio: Any, cutoff_freq: Any = 1000.0) -> DoomAudio:
+    """Single-pole IIR high-pass filter."""
+    t = _unwrap_audio(audio)
+    fc = float(cutoff_freq)
+    sr = t.sample_rate or 44100
+    rc = 1.0 / (2.0 * math.pi * fc)
+    dt = 1.0 / sr
+    alpha = rc / (rc + dt)
+    filtered = []
+    prev_x = 0.0
+    prev_y = 0.0
+    for s in t.samples:
+        cur_y = alpha * (prev_y + s - prev_x)
+        filtered.append(cur_y)
+        prev_x = s
+        prev_y = cur_y
+    return DoomAudio(samples=filtered, sample_rate=sr, channels=t.channels)
+
+
+def audio_peak_amplitude(audio: Any) -> float:
+    """Maximum absolute amplitude."""
+    t = _unwrap_audio(audio)
+    if not t.samples:
+        return 0.0
+    return round(max(abs(s) for s in t.samples), 4)
+
+
+def audio_rms_energy(audio: Any) -> float:
+    """Root-Mean-Square energy calculation."""
+    t = _unwrap_audio(audio)
+    if not t.samples:
+        return 0.0
+    return round(math.sqrt(sum(s * s for s in t.samples) / len(t.samples)), 4)
+
+
+def audio_zero_crossing_rate(audio: Any) -> float:
+    """Measure rate of sign changes across audio waveform."""
+    t = _unwrap_audio(audio)
+    if len(t.samples) <= 1:
+        return 0.0
+    s = t.samples
+    crossings = sum(1 for i in range(1, len(s)) if (s[i] >= 0 and s[i - 1] < 0) or (s[i] < 0 and s[i - 1] >= 0))
+    return round(crossings / float(len(s) - 1), 4)
+
+
+def audio_clip_samples(audio: Any, min_val: Any = -0.8, max_val: Any = 0.8) -> DoomAudio:
+    """Hard clipping distortion filter."""
+    t = _unwrap_audio(audio)
+    mn, mx = float(min_val), float(max_val)
+    clipped = [max(mn, min(mx, s)) for s in t.samples]
+    return DoomAudio(samples=clipped, sample_rate=t.sample_rate, channels=t.channels)
+
+
+def audio_loop_track(audio: Any, count: Any = 2) -> DoomAudio:
+    """Repeat audio track N times."""
+    t = _unwrap_audio(audio)
+    c = max(1, int(count))
+    return DoomAudio(samples=t.samples * c, sample_rate=t.sample_rate, channels=t.channels)
+
+
+def audio_delay_echo(audio: Any, delay_sec: Any = 0.2, decay: Any = 0.5) -> DoomAudio:
+    """Echo feedback delay line."""
+    t = _unwrap_audio(audio)
+    delay_samples = int(float(delay_sec) * t.sample_rate * t.channels)
+    dec = float(decay)
+    out = list(t.samples)
+    for i in range(delay_samples, len(out)):
+        out[i] = max(-1.0, min(1.0, out[i] + dec * t.samples[i - delay_samples]))
+    return DoomAudio(samples=out, sample_rate=t.sample_rate, channels=t.channels)
+
+
+def audio_time_stretch_naive(audio: Any, rate: Any = 1.0) -> DoomAudio:
+    """Linear interpolation time stretcher."""
+    t = _unwrap_audio(audio)
+    r = max(0.01, float(rate))
+    s = t.samples
+    if not s or r == 1.0:
+        return t
+    new_len = int(len(s) / r)
+    out = []
+    for i in range(new_len):
+        pos = i * r
+        idx = int(pos)
+        frac = pos - idx
+        if idx + 1 < len(s):
+            val = s[idx] * (1.0 - frac) + s[idx + 1] * frac
+        elif idx < len(s):
+            val = s[idx]
+        else:
+            val = 0.0
+        out.append(val)
+    return DoomAudio(samples=out, sample_rate=t.sample_rate, channels=t.channels)
+
+
+def audio_generate_silence(duration: Any, sample_rate: int = 44100) -> DoomAudio:
+    """Generate silent audio buffer."""
+    d = float(duration)
+    total_samples = int(d * sample_rate)
+    return DoomAudio(samples=[0.0] * total_samples, sample_rate=sample_rate, channels=1)
+
+

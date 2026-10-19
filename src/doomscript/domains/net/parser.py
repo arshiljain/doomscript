@@ -132,6 +132,277 @@ class NetDomainParser(DomainParser):
             path = save_m.group(2)
             return f"save_response_content({src}, {path})"
 
+        # ping host <host> [with timeout <to>] into <target>
+        ping_m = re.match(
+            r"^ping\s+host\s+(.+?)(?:\s+with\s+timeout\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if ping_m:
+            host = ping_m.group(1).strip()
+            to = ping_m.group(2)
+            target = ping_m.group(3).strip()
+            to_arg = f", timeout={to.strip()}" if to else ""
+            return f"set {target} to net_ping_host({host}{to_arg})"
+
+        # resolve dns [for|of] <host> into <target>
+        dns_m = re.match(
+            r"^resolve\s+dns(?:\s+(?:for|of))?\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if dns_m:
+            host, target = dns_m.group(1).strip(), dns_m.group(2).strip()
+            return f"set {target} to net_resolve_dns({host})"
+
+        # check port <port> on [host] <host> [with timeout <to>] into <target>
+        port_m = re.match(
+            r"^check\s+port\s+(.+?)\s+on\s+(?:host\s+)?(.+?)(?:\s+with\s+timeout\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if port_m:
+            p, host, to, target = port_m.group(1).strip(), port_m.group(2).strip(), port_m.group(3), port_m.group(4).strip()
+            to_arg = f", timeout={to.strip()}" if to else ""
+            return f"set {target} to net_check_port({p}, host={host}{to_arg})"
+
+        # create basic auth header for <user> with <pass> into <target>
+        bauth_m = re.match(
+            r"^create\s+basic\s+auth\s+header\s+for\s+(.+?)\s+with\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if bauth_m:
+            u, p, target = bauth_m.group(1).strip(), bauth_m.group(2).strip(), bauth_m.group(3).strip()
+            return f"set {target} to net_create_basic_auth({u}, {p})"
+
+        # create bearer auth header with token <tok> into <target>
+        tok_m = re.match(
+            r"^create\s+bearer\s+auth\s+header\s+(?:with|for)\s+(?:token\s+)?(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if tok_m:
+            tok, target = tok_m.group(1).strip(), tok_m.group(2).strip()
+            return f"set {target} to net_create_bearer_auth({tok})"
+
+        # check [internet] connectivity into <target>
+        conn_m = re.match(
+            r"^check\s+(?:internet\s+)?connectivity\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if conn_m:
+            target = conn_m.group(1).strip()
+            return f"set {target} to net_is_connected()"
+
+        # convert cidr <cidr> to netmask into <target>
+        m_c2m = re.match(
+            r"^(?:convert\s+)?cidr\s+(.+?)\s+to\s+netmask\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_c2m:
+            cidr, target = m_c2m.group(1).strip(), m_c2m.group(2).strip()
+            return f"set {target} to net_cidr_to_netmask({cidr})"
+
+        # check if ip <ip> in subnet <cidr> into <target>
+        m_insub = re.match(
+            r"^(?:check\s+if\s+|is\s+)?ip\s+(.+?)\s+in\s+subnet\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_insub:
+            ip, cidr, target = m_insub.group(1).strip(), m_insub.group(2).strip(), m_insub.group(3).strip()
+            return f"set {target} to net_ip_in_subnet({ip}, {cidr})"
+
+        # expand cidr|subnet <cidr> into <target>
+        m_expc = re.match(
+            r"^expand\s+(?:cidr|subnet)\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_expc:
+            cidr, target = m_expc.group(1).strip(), m_expc.group(2).strip()
+            return f"set {target} to net_expand_cidr_range({cidr})"
+
+        # validate ipv4 <ip> into <target>
+        m_v4 = re.match(
+            r"^(?:validate|is\s+valid)\s+ipv4\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_v4:
+            ip, target = m_v4.group(1).strip(), m_v4.group(2).strip()
+            return f"set {target} to net_is_valid_ipv4({ip})"
+
+        # validate ipv6 <ip> into <target>
+        m_v6 = re.match(
+            r"^(?:validate|is\s+valid)\s+ipv6\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_v6:
+            ip, target = m_v6.group(1).strip(), m_v6.group(2).strip()
+            return f"set {target} to net_is_valid_ipv6({ip})"
+
+        # normalize|format mac address <mac> into <target>
+        m_mac = re.match(
+            r"^(?:normalize|format)\s+mac\s+address\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_mac:
+            mac, target = m_mac.group(1).strip(), m_mac.group(2).strip()
+            return f"set {target} to net_format_mac_address({mac})"
+
+        # whois lookup|domain <domain> into <target>
+        m_who = re.match(
+            r"^whois\s+(?:lookup|domain)\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_who:
+            dom, target = m_who.group(1).strip(), m_who.group(2).strip()
+            return f"set {target} to net_whois_domain({dom})"
+
+        # http status message|text for <code> into <target>
+        m_hmsg = re.match(
+            r"^http\s+status\s+(?:message|text)\s+for\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_hmsg:
+            code, target = m_hmsg.group(1).strip(), m_hmsg.group(2).strip()
+            return f"set {target} to net_http_status_message({code})"
+
+        # build query string from <params> into <target>
+        m_bqs = re.match(
+            r"^build\s+query\s+string\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_bqs:
+            params, target = m_bqs.group(1).strip(), m_bqs.group(2).strip()
+            return f"set {target} to net_build_query_string({params})"
+
+        # parse url [components] <url> into <target>
+        m_purl = re.match(
+            r"^parse\s+url(?:\s+components)?\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_purl:
+            url, target = m_purl.group(1).strip(), m_purl.group(2).strip()
+            return f"set {target} to net_parse_url_components({url})"
+
+        # calculate backoff delay for attempt <att> [base <base>] [max <max>] into <target>
+        m_boff = re.match(
+            r"^calculate\s+backoff\s+delay\s+for\s+attempt\s+(.+?)(?:\s+base\s+(.+?))?(?:\s+max\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_boff:
+            att = m_boff.group(1).strip()
+            base = m_boff.group(2)
+            max_d = m_boff.group(3)
+            target = m_boff.group(4).strip()
+            b_val = base.strip() if base else "1.0"
+            m_val = max_d.strip() if max_d else "60.0"
+            return f"set {target} to net_exponential_backoff_delay({att}, {b_val}, {m_val})"
+
+        # scan ports <ports> on host <host> [with timeout <to>] into <target>
+        m_scnp = re.match(
+            r"^scan\s+ports\s+(.+?)\s+on\s+host\s+(.+?)(?:\s+with\s+timeout\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_scnp:
+            ports, host, to, target = m_scnp.group(1).strip(), m_scnp.group(2).strip(), m_scnp.group(3), m_scnp.group(4).strip()
+            to_val = to.strip() if to else "1.0"
+            return f"set {target} to net_check_multiple_ports({host}, {ports}, {to_val})"
+
+        # reverse dns lookup <ip> into <target>
+        m_rdns = re.match(
+            r"^reverse\s+dns\s+lookup\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_rdns:
+            ip, target = m_rdns.group(1).strip(), m_rdns.group(2).strip()
+            return f"set {target} to net_reverse_dns_lookup({ip})"
+
+        # generate multipart boundary into <target>
+        m_bnd = re.match(
+            r"^generate\s+multipart\s+boundary\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_bnd:
+            target = m_bnd.group(1).strip()
+            return f"set {target} to net_generate_multipart_boundary()"
+
+        # encode basic auth header user <user> password <pw> into <target>
+        m_ebauth = re.match(
+            r"^encode\s+basic\s+auth\s+header\s+user\s+(.+?)\s+password\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_ebauth:
+            user, pw, target = m_ebauth.group(1).strip(), m_ebauth.group(2).strip(), m_ebauth.group(3).strip()
+            return f"set {target} to net_encode_basic_auth_header({user}, {pw})"
+
+        # decode basic auth header <hdr> into <target>
+        m_dbauth = re.match(
+            r"^decode\s+basic\s+auth\s+header\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_dbauth:
+            hdr, target = m_dbauth.group(1).strip(), m_dbauth.group(2).strip()
+            return f"set {target} to net_decode_basic_auth_header({hdr})"
+
+        # parse raw http headers <raw> into <target>
+        m_phdr = re.match(
+            r"^parse\s+raw\s+http\s+headers\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_phdr:
+            raw, target = m_phdr.group(1).strip(), m_phdr.group(2).strip()
+            return f"set {target} to net_parse_http_headers({raw})"
+
+        # format http headers <dict> into <target>
+        m_fhdr = re.match(
+            r"^format\s+http\s+headers\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_fhdr:
+            hdict, target = m_fhdr.group(1).strip(), m_fhdr.group(2).strip()
+            return f"set {target} to net_format_http_headers({hdict})"
+
+        # check if private ip <ip> into <target>
+        m_priv = re.match(
+            r"^(?:check\s+if\s+|is\s+)?private\s+ip\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_priv:
+            ip, target = m_priv.group(1).strip(), m_priv.group(2).strip()
+            return f"set {target} to net_is_private_ip({ip})"
+
+        # download file from <url> to <path> [into <target>]
+        m_dl = re.match(
+            r"^download\s+file\s+from\s+(.+?)\s+to\s+(.+?)(?:\s+into\s+([A-Za-z_]\w*))?$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_dl:
+            url, path, target = m_dl.group(1).strip(), m_dl.group(2).strip(), m_dl.group(3)
+            call = f"net_download_file({url}, {path})"
+            return f"set {target} to {call}" if target else call
+
         return None
 
     def parse_block(

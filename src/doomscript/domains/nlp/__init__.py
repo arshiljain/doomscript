@@ -98,6 +98,40 @@ class NLPDomain(DomainContract):
             or s.startswith("entities in ")
             or s.startswith("calculate tfidf ")
             or s.startswith("tfidf of ")
+            or s.startswith("extractive summary of ")
+            or s.startswith("remove stopwords from ")
+            or s.startswith("word frequencies of ")
+            or s.startswith("text similarity between ")
+            or s.startswith("jaccard similarity of ")
+            or s.startswith("extract all matches of pattern ")
+            or s.startswith("rank corpus ")
+            or s.startswith("bm25 score for ")
+            or s.startswith("levenshtein distance between ")
+            or s.startswith("hamming distance between ")
+            or s.startswith("porter stem of ")
+            or s.startswith("soundex ")
+            or s.startswith("metaphone ")
+            or s.startswith("rouge-l score between ")
+            or s.startswith("rouge l score between ")
+            or s.startswith("bleu score between ")
+            or s.startswith("term frequency cosine similarity between ")
+            or s.startswith("tf cosine similarity between ")
+            or s.startswith("expand contractions in ")
+            or s.startswith("mask sensitive entities in ")
+            or s.startswith("flesch reading ease of ")
+            or s.startswith("gunning fog index of ")
+            or s.startswith("count syllables in ")
+            or (s.startswith("split ") and " into sentences" in s)
+            or s.startswith("tag parts of speech in ")
+            or s.startswith("pos tag ")
+            or s.startswith("heuristic sentiment score for ")
+            or s.startswith("vader sentiment of ")
+            or (s.startswith("extract ") and "-character ngrams from " in s)
+            or s.startswith("character ngrams from ")
+            or s.startswith("find collocations in ")
+            or s.startswith("collocations in ")
+            or s.startswith("wrap text ")
+            or s.startswith("word wrap ")
         )
 
     def can_handle_block(self, header: str) -> bool:
@@ -127,4 +161,24 @@ __all__ = [
     "analyze_sentiment",
     "calculate_tfidf",
     "extract_entities",
+    "nlp_bm25_score",
+    "nlp_levenshtein_distance",
+    "nlp_hamming_distance",
+    "nlp_stem_porter",
+    "nlp_soundex",
+    "nlp_metaphone",
+    "nlp_rouge_l",
+    "nlp_bleu_score",
+    "nlp_cosine_similarity_tf",
+    "nlp_expand_contractions",
+    "nlp_mask_sensitive_entities",
+    "nlp_readability_flesch",
+    "nlp_readability_gunning_fog",
+    "nlp_syllable_count",
+    "nlp_sentence_split",
+    "nlp_pos_tag_rule_based",
+    "nlp_sentiment_vader_heuristic",
+    "nlp_character_ngrams",
+    "nlp_collocations",
+    "nlp_word_wrap",
 ]

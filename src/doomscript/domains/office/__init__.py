@@ -25,6 +25,32 @@ from doomscript.domains.office.runtime import (
     add_document_paragraph,
     save_word_document,
     execute_office_ir,
+    office_count_worksheets,
+    office_extract_text,
+    office_add_worksheet,
+    office_markdown_to_sections,
+    office_merge_pdfs,
+    office_count_pages,
+    office_append_table_to_sheet,
+    office_calculate_sheet_summary,
+    office_detect_csv_delimiter,
+    office_read_csv_header,
+    office_create_table_in_document,
+    office_add_bulleted_list,
+    office_add_numbered_list,
+    office_set_spreadsheet_cell,
+    office_get_spreadsheet_cell,
+    office_find_replace_in_document,
+    office_list_worksheet_names,
+    office_delete_worksheet,
+    office_rename_worksheet,
+    office_sort_spreadsheet_by_column,
+    office_filter_spreadsheet_rows,
+    office_export_sheet_to_json,
+    office_import_json_to_sheet,
+    office_count_words_in_document,
+    office_count_characters_in_document,
+    office_extract_document_metadata,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.office.exporter import OfficeASTExporter
@@ -110,6 +136,32 @@ class OfficeDomain(DomainContract):
             or s.startswith("create word document ")
             or s.startswith("save spreadsheet ")
             or s.startswith("save word document ")
+            or s.startswith("count worksheets in ")
+            or s.startswith("extract text from ")
+            or s.startswith("add worksheet ")
+            or s.startswith("convert markdown ")
+            or s.startswith("merge pdf ")
+            or s.startswith("count pages in ")
+            or s.startswith("append table ")
+            or s.startswith("calculate sheet summary ")
+            or s.startswith("calculate summary ")
+            or s.startswith("detect csv delimiter ")
+            or s.startswith("read csv header ")
+            or s.startswith("set cell at row ")
+            or s.startswith("get cell at row ")
+            or s.startswith("find and replace ")
+            or (s.startswith("replace ") and " in " in s and ("document" in s or "doc" in s))
+            or s.startswith("list worksheet ")
+            or s.startswith("list worksheets ")
+            or s.startswith("delete worksheet ")
+            or s.startswith("rename worksheet ")
+            or s.startswith("sort sheet ")
+            or s.startswith("filter sheet ")
+            or s.startswith("export sheet ")
+            or s.startswith("import json ")
+            or s.startswith("count words in ")
+            or s.startswith("count characters in ")
+            or s.startswith("extract document metadata ")
         ):
             return True
 
@@ -123,12 +175,24 @@ class OfficeDomain(DomainContract):
                 return True
             if s.startswith("add paragraph ") and " to " in s:
                 return True
+            if s.startswith("add table with headers ") and " to " in s:
+                return True
+            if s.startswith("add bulleted list ") and " to " in s:
+                return True
+            if s.startswith("add numbered list ") and " to " in s:
+                return True
         else:
             if (s.startswith("add row ") or s.startswith("add rows ")) and (" to sheet" in s or " to spreadsheet" in s):
                 return True
             if s.startswith("add heading ") and (" to word" in s or " to docx" in s):
                 return True
             if s.startswith("add paragraph ") and (" to word" in s or " to docx" in s):
+                return True
+            if s.startswith("add table with headers ") and (" to word" in s or " to docx" in s):
+                return True
+            if s.startswith("add bulleted list ") and (" to word" in s or " to docx" in s):
+                return True
+            if s.startswith("add numbered list ") and (" to word" in s or " to docx" in s):
                 return True
 
         return False
@@ -167,4 +231,30 @@ __all__ = [
     "add_document_paragraph",
     "save_word_document",
     "execute_office_ir",
+    "office_count_worksheets",
+    "office_extract_text",
+    "office_add_worksheet",
+    "office_markdown_to_sections",
+    "office_merge_pdfs",
+    "office_count_pages",
+    "office_append_table_to_sheet",
+    "office_calculate_sheet_summary",
+    "office_detect_csv_delimiter",
+    "office_read_csv_header",
+    "office_create_table_in_document",
+    "office_add_bulleted_list",
+    "office_add_numbered_list",
+    "office_set_spreadsheet_cell",
+    "office_get_spreadsheet_cell",
+    "office_find_replace_in_document",
+    "office_list_worksheet_names",
+    "office_delete_worksheet",
+    "office_rename_worksheet",
+    "office_sort_spreadsheet_by_column",
+    "office_filter_spreadsheet_rows",
+    "office_export_sheet_to_json",
+    "office_import_json_to_sheet",
+    "office_count_words_in_document",
+    "office_count_characters_in_document",
+    "office_extract_document_metadata",
 ]

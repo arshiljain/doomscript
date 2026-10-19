@@ -10,6 +10,31 @@ from doomscript.domains.opt.runtime import (
     parse_linear_expression,
     parse_constraint,
     solve_linear_program,
+    opt_minimize_1d,
+    opt_grid_search,
+    opt_fractional_knapsack,
+    opt_activity_selection,
+    opt_gradient_descent_step,
+    opt_bisection_root,
+    opt_simulated_annealing,
+    opt_golden_section_search,
+    opt_knapsack_01_dp,
+    opt_longest_increasing_subsequence,
+    opt_coin_change_minimum,
+    opt_coin_change_combinations,
+    opt_job_scheduling_deadline,
+    opt_huffman_encoding,
+    opt_matrix_chain_multiplication,
+    opt_levenshtein_alignment,
+    opt_subset_sum_exists,
+    opt_subset_sum_find,
+    opt_rod_cutting,
+    opt_two_opt_tsp,
+    opt_linear_interpolation,
+    opt_weighted_interval_scheduling,
+    opt_pareto_frontier,
+    opt_hungarian_assignment,
+    opt_binary_search_peak_1d,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.opt.exporter import OptASTExporter
@@ -40,7 +65,35 @@ class OptDomain(DomainContract):
 
     def can_handle_line(self, line: str) -> bool:
         s = line.strip().lower()
-        return s.startswith("solve linear program ") or s.startswith("solve ")
+        return (
+            s.startswith("solve linear program ")
+            or s.startswith("solve ")
+            or s.startswith("minimize 1d ")
+            or s.startswith("grid search ")
+            or s.startswith("solve fractional knapsack ")
+            or s.startswith("schedule activities ")
+            or s.startswith("gradient descent step ")
+            or s.startswith("find root of ")
+            or s.startswith("simulated annealing for ")
+            or s.startswith("golden section search for ")
+            or s.startswith("solve 01 knapsack ")
+            or s.startswith("longest increasing subsequence ")
+            or s.startswith("minimum coins for amount ")
+            or s.startswith("coin combinations for amount ")
+            or s.startswith("schedule jobs by deadline ")
+            or s.startswith("huffman encoding for frequencies ")
+            or s.startswith("matrix chain multiplication ")
+            or s.startswith("levenshtein alignment between ")
+            or s.startswith("check if subset sum exists ")
+            or s.startswith("find subset summing to ")
+            or s.startswith("solve rod cutting for length ")
+            or s.startswith("optimize tsp with 2opt ")
+            or s.startswith("interpolate linear value at ")
+            or s.startswith("weighted interval scheduling ")
+            or s.startswith("find pareto frontier ")
+            or s.startswith("hungarian assignment for cost matrix ")
+            or s.startswith("find peak element in ")
+        )
 
     def can_handle_block(self, header: str) -> bool:
         s = header.strip().lower()
@@ -71,4 +124,29 @@ __all__ = [
     "parse_linear_expression",
     "parse_constraint",
     "solve_linear_program",
+    "opt_minimize_1d",
+    "opt_grid_search",
+    "opt_fractional_knapsack",
+    "opt_activity_selection",
+    "opt_gradient_descent_step",
+    "opt_bisection_root",
+    "opt_simulated_annealing",
+    "opt_golden_section_search",
+    "opt_knapsack_01_dp",
+    "opt_longest_increasing_subsequence",
+    "opt_coin_change_minimum",
+    "opt_coin_change_combinations",
+    "opt_job_scheduling_deadline",
+    "opt_huffman_encoding",
+    "opt_matrix_chain_multiplication",
+    "opt_levenshtein_alignment",
+    "opt_subset_sum_exists",
+    "opt_subset_sum_find",
+    "opt_rod_cutting",
+    "opt_two_opt_tsp",
+    "opt_linear_interpolation",
+    "opt_weighted_interval_scheduling",
+    "opt_pareto_frontier",
+    "opt_hungarian_assignment",
+    "opt_binary_search_peak_1d",
 ]

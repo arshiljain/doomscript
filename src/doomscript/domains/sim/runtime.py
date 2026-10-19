@@ -436,3 +436,358 @@ class SimRuntime(DomainRuntime):
             scope[spec.target_var] = res
         return res
 
+
+# --- Batch 13 Spoken English Simulation & Probability Verbs ---
+
+def sim_random_walk(steps: Any = 100, start: Any = 0.0, step_size: Any = 1.0) -> List[float]:
+    """Simulate 1D random walk trajectory."""
+    n = int(steps)
+    curr = float(start)
+    delta = float(step_size)
+    path = [curr]
+    for _ in range(n):
+        curr += delta if random.random() < 0.5 else -delta
+        path.append(round(curr, 4))
+    return path
+
+
+def sim_exponential(rate: Any = 1.0) -> float:
+    """Generate a random sample from an exponential distribution with rate lambda."""
+    lam = float(rate)
+    if lam <= 0:
+        raise ValueError("Exponential rate must be positive")
+    return round(random.expovariate(lam), 4)
+
+
+def sim_poisson(lam: Any = 1.0) -> int:
+    """Generate a Poisson random variate using Knuth's algorithm."""
+    l_val = float(lam)
+    if l_val <= 0:
+        return 0
+    limit = math.exp(-l_val)
+    k = 0
+    p = 1.0
+    while p > limit:
+        k += 1
+        p *= random.random()
+    return k - 1
+
+
+def sim_monte_carlo_pi(samples: Any = 10000) -> float:
+    """Estimate value of Pi via 2D Monte Carlo sampling inside unit square."""
+    n = int(samples)
+    if n <= 0:
+        return 0.0
+    inside = 0
+    for _ in range(n):
+        x = random.random()
+        y = random.random()
+        if x * x + y * y <= 1.0:
+            inside += 1
+    return round((4.0 * inside) / n, 4)
+
+
+def sim_roll_dice(count: Any = 1, sides: Any = 6) -> List[int]:
+    """Roll N dice with specified number of sides."""
+    c = int(count)
+    s = int(sides)
+    return [random.randint(1, s) for _ in range(c)]
+
+
+def sim_coin_tosses(count: Any = 10, p_heads: Any = 0.5) -> List[str]:
+    """Simulate sequence of Bernoulli coin tosses ('H' or 'T')."""
+    n = int(count)
+    p = float(p_heads)
+    return ["H" if random.random() < p else "T" for _ in range(n)]
+
+
+def sim_markov_chain_step(current_state: Any, transition_matrix: Any, states: Any) -> Any:
+    """Transition to next state in Markov chain according to transition probability matrix."""
+    st_list = list(states)
+    curr = current_state if current_state in st_list else st_list[0]
+    idx = st_list.index(curr)
+    probs = transition_matrix[idx]
+    return random.choices(st_list, weights=probs)[0]
+
+
+def sim_markov_chain_walk(start_state: Any, transition_matrix: Any, states: Any, steps: Any) -> List[Any]:
+    """Simulate N-step walk along Markov chain."""
+    n = int(steps)
+    st_list = list(states)
+    curr = start_state if start_state in st_list else st_list[0]
+    path = [curr]
+    for _ in range(n):
+        curr = sim_markov_chain_step(curr, transition_matrix, st_list)
+        path.append(curr)
+    return path
+
+
+def sim_sample_geometric(p: Any, count: Any = 1) -> List[int]:
+    """Sample counts of Bernoulli trials until first success."""
+    prob = float(p)
+    if not (0.0 < prob <= 1.0):
+        raise ValueError("Geometric probability p must be in (0, 1]")
+    res = []
+    for _ in range(int(count)):
+        k = int(math.ceil(math.log(1.0 - random.random()) / math.log(1.0 - prob)))
+        res.append(max(1, k))
+    return res
+
+
+def sim_sample_binomial(n: Any, p: Any, count: Any = 1) -> List[int]:
+    """Sample binomial random variates (# of successes in n trials)."""
+    n_trials = int(n)
+    prob = float(p)
+    return [sum(1 for _ in range(n_trials) if random.random() < prob) for _ in range(int(count))]
+
+
+def sim_sample_triangular(low: Any, high: Any, mode: Any, count: Any = 1) -> List[float]:
+    """Sample triangular distribution variates."""
+    lo = float(low)
+    hi = float(high)
+    md = float(mode)
+    return [round(random.triangular(lo, hi, md), 4) for _ in range(int(count))]
+
+
+def sim_bootstrap_mean_ci(data: Any, n_bootstraps: Any = 1000, confidence: Any = 0.95) -> Dict[str, float]:
+    """Calculate non-parametric bootstrap confidence interval for the mean."""
+    vals = [float(x) for x in data]
+    n = len(vals)
+    if n == 0:
+        return {"mean": 0.0, "ci_lower": 0.0, "ci_upper": 0.0, "confidence": float(confidence)}
+    orig_mean = sum(vals) / n
+    b_count = int(n_bootstraps)
+    boot_means = []
+    for _ in range(b_count):
+        sample = [random.choice(vals) for _ in range(n)]
+        boot_means.append(sum(sample) / n)
+    boot_means.sort()
+    conf = float(confidence)
+    alpha = (1.0 - conf) / 2.0
+    idx_low = int(alpha * b_count)
+    idx_high = int((1.0 - alpha) * b_count)
+    return {
+        "mean": round(orig_mean, 4),
+        "ci_lower": round(boot_means[min(idx_low, b_count - 1)], 4),
+        "ci_upper": round(boot_means[min(idx_high, b_count - 1)], 4),
+        "confidence": conf,
+    }
+
+
+def sim_permutation_test(group1: Any, group2: Any, n_permutations: Any = 1000) -> float:
+    """Calculate two-tailed permutation test p-value for difference in group means."""
+    g1 = [float(x) for x in group1]
+    g2 = [float(x) for x in group2]
+    n1 = len(g1)
+    n2 = len(g2)
+    if n1 == 0 or n2 == 0:
+        return 1.0
+    obs_diff = abs((sum(g1) / n1) - (sum(g2) / n2))
+    pool = g1 + g2
+    total_len = len(pool)
+    perms = int(n_permutations)
+    count_extreme = 0
+    for _ in range(perms):
+        shuffled = list(pool)
+        random.shuffle(shuffled)
+        perm_g1 = shuffled[:n1]
+        perm_g2 = shuffled[n1:]
+        diff = abs((sum(perm_g1) / n1) - (sum(perm_g2) / n2))
+        if diff >= obs_diff:
+            count_extreme += 1
+    return round(count_extreme / perms, 4)
+
+
+def sim_mm1_queue(arrival_rate: Any, service_rate: Any, duration: Any = 100.0) -> Dict[str, float]:
+    """Simulate single-server M/M/1 queue over specified duration."""
+    lam = float(arrival_rate)
+    mu = float(service_rate)
+    dur = float(duration)
+    t = 0.0
+    queue = []
+    wait_times = []
+    server_busy_until = 0.0
+    total_customers = 0
+
+    while t < dur:
+        inter_arrival = random.expovariate(lam)
+        t += inter_arrival
+        if t >= dur:
+            break
+        total_customers += 1
+        service_time = random.expovariate(mu)
+        start_service = max(t, server_busy_until)
+        wait_time = start_service - t
+        wait_times.append(wait_time)
+        server_busy_until = start_service + service_time
+
+    avg_wait = sum(wait_times) / len(wait_times) if wait_times else 0.0
+    utilization = min(1.0, lam / mu if mu > 0 else 1.0)
+    return {
+        "total_customers": total_customers,
+        "avg_wait_time": round(avg_wait, 4),
+        "utilization": round(utilization, 4),
+    }
+
+
+def sim_wiener_process(t: Any = 1.0, n_steps: Any = 100, mu: Any = 0.0, sigma: Any = 1.0) -> List[float]:
+    """Simulate continuous 1D Wiener process (Brownian motion with drift)."""
+    total_time = float(t)
+    steps = int(n_steps)
+    drift = float(mu)
+    vol = float(sigma)
+    dt = total_time / max(1, steps)
+    sqrt_dt = math.sqrt(dt)
+
+    curr = 0.0
+    path = [round(curr, 4)]
+    for _ in range(steps):
+        z = random.gauss(0.0, 1.0)
+        curr += drift * dt + vol * sqrt_dt * z
+        path.append(round(curr, 4))
+    return path
+
+
+def sim_bernoulli_trial(p: Any = 0.5) -> bool:
+    """Execute single Bernoulli trial with success probability p."""
+    return random.random() < float(p)
+
+
+def sim_sample_lognormal(mean: Any = 0.0, std: Any = 1.0, count: Any = 1) -> List[float]:
+    """Sample Log-Normal distribution variates."""
+    m = float(mean)
+    s = float(std)
+    return [round(random.lognormvariate(m, s), 4) for _ in range(int(count))]
+
+
+def sim_monte_carlo_integral(fn: Any, a: Any, b: Any, n_samples: Any = 10000) -> float:
+    """Estimate 1D definite integral using uniform Monte Carlo sampling."""
+    lo = float(a)
+    hi = float(b)
+    n = int(n_samples)
+    if n <= 0 or hi <= lo:
+        return 0.0
+    total = 0.0
+    for _ in range(n):
+        x = random.uniform(lo, hi)
+        total += fn(x) if callable(fn) else float(fn)
+    return round((hi - lo) * (total / n), 4)
+
+
+def sim_estimate_expected_value(samples: Any) -> Dict[str, float]:
+    """Estimate empirical expected value, variance, and standard deviation."""
+    vals = [float(x) for x in samples]
+    n = len(vals)
+    if n == 0:
+        return {"expected_value": 0.0, "variance": 0.0, "std_dev": 0.0}
+    mean = sum(vals) / n
+    var = sum((x - mean) ** 2 for x in vals) / (n - 1) if n > 1 else 0.0
+    return {
+        "expected_value": round(mean, 4),
+        "variance": round(var, 4),
+        "std_dev": round(math.sqrt(var), 4),
+    }
+
+
+def sim_birthday_paradox_prob(people_count: Any) -> float:
+    """Calculate theoretical probability that at least two people share a birthday."""
+    n = int(people_count)
+    if n > 365:
+        return 1.0
+    if n <= 1:
+        return 0.0
+    prob_unique = 1.0
+    for i in range(n):
+        prob_unique *= (365.0 - i) / 365.0
+    return round(1.0 - prob_unique, 4)
+
+
+def sim_coupon_collector_estimate(num_coupons: Any, trials: Any = 100) -> float:
+    """Estimate expected draws to collect all distinct coupons via Monte Carlo."""
+    k = int(num_coupons)
+    t_count = int(trials)
+    if k <= 0:
+        return 0.0
+    total_draws = 0
+    for _ in range(t_count):
+        seen = set()
+        draws = 0
+        while len(seen) < k:
+            seen.add(random.randint(0, k - 1))
+            draws += 1
+        total_draws += draws
+    return round(total_draws / max(1, t_count), 2)
+
+
+def sim_shuffle_deck() -> List[str]:
+    """Generate and Fisher-Yates shuffle standard 52-card deck."""
+    suits = ["S", "H", "D", "C"]
+    ranks = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"]
+    deck = [f"{r}{s}" for s in suits for r in ranks]
+    random.shuffle(deck)
+    return deck
+
+
+def sim_draw_cards(deck: Any, count: Any = 1) -> List[str]:
+    """Draw top N cards from deck without replacement."""
+    d = list(deck)
+    n = min(int(count), len(d))
+    return d[:n]
+
+
+def sim_sample_weibull(k: Any, lam: Any = 1.0, count: Any = 1) -> List[float]:
+    """Sample Weibull distribution variates for reliability analysis."""
+    shape = float(k)
+    scale = float(lam)
+    if shape <= 0 or scale <= 0:
+        raise ValueError("Weibull shape and scale must be positive")
+    res = []
+    for _ in range(int(count)):
+        u = random.random()
+        val = scale * ((-math.log(max(1e-12, 1.0 - u))) ** (1.0 / shape))
+        res.append(round(val, 4))
+    return res
+
+
+def sim_generate_synthetic_timeline(start_time: Any, intervals: Any) -> List[float]:
+    """Generate sequence of timestamps from delta arrival intervals."""
+    curr = float(start_time)
+    res = [round(curr, 2)]
+    for delta in intervals:
+        curr += float(delta)
+        res.append(round(curr, 2))
+    return res
+
+
+def sim_survival_rate_kaplan_meier(durations: Any, events: Any) -> List[Dict[str, Any]]:
+    """Compute empirical Kaplan-Meier survival curve table."""
+    durs = [float(d) for d in durations]
+    evs = [int(e) for e in events]
+    data = sorted(zip(durs, evs), key=lambda x: x[0])
+    n = len(data)
+    surv_prob = 1.0
+    table = []
+    i = 0
+    while i < n:
+        t = data[i][0]
+        # Count deaths and censorings at time t
+        d = 0
+        c = 0
+        while i < n and data[i][0] == t:
+            if data[i][1] == 1:
+                d += 1
+            else:
+                c += 1
+            i += 1
+        at_risk = n - (i - d - c)
+        if at_risk > 0 and d > 0:
+            surv_prob *= (1.0 - (d / at_risk))
+        table.append({
+            "time": round(t, 2),
+            "at_risk": at_risk,
+            "events": d,
+            "survival_prob": round(surv_prob, 4),
+        })
+    return table
+
+

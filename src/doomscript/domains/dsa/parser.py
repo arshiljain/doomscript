@@ -563,6 +563,162 @@ class DsaDomainParser(DomainParser):
         if pal_m:
             return f"set {pal_m.group(2).strip()} to dsa_is_palindrome({pal_m.group(1).strip()})"
 
+        # 14. Segment Tree Operations
+        st_c_m = re.match(r"^create\s+segment\s+tree\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if st_c_m:
+            return f"set {st_c_m.group(2).strip()} to dsa_create_segment_tree({st_c_m.group(1).strip()})"
+
+        st_q_m = re.match(r"^query\s+range\s+sum\s+in\s+segment\s+tree\s+([A-Za-z_]\w*)\s+from\s+(.+?)\s+to\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if st_q_m:
+            return f"set {st_q_m.group(4).strip()} to dsa_segment_tree_query({st_q_m.group(1).strip()}, {st_q_m.group(2).strip()}, {st_q_m.group(3).strip()})"
+
+        st_u_m = re.match(r"^update\s+point\s+in\s+segment\s+tree\s+([A-Za-z_]\w*)\s+at\s+(.+?)\s+with\s+(.+)$", line.strip(), re.IGNORECASE)
+        if st_u_m:
+            return f"dsa_segment_tree_update({st_u_m.group(1).strip()}, {st_u_m.group(2).strip()}, {st_u_m.group(3).strip()})"
+
+        # 15. Fenwick Tree (Binary Indexed Tree)
+        fen_c_m = re.match(r"^create\s+fenwick\s+tree\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if fen_c_m:
+            return f"set {fen_c_m.group(2).strip()} to dsa_create_fenwick_tree({fen_c_m.group(1).strip()})"
+
+        fen_q_m = re.match(r"^prefix\s+sum\s+in\s+fenwick\s+tree\s+([A-Za-z_]\w*)\s+up\s+to\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if fen_q_m:
+            return f"set {fen_q_m.group(3).strip()} to dsa_fenwick_prefix_sum({fen_q_m.group(1).strip()}, {fen_q_m.group(2).strip()})"
+
+        fen_u_m = re.match(r"^update\s+fenwick\s+tree\s+([A-Za-z_]\w*)\s+at\s+(.+?)\s+by\s+(.+)$", line.strip(), re.IGNORECASE)
+        if fen_u_m:
+            return f"dsa_fenwick_update({fen_u_m.group(1).strip()}, {fen_u_m.group(2).strip()}, {fen_u_m.group(3).strip()})"
+
+        # 16. Reservoir Sampling & LCS
+        res_m = re.match(r"^sample\s+(.+?)\s+items\s+from\s+stream\s+(.+?)\s+using\s+reservoir\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if res_m:
+            return f"set {res_m.group(3).strip()} to dsa_reservoir_sample({res_m.group(2).strip()}, {res_m.group(1).strip()})"
+
+        lcs_m = re.match(r"^longest\s+common\s+subsequence\s+of\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if lcs_m:
+            return f"set {lcs_m.group(3).strip()} to dsa_lcs({lcs_m.group(1).strip()}, {lcs_m.group(2).strip()})"
+
+        # 17. Math & Statistics Operations
+        corr_m = re.match(r"^correlation\s+between\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if corr_m:
+            return f"set {corr_m.group(3).strip()} to dsa_correlation({corr_m.group(1).strip()}, {corr_m.group(2).strip()})"
+
+        reg_m = re.match(r"^linear\s+regression\s+of\s+(.+?)\s+on\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if reg_m:
+            return f"set {reg_m.group(3).strip()} to dsa_linear_regression({reg_m.group(1).strip()}, {reg_m.group(2).strip()})"
+
+        mmed_m = re.match(r"^moving\s+median\s+of\s+(.+?)\s+with\s+window\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if mmed_m:
+            return f"set {mmed_m.group(3).strip()} to dsa_moving_median({mmed_m.group(1).strip()}, {mmed_m.group(2).strip()})"
+
+        pct_m = re.match(r"^percentile\s+(.+?)\s+of\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if pct_m:
+            return f"set {pct_m.group(3).strip()} to dsa_percentile({pct_m.group(2).strip()}, {pct_m.group(1).strip()})"
+
+        z_m = re.match(r"^z-score\s+normalize\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if z_m:
+            return f"set {z_m.group(2).strip()} to dsa_z_score_normalize({z_m.group(1).strip()})"
+
+        mms_m = re.match(r"^min-max\s+scale\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if mms_m:
+            return f"set {mms_m.group(2).strip()} to dsa_min_max_scale({mms_m.group(1).strip()})"
+
+        ecdf_m = re.match(r"^empirical\s+cdf\s+of\s+(.+?)\s+at\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if ecdf_m:
+            return f"set {ecdf_m.group(3).strip()} to dsa_empirical_cdf({ecdf_m.group(1).strip()}, {ecdf_m.group(2).strip()})"
+
+        # 18. Advanced DSA 350-Expansion Verbs
+        # Prefix Tree (Trie)
+        trie_cr_m = re.match(r"^create\s+(?:prefix\s+tree|trie)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if trie_cr_m:
+            return f"set {trie_cr_m.group(1).strip()} to dsa_trie_create()"
+
+        trie_ins_m = re.match(r"^insert\s+word\s+(.+?)\s+into\s+(?:prefix\s+tree|trie)\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if trie_ins_m:
+            return f"dsa_trie_insert({trie_ins_m.group(2).strip()}, {trie_ins_m.group(1).strip()})"
+
+        trie_srch_m = re.match(r"^search\s+word\s+(.+?)\s+in\s+(?:prefix\s+tree|trie)\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if trie_srch_m:
+            return f"set {trie_srch_m.group(3).strip()} to dsa_trie_search({trie_srch_m.group(2).strip()}, {trie_srch_m.group(1).strip()})"
+
+        trie_sw_m = re.match(r"^check\s+if\s+(?:prefix\s+tree|trie)\s+([A-Za-z_]\w*)\s+starts\s+with\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if trie_sw_m:
+            return f"set {trie_sw_m.group(3).strip()} to dsa_trie_starts_with({trie_sw_m.group(1).strip()}, {trie_sw_m.group(2).strip()})"
+
+        # Disjoint Set Union (DSU / Union-Find)
+        dsu_cr_m = re.match(r"^create\s+(?:disjoint\s+set|union\s+find)\s+with\s+size\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if dsu_cr_m:
+            return f"set {dsu_cr_m.group(2).strip()} to dsa_dsu_create({dsu_cr_m.group(1).strip()})"
+
+        dsu_find_m = re.match(r"^find\s+root\s+of\s+(.+?)\s+in\s+(?:disjoint\s+set|union\s+find)\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if dsu_find_m:
+            return f"set {dsu_find_m.group(3).strip()} to dsa_dsu_find({dsu_find_m.group(2).strip()}, {dsu_find_m.group(1).strip()})"
+
+        dsu_u_m = re.match(r"^union\s+sets\s+(.+?)\s+and\s+(.+?)\s+in\s+(?:disjoint\s+set|union\s+find)\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if dsu_u_m:
+            return f"set {dsu_u_m.group(4).strip()} to dsa_dsu_union({dsu_u_m.group(3).strip()}, {dsu_u_m.group(1).strip()}, {dsu_u_m.group(2).strip()})"
+
+        # LRU Cache
+        lru_cr_m = re.match(r"^create\s+lru\s+cache\s+with\s+capacity\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if lru_cr_m:
+            return f"set {lru_cr_m.group(2).strip()} to dsa_lru_create({lru_cr_m.group(1).strip()})"
+
+        lru_get_m = re.match(r"^get\s+key\s+(.+?)\s+from\s+lru\s+cache\s+([A-Za-z_]\w*)(?:\s+with\s+default\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if lru_get_m:
+            d_arg = f", default={lru_get_m.group(3).strip()}" if lru_get_m.group(3) else ""
+            return f"set {lru_get_m.group(4).strip()} to dsa_lru_get({lru_get_m.group(2).strip()}, {lru_get_m.group(1).strip()}{d_arg})"
+
+        lru_put_m = re.match(r"^put\s+key\s+(.+?)\s+with\s+value\s+(.+?)\s+into\s+lru\s+cache\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if lru_put_m:
+            return f"dsa_lru_put({lru_put_m.group(3).strip()}, {lru_put_m.group(1).strip()}, {lru_put_m.group(2).strip()})"
+
+        # Binary Search Variants
+        bsl_m = re.match(r"^binary\s+search\s+leftmost\s+(.+?)\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if bsl_m:
+            return f"set {bsl_m.group(3).strip()} to dsa_binary_search_left({bsl_m.group(2).strip()}, {bsl_m.group(1).strip()})"
+
+        bsr_m = re.match(r"^binary\s+search\s+rightmost\s+(.+?)\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if bsr_m:
+            return f"set {bsr_m.group(3).strip()} to dsa_binary_search_right({bsr_m.group(2).strip()}, {bsr_m.group(1).strip()})"
+
+        # QuickSelect
+        qs_m = re.match(r"^quickselect\s+(.+?)(?:th|st|nd|rd)?\s+smallest\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if qs_m:
+            return f"set {qs_m.group(3).strip()} to dsa_quickselect({qs_m.group(2).strip()}, {qs_m.group(1).strip()})"
+
+        # 2D Kadane
+        kad2_m = re.match(r"^maximum\s+sum\s+2d\s+subgrid\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if kad2_m:
+            return f"set {kad2_m.group(2).strip()} to dsa_kadane_2d({kad2_m.group(1).strip()})"
+
+        # Inversion Count
+        inv_m = re.match(r"^count\s+inversions\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if inv_m:
+            return f"set {inv_m.group(2).strip()} to dsa_count_inversions({inv_m.group(1).strip()})"
+
+        # Permutations
+        np_m = re.match(r"^next\s+lexicographical\s+permutation\s+of\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if np_m:
+            return f"set {np_m.group(2).strip()} to dsa_next_permutation({np_m.group(1).strip()})"
+
+        pp_m = re.match(r"^previous\s+lexicographical\s+permutation\s+of\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if pp_m:
+            return f"set {pp_m.group(2).strip()} to dsa_prev_permutation({pp_m.group(1).strip()})"
+
+        # Rabin-Karp & Manacher
+        rk_m = re.match(r"^rabin\s+karp\s+search\s+for\s+(.+?)\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if rk_m:
+            return f"set {rk_m.group(3).strip()} to dsa_rabin_karp_search({rk_m.group(2).strip()}, {rk_m.group(1).strip()})"
+
+        man_m = re.match(r"^longest\s+palindromic\s+substring\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if man_m:
+            return f"set {man_m.group(2).strip()} to dsa_manacher({man_m.group(1).strip()})"
+
+        # Bridges
+        brg_m = re.match(r"^find\s+bridges\s+in\s+graph\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if brg_m:
+            return f"set {brg_m.group(2).strip()} to dsa_tarjan_bridges({brg_m.group(1).strip()})"
+
         return None
 
     def parse_block(

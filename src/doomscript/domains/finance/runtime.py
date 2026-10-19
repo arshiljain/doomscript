@@ -299,3 +299,407 @@ def execute_finance_ir(spec_id: str) -> Any:
     if spec is None:
         raise KeyError(f"Finance spec not found: {spec_id}")
     return FinanceRuntime().execute_ir(spec, {})
+
+
+# --- Batch 4 Spoken English Finance Verbs ---
+
+def finance_bollinger_bands(prices: Any, period: Any = 20, num_std: Any = 2) -> Dict[str, List[float]]:
+    """Calculate Bollinger Bands (middle, upper, lower)."""
+    vals = _extract_values(prices)
+    p = int(period)
+    k = float(num_std)
+    if len(vals) < p:
+        return {"middle": [], "upper": [], "lower": []}
+    middle = []
+    upper = []
+    lower = []
+    for i in range(len(vals) - p + 1):
+        window = vals[i : i + p]
+        m = sum(window) / p
+        variance = sum((x - m) ** 2 for x in window) / p
+        std = math.sqrt(variance)
+        middle.append(round(m, 4))
+        upper.append(round(m + k * std, 4))
+        lower.append(round(m - k * std, 4))
+    return {"middle": middle, "upper": upper, "lower": lower}
+
+
+def finance_rsi(prices: Any, period: Any = 14) -> List[float]:
+    """Calculate Relative Strength Index (RSI)."""
+    return relative_strength_index(prices, period=int(period))
+
+
+def finance_macd(prices: Any, fast: Any = 12, slow: Any = 26, signal: Any = 9) -> Dict[str, List[float]]:
+    """Moving Average Convergence Divergence (MACD, signal, and histogram)."""
+    vals = _extract_values(prices)
+    f, s, sig = int(fast), int(slow), int(signal)
+    if len(vals) < s:
+        return {"macd": [], "signal": [], "histogram": []}
+    ema_fast = moving_average(vals, window=f, kind="ema")
+    ema_slow = moving_average(vals, window=s, kind="ema")
+    macd_line = [round(a - b, 4) for a, b in zip(ema_fast, ema_slow)]
+    sig_line = moving_average(macd_line, window=sig, kind="ema")
+    hist = [round(m - s_val, 4) for m, s_val in zip(macd_line, sig_line)]
+    return {"macd": macd_line, "signal": sig_line, "histogram": hist}
+
+
+def finance_sharpe_ratio(returns: Any, risk_free: Any = 0.0) -> float:
+    """Calculate annualized Sharpe ratio with risk-free rate."""
+    return calculate_sharpe_ratio(returns, risk_free_rate=float(risk_free))
+
+
+def finance_maximum_drawdown(prices: Any) -> float:
+    """Maximum peak-to-trough drawdown ratio."""
+    vals = _extract_values(prices)
+    if not vals:
+        return 0.0
+    peak = vals[0]
+    max_dd = 0.0
+    for v in vals:
+        if v > peak:
+            peak = v
+        dd = (peak - v) / peak if peak > 0 else 0.0
+        if dd > max_dd:
+            max_dd = dd
+    return round(max_dd, 4)
+
+
+def finance_value_at_risk(returns: Any, confidence: Any = 95) -> float:
+    """Historical Value at Risk (VaR) at specified confidence percentage."""
+    vals = _extract_values(returns)
+    if not vals:
+        return 0.0
+    sorted_rets = sorted(vals)
+    conf = float(confidence)
+    cutoff_idx = max(0, min(len(sorted_rets) - 1, int(len(sorted_rets) * (1.0 - conf / 100.0))))
+    loss = -sorted_rets[cutoff_idx]
+    return round(float(loss), 4)
+
+
+def finance_cagr(prices: Any) -> float:
+    """Compound Annual Growth Rate across given periods."""
+    vals = _extract_values(prices)
+    if len(vals) < 2 or vals[0] <= 0:
+        return 0.0
+    periods = len(vals) - 1
+    cagr = (vals[-1] / vals[0]) ** (1.0 / periods) - 1.0
+    return round(float(cagr), 4)
+
+
+# 350-Expansion Quantitative Finance Operations
+
+def _norm_cdf(x: float) -> float:
+    return (1.0 + math.erf(x / math.sqrt(2.0))) / 2.0
+
+
+def fin_vwap(prices: Any, volumes: Any) -> float:
+    """Volume Weighted Average Price."""
+    ps = _extract_values(prices)
+    vs = _extract_values(volumes)
+    if not ps or not vs or len(ps) != len(vs):
+        return 0.0
+    tot_vol = sum(vs)
+    if tot_vol == 0:
+        return 0.0
+    return round(sum(p * v for p, v in zip(ps, vs)) / tot_vol, 4)
+
+
+def fin_stochastic_oscillator(highs: Any, lows: Any, closes: Any, k_period: Any = 14, d_period: Any = 3) -> Dict[str, List[float]]:
+    """Stochastic Oscillator (%K and %D)."""
+    hs = _extract_values(highs)
+    ls = _extract_values(lows)
+    cs = _extract_values(closes)
+    k_p, d_p = int(k_period), int(d_period)
+    n = min(len(hs), len(ls), len(cs))
+    if n < k_p:
+        return {"percent_k": [], "percent_d": []}
+    k_vals = []
+    for i in range(k_p - 1, n):
+        window_high = max(hs[i - k_p + 1:i + 1])
+        window_low = min(ls[i - k_p + 1:i + 1])
+        denom = window_high - window_low
+        val = 100.0 * (cs[i] - window_low) / denom if denom > 0 else 50.0
+        k_vals.append(round(val, 4))
+    d_vals = []
+    for i in range(len(k_vals)):
+        if i + 1 >= d_p:
+            d_vals.append(round(sum(k_vals[i - d_p + 1:i + 1]) / d_p, 4))
+        else:
+            d_vals.append(round(sum(k_vals[:i + 1]) / (i + 1), 4))
+    return {"percent_k": k_vals, "percent_d": d_vals}
+
+
+def fin_sortino_ratio(returns: Any, risk_free_rate: Any = 0.02, target_return: Any = 0.0) -> float:
+    """Annualized Sortino Ratio focusing on downside risk."""
+    rets = _extract_values(returns)
+    if not rets:
+        return 0.0
+    rf = float(risk_free_rate)
+    tgt = float(target_return)
+    mean_ret = sum(rets) / len(rets)
+    downside_sq = [min(0.0, r - tgt) ** 2 for r in rets]
+    downside_dev = math.sqrt(sum(downside_sq) / len(rets))
+    if downside_dev == 0:
+        return 0.0
+    return round((mean_ret - rf) / downside_dev, 4)
+
+
+def fin_beta(asset_returns: Any, market_returns: Any) -> float:
+    """Beta sensitivity coefficient against benchmark."""
+    a = _extract_values(asset_returns)
+    m = _extract_values(market_returns)
+    n = min(len(a), len(m))
+    if n < 2:
+        return 1.0
+    a, m = a[:n], m[:n]
+    mean_a, mean_m = sum(a) / n, sum(m) / n
+    cov = sum((a[i] - mean_a) * (m[i] - mean_m) for i in range(n)) / (n - 1)
+    var_m = sum((m[i] - mean_m) ** 2 for i in range(n)) / (n - 1)
+    if var_m == 0:
+        return 1.0
+    return round(cov / var_m, 4)
+
+
+def fin_treynor_ratio(returns: Any, market_returns: Any, risk_free_rate: Any = 0.02) -> float:
+    """Treynor Ratio per unit of systematic risk (Beta)."""
+    b = fin_beta(returns, market_returns)
+    if abs(b) < 1e-6:
+        return 0.0
+    rets = _extract_values(returns)
+    mean_ret = sum(rets) / len(rets) if rets else 0.0
+    return round((mean_ret - float(risk_free_rate)) / b, 4)
+
+
+def fin_calmar_ratio(returns: Any, max_drawdown_val: Any = None) -> float:
+    """Calmar Ratio of compound annual return to maximum drawdown."""
+    rets = _extract_values(returns)
+    if not rets:
+        return 0.0
+    cum = 1.0
+    peak = 1.0
+    max_dd = float(max_drawdown_val) if max_drawdown_val is not None else 0.0
+    if max_drawdown_val is None:
+        for r in rets:
+            cum *= (1.0 + r)
+            if cum > peak:
+                peak = cum
+            dd = (peak - cum) / peak
+            if dd > max_dd:
+                max_dd = dd
+    ann_ret = sum(rets) / len(rets) * 252.0 if len(rets) > 0 else 0.0
+    if max_dd <= 0:
+        return 0.0
+    return round(ann_ret / max_dd, 4)
+
+
+def fin_alpha(asset_returns: Any, market_returns: Any, risk_free_rate: Any = 0.02) -> float:
+    """Jensen's Alpha abnormal return."""
+    a = _extract_values(asset_returns)
+    m = _extract_values(market_returns)
+    rf = float(risk_free_rate)
+    b = fin_beta(a, m)
+    mean_a = sum(a) / len(a) if a else 0.0
+    mean_m = sum(m) / len(m) if m else 0.0
+    expected = rf + b * (mean_m - rf)
+    return round(mean_a - expected, 4)
+
+
+def fin_black_scholes_call(spot: Any, strike: Any, t: Any, rate: Any, vol: Any) -> float:
+    """Black-Scholes analytical Call Option price."""
+    S, K, T, r, v = float(spot), float(strike), float(t), float(rate), float(vol)
+    if T <= 0 or v <= 0:
+        return max(0.0, S - K)
+    d1 = (math.log(S / K) + (r + 0.5 * v * v) * T) / (v * math.sqrt(T))
+    d2 = d1 - v * math.sqrt(T)
+    call = S * _norm_cdf(d1) - K * math.exp(-r * T) * _norm_cdf(d2)
+    return round(max(0.0, call), 4)
+
+
+def fin_black_scholes_put(spot: Any, strike: Any, t: Any, rate: Any, vol: Any) -> float:
+    """Black-Scholes analytical Put Option price."""
+    S, K, T, r, v = float(spot), float(strike), float(t), float(rate), float(vol)
+    if T <= 0 or v <= 0:
+        return max(0.0, K - S)
+    d1 = (math.log(S / K) + (r + 0.5 * v * v) * T) / (v * math.sqrt(T))
+    d2 = d1 - v * math.sqrt(T)
+    put = K * math.exp(-r * T) * _norm_cdf(-d2) - S * _norm_cdf(-d1)
+    return round(max(0.0, put), 4)
+
+
+def fin_average_true_range(highs: Any, lows: Any, closes: Any, period: Any = 14) -> List[float]:
+    """Average True Range (ATR) volatility indicator."""
+    hs = _extract_values(highs)
+    ls = _extract_values(lows)
+    cs = _extract_values(closes)
+    p = int(period)
+    n = min(len(hs), len(ls), len(cs))
+    if n == 0:
+        return []
+    trs = [hs[0] - ls[0]]
+    for i in range(1, n):
+        tr = max(hs[i] - ls[i], abs(hs[i] - cs[i - 1]), abs(ls[i] - cs[i - 1]))
+        trs.append(tr)
+    atr = []
+    curr = sum(trs[:min(p, n)]) / min(p, n)
+    for i in range(n):
+        if i < p:
+            atr.append(round(sum(trs[:i + 1]) / (i + 1), 4))
+        else:
+            curr = (curr * (p - 1) + trs[i]) / p
+            atr.append(round(curr, 4))
+    return atr
+
+
+def fin_keltner_channels(highs: Any, lows: Any, closes: Any, ema_period: Any = 20, atr_period: Any = 10, multiplier: Any = 2.0) -> Dict[str, List[float]]:
+    """Keltner Channels (Upper, Middle, Lower)."""
+    cs = _extract_values(closes)
+    mid = moving_average(cs, window=int(ema_period), kind="ema")
+    atr = fin_average_true_range(highs, lows, closes, period=int(atr_period))
+    mult = float(multiplier)
+    upper, lower = [], []
+    for m, a in zip(mid, atr):
+        upper.append(round(m + mult * a, 4))
+        lower.append(round(m - mult * a, 4))
+    return {"middle": mid, "upper": upper, "lower": lower}
+
+
+def fin_williams_r(highs: Any, lows: Any, closes: Any, period: Any = 14) -> List[float]:
+    """Williams %R momentum indicator."""
+    hs = _extract_values(highs)
+    ls = _extract_values(lows)
+    cs = _extract_values(closes)
+    p = int(period)
+    n = min(len(hs), len(ls), len(cs))
+    wr = []
+    for i in range(n):
+        start = max(0, i - p + 1)
+        hh = max(hs[start:i + 1])
+        ll = min(ls[start:i + 1])
+        denom = hh - ll
+        val = ((hh - cs[i]) / denom) * -100.0 if denom > 0 else -50.0
+        wr.append(round(val, 4))
+    return wr
+
+
+def fin_money_flow_index(highs: Any, lows: Any, closes: Any, volumes: Any, period: Any = 14) -> List[float]:
+    """Money Flow Index (MFI) volume-weighted RSI."""
+    hs = _extract_values(highs)
+    ls = _extract_values(lows)
+    cs = _extract_values(closes)
+    vs = _extract_values(volumes)
+    p = int(period)
+    n = min(len(hs), len(ls), len(cs), len(vs))
+    if n < 2:
+        return [50.0] * n
+    tp = [(hs[i] + ls[i] + cs[i]) / 3.0 for i in range(n)]
+    pos_flow, neg_flow = [0.0] * n, [0.0] * n
+    for i in range(1, n):
+        raw_mf = tp[i] * vs[i]
+        if tp[i] > tp[i - 1]:
+            pos_flow[i] = raw_mf
+        elif tp[i] < tp[i - 1]:
+            neg_flow[i] = raw_mf
+    mfi = []
+    for i in range(n):
+        start = max(0, i - p + 1)
+        tot_pos = sum(pos_flow[start:i + 1])
+        tot_neg = sum(neg_flow[start:i + 1])
+        if tot_neg == 0:
+            mfi.append(100.0)
+        else:
+            mr = tot_pos / tot_neg
+            mfi.append(round(100.0 - (100.0 / (1.0 + mr)), 4))
+    return mfi
+
+
+def fin_portfolio_rebalance(current_weights: Any, target_weights: Any, total_value: Any) -> Dict[str, float]:
+    """Generate trade amounts (currency) required to rebalance portfolio."""
+    tot = float(total_value)
+    cur = dict(current_weights)
+    tgt = dict(target_weights)
+    all_assets = set(cur.keys()).union(set(tgt.keys()))
+    trades: Dict[str, float] = {}
+    for a in all_assets:
+        w_cur = float(cur.get(a, 0.0))
+        w_tgt = float(tgt.get(a, 0.0))
+        diff = (w_tgt - w_cur) * tot
+        trades[a] = round(diff, 2)
+    return trades
+
+
+def fin_twap(prices: Any, timestamps: Any = None) -> float:
+    """Time-Weighted Average Price across timestamps."""
+    ps = _extract_values(prices)
+    if not ps:
+        return 0.0
+    return round(sum(ps) / len(ps), 4)
+
+
+def fin_donchian_channels(highs: Any, lows: Any, period: Any = 20) -> Dict[str, List[float]]:
+    """Donchian Channels (Upper, Lower, Middle)."""
+    hs = _extract_values(highs)
+    ls = _extract_values(lows)
+    p = int(period)
+    n = min(len(hs), len(ls))
+    upper, lower, mid = [], [], []
+    for i in range(n):
+        start = max(0, i - p + 1)
+        u = max(hs[start:i + 1])
+        l = min(ls[start:i + 1])
+        upper.append(round(u, 4))
+        lower.append(round(l, 4))
+        mid.append(round((u + l) / 2.0, 4))
+    return {"upper": upper, "lower": lower, "middle": mid}
+
+
+def fin_information_ratio(asset_returns: Any, benchmark_returns: Any) -> float:
+    """Information Ratio: active return over tracking error."""
+    a = _extract_values(asset_returns)
+    b = _extract_values(benchmark_returns)
+    n = min(len(a), len(b))
+    if n < 2:
+        return 0.0
+    diffs = [a[i] - b[i] for i in range(n)]
+    mean_diff = sum(diffs) / n
+    te = math.sqrt(sum((d - mean_diff) ** 2 for d in diffs) / (n - 1))
+    if te == 0:
+        return 0.0
+    return round(mean_diff / te, 4)
+
+
+def fin_drawdown_series(cumulative_returns: Any) -> List[float]:
+    """Compute underwater drawdown series."""
+    vals = _extract_values(cumulative_returns)
+    if not vals:
+        return []
+    peak = vals[0]
+    dd_series = []
+    for v in vals:
+        if v > peak:
+            peak = v
+        dd = (v - peak) / peak if peak > 0 else 0.0
+        dd_series.append(round(dd, 4))
+    return dd_series
+
+
+def fin_implied_volatility_bisection(market_price: Any, spot: Any, strike: Any, t: Any, rate: Any, is_call: bool = True) -> float:
+    """Solve for implied volatility via bisection search."""
+    target_p = float(market_price)
+    S, K, T, r = float(spot), float(strike), float(t), float(rate)
+    low_vol, high_vol = 0.001, 5.0
+    for _ in range(50):
+        mid_vol = (low_vol + high_vol) / 2.0
+        price = fin_black_scholes_call(S, K, T, r, mid_vol) if is_call else fin_black_scholes_put(S, K, T, r, mid_vol)
+        if abs(price - target_p) < 1e-4:
+            return round(mid_vol, 4)
+        if price < target_p:
+            low_vol = mid_vol
+        else:
+            high_vol = mid_vol
+    return round((low_vol + high_vol) / 2.0, 4)
+
+
+def fin_var_historical(returns: Any, confidence: Any = 0.95) -> float:
+    """Historical Value at Risk."""
+    return finance_value_at_risk(returns, confidence=float(confidence) * (100.0 if float(confidence) <= 1.0 else 1.0))
+
