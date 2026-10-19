@@ -1,7 +1,6 @@
-"""Central Domain Registry for managing and dispatching DoomScript domain extensions."""
-
+from __future__ import annotations
 from typing import Dict, List, Optional, Set
-from doomscript.domains.base import DomainContract
+from doomscript.domains.base import DomainContract, DomainIR
 
 
 class DomainRegistry:

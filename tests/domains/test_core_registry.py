@@ -110,3 +110,12 @@ def test_all_builtin_domains_registered():
     for d in expected:
         assert reg.has_domain(d), f"Domain {d} not registered"
         assert reg.get_domain(d) is not None
+
+
+def test_registry_type_annotations_resolution():
+    """Regression test ensuring annotations evaluate cleanly in Python 3.10-3.13 without NameError."""
+    import typing
+    hints_store = typing.get_type_hints(DomainRegistry.store_spec)
+    assert "ir" in hints_store
+    hints_get = typing.get_type_hints(DomainRegistry.get_spec)
+    assert "return" in hints_get
