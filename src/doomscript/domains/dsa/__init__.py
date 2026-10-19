@@ -9,6 +9,12 @@ from doomscript.domains.dsa.runtime import (
     run_benchmark,
     fit_complexity,
     profile_memory_of_function,
+    RedBlackTree,
+    RBNode,
+    SkipList,
+    SkipListNode,
+    dsa_red_black_tree,
+    dsa_skip_list,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.dsa.exporter import DsaASTExporter
@@ -292,4 +298,10 @@ __all__ = [
     "dsa_treap_to_list",
     "DinicMaxFlow",
     "dsa_dinic_max_flow",
+    "RedBlackTree",
+    "RBNode",
+    "SkipList",
+    "SkipListNode",
+    "dsa_red_black_tree",
+    "dsa_skip_list",
 ]

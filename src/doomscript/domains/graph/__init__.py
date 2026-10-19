@@ -53,6 +53,7 @@ from doomscript.domains.graph.runtime import (
     graph_betweenness_centrality,
     graph_tarjan_scc,
     graph_mst,
+    graph_johnson_apsp,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.graph.exporter import GraphASTExporter
@@ -238,5 +239,6 @@ __all__ = [
     "graph_betweenness_centrality",
     "graph_tarjan_scc",
     "graph_mst",
+    "graph_johnson_apsp",
 ]
 

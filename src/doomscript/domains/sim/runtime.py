@@ -1085,4 +1085,104 @@ class SpatialAgentSimulation:
         return [(round(a["x"], 2), round(a["y"], 2)) for a in self.agents]
 
 
+class SimResource:
+    """Resource with finite capacity and FIFO waiting queue for Discrete Event Simulation."""
+
+    def __init__(self, name: str, capacity: int = 1):
+        self.name = name
+        self.capacity = int(capacity)
+        self.available = self.capacity
+        self.queue: List[Tuple[float, Any, Callable]] = []  # (arrival_time, entity_id, callback)
+        self.total_wait_time = 0.0
+        self.total_served = 0
+
+    def request(self, current_time: float, entity_id: Any, callback: Callable) -> bool:
+        """Requests resource. If available, acquires immediately (returns True). Else enqueues (returns False)."""
+        if self.available > 0:
+            self.available -= 1
+            self.total_served += 1
+            return True
+        else:
+            self.queue.append((current_time, entity_id, callback))
+            return False
+
+    def release(self, current_time: float) -> Optional[Tuple[Any, Callable]]:
+        """Releases resource and grants to next in queue if any."""
+        self.available += 1
+        if self.queue and self.available > 0:
+            self.available -= 1
+            arrival_time, entity_id, cb = self.queue.pop(0)
+            wait_time = current_time - arrival_time
+            self.total_wait_time += wait_time
+            self.total_served += 1
+            return entity_id, cb
+        return None
+
+
+class DiscreteEventSimulation:
+    """Priority-Queue Discrete Event Simulation (DES) engine with simulated clock."""
+
+    def __init__(self):
+        import heapq
+        self.pq: List[Tuple[float, int, int, Callable, Tuple, Dict]] = []
+        self.current_time = 0.0
+        self.event_counter = 0
+        self.resources: Dict[str, SimResource] = {}
+        self.events_processed = 0
+
+    def add_resource(self, name: str, capacity: int = 1) -> SimResource:
+        res = SimResource(name, capacity)
+        self.resources[name] = res
+        return res
+
+    def schedule(
+        self, delay: float, callback: Callable, priority: int = 0, *args, **kwargs
+    ) -> None:
+        """Schedules callback to be executed at current_time + delay."""
+        import heapq
+        event_time = self.current_time + max(0.0, float(delay))
+        self.event_counter += 1
+        heapq.heappush(self.pq, (event_time, priority, self.event_counter, callback, args, kwargs))
+
+    def step(self) -> bool:
+        """Pops and executes the next scheduled event."""
+        import heapq
+        if not self.pq:
+            return False
+        event_time, priority, _, callback, args, kwargs = heapq.heappop(self.pq)
+        self.current_time = event_time
+        self.events_processed += 1
+        callback(*args, **kwargs)
+        return True
+
+    def run_until(self, max_time: float) -> Dict[str, Any]:
+        """Runs simulation until simulated clock reaches max_time or event queue is empty."""
+        while self.pq and self.pq[0][0] <= max_time:
+            self.step()
+
+        self.current_time = max_time
+        res_stats = {}
+        for name, r in self.resources.items():
+            avg_wait = r.total_wait_time / r.total_served if r.total_served > 0 else 0.0
+            res_stats[name] = {
+                "capacity": r.capacity,
+                "available": r.available,
+                "total_served": r.total_served,
+                "queue_length": len(r.queue),
+                "avg_wait_time": round(avg_wait, 4),
+            }
+
+        return {
+            "current_time": self.current_time,
+            "events_processed": self.events_processed,
+            "remaining_events": len(self.pq),
+            "resources": res_stats,
+        }
+
+
+def sim_create_discrete_event_sim() -> DiscreteEventSimulation:
+    """Instantiates a Discrete Event Simulation engine."""
+    return DiscreteEventSimulation()
+
+
 

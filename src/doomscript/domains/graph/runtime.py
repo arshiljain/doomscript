@@ -1151,4 +1151,78 @@ def graph_mst(g: Any) -> Dict[str, Any]:
     }
 
 
+def graph_johnson_apsp(g: Any) -> Dict[str, Any]:
+    """Johnson's All-Pairs Shortest Path algorithm.
+    Reweights edges via Bellman-Ford to handle negative weights, then executes Dijkstra for each vertex.
+    Returns all-pairs shortest paths or flags negative cycle.
+    """
+    import heapq
+    graph = _ensure_graph(g)
+    nodes = list(graph.nodes.keys())
+    if not nodes:
+        return {"distances": {}, "has_negative_cycle": False}
+
+    # 1. Add synthetic source q with weight 0 to all vertices
+    q = "__johnson_source__"
+    all_nodes = nodes + [q]
+    edges = []
+    for u in nodes:
+        edges.append((q, u, 0.0))
+        for v, w in graph.adj.get(u, {}).items():
+            edges.append((u, v, float(w)))
+
+    # 2. Bellman-Ford from q to compute potential function h
+    h = {node: float("inf") for node in all_nodes}
+    h[q] = 0.0
+
+    for _ in range(len(all_nodes) - 1):
+        updated = False
+        for u, v, w in edges:
+            if h[u] != float("inf") and h[u] + w < h[v]:
+                h[v] = h[u] + w
+                updated = True
+        if not updated:
+            break
+
+    # Check for negative cycle
+    for u, v, w in edges:
+        if h[u] != float("inf") and h[u] + w < h[v]:
+            return {"distances": {}, "has_negative_cycle": True}
+
+    # 3. Reweight graph: w_hat(u, v) = w(u, v) + h(u) - h(v) >= 0
+    reweighted_adj: Dict[str, Dict[str, float]] = {u: {} for u in nodes}
+    for u in nodes:
+        for v, w in graph.adj.get(u, {}).items():
+            w_hat = float(w) + h[u] - h[v]
+            reweighted_adj[u][v] = max(0.0, w_hat)
+
+    # 4. Run Dijkstra from each vertex
+    apsp: Dict[str, Dict[str, Optional[float]]] = {}
+    for s in nodes:
+        dist_hat = {v: float("inf") for v in nodes}
+        dist_hat[s] = 0.0
+        pq = [(0.0, s)]
+
+        while pq:
+            d_curr, u = heapq.heappop(pq)
+            if d_curr > dist_hat[u]:
+                continue
+            for v, w_hat in reweighted_adj.get(u, {}).items():
+                if dist_hat[u] + w_hat < dist_hat[v]:
+                    dist_hat[v] = dist_hat[u] + w_hat
+                    heapq.heappush(pq, (dist_hat[v], v))
+
+        # Restore true distance: d(u, v) = d_hat(u, v) - h(u) + h(v)
+        row: Dict[str, Optional[float]] = {}
+        for v in nodes:
+            if dist_hat[v] == float("inf"):
+                row[v] = None
+            else:
+                true_d = dist_hat[v] - h[s] + h[v]
+                row[v] = round(true_d, 4)
+        apsp[s] = row
+
+    return {"distances": apsp, "has_negative_cycle": False}
+
+
 

@@ -42,6 +42,9 @@ from doomscript.domains.sim.runtime import (
     sim_queue_system,
     CellularAutomaton,
     SpatialAgentSimulation,
+    SimResource,
+    DiscreteEventSimulation,
+    sim_create_discrete_event_sim,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.sim.exporter import SimASTExporter
@@ -193,4 +196,7 @@ __all__ = [
     "sim_queue_system",
     "CellularAutomaton",
     "SpatialAgentSimulation",
+    "SimResource",
+    "DiscreteEventSimulation",
+    "sim_create_discrete_event_sim",
 ]

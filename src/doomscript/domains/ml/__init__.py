@@ -20,6 +20,8 @@ from doomscript.domains.ml.runtime import (
     ml_train_cart,
     ml_train_gbdt,
     ml_train_isolation_forest,
+    RandomForestModel,
+    ml_train_random_forest,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.ml.exporter import MLASTExporter
@@ -168,5 +170,7 @@ __all__ = [
     "ml_train_cart",
     "ml_train_gbdt",
     "ml_train_isolation_forest",
+    "RandomForestModel",
+    "ml_train_random_forest",
 ]
 

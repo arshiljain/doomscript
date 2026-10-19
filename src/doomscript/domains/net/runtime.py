@@ -3,11 +3,12 @@
 import json
 import os
 import re
+import struct
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple, Union
 from doomscript.domains.base import DomainRuntime, DomainIR
 from doomscript.domains.net.spec import ApiWorkflowSpec, RequestStep, ParseStep, SaveStep
 
@@ -765,5 +766,154 @@ class WebSocketCodec:
             "payload_bytes": final_data,
             "text": text_val,
         }
+
+
+class DNSWireProtocol:
+    """RFC 1035 Domain Name System (DNS) Binary Wire Protocol Builder and Parser."""
+
+    RECORD_TYPES = {
+        1: "A",
+        2: "NS",
+        5: "CNAME",
+        6: "SOA",
+        15: "MX",
+        16: "TXT",
+        28: "AAAA",
+    }
+    TYPE_NAMES = {v: k for k, v in RECORD_TYPES.items()}
+
+    @classmethod
+    def encode_domain_name(cls, domain: str) -> bytes:
+        """Converts domain name like 'www.google.com' to length-prefixed DNS wire labels."""
+        parts = domain.strip(".").split(".")
+        out = bytearray()
+        for p in parts:
+            b = p.encode("ascii")
+            out.append(len(b))
+            out.extend(b)
+        out.append(0)  # Root terminator
+        return bytes(out)
+
+    @classmethod
+    def decode_domain_name(cls, raw: bytes, offset: int) -> Tuple[str, int]:
+        """Parses length-prefixed DNS domain name labels with pointer compression support."""
+        labels = []
+        curr = offset
+        jumped = False
+        bytes_consumed = 0
+
+        while curr < len(raw):
+            length = raw[curr]
+            if length == 0:
+                if not jumped:
+                    bytes_consumed = curr - offset + 1
+                break
+            elif (length & 0xC0) == 0xC0:
+                # Compression pointer (14-bit offset)
+                if curr + 1 >= len(raw):
+                    break
+                pointer = ((length & 0x3F) << 8) | raw[curr + 1]
+                if not jumped:
+                    bytes_consumed = curr - offset + 2
+                    jumped = True
+                curr = pointer
+            else:
+                curr += 1
+                label = raw[curr : curr + length].decode("ascii", errors="replace")
+                labels.append(label)
+                curr += length
+
+        return ".".join(labels), bytes_consumed if jumped else (curr - offset + 1)
+
+    @classmethod
+    def build_query(cls, domain: str, qtype: str = "A", tx_id: int = 0x1234) -> bytes:
+        """Builds a 12-byte DNS query header and Question section."""
+        # 12-byte Header
+        # ID (2B), Flags (2B: standard query RD=1 is 0x0100), QDCOUNT=1, ANCOUNT=0, NSCOUNT=0, ARCOUNT=0
+        header = struct.pack(">HHHHHH", tx_id, 0x0100, 1, 0, 0, 0)
+
+        # Question section
+        qname = cls.encode_domain_name(domain)
+        qtype_num = cls.TYPE_NAMES.get(qtype.upper(), 1)
+        qclass_num = 1  # IN (Internet)
+        question = qname + struct.pack(">HH", qtype_num, qclass_num)
+
+        return header + question
+
+    @classmethod
+    def parse_packet(cls, packet: bytes) -> Dict[str, Any]:
+        """Parses full DNS packet: header, questions, and resource records."""
+        if len(packet) < 12:
+            raise ValueError("DNS packet requires at least 12 bytes header")
+
+        tx_id, flags, qdcount, ancount, nscount, arcount = struct.unpack(">HHHHHH", packet[:12])
+
+        qr = (flags >> 15) & 1
+        opcode = (flags >> 11) & 0x0F
+        aa = (flags >> 10) & 1
+        tc = (flags >> 9) & 1
+        rd = (flags >> 8) & 1
+        ra = (flags >> 7) & 1
+        rcode = flags & 0x0F
+
+        offset = 12
+        questions = []
+        for _ in range(qdcount):
+            name, consumed = cls.decode_domain_name(packet, offset)
+            offset += consumed
+            if offset + 4 <= len(packet):
+                qtype_num, qclass_num = struct.unpack(">HH", packet[offset : offset + 4])
+                offset += 4
+                questions.append({
+                    "name": name,
+                    "type": cls.RECORD_TYPES.get(qtype_num, f"TYPE_{qtype_num}"),
+                    "class": "IN" if qclass_num == 1 else str(qclass_num),
+                })
+
+        answers = []
+        for _ in range(ancount):
+            name, consumed = cls.decode_domain_name(packet, offset)
+            offset += consumed
+            if offset + 10 <= len(packet):
+                rtype_num, rclass_num, ttl, rdlength = struct.unpack(">HHIH", packet[offset : offset + 10])
+                offset += 10
+                rdata_raw = packet[offset : offset + rdlength]
+                offset += rdlength
+
+                rdata_str = ""
+                if rtype_num == 1 and rdlength == 4:
+                    # IPv4 address
+                    rdata_str = ".".join(str(b) for b in rdata_raw)
+                elif rtype_num == 28 and rdlength == 16:
+                    # IPv6 address
+                    rdata_str = ":".join(f"{rdata_raw[i]:02x}{rdata_raw[i+1]:02x}" for i in range(0, 16, 2))
+                else:
+                    rdata_str = rdata_raw.hex()
+
+                answers.append({
+                    "name": name,
+                    "type": cls.RECORD_TYPES.get(rtype_num, f"TYPE_{rtype_num}"),
+                    "ttl": ttl,
+                    "rdata": rdata_str,
+                })
+
+        return {
+            "id": tx_id,
+            "is_response": bool(qr),
+            "opcode": opcode,
+            "rcode": rcode,
+            "questions": questions,
+            "answers": answers,
+        }
+
+
+def net_dns_build_query(domain: str, qtype: str = "A", tx_id: int = 0x1234) -> bytes:
+    """Builds an RFC 1035 binary DNS query packet."""
+    return DNSWireProtocol.build_query(domain, qtype, tx_id)
+
+
+def net_dns_parse_packet(packet_bytes: bytes) -> Dict[str, Any]:
+    """Parses an RFC 1035 binary DNS query or response packet."""
+    return DNSWireProtocol.parse_packet(packet_bytes)
 
 

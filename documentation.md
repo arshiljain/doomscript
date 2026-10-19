@@ -25,7 +25,7 @@
    - [Cryptography & Hashing](#cryptography--hashing)
    - [Streaming & Pipelines](#streaming--pipelines)
    - [Job Scheduling & Timers](#job-scheduling--timers)
-5. [The 25 Domain Packs (`use <domain>`)](#5-the-25-domain-packs)
+5. [The 40 Domain Packs (`use <domain>`)](#5-the-40-domain-packs)
    - [1. DSA & Algorithms (`use dsa`)](#1-dsa--algorithms-use-dsa)
    - [2. Data Engineering (`use data`)](#2-data-engineering-use-data)
    - [3. Machine Learning (`use ml`)](#3-machine-learning-use-ml)
@@ -51,6 +51,21 @@
    - [23. Quantum Computing & State Simulation (`use quantum`)](#23-quantum-computing--state-simulation-use-quantum)
    - [24. Electrical Engineering & Circuit Analysis (`use circuit`)](#24-electrical-engineering--circuit-analysis-use-circuit)
    - [25. Blockchain, Cryptographic Ledgers & Merkle Trees (`use chain`)](#25-blockchain-cryptographic-ledgers--merkle-trees-use-chain)
+   - [26. 3D Mathematics & Geometric Algebra (`use math3d`)](#26-3d-mathematics--geometric-algebra-use-math3d)
+   - [27. Compiler Engineering & Abstract Syntax Trees (`use compiler`)](#27-compiler-engineering--abstract-syntax-trees-use-compiler)
+   - [28. Robotics, Kinematics & Motion Planning (`use robotics`)](#28-robotics-kinematics--motion-planning-use-robotics)
+   - [29. Digital Signal Processing & Communications (`use signals`)](#29-digital-signal-processing--communications-use-signals)
+   - [30. Astronomy & Orbital Mechanics (`use astronomy`)](#30-astronomy--orbital-mechanics-use-astronomy)
+   - [31. Computational Chemistry & Cheminformatics (`use chem`)](#31-computational-chemistry--cheminformatics-use-chem)
+   - [32. Data Compression & Information Theory (`use compression`)](#32-data-compression--information-theory-use-compression)
+   - [33. Time Series Forecasting & Decomposition (`use time_series`)](#33-time-series-forecasting--decomposition-use-time_series)
+   - [34. Computer Algebra & Symbolic Mathematics (`use symbolic`)](#34-computer-algebra--symbolic-mathematics-use-symbolic)
+   - [35. Software Rasterization & 3D Computer Graphics (`use graphics`)](#35-software-rasterization--3d-computer-graphics-use-graphics)
+   - [36. Telecommunications & Error-Correcting Codes (`use telecom`)](#36-telecommunications--error-correcting-codes-use-telecom)
+   - [37. Computational Neuroscience & Spiking Neural Networks (`use neuro`)](#37-computational-neuroscience--spiking-neural-networks-use-neuro)
+   - [38. Formal Automata & Computation Theory (`use automata`)](#38-formal-automata--computation-theory-use-automata)
+   - [39. Metrics, Telemetry & Observability (`use metrics`)](#39-metrics-telemetry--observability-use-metrics)
+   - [40. Spatial Audio & Acoustic Simulation (`use spatial_audio`)](#40-spatial-audio--acoustic-simulation-use-spatial_audio)
 6. [Best Practices & Idioms](#6-best-practices--idioms)
 
 ---
@@ -1300,6 +1315,470 @@ say "Alice Balance: ", alice_bal, " Bob Balance: ", bob_bal
 # 4. Ethereum EIP-55 Checksum Address
 eip55_address = chain_eip55_address("0xfb6916095ca1df60bb79ce92ce3ea74c37c5d359")
 say "Checksummed Address: ", eip55_address
+```
+
+### 26. 3D Mathematics & Geometric Algebra (`use math3d`)
+Vectors, 4x4 Transformation Matrices, Quaternions, SLERP interpolation, and Ray-AABB collision testing:
+
+```doomscript
+use math3d
+
+# 1. 3D Vector Math
+v1 = math3d_vec3(1.0, 0.0, 0.0)
+v2 = math3d_vec3(0.0, 1.0, 0.0)
+cross_prod = math3d_vec3_cross(v1, v2)
+dot_prod = math3d_vec3_dot(v1, v2)
+norm_v = math3d_vec3_normalize(cross_prod)
+
+# 2. 4x4 Matrices (Perspective & Look-At)
+proj_mat = math3d_mat4_perspective(60.0, 1.777, 0.1, 1000.0)
+view_mat = math3d_mat4_look_at(math3d_vec3(0, 5, 10), math3d_vec3(0, 0, 0), math3d_vec3(0, 1, 0))
+mvp = math3d_mat4_multiply(proj_mat, view_mat)
+
+# 3. Quaternions & Spherical Linear Interpolation (SLERP)
+q_start = math3d_quat_from_euler(0, 0, 0)
+q_end = math3d_quat_from_euler(0, 90, 0)
+q_mid = math3d_quat_slerp(q_start, q_end, 0.5)
+
+# 4. Ray-AABB Intersection
+hit = math3d_ray_aabb_intersect(
+    ray_origin=math3d_vec3(0, 0, -5),
+    ray_dir=math3d_vec3(0, 0, 1),
+    box_min=math3d_vec3(-1, -1, -1),
+    box_max=math3d_vec3(1, 1, 1)
+)
+say "Ray Hit Box: ", hit["hit"], " at distance: ", hit["distance"]
+```
+
+---
+
+### 27. Compiler Engineering & Abstract Syntax Trees (`use compiler`)
+Pure-Python Lexing, AST Parsing, Constant Folding Optimizer, and Bytecode Evaluation:
+
+```doomscript
+use compiler
+
+source_code = "let total = (10 + 20) * 3"
+
+# 1. Tokenization / Lexer
+tokens = compiler_tokenize(source_code)
+say "Tokens Count: ", len(tokens)
+
+# 2. AST Parsing
+ast_tree = compiler_parse(tokens)
+
+# 3. Constant Folding Optimizer
+optimized_ast = compiler_optimize_ast(ast_tree)
+
+# 4. Tree-Walk Evaluation / Execution
+result_env = compiler_evaluate(optimized_ast)
+say "Total Result: ", result_env["total"]
+```
+
+---
+
+### 28. Robotics, Kinematics & Motion Planning (`use robotics`)
+Denavit-Hartenberg (DH) Forward Kinematics, Planar Inverse Kinematics, PID Controllers, Trapezoidal Velocity Profiles, and A* Path Planning:
+
+```doomscript
+use robotics
+
+# 1. Forward Kinematics (DH Table)
+dh_params = [
+    Record({"theta": 0.0, "d": 0.0, "a": 1.0, "alpha": 0.0}),
+    Record({"theta": 1.5707, "d": 0.0, "a": 1.0, "alpha": 0.0})
+]
+ee_pos = robotics_forward_kinematics(dh_params)
+say "End-Effector Coordinates: ", ee_pos
+
+# 2. Planar Inverse Kinematics (2-Link Arm)
+angles = robotics_inverse_kinematics_2link(1.0, 1.0, target_x=1.0, target_y=1.0)
+say "Joint Angles (rad): ", angles["theta1"], ", ", angles["theta2"]
+
+# 3. Closed-Loop PID Controller
+pid = robotics_create_pid(kp=2.0, ki=0.5, kd=0.1, setpoint=100.0)
+control_out = robotics_update_pid(pid, current_measurement=95.0, dt=0.01)
+
+# 4. A* Grid Motion Planning
+grid = [
+    [0, 0, 0, 0],
+    [0, 1, 1, 0],
+    [0, 0, 0, 0]
+]
+path = robotics_astar_grid(grid, start=[0, 0], goal=[2, 3])
+say "Obstacle-Free Path: ", path
+```
+
+---
+
+### 29. Digital Signal Processing & Communications (`use signals`)
+Radix-2 Cooley-Tukey FFT/IFFT, FIR/IIR Biquad Filtering, Spectral Windowing, and Goertzel Tone Detection:
+
+```doomscript
+use signals
+
+# Generate 50Hz test signal sampled at 1000Hz
+signal_data = [math.sin(2.0 * math.pi * 50.0 * (i / 1000.0)) for i in range(128)]
+
+# 1. Spectral Windowing (Hann, Hamming, Blackman)
+windowed = signals_apply_window(signal_data, window_type="hann")
+
+# 2. Fast Fourier Transform (FFT)
+spectrum = signals_fft(windowed)
+dominant_freq = signals_dominant_frequency(spectrum, sample_rate=1000)
+say "Dominant Spectral Frequency: ", dominant_freq, " Hz"
+
+# 3. Biquad IIR Low-Pass Filter
+filtered = signals_biquad_lowpass(signal_data, cutoff_hz=30.0, sample_rate=1000.0, q=0.707)
+
+# 4. Goertzel Single-Tone Detection (DTMF decoding)
+tone_power = signals_goertzel_detect(signal_data, target_freq=50.0, sample_rate=1000)
+say "Goertzel Tone Magnitude: ", tone_power
+```
+
+---
+
+### 30. Astronomy & Orbital Mechanics (`use astronomy`)
+Julian Date calculations, Keplerian Orbits to Cartesian Vectors, Hohmann Transfer Delta-v, and Celestial Coordinate Transformations:
+
+```doomscript
+use astronomy
+
+# 1. Julian Date
+jd = astro_julian_date(year=2026, month=10, day=20, hour=12, minute=0, second=0)
+say "Julian Date: ", jd
+
+# 2. Keplerian Orbit to Cartesian State (r, v)
+state = astro_kepler_to_cartesian(
+    semi_major_axis_km=7000.0,
+    eccentricity=0.01,
+    inclination_deg=28.5,
+    raan_deg=45.0,
+    arg_pe_deg=10.0,
+    true_anomaly_deg=90.0,
+    mu=398600.4418  # Earth standard gravitational parameter
+)
+say "Orbital Position (km): ", state["r"], " Velocity (km/s): ", state["v"]
+
+# 3. Hohmann Orbital Transfer Delta-V
+hohmann = astro_hohmann_transfer(r1_km=7000.0, r2_km=42164.0, mu=398600.4418)
+say "Total Delta-v to GEO: ", hohmann["delta_v_total"], " km/s"
+
+# 4. Equatorial to Horizontal (Alt-Azimuth) Conversion
+horiz = astro_equatorial_to_horizontal(ra_hours=5.588, dec_deg=-5.39, lat_deg=37.77, lst_hours=6.0)
+say "Target Altitude: ", horiz["altitude_deg"], " Azimuth: ", horiz["azimuth_deg"]
+```
+
+---
+
+### 31. Computational Chemistry & Cheminformatics (`use chem`)
+SMILES String Parsing, Molecular Formula Weights, Hückel Aromaticity Testing, and Chemical Reaction Equation Balancing:
+
+```doomscript
+use chem
+
+# 1. Parse SMILES Molecular Graph
+mol = chem_parse_smiles("c1ccccc1")  # Benzene
+say "Atom Count: ", chem_atom_count(mol)
+
+# 2. Molecular Formula Weight
+mw = chem_formula_weight("C6H12O6")  # Glucose
+say "Glucose Molecular Weight: ", mw, " g/mol"
+
+# 3. Hückel Aromaticity Check (4n + 2 pi-electrons)
+is_aromatic = chem_is_aromatic(mol)
+say "Is Benzene Aromatic: ", is_aromatic
+
+# 4. Balance Chemical Reaction Equations (Nullspace Solver)
+# Combust methane: CH4 + O2 -> CO2 + H2O
+balanced = chem_balance_reaction("CH4 + O2 -> CO2 + H2O")
+say "Balanced Equation: ", balanced["equation"]
+# Outputs: "1 CH4 + 2 O2 -> 1 CO2 + 2 H2O"
+```
+
+---
+
+### 32. Data Compression & Information Theory (`use compression`)
+Canonical Huffman Trees, LZ77 Sliding Window, LZW Coding, Rational Arithmetic Coding, and Shannon Entropy:
+
+```doomscript
+use compression
+
+raw_data = "TOBEORNOTTOBEORTOBEORNOT"
+
+# 1. Shannon Entropy
+entropy = compression_shannon_entropy(raw_data)
+say "Shannon Entropy (bits/char): ", entropy
+
+# 2. Canonical Huffman Prefix Coding
+huffman_encoded = compression_huffman_encode(raw_data)
+huffman_decoded = compression_huffman_decode(huffman_encoded)
+say "Huffman Match: ", raw_data == huffman_decoded
+
+# 3. LZ77 Sliding Window Compression
+lz77_tokens = compression_lz77_encode(raw_data, window_size=20)
+lz77_decomp = compression_lz77_decode(lz77_tokens)
+say "LZ77 Match: ", raw_data == lz77_decomp
+
+# 4. LZW Dictionary Compression
+lzw_codes = compression_lzw_encode(raw_data)
+lzw_decomp = compression_lzw_decode(lzw_codes)
+say "LZW Match: ", raw_data == lzw_decomp
+```
+
+---
+
+### 33. Time Series Forecasting & Decomposition (`use time_series`)
+STL Additive/Multiplicative Decomposition, Sample ACF/PACF (Durbin-Levinson), and Holt-Winters Triple Exponential Smoothing:
+
+```doomscript
+use time_series
+
+# Synthetic monthly data with trend and seasonal pattern
+series = [10.0 + i * 0.5 + (10.0 if i % 4 == 0 else 0.0) for i in range(32)]
+
+# 1. Classical STL Decomposition
+decomp = ts_decompose(series, period=4, model="additive")
+say "Trend Component: ", decomp["trend"][:4]
+say "Seasonal Component: ", decomp["seasonal"][:4]
+
+# 2. Autocorrelation (ACF) & Partial Autocorrelation (PACF)
+acf_vals = ts_acf(series, nlags=8)
+pacf_vals = ts_pacf(series, nlags=8)
+
+# 3. Holt-Winters Triple Smoothing (Level, Trend, Seasonality)
+hw = ts_holt_winters(series, period=4, alpha=0.3, beta=0.1, gamma=0.2)
+forecast = hw.forecast(steps=4)
+say "Forecast Next 4 Periods: ", forecast
+```
+
+---
+
+### 34. Computer Algebra & Symbolic Mathematics (`use symbolic`)
+Pure-Python CAS, Analytical Symbolic Differentiation, Algebraic Simplification, and Polynomial GCD:
+
+```doomscript
+use symbolic
+
+# 1. Parse Symbolic Expressions
+expr = sym_parse("x^3 + 3*x^2 + 3*x + 1")
+
+# 2. Analytical Symbolic Differentiation
+# d/dx (x^3 + 3*x^2 + 3*x + 1) = 3*x^2 + 6*x + 3
+deriv = sym_diff(expr, "x")
+say "Derivative: ", sym_to_string(deriv)
+
+# 3. Algebraic Simplification
+simplified = sym_simplify(deriv)
+say "Simplified: ", sym_to_string(simplified)
+
+# 4. Symbolic Function Evaluation
+val_at_2 = sym_eval(expr, {"x": 2})  # (2 + 1)^3 = 27
+say "Value at x=2: ", val_at_2
+
+# 5. Polynomial Greatest Common Divisor (GCD)
+poly_gcd = sym_poly_gcd("x^2 - 1", "x^2 + 2*x + 1")
+say "Polynomial GCD: ", sym_to_string(poly_gcd)
+```
+
+---
+
+### 35. Software Rasterization & 3D Computer Graphics (`use graphics`)
+RGBA FrameBuffer, Z-DepthBuffer, Bresenham Lines, Midpoint Circles, Gouraud Triangles, and BMP/PPM Export:
+
+```doomscript
+use graphics
+
+# 1. Create 256x256 RGBA FrameBuffer with Depth Buffer
+fb = gfx_create_framebuffer(width=256, height=256, bg_color=[20, 20, 30, 255])
+db = gfx_create_depthbuffer(width=256, height=256)
+
+# 2. Draw Bresenham Lines & Midpoint Circles
+gfx_draw_line(fb, x0=10, y0=10, x1=240, y1=240, color=[255, 200, 0, 255])
+gfx_draw_circle(fb, cx=128, cy=128, radius=50, color=[0, 255, 200, 255], fill=False)
+
+# 3. Rasterize Gouraud-Shaded 3D Triangle with Z-Buffering
+v0 = Record({"x": 128, "y": 30, "z": 0.5, "r": 255, "g": 0, "b": 0})
+v1 = Record({"x": 30, "y": 200, "z": 0.2, "r": 0, "g": 255, "b": 0})
+v2 = Record({"x": 220, "y": 200, "z": 0.8, "r": 0, "g": 0, "b": 255})
+gfx_rasterize_triangle_gouraud(fb, db, v0, v1, v2)
+
+# 4. Save Image to Disk
+gfx_save_bmp(fb, "render.bmp")
+gfx_save_ppm(fb, "render.ppm")
+```
+
+---
+
+### 36. Telecommunications & Error-Correcting Codes (`use telecom`)
+Hamming(7,4) Single-Error Correction, CRC Checks (CRC-8/16/32/64), Galois Field $GF(2^8)$ Arithmetic, and Reed-Solomon RS(n, k) Codes:
+
+```doomscript
+use telecom
+
+# 1. Hamming(7,4) Single-Bit Error Correction
+data_bits = [1, 0, 1, 1]
+encoded_7bit = telecom_hamming74_encode(data_bits)
+# Introduce bit corruption on transmission
+corrupted = list(encoded_7bit)
+corrupted[2] ^= 1  # Flip 3rd bit
+corrected_bits, had_error = telecom_hamming74_decode(corrupted)
+say "Hamming Repaired: ", corrected_bits == data_bits
+
+# 2. Cyclic Redundancy Checks (CRC)
+crc32_val = telecom_crc32(b"Mission-Critical Network Packet")
+say "CRC32 Checksum: ", hex(crc32_val)
+
+# 3. Galois Field GF(2^8) Arithmetic
+product = telecom_gf256_mul(0x57, 0x83)
+say "Galois Field Product: ", hex(product)
+
+# 4. Reed-Solomon RS(n, k) Codec (Berlekamp-Massey + Forney)
+rs_block = telecom_rs_encode(b"HELLO WORLD", num_ecc=4)
+# Corrupt up to 2 arbitrary bytes
+rs_corrupted = bytearray(rs_block)
+rs_corrupted[1] ^= 0xFF
+rs_corrupted[4] ^= 0xAA
+rs_repaired = telecom_rs_decode(bytes(rs_corrupted), num_ecc=4)
+say "Reed-Solomon Repaired: ", rs_repaired == b"HELLO WORLD"
+```
+
+---
+
+### 37. Computational Neuroscience & Spiking Neural Networks (`use neuro`)
+Leaky Integrate-and-Fire (LIF) Neurons, Izhikevich Cortical Neurons, STDP Hebbian Plasticity, and Poisson Spike Trains:
+
+```doomscript
+use neuro
+
+# 1. Leaky Integrate-and-Fire (LIF) Neuron
+lif = neuro_lif_neuron(tau_m=20.0, v_rest=-70.0, v_reset=-75.0, v_thresh=-55.0)
+v_mem, did_spike = neuro_update_lif(lif, current_inj=15.0, dt=1.0)
+say "LIF Membrane: ", v_mem, " mV (Spiked: ", did_spike, ")"
+
+# 2. Izhikevich Cortical Neuron (Regular Spiking, Chattering, Fast Spiking)
+izhi = neuro_izhikevich_neuron(a=0.02, b=0.2, c=-65.0, d=8.0)
+izhi_spikes = neuro_simulate_izhikevich(izhi, current_inj=10.0, duration_ms=100.0, dt=0.5)
+say "Spikes in 100ms: ", len(izhi_spikes)
+
+# 3. Spike-Timing-Dependent Plasticity (STDP) Synapse
+delta_w = neuro_stdp_update(pre_spike_t=10.0, post_spike_t=15.0, a_pos=0.01, a_neg=0.012, tau=20.0)
+say "STDP Synaptic Weight Change: ", delta_w  # Positive (LTP) because pre fired before post
+
+# 4. Poisson Spike Train
+spike_times = neuro_poisson_spike_train(rate_hz=50.0, duration_sec=1.0)
+say "Generated Spikes: ", len(spike_times)
+```
+
+---
+
+### 38. Formal Automata & Computation Theory (`use automata`)
+Deterministic Finite Automata (DFA), Hopcroft State Minimization, Thompson Regex-to-NFA, and Universal Turing Machines:
+
+```doomscript
+use automata
+
+# 1. Deterministic Finite Automaton (DFA)
+dfa = automata_create_dfa(
+    states=["q0", "q1"],
+    alphabet=["0", "1"],
+    transitions={"q0": {"0": "q0", "1": "q1"}, "q1": {"0": "q0", "1": "q1"}},
+    start_state="q0",
+    accept_states=["q1"]
+)
+accepted = automata_dfa_accepts(dfa, "1011")
+say "DFA Accepts '1011' (ends in 1): ", accepted
+
+# 2. Hopcroft State Minimization
+min_dfa = automata_minimize_dfa(dfa)
+say "Minimised DFA State Count: ", len(min_dfa["states"])
+
+# 3. Thompson's Construction: Regex to NFA
+nfa = automata_regex_to_nfa("(a|b)*abb")
+say "NFA Recognizes 'aabb': ", automata_nfa_accepts(nfa, "aabb")
+
+# 4. Universal Turing Machine Simulator (Binary Incrementer)
+tm = automata_create_turing_machine(
+    states=["q_seek", "q_carry", "q_done"],
+    transitions={
+        ("q_seek", "1"): ("q_seek", "1", "R"),
+        ("q_seek", "0"): ("q_seek", "0", "R"),
+        ("q_seek", "B"): ("q_carry", "B", "L"),
+        ("q_carry", "1"): ("q_carry", "0", "L"),
+        ("q_carry", "0"): ("q_done", "1", "N"),
+        ("q_carry", "B"): ("q_done", "1", "N")
+    },
+    start_state="q_seek",
+    accept_state="q_done"
+)
+tape_res = automata_run_turing_machine(tm, tape="1011")  # 11 + 1 = 12 ("1100")
+say "Turing Machine Output Tape: ", tape_res["tape"]
+```
+
+---
+
+### 39. Metrics, Telemetry & Observability (`use metrics`)
+Prometheus/OpenMetrics Counters, Gauges, Histograms, Quantile Reservoirs, Distributed Tracing Spans, and Text Exporter:
+
+```doomscript
+use metrics
+
+# 1. Counters & Gauges
+metrics_counter_inc("http_requests_total", labels={"method": "GET", "status": "200"})
+metrics_counter_add("bytes_transmitted_total", 4096)
+metrics_gauge_set("active_workers", 8)
+
+# 2. Histograms & Quantile Percentiles (p50, p90, p95, p99)
+metrics_histogram_observe("request_duration_ms", 12.5)
+metrics_histogram_observe("request_duration_ms", 45.2)
+metrics_histogram_observe("request_duration_ms", 8.1)
+quantiles = metrics_get_quantiles("request_duration_ms")
+say "Latency p50: ", quantiles["p50"], " p99: ", quantiles["p99"]
+
+# 3. Distributed Tracing Spans
+span = metrics_start_span("database_query", trace_id="trace_abc123")
+# ... execute operation ...
+metrics_end_span(span, tags={"db.table": "orders", "db.rows": 120})
+
+# 4. Export OpenMetrics / Prometheus Scrape Payload
+scrape_text = metrics_export_openmetrics()
+say "Prometheus Scrape Output:\n", scrape_text
+```
+
+---
+
+### 40. Spatial Audio & Acoustic Simulation (`use spatial_audio`)
+Binaural Woodworth ITD/ILD 3D Spatialization, First-Order Ambisonics $B$-Format, Doppler Frequency Shifts, and Schroeder Algorithmic Reverberation:
+
+```doomscript
+use spatial_audio
+
+# 1. Binaural 3D Audio (Interaural Time & Level Differences)
+mono_sound = [math.sin(2.0 * math.pi * 440.0 * (i / 44100.0)) for i in range(1000)]
+binaural_stereo = audio_spatialize_binaural(
+    mono_sound,
+    source_azimuth_deg=45.0,    # Source at 45 degrees to the right
+    source_elevation_deg=0.0,
+    source_dist_m=2.0,
+    sample_rate=44100
+)
+say "Left Ear Samples: ", len(binaural_stereo["left"]), " Right Ear: ", len(binaural_stereo["right"])
+
+# 2. First-Order Ambisonics B-Format Encoding (W, X, Y, Z)
+b_format = audio_encode_ambisonics(mono_sound, azimuth_deg=30.0, elevation_deg=15.0)
+say "Ambisonic Components: W, X, Y, Z channels ready for 360-degree decoding"
+
+# 3. Doppler Frequency Shift for Moving Audio Sources
+doppler_samples = audio_apply_doppler(
+    mono_sound,
+    source_velocity_mps=30.0,   # Moving toward listener at 30 m/s
+    speed_of_sound_mps=343.0,
+    sample_rate=44100
+)
+
+# 4. Schroeder Algorithmic Reverberation (Comb + All-Pass filters)
+reverbed = audio_schroeder_reverb(mono_sound, rt60_sec=1.5, sample_rate=44100)
+say "Reverberation Processed: ", len(reverbed), " samples"
 ```
 
 ---

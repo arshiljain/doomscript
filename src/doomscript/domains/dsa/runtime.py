@@ -2381,3 +2381,306 @@ def dsa_dinic_max_flow(n: int, edges: List[Tuple[int, int, float]], source: int,
         dinic.add_edge(e[0], e[1], e[2])
     return dinic.compute_max_flow(source, sink)
 
+
+# ===========================================================================
+# Advanced Balanced Search Structures: Red-Black Tree & Skip List
+# ===========================================================================
+
+class RBColor:
+    RED = 0
+    BLACK = 1
+
+
+class RBNode:
+    """Node in a self-balancing Red-Black binary search tree."""
+
+    def __init__(self, key: Any, value: Any = None, color: int = RBColor.RED):
+        self.key = key
+        self.value = value if value is not None else key
+        self.color = color
+        self.left: Optional[RBNode] = None
+        self.right: Optional[RBNode] = None
+        self.parent: Optional[RBNode] = None
+
+    def __repr__(self):
+        c = "R" if self.color == RBColor.RED else "B"
+        return f"RBNode({self.key}:{c})"
+
+
+class RedBlackTree:
+    """Self-Balancing Red-Black Binary Search Tree adhering to CLRS color invariants."""
+
+    def __init__(self):
+        # Sentinel NIL node
+        self.NIL = RBNode(None, None, color=RBColor.BLACK)
+        self.NIL.left = self.NIL
+        self.NIL.right = self.NIL
+        self.root = self.NIL
+        self.size = 0
+
+    def insert(self, key: Any, value: Any = None) -> None:
+        """Inserts a key-value pair and restores Red-Black properties."""
+        val = value if value is not None else key
+        new_node = RBNode(key, val, color=RBColor.RED)
+        new_node.left = self.NIL
+        new_node.right = self.NIL
+
+        parent = None
+        curr = self.root
+        while curr != self.NIL:
+            parent = curr
+            if key < curr.key:
+                curr = curr.left
+            elif key > curr.key:
+                curr = curr.right
+            else:
+                curr.value = val
+                return
+
+        new_node.parent = parent
+        if parent is None:
+            self.root = new_node
+        elif key < parent.key:
+            parent.left = new_node
+        else:
+            parent.right = new_node
+
+        self.size += 1
+        self._insert_fixup(new_node)
+
+    def _insert_fixup(self, z: RBNode) -> None:
+        while z.parent and z.parent.color == RBColor.RED:
+            if z.parent == z.parent.parent.left:
+                y = z.parent.parent.right  # Uncle
+                if y.color == RBColor.RED:
+                    z.parent.color = RBColor.BLACK
+                    y.color = RBColor.BLACK
+                    z.parent.parent.color = RBColor.RED
+                    z = z.parent.parent
+                else:
+                    if z == z.parent.right:
+                        z = z.parent
+                        self._left_rotate(z)
+                    z.parent.color = RBColor.BLACK
+                    z.parent.parent.color = RBColor.RED
+                    self._right_rotate(z.parent.parent)
+            else:
+                y = z.parent.parent.left
+                if y.color == RBColor.RED:
+                    z.parent.color = RBColor.BLACK
+                    y.color = RBColor.BLACK
+                    z.parent.parent.color = RBColor.RED
+                    z = z.parent.parent
+                else:
+                    if z == z.parent.left:
+                        z = z.parent
+                        self._right_rotate(z)
+                    z.parent.color = RBColor.BLACK
+                    z.parent.parent.color = RBColor.RED
+                    self._left_rotate(z.parent.parent)
+            if z == self.root:
+                break
+        self.root.color = RBColor.BLACK
+
+    def _left_rotate(self, x: RBNode) -> None:
+        y = x.right
+        x.right = y.left
+        if y.left != self.NIL:
+            y.left.parent = x
+        y.parent = x.parent
+        if x.parent is None:
+            self.root = y
+        elif x == x.parent.left:
+            x.parent.left = y
+        else:
+            x.parent.right = y
+        y.left = x
+        x.parent = y
+
+    def _right_rotate(self, y: RBNode) -> None:
+        x = y.left
+        y.left = x.right
+        if x.right != self.NIL:
+            x.right.parent = y
+        x.parent = y.parent
+        if y.parent is None:
+            self.root = x
+        elif y == y.parent.right:
+            y.parent.right = x
+        else:
+            y.parent.left = x
+        x.right = y
+        y.parent = x
+
+    def search(self, key: Any) -> Optional[Any]:
+        """Searches for key and returns associated value or None."""
+        curr = self.root
+        while curr != self.NIL:
+            if key == curr.key:
+                return curr.value
+            elif key < curr.key:
+                curr = curr.left
+            else:
+                curr = curr.right
+        return None
+
+    def minimum(self, node: Optional[RBNode] = None) -> Optional[Any]:
+        curr = node or self.root
+        if curr == self.NIL:
+            return None
+        while curr.left != self.NIL:
+            curr = curr.left
+        return curr.key
+
+    def maximum(self, node: Optional[RBNode] = None) -> Optional[Any]:
+        curr = node or self.root
+        if curr == self.NIL:
+            return None
+        while curr.right != self.NIL:
+            curr = curr.right
+        return curr.key
+
+    def inorder(self) -> List[Any]:
+        """Returns sorted list of keys."""
+        res = []
+        def _walk(node: RBNode):
+            if node != self.NIL:
+                _walk(node.left)
+                res.append(node.key)
+                _walk(node.right)
+        _walk(self.root)
+        return res
+
+    def is_valid_rb(self) -> bool:
+        """Verifies Red-Black tree properties."""
+        if self.root == self.NIL:
+            return True
+        if self.root.color != RBColor.BLACK:
+            return False
+
+        def check(node: RBNode) -> Tuple[bool, int]:
+            if node == self.NIL:
+                return True, 1
+            if node.color == RBColor.RED:
+                if node.left.color == RBColor.RED or node.right.color == RBColor.RED:
+                    return False, 0
+            ok_l, bh_l = check(node.left)
+            ok_r, bh_r = check(node.right)
+            if not ok_l or not ok_r or bh_l != bh_r:
+                return False, 0
+            add_black = 1 if node.color == RBColor.BLACK else 0
+            return True, bh_l + add_black
+
+        valid, _ = check(self.root)
+        return valid
+
+
+class SkipListNode:
+    """Node in a SkipList holding multi-level forward pointers."""
+
+    def __init__(self, key: Any, value: Any, level: int):
+        self.key = key
+        self.value = value
+        self.forward: List[Optional[SkipListNode]] = [None] * level
+
+
+class SkipList:
+    """Probabilistic ordered dictionary with expected O(log n) search, insert, and delete."""
+
+    def __init__(self, max_level: int = 16, p: float = 0.5):
+        self.max_level = max_level
+        self.p = p
+        self.header = SkipListNode(None, None, max_level)
+        self.level = 1
+        self.size = 0
+
+    def _random_level(self) -> int:
+        lvl = 1
+        while random.random() < self.p and lvl < self.max_level:
+            lvl += 1
+        return lvl
+
+    def insert(self, key: Any, value: Any = None) -> None:
+        """Inserts or updates key-value pair."""
+        val = value if value is not None else key
+        update = [None] * self.max_level
+        curr = self.header
+
+        for i in range(self.level - 1, -1, -1):
+            while curr.forward[i] and curr.forward[i].key < key:
+                curr = curr.forward[i]
+            update[i] = curr
+
+        curr = curr.forward[0]
+        if curr and curr.key == key:
+            curr.value = val
+            return
+
+        new_lvl = self._random_level()
+        if new_lvl > self.level:
+            for i in range(self.level, new_lvl):
+                update[i] = self.header
+            self.level = new_lvl
+
+        new_node = SkipListNode(key, val, new_lvl)
+        for i in range(new_lvl):
+            new_node.forward[i] = update[i].forward[i]
+            update[i].forward[i] = new_node
+
+        self.size += 1
+
+    def search(self, key: Any) -> Optional[Any]:
+        """Searches for key and returns associated value or None."""
+        curr = self.header
+        for i in range(self.level - 1, -1, -1):
+            while curr.forward[i] and curr.forward[i].key < key:
+                curr = curr.forward[i]
+        curr = curr.forward[0]
+        if curr and curr.key == key:
+            return curr.value
+        return None
+
+    def delete(self, key: Any) -> bool:
+        """Deletes key from SkipList. Returns True if found and removed."""
+        update = [None] * self.max_level
+        curr = self.header
+
+        for i in range(self.level - 1, -1, -1):
+            while curr.forward[i] and curr.forward[i].key < key:
+                curr = curr.forward[i]
+            update[i] = curr
+
+        curr = curr.forward[0]
+        if not curr or curr.key != key:
+            return False
+
+        for i in range(self.level):
+            if update[i].forward[i] != curr:
+                break
+            update[i].forward[i] = curr.forward[i]
+
+        while self.level > 1 and self.header.forward[self.level - 1] is None:
+            self.level -= 1
+
+        self.size -= 1
+        return True
+
+    def to_list(self) -> List[Any]:
+        """Returns sorted list of keys."""
+        res = []
+        curr = self.header.forward[0]
+        while curr:
+            res.append(curr.key)
+            curr = curr.forward[0]
+        return res
+
+
+def dsa_red_black_tree() -> RedBlackTree:
+    """Creates a new self-balancing Red-Black Tree."""
+    return RedBlackTree()
+
+
+def dsa_skip_list(max_level: int = 16) -> SkipList:
+    """Creates a new Skip List."""
+    return SkipList(max_level)
+

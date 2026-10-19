@@ -2,6 +2,7 @@
 
 from typing import Any, Dict, List, Optional, Tuple, Union
 import math
+import random
 from datetime import datetime, timedelta
 from doomscript.runtime import Record
 from doomscript.domains.base import DomainRuntime, DomainIR
@@ -972,5 +973,67 @@ def fin_ichimoku_cloud(
         "senkou_a": senkou_a,
         "senkou_b": senkou_b,
         "chikou": chikou,
+    }
+
+
+def fin_monte_carlo_var(
+    initial_portfolio_value: float,
+    expected_annual_return: float,
+    annual_volatility: float,
+    time_horizon_days: int = 10,
+    num_simulations: int = 1000,
+    seed: Optional[int] = 42,
+) -> Dict[str, float]:
+    """Computes Monte Carlo Value at Risk (VaR) and Expected Shortfall (CVaR) using Geometric Brownian Motion.
+    Returns 95% and 99% VaR in absolute currency and percentage loss.
+    """
+    if seed is not None:
+        random.seed(seed)
+
+    S0 = float(initial_portfolio_value)
+    mu = float(expected_annual_return)
+    sigma = float(annual_volatility)
+    dt = float(time_horizon_days) / 252.0  # trading year
+    drift = (mu - 0.5 * sigma * sigma) * dt
+    vol_sqrt_dt = sigma * math.sqrt(dt)
+
+    final_values: List[float] = []
+    pnl_losses: List[float] = []
+
+    for _ in range(num_simulations):
+        # Box-Muller transform for standard normal random variable
+        u1 = max(1e-12, random.random())
+        u2 = random.random()
+        z = math.sqrt(-2.0 * math.log(u1)) * math.cos(2.0 * math.pi * u2)
+
+        st = S0 * math.exp(drift + vol_sqrt_dt * z)
+        final_values.append(st)
+        loss = S0 - st  # positive means loss
+        pnl_losses.append(loss)
+
+    # Sort losses in ascending order (higher loss at end)
+    sorted_losses = sorted(pnl_losses)
+    idx_95 = int(num_simulations * 0.95)
+    idx_99 = int(num_simulations * 0.99)
+
+    var_95 = max(0.0, sorted_losses[idx_95])
+    var_99 = max(0.0, sorted_losses[idx_99])
+
+    # Expected Shortfall (CVaR) = average of losses beyond VaR
+    tail_95 = [l for l in sorted_losses[idx_95:]]
+    tail_99 = [l for l in sorted_losses[idx_99:]]
+
+    cvar_95 = sum(tail_95) / len(tail_95) if tail_95 else var_95
+    cvar_99 = sum(tail_99) / len(tail_99) if tail_99 else var_99
+
+    return {
+        "var_95": round(var_95, 2),
+        "var_99": round(var_99, 2),
+        "var_95_pct": round((var_95 / S0) * 100.0, 3),
+        "var_99_pct": round((var_99 / S0) * 100.0, 3),
+        "cvar_95": round(cvar_95, 2),
+        "cvar_99": round(cvar_99, 2),
+        "mean_final_value": round(sum(final_values) / num_simulations, 2),
+        "median_final_value": round(sorted(final_values)[num_simulations // 2], 2),
     }
 

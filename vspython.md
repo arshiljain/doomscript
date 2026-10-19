@@ -16,7 +16,7 @@ In **DoomScript**, programming uses **Subject-Verb-Object (SVO)** phrasing, **po
 
 ---
 
-## 📚 25 Side-by-Side Examples (Beginner to Advanced)
+## 📚 30 Side-by-Side Examples (Beginner to Advanced)
 
 ```
 Table of Contents:
@@ -25,6 +25,7 @@ Table of Contents:
  Tier 3: Algorithms, Math & Research (11–15)
  Tier 4: Modern Production Paradigms (16–20)
  Tier 5: Science, Hardware & New Frontier Megapacks (21–25)
+ Tier 6: 3D Math, DSP, Chemistry & Frontier CAS (26–30)
 ```
 
 ---
@@ -887,6 +888,168 @@ calculate voltage with current 2.5 and resistance res's resistance into v_res
 
 ---
 
+### Tier 6: 3D Math, DSP, Chemistry & Frontier CAS
+
+#### Example 26: 3D Quaternions & Spherical Interpolation (SLERP)
+*Rotating 3D cameras smoothly without gimbal lock or matrix drift.*
+
+##### 🐍 Python
+```python
+import math
+
+class Quaternion:
+    def __init__(self, w, x, y, z):
+        self.w, self.x, self.y, self.z = w, x, y, z
+
+    def slerp(self, other, t):
+        dot = self.w * other.w + self.x * other.x + self.y * other.y + self.z * other.z
+        if dot < 0.0:
+            other = Quaternion(-other.w, -other.x, -other.y, -other.z)
+            dot = -dot
+        if dot > 0.9995:
+            # Linear interpolation for tiny angles
+            return Quaternion(
+                self.w + t * (other.w - self.w),
+                self.x + t * (other.x - self.x),
+                self.y + t * (other.y - self.y),
+                self.z + t * (other.z - self.z),
+            )
+        theta_0 = math.acos(dot)
+        theta = theta_0 * t
+        sin_theta = math.sin(theta)
+        sin_theta_0 = math.sin(theta_0)
+        s0 = math.cos(theta) - dot * sin_theta / sin_theta_0
+        s1 = sin_theta / sin_theta_0
+        return Quaternion(
+            (s0 * self.w) + (s1 * other.w),
+            (s0 * self.x) + (s1 * other.x),
+            (s0 * self.y) + (s1 * other.y),
+            (s0 * self.z) + (s1 * other.z),
+        )
+```
+
+##### 🔮 DoomScript
+```doomscript
+use math3d
+
+q1 = math3d_quat_from_euler(0, 0, 0)
+q2 = math3d_quat_from_euler(0, 90, 0)
+q_mid = math3d_quat_slerp(q1, q2, 0.5)
+```
+> **Why DoomScript is easier:** 3D geometric algebra and SLERP calculations are built natively into `use math3d` with zero third-party linear algebra dependencies.
+
+---
+
+#### Example 27: Chemical Reaction Balancing & Molecular Weights
+*Balancing combustion stoichiometry with linear nullspace solving.*
+
+##### 🐍 Python
+```python
+# Requires numpy, sympy, or custom Gaussian elimination solver
+import numpy as np
+# Needs element count matrix formulation, matrix reduction, and nullspace solving:
+# 20+ lines of complex stoichiometric matrix setup
+```
+
+##### 🔮 DoomScript
+```doomscript
+use chem
+
+balanced = chem_balance_reaction("CH4 + O2 -> CO2 + H2O")
+say "Balanced Equation: ", balanced's equation
+# Outputs: 1 CH4 + 2 O2 -> 1 CO2 + 2 H2O
+
+glucose_weight = chem_formula_weight("C6H12O6")
+say "Molecular Weight: ", glucose_weight, " g/mol"
+```
+> **Why DoomScript is easier:** Natural chemical notation parsing and automated stoichiometry balancing in one clean statement.
+
+---
+
+#### Example 28: Fast Fourier Transform (FFT) & Dominant Tone Detection
+*Transforming audio signals into spectral frequencies and detecting DTMF tones.*
+
+##### 🐍 Python
+```python
+import cmath
+
+def fft(x):
+    n = len(x)
+    if n <= 1:
+        return x
+    even = fft(x[0::2])
+    odd = fft(x[1::2])
+    t = [cmath.exp(-2j * cmath.pi * k / n) * odd[k] for k in range(n // 2)]
+    return [even[k] + t[k] for k in range(n // 2)] + [even[k] - t[k] for k in range(n // 2)]
+
+# Windowing, magnitude squaring, and dominant peak search requires 30+ more lines
+```
+
+##### 🔮 DoomScript
+```doomscript
+use signals
+
+windowed_audio = signals_apply_window(raw_audio, window_type="hann")
+spectrum = signals_fft(windowed_audio)
+peak_hz = signals_dominant_frequency(spectrum, sample_rate=44100)
+say "Peak Frequency Detected: ", peak_hz, " Hz"
+```
+> **Why DoomScript is easier:** Pure standard-library Cooley-Tukey Radix-2 spectral analysis without requiring NumPy or SciPy.
+
+---
+
+#### Example 29: Symbolic Calculus & Analytical Differentiation
+*Deriving mathematical functions symbolically using chain and product rules.*
+
+##### 🐍 Python
+```python
+# Requires installing SymPy (heavy external dependency)
+# from sympy import symbols, diff
+# x = symbols('x')
+# expr = x**3 + 3*x**2 + 3*x + 1
+# deriv = diff(expr, x)
+```
+
+##### 🔮 DoomScript
+```doomscript
+use symbolic
+
+expr = sym_parse("x^3 + 3*x^2 + 3*x + 1")
+deriv = sym_diff(expr, "x")
+simplified = sym_simplify(deriv)
+say "Symbolic Derivative: ", sym_to_string(simplified)
+# Outputs: 3*x^2 + 6*x + 3
+```
+> **Why DoomScript is easier:** Pure-Python built-in Computer Algebra System (CAS) with zero external pip dependencies.
+
+---
+
+#### Example 30: Error-Correcting Codes & Galois Field Arithmetic
+*Correcting transmission bitflips using Reed-Solomon and Hamming codes.*
+
+##### 🐍 Python
+```python
+# Typically requires 'reedsolo' or C-extensions for GF(2^8) arithmetic
+# Setting up log/antilog tables, generator polynomials, Berlekamp-Massey, and Forney
+```
+
+##### 🔮 DoomScript
+```doomscript
+use telecom
+
+# Hamming(7,4) Single-Error Correction
+encoded = telecom_hamming74_encode([1, 0, 1, 1])
+# Corrupt 3rd bit on transmission
+corrupted = list(encoded)
+corrupted[2] = corrupted[2] xor 1
+repaired, had_error = telecom_hamming74_decode(corrupted)
+
+say "Bitflips Repaired Successfully: ", repaired is [1, 0, 1, 1]
+```
+> **Why DoomScript is easier:** Telecommunications error-correcting codes, Galois Field $GF(2^8)$ polynomials, and CRC-32/64 are available natively in `use telecom`.
+
+---
+
 ## 📊 Summary: The Ergonomic Comparison
 
 | Metric / Dimension | 🐍 Traditional Python | 🔮 DoomScript |
@@ -894,7 +1057,7 @@ calculate voltage with current 2.5 and resistance res's resistance into v_res
 | **Control Flow Syntax** | Requires colons (`:`) and rigid indentation | **Colons are optional**; clean, flexible indentation |
 | **Punctuation Density** | High (`[`, `]`, `{`, `}`, `(`, `)`, `:`, `;`, `,`) | **Near zero**; natural English words replace symbols |
 | **Property Access** | `obj["key"]` or `getattr(obj, "prop")` | `obj's key` or `item 1 of list` |
-| **Domain Breadth** | Fragmented across hundreds of pip packages | **25 Built-in Domains** (Bio, Quantum, Physics, Sec, Circuit, Chain...) |
+| **Domain Breadth** | Fragmented across hundreds of pip packages | **40 Built-in Domains** (Math3D, Chem, Signals, Symbolic, Telecom, Bio, Quantum...) |
 | **Execution Performance** | Standard CPython execution | **Identical** (compiles to Python AST or `.exe` via Nuitka) |
 | **Learning Curve** | High cognitive overhead memorizing APIs | **Speaks like human instructions** |
 
@@ -903,4 +1066,5 @@ calculate voltage with current 2.5 and resistance res's resistance into v_res
 ## 🏁 Conclusion
 
 DoomScript is not an alternative to Python's power—**it is Python freed from syntax friction**. By compiling natural English directly to Python AST, DoomScript gives you the full speed, ecosystem, and reliability of Python with code you can read aloud like a book.
+
 

@@ -3236,6 +3236,246 @@ from doomscript.domains.chain.runtime import (
     execute_chain_ir,
 )
 
+from doomscript.domains.math3d.runtime import (
+    Vec3,
+    Vec4,
+    Mat4,
+    Quat,
+    Ray,
+    math3d_ray_sphere_intersect,
+    math3d_ray_triangle_intersect,
+    math3d_sdf_sphere,
+    math3d_sdf_box,
+    math3d_sdf_torus,
+    math3d_sdf_smooth_union,
+    math3d_sdf_normal,
+    math3d_raymarch,
+)
+
+from doomscript.domains.compiler.runtime import (
+    Opcode,
+    Instruction,
+    BytecodeVM,
+    Assembler,
+    LexerGenerator,
+    PrattParser,
+    compiler_run_bytecode,
+    compiler_assemble_string,
+    compiler_parse_pratt,
+)
+
+from doomscript.domains.robotics.runtime import (
+    DHParameter,
+    ForwardKinematicsChain,
+    InverseKinematics2D,
+    TrajectoryPlanner,
+    ExtendedKalmanFilter2D,
+    robotics_forward_kinematics,
+    robotics_inverse_kinematics_2link,
+    robotics_cubic_trajectory,
+    robotics_create_ekf,
+)
+
+from doomscript.domains.signals.runtime import (
+    WaveletTransform,
+    FilterDesign,
+    SignalAnalytics,
+    signals_haar_dwt,
+    signals_haar_idwt,
+    signals_db4_dwt,
+    signals_fir_lowpass,
+    signals_butterworth_filter,
+    signals_hilbert,
+    signals_find_peaks,
+)
+
+from doomscript.domains.astronomy.runtime import (
+    CelestialTime,
+    KeplerianOrbit,
+    CelestialCoordinates,
+    Astrodynamics,
+    astronomy_julian_date,
+    astronomy_kepler_orbit,
+    astronomy_eq_to_horiz,
+    astronomy_hohmann_transfer,
+)
+
+from doomscript.domains.chem.runtime import (
+    PERIODIC_TABLE,
+    FormulaParser,
+    Atom,
+    Bond,
+    MoleculeGraph,
+    SMILESParser,
+    ReactionBalancer,
+    chem_molecular_weight,
+    chem_elemental_composition,
+    chem_parse_smiles,
+    chem_balance_reaction,
+)
+
+from doomscript.domains.compression.runtime import (
+    ShannonEntropy,
+    RunLengthCodec,
+    HuffmanCodec,
+    LZ77Codec,
+    LZWCodec,
+    ArithmeticCodec,
+    compression_entropy,
+    compression_rle_encode,
+    compression_rle_decode,
+    compression_huffman_encode,
+    compression_huffman_decode,
+    compression_lz77_encode,
+    compression_lz77_decode,
+    compression_lzw_encode,
+    compression_lzw_decode,
+)
+
+from doomscript.domains.time_series.runtime import (
+    TimeSeriesDifferencer,
+    AutocorrelationAnalyzer,
+    TimeSeriesDecomposer,
+    ExponentialSmoothing,
+    time_series_decompose,
+    time_series_acf,
+    time_series_pacf,
+    time_series_holt_winters,
+    time_series_difference,
+)
+
+from doomscript.domains.symbolic.runtime import (
+    Expr,
+    Constant,
+    Symbol,
+    Add,
+    Mul,
+    Pow,
+    Sin,
+    Cos,
+    Ln,
+    Exp,
+    ExpressionParser,
+    PolyOps,
+    symbolic_parse,
+    symbolic_diff,
+    symbolic_simplify,
+    symbolic_eval,
+    symbolic_poly_gcd,
+)
+
+from doomscript.domains.graphics.runtime import (
+    FrameBuffer,
+    DepthBuffer,
+    Rasterizer2D,
+    Rasterizer3D,
+    graphics_create_framebuffer,
+    graphics_create_depthbuffer,
+    graphics_draw_line,
+    graphics_draw_circle,
+    graphics_draw_rect,
+    graphics_draw_triangle,
+)
+
+from doomscript.domains.telecom.runtime import (
+    Hamming74,
+    CRC,
+    GF256,
+    ReedSolomon,
+    telecom_hamming74_encode,
+    telecom_hamming74_decode,
+    telecom_crc8,
+    telecom_crc16,
+    telecom_crc32,
+    telecom_reed_solomon_encode,
+    telecom_reed_solomon_decode,
+)
+
+from doomscript.domains.neuro.runtime import (
+    LIFNeuron,
+    IzhikevichNeuron,
+    STDP,
+    PoissonSpikeGenerator,
+    SpikeAnalytics,
+    neuro_create_lif,
+    neuro_create_izhikevich,
+    neuro_stdp_update,
+    neuro_poisson_spikes,
+    neuro_simulate_lif,
+)
+
+from doomscript.domains.automata.runtime import (
+    DFA,
+    NFA,
+    ThompsonRegex,
+    TuringMachine,
+    automata_create_dfa,
+    automata_dfa_accepts,
+    automata_minimize_dfa,
+    automata_regex_to_dfa,
+    automata_run_turing_machine,
+)
+
+from doomscript.domains.metrics.runtime import (
+    Counter,
+    Gauge,
+    Histogram,
+    QuantileReservoir,
+    TraceSpan,
+    metrics_counter,
+    metrics_gauge,
+    metrics_histogram,
+    metrics_calculate_percentile,
+    metrics_export_openmetrics,
+    metrics_clear,
+)
+
+from doomscript.domains.spatial_audio.runtime import (
+    BinauralPanner,
+    AmbisonicsBFormat,
+    DopplerEffect,
+    SchroederReverberator,
+    spatial_audio_binaural,
+    spatial_audio_ambisonics_encode,
+    spatial_audio_ambisonics_decode_stereo,
+    spatial_audio_doppler,
+    spatial_audio_schroeder_reverb,
+)
+
+from doomscript.domains.dsa.runtime import (
+    RedBlackTree,
+    RBNode,
+    SkipList,
+    SkipListNode,
+    dsa_red_black_tree,
+    dsa_skip_list,
+)
+
+from doomscript.domains.ml.runtime import (
+    RandomForestModel,
+    ml_train_random_forest,
+)
+
+from doomscript.domains.finance.runtime import (
+    fin_monte_carlo_var,
+)
+
+from doomscript.domains.graph.runtime import (
+    graph_johnson_apsp,
+)
+
+from doomscript.domains.net.runtime import (
+    DNSWireProtocol,
+    net_dns_build_query,
+    net_dns_parse_packet,
+)
+
+from doomscript.domains.sim.runtime import (
+    SimResource,
+    DiscreteEventSimulation,
+    sim_create_discrete_event_sim,
+)
+
 
 
 # ---------------------------------------------------------------------------

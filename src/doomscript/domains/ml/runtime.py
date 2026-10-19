@@ -3,6 +3,7 @@
 import math
 import os
 import pickle
+import random
 from typing import Any, Dict, List, Optional, Tuple
 from doomscript.domains.base import DomainRuntime, DomainIR
 from doomscript.domains.ml.spec import ModelSpec, EvaluationReport
@@ -1103,5 +1104,108 @@ def ml_train_isolation_forest(
         contamination=contamination,
     )
     model.fit(X_mat)
+    return model
+
+
+class RandomForestModel:
+    """Zero-dependency Random Forest Classifier and Regressor with bootstrap bagging & feature subsampling."""
+
+    def __init__(
+        self,
+        n_estimators: int = 10,
+        max_depth: int = 5,
+        min_samples_split: int = 2,
+        max_features: Optional[str] = "sqrt",
+        is_classifier: bool = True,
+        seed: Optional[int] = 42,
+    ):
+        self.n_estimators = int(n_estimators)
+        self.max_depth = int(max_depth)
+        self.min_samples_split = int(min_samples_split)
+        self.max_features = max_features
+        self.is_classifier = is_classifier
+        self.seed = seed
+        self.trees: List[CARTDecisionTree] = []
+        self.feature_subsets: List[List[int]] = []
+
+    def fit(self, X: List[List[float]], y: List[Any]) -> "RandomForestModel":
+        if self.seed is not None:
+            random.seed(self.seed)
+        n_samples = len(X)
+        n_features = len(X[0]) if n_samples > 0 else 0
+
+        # Number of features per tree
+        if self.max_features == "sqrt" and n_features > 0:
+            k_features = max(1, int(math.isqrt(n_features)))
+        elif self.max_features == "log2" and n_features > 0:
+            k_features = max(1, int(math.log2(n_features)))
+        else:
+            k_features = n_features
+
+        self.trees = []
+        self.feature_subsets = []
+
+        for _ in range(self.n_estimators):
+            # Bootstrap sample (with replacement)
+            indices = [random.randint(0, n_samples - 1) for _ in range(n_samples)]
+            # Random feature subsample
+            selected_features = sorted(random.sample(range(n_features), k_features))
+            self.feature_subsets.append(selected_features)
+
+            sub_X = [[X[i][f] for f in selected_features] for i in indices]
+            sub_y = [y[i] for i in indices]
+
+            tree = CARTDecisionTree(
+                is_classifier=self.is_classifier,
+                max_depth=self.max_depth,
+                min_samples_split=self.min_samples_split,
+            )
+            tree.fit(sub_X, sub_y)
+            self.trees.append(tree)
+
+        return self
+
+    def predict(self, X: List[List[float]]) -> List[Any]:
+        if not self.trees:
+            return []
+        all_tree_preds = []
+        for tree, f_subset in zip(self.trees, self.feature_subsets):
+            sub_X = [[row[f] for f in f_subset] for row in X]
+            preds = tree.predict(sub_X)
+            all_tree_preds.append(preds)
+
+        n_samples = len(X)
+        ensemble_preds = []
+        from collections import Counter
+        for i in range(n_samples):
+            sample_votes = [all_tree_preds[t][i] for t in range(len(self.trees))]
+            if self.is_classifier:
+                majority_vote = Counter(sample_votes).most_common(1)[0][0]
+                ensemble_preds.append(majority_vote)
+            else:
+                mean_val = sum(sample_votes) / len(sample_votes)
+                ensemble_preds.append(round(mean_val, 4))
+        return ensemble_preds
+
+
+def ml_train_random_forest(
+    X: Any,
+    y: Any,
+    n_estimators: int = 10,
+    max_depth: int = 5,
+    min_samples_split: int = 2,
+    is_classifier: bool = True,
+    seed: Optional[int] = 42,
+) -> RandomForestModel:
+    """Train a pure-Python Random Forest ensemble."""
+    X_mat = [list(r) for r in X]
+    model = RandomForestModel(
+        n_estimators=n_estimators,
+        max_depth=max_depth,
+        min_samples_split=min_samples_split,
+        is_classifier=is_classifier,
+        seed=seed,
+    )
+    model.fit(X_mat, list(y))
     return model
 

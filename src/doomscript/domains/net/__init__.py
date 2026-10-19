@@ -41,6 +41,9 @@ from doomscript.domains.net.runtime import (
     HTTP2FrameParser,
     PacketDissector,
     WebSocketCodec,
+    DNSWireProtocol,
+    net_dns_build_query,
+    net_dns_parse_packet,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.net.exporter import NetASTExporter
@@ -202,4 +205,7 @@ __all__ = [
     "HTTP2FrameParser",
     "PacketDissector",
     "WebSocketCodec",
+    "DNSWireProtocol",
+    "net_dns_build_query",
+    "net_dns_parse_packet",
 ]

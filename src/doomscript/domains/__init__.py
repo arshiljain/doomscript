@@ -34,6 +34,21 @@ from doomscript.domains.game import GAME_DOMAIN
 from doomscript.domains.quantum import QUANTUM_DOMAIN
 from doomscript.domains.circuit import CIRCUIT_DOMAIN
 from doomscript.domains.chain import CHAIN_DOMAIN
+from doomscript.domains.math3d import MATH3D_DOMAIN
+from doomscript.domains.compiler import COMPILER_DOMAIN
+from doomscript.domains.robotics import ROBOTICS_DOMAIN
+from doomscript.domains.signals import SIGNALS_DOMAIN
+from doomscript.domains.astronomy import ASTRONOMY_DOMAIN
+from doomscript.domains.chem import CHEM_DOMAIN
+from doomscript.domains.compression import COMPRESSION_DOMAIN
+from doomscript.domains.time_series import TIME_SERIES_DOMAIN
+from doomscript.domains.symbolic import SYMBOLIC_DOMAIN
+from doomscript.domains.graphics import GRAPHICS_DOMAIN
+from doomscript.domains.telecom import TELECOM_DOMAIN
+from doomscript.domains.neuro import NEURO_DOMAIN
+from doomscript.domains.automata import AUTOMATA_DOMAIN
+from doomscript.domains.metrics import METRICS_DOMAIN
+from doomscript.domains.spatial_audio import SPATIAL_AUDIO_DOMAIN
 
 __all__ = [
     "DomainContract",
@@ -69,4 +84,19 @@ __all__ = [
     "QUANTUM_DOMAIN",
     "CIRCUIT_DOMAIN",
     "CHAIN_DOMAIN",
+    "MATH3D_DOMAIN",
+    "COMPILER_DOMAIN",
+    "ROBOTICS_DOMAIN",
+    "SIGNALS_DOMAIN",
+    "ASTRONOMY_DOMAIN",
+    "CHEM_DOMAIN",
+    "COMPRESSION_DOMAIN",
+    "TIME_SERIES_DOMAIN",
+    "SYMBOLIC_DOMAIN",
+    "GRAPHICS_DOMAIN",
+    "TELECOM_DOMAIN",
+    "NEURO_DOMAIN",
+    "AUTOMATA_DOMAIN",
+    "METRICS_DOMAIN",
+    "SPATIAL_AUDIO_DOMAIN",
 ]
