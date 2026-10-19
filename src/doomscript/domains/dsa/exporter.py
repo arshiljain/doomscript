@@ -15,22 +15,24 @@ class DsaASTExporter(DomainASTExporter):
         if not isinstance(ir, BenchmarkSpec):
             raise TypeError(f"DsaASTExporter expects BenchmarkSpec, got {type(ir).__name__}")
 
-        imports: Set[str] = {"time", "tracemalloc"}
+        imports: Set[str] = {"time", "tracemalloc", "math"}
         stmts: List[ast.stmt] = []
 
-        # var_name = {"fn": fn_name, "sizes": [...], "repeat": repeat}
-        dict_node = ast.Dict(
-            keys=[
-                ast.Constant(value="fn_name"),
-                ast.Constant(value="input_sizes"),
-                ast.Constant(value="repeat"),
-            ],
-            values=[
+        call_node = ast.Call(
+            func=ast.Name(id="run_dsa_benchmark", ctx=ast.Load()),
+            args=[
                 ast.Constant(value=ir.fn_name),
-                ast.List(elts=[ast.Constant(value=s) for s in ir.input_sizes], ctx=ast.Load()),
-                ast.Constant(value=ir.repeat),
+            ],
+            keywords=[
+                ast.keyword(
+                    arg="input_sizes",
+                    value=ast.List(elts=[ast.Constant(value=s) for s in ir.input_sizes], ctx=ast.Load()),
+                ),
+                ast.keyword(arg="repeat", value=ast.Constant(value=ir.repeat)),
+                ast.keyword(arg="generator", value=ast.Constant(value=ir.generator)),
+                ast.keyword(arg="measure_memory", value=ast.Constant(value=ir.measure_memory)),
             ],
         )
-        stmts.append(ast.Assign(targets=[ast.Name(id=var_name, ctx=ast.Store())], value=dict_node))
+        stmts.append(ast.Assign(targets=[ast.Name(id=var_name, ctx=ast.Store())], value=call_node))
 
         return imports, stmts

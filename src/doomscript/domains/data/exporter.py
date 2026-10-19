@@ -142,23 +142,32 @@ class DataASTExporter(DomainASTExporter):
                 stmts.append(ast.Assign(targets=[ast.Name(id=target_df, ctx=ast.Store())], value=query_call))
 
             elif isinstance(step, GroupByStep):
-                # agg_dict = {'amount': 'sum', ...}
-                agg_keys = [ast.Constant(value=src_col) for _, (_, src_col) in step.aggregations.items()]
-                agg_vals = [ast.Constant(value=agg_fn.lower()) for _, (agg_fn, _) in step.aggregations.items()]
-                agg_dict = ast.Dict(keys=agg_keys, values=agg_vals)
+                keys_val = step.keys[0] if len(step.keys) == 1 else step.keys
+                kw_aggs = []
+                for out_col, (agg_fn, src_col) in step.aggregations.items():
+                    col_to_use = src_col if src_col else step.keys[0]
+                    kw_aggs.append(
+                        ast.keyword(
+                            arg=out_col,
+                            value=ast.Tuple(
+                                elts=[ast.Constant(value=col_to_use), ast.Constant(value=agg_fn.lower())],
+                                ctx=ast.Load(),
+                            ),
+                        )
+                    )
 
                 group_call = ast.Call(
                     func=ast.Attribute(
                         value=ast.Call(
                             func=ast.Attribute(value=ast.Name(id=target_df, ctx=ast.Load()), attr="groupby", ctx=ast.Load()),
-                            args=[ast.Constant(value=step.keys[0] if len(step.keys) == 1 else step.keys)],
+                            args=[ast.Constant(value=keys_val)],
                             keywords=[ast.keyword(arg="as_index", value=ast.Constant(value=False))],
                         ),
                         attr="agg",
                         ctx=ast.Load(),
                     ),
-                    args=[agg_dict],
-                    keywords=[],
+                    args=[],
+                    keywords=kw_aggs,
                 )
                 stmts.append(ast.Assign(targets=[ast.Name(id=target_df, ctx=ast.Store())], value=group_call))
 

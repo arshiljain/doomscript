@@ -94,7 +94,7 @@ class DataDomainParser(DomainParser):
     ) -> Tuple[PipelineSpec, str]:
         # pipeline "<name>" [from <source>] into <target>:
         m = re.match(
-            r"^pipeline\s+[\"']([^\"']+)[\"'](?:\s+from\s+([^\s:]+))?(?:\s+into\s+([A-Za-z_]\w*))?:?$",
+            r"^pipeline\s+[\"']?([A-Za-z_]\w*)[\"']?(?:\s+from\s+([^\s:]+))?(?:\s+into\s+([A-Za-z_]\w*))?:?$",
             header.strip(),
             re.IGNORECASE,
         )
@@ -103,7 +103,7 @@ class DataDomainParser(DomainParser):
 
         pipe_name = m.group(1)
         source = m.group(2) or "data"
-        target = m.group(3) or "pipeline_output"
+        target = m.group(3) or pipe_name
 
         spec = PipelineSpec(name=pipe_name, source=source, target=target)
 
@@ -121,14 +121,21 @@ class DataDomainParser(DomainParser):
                 i += 1
                 continue
 
+            # Check read step inside block: read <source> [into <target>]
+            read_m = re.match(r"^read\s+[\"']?([^\"'\s]+)[\"']?(?:\s+into\s+([A-Za-z_]\w*))?$", line, re.IGNORECASE)
+            if read_m:
+                spec.source = read_m.group(1)
+                i += 1
+                continue
+
             # Check sub-block switches
-            if re.match(r"^validate\s*:?$", line, re.IGNORECASE):
+            if re.match(r"^validate(?:\s+[A-Za-z_]\w*)?\s*:?$", line, re.IGNORECASE):
                 in_validate = True
                 in_groupby = False
                 i += 1
                 continue
 
-            grp_m = re.match(r"^group\s+by\s+(.+?):?$", line, re.IGNORECASE)
+            grp_m = re.match(r"^group\s+(?:[A-Za-z_]\w*\s+)?by\s+(.+?):?$", line, re.IGNORECASE)
             if grp_m:
                 in_groupby = True
                 in_validate = False

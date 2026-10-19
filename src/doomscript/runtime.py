@@ -2229,6 +2229,26 @@ def execute_dsa_ir(spec):
     return res
 
 
+def run_dsa_benchmark(fn_name, input_sizes, repeat=3, generator="sorted_integers", measure_memory=True):
+    """Executes a DSA benchmark against the caller's scope and returns the ComplexityReport dict."""
+    import sys
+    from doomscript.domains.dsa.spec import BenchmarkSpec
+    from doomscript.domains.dsa.runtime import run_benchmark
+    spec = BenchmarkSpec(
+        fn_name=fn_name,
+        input_sizes=input_sizes,
+        repeat=repeat,
+        generator=generator,
+        measure_memory=measure_memory,
+    )
+    caller_frame = sys._getframe(1)
+    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
+    scope = dict(target_env)
+    if caller_frame.f_locals:
+        scope.update(caller_frame.f_locals)
+    return run_benchmark(spec, scope)
+
+
 
 
 
