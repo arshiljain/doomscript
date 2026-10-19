@@ -79,7 +79,7 @@ class SinkStep(PipelineStep):
 class PipelineSpec(DomainIR):
     """Top-level typed specification for a Data Engineering ETL pipeline."""
     name: str
-    source: str
+    source: str = ""
     target: str = "pipeline_output"
     validations: List[ValidationRule] = field(default_factory=list)
     steps: List[PipelineStep] = field(default_factory=list)
@@ -95,3 +95,7 @@ class PipelineSpec(DomainIR):
             if not v.column:
                 errors.append(f"Validation rule '{v.rule_type}' requires a column name.")
         return errors
+
+
+CalculateStep = DeriveStep
+DataPipelineSpec = PipelineSpec

@@ -7,6 +7,7 @@ import os
 import re
 from typing import Any, Dict, List, Optional
 from doomscript.domains.base import DomainRuntime, DomainIR
+from doomscript.domains.data.expr_eval import SafeASTEvaluator, SafeEvalError, SafeEvalSecurityError
 from doomscript.domains.data.spec import (
     PipelineSpec,
     DedupeStep,
@@ -147,6 +148,14 @@ def join_datasets(left: Any, right: Any, on: str, how: str = "inner") -> List[Di
     return joined
 
 
+def run_pipeline(spec: PipelineSpec, scope: Dict[str, Any], source_data: Any = None) -> List[Dict[str, Any]]:
+    """Convenience helper to run a pipeline directly with optional in-memory source data."""
+    if source_data is not None and not spec.source:
+        scope["__source_data__"] = source_data
+        spec.source = "__source_data__"
+    return DataPipelineRuntime().execute_pipeline(spec, scope)
+
+
 class DataPipelineRuntime(DomainRuntime):
     """Runtime engine that executes a PipelineSpec."""
 
@@ -211,14 +220,15 @@ class DataPipelineRuntime(DomainRuntime):
                         r[step.column] = step.value
 
             elif isinstance(step, DeriveStep):
-                # Safe evaluation with row keys as local variables
+                evaluator = SafeASTEvaluator()
                 for r in rows:
-                    env = {"math": math}
-                    env.update(r)
                     try:
-                        r[step.target_col] = eval(step.expression, {"__builtins__": {}}, env)
-                    except Exception:
-                        pass
+                        r[step.target_col] = evaluator.evaluate(step.expression, r)
+                    except Exception as e:
+                        raise SafeEvalError(
+                            f"Calculation error in pipeline '{spec.name}' for column '{step.target_col}' "
+                            f"with expression '{step.expression}': {e}"
+                        ) from e
 
             elif isinstance(step, FilterStep):
                 cond_str = step.condition.strip()
@@ -247,15 +257,16 @@ class DataPipelineRuntime(DomainRuntime):
                 for pat, rep in replacements:
                     cond_str = re.sub(pat, rep, cond_str, flags=re.IGNORECASE)
 
+                evaluator = SafeASTEvaluator()
                 filtered = []
                 for r in rows:
-                    env = {"math": math}
-                    env.update(r)
                     try:
-                        if eval(cond_str, {"__builtins__": {}}, env):
+                        if evaluator.evaluate(cond_str, r):
                             filtered.append(r)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        raise SafeEvalError(
+                            f"Filter error in pipeline '{spec.name}' with condition '{step.condition}': {e}"
+                        ) from e
                 rows = filtered
 
             elif isinstance(step, JoinStep):
