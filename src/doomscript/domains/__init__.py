@@ -18,6 +18,7 @@ from doomscript.domains.viz import VIZ_DOMAIN
 from doomscript.domains.research import RESEARCH_DOMAIN
 from doomscript.domains.nlp import NLP_DOMAIN
 from doomscript.domains.geo import GEO_DOMAIN
+from doomscript.domains.opt import OPT_DOMAIN
 
 __all__ = [
     "DomainContract",
@@ -37,4 +38,5 @@ __all__ = [
     "RESEARCH_DOMAIN",
     "NLP_DOMAIN",
     "GEO_DOMAIN",
+    "OPT_DOMAIN",
 ]

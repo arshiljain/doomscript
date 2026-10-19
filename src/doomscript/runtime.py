@@ -2337,6 +2337,41 @@ def execute_geo_ir(spec):
     return res
 
 
+from doomscript.domains.opt.runtime import (
+    solve_linear_program as _opt_solve_lp,
+    SimplexSolver,
+    parse_linear_expression,
+    parse_constraint,
+    OptRuntime,
+)
+
+def solve_linear_program(spec_or_name):
+    import sys
+    caller_frame = sys._getframe(1)
+    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
+    scope = dict(target_env)
+    if caller_frame.f_locals:
+        scope.update(caller_frame.f_locals)
+    return _opt_solve_lp(spec_or_name, scope=scope)
+
+def execute_opt_ir(spec):
+    import sys
+    from doomscript.domains.opt.runtime import OptRuntime
+    from doomscript.domains.registry import get_domain_registry
+    if isinstance(spec, str):
+        spec = get_domain_registry().get_spec(spec)
+    caller_frame = sys._getframe(1)
+    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
+    scope = dict(target_env)
+    if caller_frame.f_locals:
+        scope.update(caller_frame.f_locals)
+    res = OptRuntime().execute_ir(spec, scope)
+    for k, v in scope.items():
+        target_env[k] = v
+    return res
+
+
+
 
 
 
