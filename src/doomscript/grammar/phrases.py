@@ -1685,6 +1685,29 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
                     emit(f"{indent}{p_var}.draw('{d_rest}')", line_idx)
                 continue
 
+            # annotate <text> at x=<x>, y=<y> [with ...]
+            ann_m = re.match(
+                r"^annotate\s+(.+?)\s+at\s+x=(.+?),\s*y=(.+?)(?:\s+with\s+(.+))?$",
+                code,
+                re.IGNORECASE,
+            )
+            if ann_m:
+                text_val = ann_m.group(1).strip()
+                x_val = ann_m.group(2).strip()
+                y_val = ann_m.group(3).strip()
+                params = ann_m.group(4)
+                if params:
+                    emit(
+                        f"{indent}{p_var}.annotate({text_val}, x={x_val}, y={y_val}, {params.strip()})",
+                        line_idx,
+                    )
+                else:
+                    emit(
+                        f"{indent}{p_var}.annotate({text_val}, x={x_val}, y={y_val})",
+                        line_idx,
+                    )
+                continue
+
             # facet by <col>
             facet_m = re.match(r"^facet\s+by\s+(.+)$", code, re.IGNORECASE)
             if facet_m:

@@ -67,6 +67,16 @@ class LabelSpec:
 
 
 @dataclass
+class AnnotationSpec:
+    text: str
+    x: Any
+    y: Any
+    color: Optional[str] = None
+    size: Optional[float] = None
+    alpha: Optional[float] = None
+
+
+@dataclass
 class PlotSpec:
     data: Any
     mapping: AestheticMapping = field(default_factory=AestheticMapping)
@@ -75,3 +85,4 @@ class PlotSpec:
     theme: ThemeSpec = field(default_factory=ThemeSpec)
     scales: List[ScaleSpec] = field(default_factory=list)
     labels: LabelSpec = field(default_factory=LabelSpec)
+    annotations: List[AnnotationSpec] = field(default_factory=list)

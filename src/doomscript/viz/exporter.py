@@ -198,6 +198,33 @@ class LetsPlotExporter:
                 call = ast.Call(func=ast.Name(id="scale_y_reverse", ctx=ast.Load()), args=[], keywords=[])
                 expr = ast.BinOp(left=expr, op=ast.Add(), right=call)
 
+        # 8. Annotations
+        for ann in spec.annotations:
+            imports.add("geom_text")
+            kw = [
+                ast.keyword(arg="label", value=ast.Constant(value=ann.text)),
+                ast.keyword(
+                    arg="x",
+                    value=ast.Constant(value=ann.x)
+                    if isinstance(ann.x, (int, float, str, bool))
+                    else ast.parse(repr(ann.x), mode="eval").body,
+                ),
+                ast.keyword(
+                    arg="y",
+                    value=ast.Constant(value=ann.y)
+                    if isinstance(ann.y, (int, float, str, bool))
+                    else ast.parse(repr(ann.y), mode="eval").body,
+                ),
+            ]
+            if ann.color is not None:
+                kw.append(ast.keyword(arg="color", value=ast.Constant(value=ann.color)))
+            if ann.size is not None:
+                kw.append(ast.keyword(arg="size", value=ast.Constant(value=ann.size)))
+            if ann.alpha is not None:
+                kw.append(ast.keyword(arg="alpha", value=ast.Constant(value=ann.alpha)))
+            call = ast.Call(func=ast.Name(id="geom_text", ctx=ast.Load()), args=[], keywords=kw)
+            expr = ast.BinOp(left=expr, op=ast.Add(), right=call)
+
         assign_node = ast.Assign(targets=[ast.Name(id=var_name, ctx=ast.Store())], value=expr)
         ast.fix_missing_locations(assign_node)
         return imports, assign_node

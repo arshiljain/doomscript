@@ -160,6 +160,17 @@ class LetsPlotRenderer:
             elif s.target == "y" and s.type == "reverse":
                 fig += lp.scale_y_reverse()
 
+        # Annotations
+        for ann in spec.annotations:
+            ann_kw = {"label": ann.text, "x": ann.x, "y": ann.y}
+            if ann.color is not None:
+                ann_kw["color"] = ann.color
+            if ann.size is not None:
+                ann_kw["size"] = ann.size
+            if ann.alpha is not None:
+                ann_kw["alpha"] = ann.alpha
+            fig += lp.geom_text(**ann_kw)
+
         return fig
 
     @classmethod

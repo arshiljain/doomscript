@@ -13,6 +13,7 @@ from doomscript.viz.spec import (
     ThemeSpec,
     ScaleSpec,
     LabelSpec,
+    AnnotationSpec,
 )
 
 
@@ -86,6 +87,7 @@ class PlotBuilder:
         self._theme = ThemeSpec()
         self._scales: List[ScaleSpec] = []
         self._labels = LabelSpec(title=title)
+        self._annotations: List[AnnotationSpec] = []
 
     # -----------------------------------------------------------------------
     # Aesthetic Mappings
@@ -264,6 +266,20 @@ class PlotBuilder:
         )
         return self
 
+    def annotate(
+        self,
+        text: str,
+        x: Any,
+        y: Any,
+        color: Optional[str] = None,
+        size: Optional[float] = None,
+        alpha: Optional[float] = None,
+    ) -> "PlotBuilder":
+        self._annotations.append(
+            AnnotationSpec(text=text, x=x, y=y, color=color, size=size, alpha=alpha)
+        )
+        return self
+
     # -----------------------------------------------------------------------
     # Validation & IR Generation
     # -----------------------------------------------------------------------
@@ -334,6 +350,7 @@ class PlotBuilder:
             theme=self._theme,
             scales=self._scales,
             labels=self._labels,
+            annotations=self._annotations,
         )
 
     # -----------------------------------------------------------------------
