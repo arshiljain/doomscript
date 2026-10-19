@@ -161,7 +161,10 @@ class DataASTExporter(DomainASTExporter):
                         value=ast.Call(
                             func=ast.Attribute(value=ast.Name(id=target_df, ctx=ast.Load()), attr="groupby", ctx=ast.Load()),
                             args=[ast.Constant(value=keys_val)],
-                            keywords=[ast.keyword(arg="as_index", value=ast.Constant(value=False))],
+                            keywords=[
+                                ast.keyword(arg="as_index", value=ast.Constant(value=False)),
+                                ast.keyword(arg="sort", value=ast.Constant(value=False)),
+                            ],
                         ),
                         attr="agg",
                         ctx=ast.Load(),
