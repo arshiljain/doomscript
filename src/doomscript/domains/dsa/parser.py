@@ -371,6 +371,198 @@ class DsaDomainParser(DomainParser):
             target = pop_left_m.group(2).strip()
             return f"set {target} to dsa_deque_pop_left({q_var})"
 
+        # --- 13 Additional Algorithmic Powers ---
+
+        # 1. Trie Engine
+        trie_c_m = re.match(r"^create\s+trie\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if trie_c_m:
+            return f"set {trie_c_m.group(1).strip()} to dsa_create_trie()"
+
+        trie_ins_m = re.match(r"^insert\s+(?:word\s+)?(.+?)\s+into\s+(?:trie\s+)?([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if trie_ins_m:
+            return f"dsa_trie_insert({trie_ins_m.group(2).strip()}, {trie_ins_m.group(1).strip()})"
+
+        trie_has_m = re.match(r"^(?:check\s+if\s+)?(?:trie\s+)?([A-Za-z_]\w*)\s+contains\s+(?:word\s+)?(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if trie_has_m:
+            return f"set {trie_has_m.group(3).strip()} to dsa_trie_contains({trie_has_m.group(1).strip()}, {trie_has_m.group(2).strip()})"
+
+        trie_sw_m = re.match(r"^(?:check\s+if\s+)?(?:trie\s+)?([A-Za-z_]\w*)\s+starts\s+with\s+(?:prefix\s+)?(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if trie_sw_m:
+            return f"set {trie_sw_m.group(3).strip()} to dsa_trie_starts_with({trie_sw_m.group(1).strip()}, {trie_sw_m.group(2).strip()})"
+
+        trie_aw_m = re.match(r"^all\s+words\s+in\s+(?:trie\s+)?([A-Za-z_]\w*)\s+starting\s+with\s+(?:prefix\s+)?(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if trie_aw_m:
+            return f"set {trie_aw_m.group(3).strip()} to dsa_trie_words_with_prefix({trie_aw_m.group(1).strip()}, {trie_aw_m.group(2).strip()})"
+
+        # 2. Disjoint Set Union (DSU / Union-Find)
+        dsu_c_m = re.match(r"^create\s+disjoint\s+set\s+with\s+size\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if dsu_c_m:
+            return f"set {dsu_c_m.group(2).strip()} to dsa_create_disjoint_set({dsu_c_m.group(1).strip()})"
+
+        dsu_u_m = re.match(r"^union\s+(.+?)\s+and\s+(.+?)\s+in\s+(?:disjoint\s+set\s+)?([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if dsu_u_m:
+            return f"dsa_dsu_union({dsu_u_m.group(3).strip()}, {dsu_u_m.group(1).strip()}, {dsu_u_m.group(2).strip()})"
+
+        dsu_f_m = re.match(r"^find\s+root\s+of\s+(.+?)\s+in\s+(?:disjoint\s+set\s+)?([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if dsu_f_m:
+            return f"set {dsu_f_m.group(3).strip()} to dsa_dsu_find({dsu_f_m.group(2).strip()}, {dsu_f_m.group(1).strip()})"
+
+        dsu_conn_m = re.match(r"^(?:check\s+if\s+)?(.+?)\s+and\s+(.+?)\s+are\s+connected\s+in\s+(?:disjoint\s+set\s+)?([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if dsu_conn_m:
+            return f"set {dsu_conn_m.group(4).strip()} to dsa_dsu_connected({dsu_conn_m.group(3).strip()}, {dsu_conn_m.group(1).strip()}, {dsu_conn_m.group(2).strip()})"
+
+        dsu_cnt_m = re.match(r"^count\s+of\s+disjoint\s+sets\s+in\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if dsu_cnt_m:
+            return f"set {dsu_cnt_m.group(2).strip()} to dsa_dsu_count({dsu_cnt_m.group(1).strip()})"
+
+        # 3. Binary Tree Operations
+        bt_b_m = re.match(r"^build\s+binary\s+tree\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if bt_b_m:
+            return f"set {bt_b_m.group(2).strip()} to dsa_build_binary_tree({bt_b_m.group(1).strip()})"
+
+        bt_lo_m = re.match(r"^level\s+order\s+traversal\s+of\s+(?:tree\s+)?([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if bt_lo_m:
+            return f"set {bt_lo_m.group(2).strip()} to dsa_level_order({bt_lo_m.group(1).strip()})"
+
+        bt_trav_m = re.match(r"^(preorder|inorder|postorder)\s+traversal\s+of\s+(?:tree\s+)?([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if bt_trav_m:
+            order = bt_trav_m.group(1).lower()
+            return f"set {bt_trav_m.group(3).strip()} to dsa_{order}({bt_trav_m.group(2).strip()})"
+
+        bt_dep_m = re.match(r"^maximum\s+depth\s+of\s+(?:tree\s+)?([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if bt_dep_m:
+            return f"set {bt_dep_m.group(2).strip()} to dsa_tree_max_depth({bt_dep_m.group(1).strip()})"
+
+        bt_inv_m = re.match(r"^invert\s+binary\s+tree\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if bt_inv_m:
+            return f"set {bt_inv_m.group(1).strip()} to dsa_invert_binary_tree({bt_inv_m.group(1).strip()})"
+
+        # 4. Binary Search / Bisect Suite
+        bs_m = re.match(r"^binary\s+search\s+target\s+(.+?)\s+in\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if bs_m:
+            return f"set {bs_m.group(3).strip()} to dsa_binary_search({bs_m.group(2).strip()}, {bs_m.group(1).strip()})"
+
+        lb_m = re.match(r"^lower\s+bound\s+of\s+(.+?)\s+in\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if lb_m:
+            return f"set {lb_m.group(3).strip()} to dsa_lower_bound({lb_m.group(2).strip()}, {lb_m.group(1).strip()})"
+
+        ub_m = re.match(r"^upper\s+bound\s+of\s+(.+?)\s+in\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if ub_m:
+            return f"set {ub_m.group(3).strip()} to dsa_upper_bound({ub_m.group(2).strip()}, {ub_m.group(1).strip()})"
+
+        # 5. Monotonic Stack Engine
+        nge_m = re.match(r"^next\s+greater\s+elements\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if nge_m:
+            return f"set {nge_m.group(2).strip()} to dsa_next_greater_elements({nge_m.group(1).strip()})"
+
+        nse_m = re.match(r"^next\s+smaller\s+elements\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if nse_m:
+            return f"set {nse_m.group(2).strip()} to dsa_next_smaller_elements({nse_m.group(1).strip()})"
+
+        pge_m = re.match(r"^previous\s+greater\s+elements\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if pge_m:
+            return f"set {pge_m.group(2).strip()} to dsa_previous_greater_elements({pge_m.group(1).strip()})"
+
+        # 6. Combinatorics & Power Set
+        perm_m = re.match(r"^all\s+permutations\s+of\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if perm_m:
+            return f"set {perm_m.group(2).strip()} to dsa_permutations({perm_m.group(1).strip()})"
+
+        comb_m = re.match(r"^all\s+combinations\s+of\s+(.+?)\s+with\s+size\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if comb_m:
+            return f"set {comb_m.group(3).strip()} to dsa_combinations({comb_m.group(1).strip()}, {comb_m.group(2).strip()})"
+
+        pow_m = re.match(r"^power\s+set\s+of\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if pow_m:
+            return f"set {pow_m.group(2).strip()} to dsa_power_set({pow_m.group(1).strip()})"
+
+        # 7. Linked List Engine
+        ll_b_m = re.match(r"^build\s+linked\s+list\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if ll_b_m:
+            return f"set {ll_b_m.group(2).strip()} to dsa_build_linked_list({ll_b_m.group(1).strip()})"
+
+        ll_r_m = re.match(r"^reverse\s+linked\s+list\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if ll_r_m:
+            return f"set {ll_r_m.group(2).strip()} to dsa_reverse_linked_list({ll_r_m.group(1).strip()})"
+
+        ll_c_m = re.match(r"^(?:check\s+if\s+)?linked\s+list\s+([A-Za-z_]\w*)\s+has\s+cycle\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if ll_c_m:
+            return f"set {ll_c_m.group(2).strip()} to dsa_linked_list_has_cycle({ll_c_m.group(1).strip()})"
+
+        ll_t_m = re.match(r"^convert\s+linked\s+list\s+([A-Za-z_]\w*)\s+to\s+list\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if ll_t_m:
+            return f"set {ll_t_m.group(2).strip()} to dsa_linked_list_to_list({ll_t_m.group(1).strip()})"
+
+        # 8. Kadane's Algorithm
+        kad_s_m = re.match(r"^maximum\s+subarray\s+sum\s+of\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if kad_s_m:
+            return f"set {kad_s_m.group(2).strip()} to dsa_max_subarray_sum({kad_s_m.group(1).strip()})"
+
+        kad_a_m = re.match(r"^maximum\s+subarray\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if kad_a_m:
+            return f"set {kad_a_m.group(2).strip()} to dsa_max_subarray({kad_a_m.group(1).strip()})"
+
+        # 9. Prefix Sums & 2D Prefix Sums
+        pref_m = re.match(r"^prefix\s+sums\s+of\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if pref_m:
+            return f"set {pref_m.group(2).strip()} to dsa_prefix_sums({pref_m.group(1).strip()})"
+
+        rs_m = re.match(r"^range\s+sum\s+in\s+([A-Za-z_]\w*)\s+from\s+(.+?)\s+to\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if rs_m:
+            return f"set {rs_m.group(4).strip()} to dsa_range_sum({rs_m.group(1).strip()}, {rs_m.group(2).strip()}, {rs_m.group(3).strip()})"
+
+        pref2d_m = re.match(r"^create\s+2d\s+prefix\s+sums\s+of\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if pref2d_m:
+            return f"set {pref2d_m.group(2).strip()} to dsa_prefix_sums_2d({pref2d_m.group(1).strip()})"
+
+        q2d_m = re.match(r"^query\s+2d\s+range\s+sum\s+in\s+([A-Za-z_]\w*)\s+from\s+(.+?),\s*(.+?)\s+to\s+(.+?),\s*(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if q2d_m:
+            return f"set {q2d_m.group(6).strip()} to dsa_query_range_sum_2d({q2d_m.group(1).strip()}, {q2d_m.group(2).strip()}, {q2d_m.group(3).strip()}, {q2d_m.group(4).strip()}, {q2d_m.group(5).strip()})"
+
+        # 10. Two-Pointer Pairs & Triplets
+        pair_m = re.match(r"^find\s+pair\s+with\s+sum\s+(.+?)\s+in\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if pair_m:
+            return f"set {pair_m.group(3).strip()} to dsa_find_pair_sum({pair_m.group(2).strip()}, {pair_m.group(1).strip()})"
+
+        trip_m = re.match(r"^find\s+all\s+triplets\s+with\s+sum\s+(.+?)\s+in\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if trip_m:
+            return f"set {trip_m.group(3).strip()} to dsa_find_triplets_sum({trip_m.group(2).strip()}, {trip_m.group(1).strip()})"
+
+        # 11. Minimum Spanning Tree (MST)
+        mst_w_m = re.match(r"^minimum\s+spanning\s+tree\s+weight\s+of\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if mst_w_m:
+            return f"set {mst_w_m.group(2).strip()} to dsa_minimum_spanning_tree_weight({mst_w_m.group(1).strip()})"
+
+        mst_m = re.match(r"^minimum\s+spanning\s+tree\s+of\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if mst_m:
+            return f"set {mst_m.group(2).strip()} to dsa_minimum_spanning_tree({mst_m.group(1).strip()})"
+
+        # 12. Knapsack & Coin Change
+        knap_m = re.match(r"^solve\s+0-1\s+knapsack\s+with\s+weights\s+(.+?),\s*values\s+(.+?),\s*capacity\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if knap_m:
+            return f"set {knap_m.group(4).strip()} to dsa_solve_knapsack_01({knap_m.group(1).strip()}, {knap_m.group(2).strip()}, {knap_m.group(3).strip()})"
+
+        coins_m = re.match(r"^minimum\s+coins\s+to\s+make\s+(.+?)\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if coins_m:
+            return f"set {coins_m.group(3).strip()} to dsa_min_coins({coins_m.group(2).strip()}, {coins_m.group(1).strip()})"
+
+        ways_m = re.match(r"^count\s+ways\s+to\s+make\s+(.+?)\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if ways_m:
+            return f"set {ways_m.group(3).strip()} to dsa_coin_change_ways({ways_m.group(2).strip()}, {ways_m.group(1).strip()})"
+
+        # 13. String Palindromes & KMP
+        kmp_m = re.match(r"^find\s+pattern\s+(.+?)\s+in\s+(.+?)\s+using\s+kmp\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if kmp_m:
+            return f"set {kmp_m.group(3).strip()} to dsa_kmp_search({kmp_m.group(2).strip()}, {kmp_m.group(1).strip()})"
+
+        lps_m = re.match(r"^longest\s+palindromic\s+substring\s+of\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if lps_m:
+            return f"set {lps_m.group(2).strip()} to dsa_longest_palindromic_substring({lps_m.group(1).strip()})"
+
+        pal_m = re.match(r"^(?:check\s+if\s+)?(.+?)\s+is\s+palindrome\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if pal_m:
+            return f"set {pal_m.group(2).strip()} to dsa_is_palindrome({pal_m.group(1).strip()})"
+
         return None
 
     def parse_block(

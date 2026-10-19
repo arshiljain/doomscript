@@ -741,3 +741,615 @@ def dsa_sliding_window_max(arr: Any, k: Any) -> List[Any]:
         if i >= window_k - 1:
             res.append(arr[q[0]])
     return res
+
+
+# =========================================================================
+# 13 Additional Algorithmic Powers
+# =========================================================================
+
+# 1. Trie Engine
+class DsaTrie:
+    """Prefix tree data structure for string dictionary and autocomplete."""
+
+    def __init__(self):
+        self.root: Dict[str, Any] = {}
+        self.end_symbol = "__END__"
+
+    def insert(self, word: str) -> None:
+        curr = self.root
+        for char in str(word):
+            if char not in curr:
+                curr[char] = {}
+            curr = curr[char]
+        curr[self.end_symbol] = True
+
+    def contains(self, word: str) -> bool:
+        curr = self.root
+        for char in str(word):
+            if char not in curr:
+                return False
+            curr = curr[char]
+        return self.end_symbol in curr
+
+    def starts_with(self, prefix: str) -> bool:
+        curr = self.root
+        for char in str(prefix):
+            if char not in curr:
+                return False
+            curr = curr[char]
+        return True
+
+    def all_words_with_prefix(self, prefix: str) -> List[str]:
+        curr = self.root
+        for char in str(prefix):
+            if char not in curr:
+                return []
+            curr = curr[char]
+        words: List[str] = []
+
+        def dfs(node: Dict[str, Any], path: str):
+            if self.end_symbol in node:
+                words.append(path)
+            for ch, child in node.items():
+                if ch != self.end_symbol:
+                    dfs(child, path + ch)
+
+        dfs(curr, str(prefix))
+        return words
+
+
+def dsa_create_trie() -> DsaTrie:
+    return DsaTrie()
+
+
+def dsa_trie_insert(trie: Any, word: Any) -> Any:
+    if isinstance(trie, DsaTrie):
+        trie.insert(str(word))
+    return trie
+
+
+def dsa_trie_contains(trie: Any, word: Any) -> bool:
+    if isinstance(trie, DsaTrie):
+        return trie.contains(str(word))
+    return False
+
+
+def dsa_trie_starts_with(trie: Any, prefix: Any) -> bool:
+    if isinstance(trie, DsaTrie):
+        return trie.starts_with(str(prefix))
+    return False
+
+
+def dsa_trie_words_with_prefix(trie: Any, prefix: Any) -> List[str]:
+    if isinstance(trie, DsaTrie):
+        return trie.all_words_with_prefix(str(prefix))
+    return []
+
+
+# 2. Disjoint Set Union (DSU / Union-Find)
+class DsaDisjointSet:
+    """Disjoint Set Union (Union-Find) with path compression and rank optimization."""
+
+    def __init__(self, size: int):
+        n = int(size)
+        self.parent = list(range(n))
+        self.rank = [0] * n
+        self.num_sets = n
+
+    def find(self, x: int) -> int:
+        idx = int(x)
+        if self.parent[idx] != idx:
+            self.parent[idx] = self.find(self.parent[idx])
+        return self.parent[idx]
+
+    def union(self, x: int, y: int) -> bool:
+        rx = self.find(x)
+        ry = self.find(y)
+        if rx == ry:
+            return False
+        if self.rank[rx] < self.rank[ry]:
+            self.parent[rx] = ry
+        elif self.rank[rx] > self.rank[ry]:
+            self.parent[ry] = rx
+        else:
+            self.parent[ry] = rx
+            self.rank[rx] += 1
+        self.num_sets -= 1
+        return True
+
+    def connected(self, x: int, y: int) -> bool:
+        return self.find(x) == self.find(y)
+
+    def count(self) -> int:
+        return self.num_sets
+
+
+def dsa_create_disjoint_set(size: Any) -> DsaDisjointSet:
+    return DsaDisjointSet(int(size))
+
+
+def dsa_dsu_union(dsu: Any, x: Any, y: Any) -> bool:
+    if isinstance(dsu, DsaDisjointSet):
+        return dsu.union(int(x), int(y))
+    return False
+
+
+def dsa_dsu_find(dsu: Any, x: Any) -> int:
+    if isinstance(dsu, DsaDisjointSet):
+        return dsu.find(int(x))
+    return int(x)
+
+
+def dsa_dsu_connected(dsu: Any, x: Any, y: Any) -> bool:
+    if isinstance(dsu, DsaDisjointSet):
+        return dsu.connected(int(x), int(y))
+    return False
+
+
+def dsa_dsu_count(dsu: Any) -> int:
+    if isinstance(dsu, DsaDisjointSet):
+        return dsu.count()
+    return 0
+
+
+# 3. Binary Tree Operations
+def dsa_build_binary_tree(vals: Any) -> Optional[TreeNode]:
+    """Construct binary tree from level-order list representation with null values."""
+    if not isinstance(vals, (list, tuple)) or not vals:
+        return None
+    root = TreeNode(vals[0])
+    queue = [root]
+    i = 1
+    while i < len(vals) and queue:
+        curr = queue.pop(0)
+        if i < len(vals) and vals[i] is not None:
+            curr.left = TreeNode(vals[i])
+            queue.append(curr.left)
+        i += 1
+        if i < len(vals) and vals[i] is not None:
+            curr.right = TreeNode(vals[i])
+            queue.append(curr.right)
+        i += 1
+    return root
+
+
+def dsa_level_order(root: Any) -> List[List[Any]]:
+    """Level order (BFS) traversal of binary tree."""
+    if not isinstance(root, TreeNode) or not root:
+        return []
+    levels: List[List[Any]] = []
+    queue = [root]
+    while queue:
+        level_size = len(queue)
+        curr_level = []
+        for _ in range(level_size):
+            node = queue.pop(0)
+            curr_level.append(node.val)
+            if node.left:
+                queue.append(node.left)
+            if node.right:
+                queue.append(node.right)
+        levels.append(curr_level)
+    return levels
+
+
+def dsa_preorder(root: Any) -> List[Any]:
+    res: List[Any] = []
+    def dfs(n: Any):
+        if n:
+            res.append(n.val)
+            dfs(n.left)
+            dfs(n.right)
+    dfs(root)
+    return res
+
+
+def dsa_inorder(root: Any) -> List[Any]:
+    res: List[Any] = []
+    def dfs(n: Any):
+        if n:
+            dfs(n.left)
+            res.append(n.val)
+            dfs(n.right)
+    dfs(root)
+    return res
+
+
+def dsa_postorder(root: Any) -> List[Any]:
+    res: List[Any] = []
+    def dfs(n: Any):
+        if n:
+            dfs(n.left)
+            dfs(n.right)
+            res.append(n.val)
+    dfs(root)
+    return res
+
+
+def dsa_tree_max_depth(root: Any) -> int:
+    if not isinstance(root, TreeNode) or not root:
+        return 0
+    return 1 + max(dsa_tree_max_depth(root.left), dsa_tree_max_depth(root.right))
+
+
+def dsa_invert_binary_tree(root: Any) -> Any:
+    if not isinstance(root, TreeNode) or not root:
+        return None
+    root.left, root.right = dsa_invert_binary_tree(root.right), dsa_invert_binary_tree(root.left)
+    return root
+
+
+# 4. Binary Search / Bisect Suite
+def dsa_binary_search(arr: Any, target: Any) -> int:
+    """Standard logarithmic binary search returning exact index or -1."""
+    if not isinstance(arr, (list, tuple)):
+        return -1
+    low, high = 0, len(arr) - 1
+    while low <= high:
+        mid = (low + high) // 2
+        if arr[mid] == target:
+            return mid
+        elif arr[mid] < target:
+            low = mid + 1
+        else:
+            high = mid - 1
+    return -1
+
+
+def dsa_lower_bound(arr: Any, target: Any) -> int:
+    """Find the first index where arr[i] >= target (bisect_left)."""
+    if not isinstance(arr, (list, tuple)):
+        return 0
+    low, high = 0, len(arr)
+    while low < high:
+        mid = (low + high) // 2
+        if arr[mid] < target:
+            low = mid + 1
+        else:
+            high = mid
+    return low
+
+
+def dsa_upper_bound(arr: Any, target: Any) -> int:
+    """Find the first index where arr[i] > target (bisect_right)."""
+    if not isinstance(arr, (list, tuple)):
+        return 0
+    low, high = 0, len(arr)
+    while low < high:
+        mid = (low + high) // 2
+        if arr[mid] <= target:
+            low = mid + 1
+        else:
+            high = mid
+    return low
+
+
+# 5. Monotonic Stack Engine
+def dsa_next_greater_elements(arr: Any) -> List[Any]:
+    """Find the next greater element for each index in O(n) time."""
+    if not isinstance(arr, (list, tuple)):
+        return []
+    n = len(arr)
+    res = [-1] * n
+    stack: List[int] = []
+    for i in range(n):
+        while stack and arr[stack[-1]] < arr[i]:
+            idx = stack.pop()
+            res[idx] = arr[i]
+        stack.append(i)
+    return res
+
+
+def dsa_next_smaller_elements(arr: Any) -> List[Any]:
+    """Find the next smaller element for each index in O(n) time."""
+    if not isinstance(arr, (list, tuple)):
+        return []
+    n = len(arr)
+    res = [-1] * n
+    stack: List[int] = []
+    for i in range(n):
+        while stack and arr[stack[-1]] > arr[i]:
+            idx = stack.pop()
+            res[idx] = arr[i]
+        stack.append(i)
+    return res
+
+
+def dsa_previous_greater_elements(arr: Any) -> List[Any]:
+    """Find the previous greater element for each index in O(n) time."""
+    if not isinstance(arr, (list, tuple)):
+        return []
+    n = len(arr)
+    res = [-1] * n
+    stack: List[Any] = []
+    for i in range(n):
+        while stack and stack[-1] <= arr[i]:
+            stack.pop()
+        if stack:
+            res[i] = stack[-1]
+        stack.append(arr[i])
+    return res
+
+
+# 6. Combinatorics & Power Set
+def dsa_permutations(items: Any) -> List[List[Any]]:
+    import itertools
+    if not items:
+        return []
+    return [list(p) for p in itertools.permutations(items)]
+
+
+def dsa_combinations(items: Any, k: Any) -> List[List[Any]]:
+    import itertools
+    if not items:
+        return []
+    return [list(c) for c in itertools.combinations(items, int(k))]
+
+
+def dsa_power_set(items: Any) -> List[List[Any]]:
+    import itertools
+    if items is None:
+        return []
+    res = []
+    lst = list(items)
+    for r in range(len(lst) + 1):
+        res.extend([list(c) for c in itertools.combinations(lst, r)])
+    return res
+
+
+# 7. Linked List Engine
+def dsa_build_linked_list(items: Any) -> Optional[ListNode]:
+    if not isinstance(items, (list, tuple)):
+        return None
+    return ListNode.from_list(list(items))
+
+
+def dsa_reverse_linked_list(head: Any) -> Optional[ListNode]:
+    prev = None
+    curr = head
+    while curr:
+        nxt = curr.next
+        curr.next = prev
+        prev = curr
+        curr = nxt
+    return prev
+
+
+def dsa_linked_list_has_cycle(head: Any) -> bool:
+    slow = head
+    fast = head
+    while fast and fast.next:
+        slow = slow.next
+        fast = fast.next.next
+        if slow == fast:
+            return True
+    return False
+
+
+def dsa_linked_list_to_list(head: Any) -> List[Any]:
+    if isinstance(head, ListNode):
+        return head.to_list()
+    return []
+
+
+# 8. Kadane's Algorithm
+def dsa_max_subarray_sum(nums: Any) -> Any:
+    """Maximum subarray sum in O(n) time and O(1) space."""
+    if not isinstance(nums, (list, tuple)) or not nums:
+        return 0
+    max_so_far = nums[0]
+    curr_max = nums[0]
+    for x in nums[1:]:
+        curr_max = max(x, curr_max + x)
+        max_so_far = max(max_so_far, curr_max)
+    return max_so_far
+
+
+def dsa_max_subarray(nums: Any) -> List[Any]:
+    """Retrieve the continuous subarray achieving the maximum sum."""
+    if not isinstance(nums, (list, tuple)) or not nums:
+        return []
+    max_so_far = nums[0]
+    curr_max = nums[0]
+    start = end = s = 0
+    for i, x in enumerate(nums[1:], 1):
+        if x > curr_max + x:
+            curr_max = x
+            s = i
+        else:
+            curr_max += x
+        if curr_max > max_so_far:
+            max_so_far = curr_max
+            start = s
+            end = i
+    return list(nums[start : end + 1])
+
+
+# 9. Prefix Sums & 2D Prefix Sums
+def dsa_prefix_sums(nums: Any) -> List[Any]:
+    pref = [0]
+    if nums:
+        for x in nums:
+            pref.append(pref[-1] + x)
+    return pref
+
+
+def dsa_range_sum(pref: Any, left: Any, right: Any) -> Any:
+    l = int(left)
+    r = int(right)
+    return pref[r + 1] - pref[l]
+
+
+def dsa_prefix_sums_2d(matrix: Any) -> List[List[Any]]:
+    if not matrix or not matrix[0]:
+        return []
+    m, n = len(matrix), len(matrix[0])
+    pref = [[0] * (n + 1) for _ in range(m + 1)]
+    for i in range(m):
+        for j in range(n):
+            pref[i + 1][j + 1] = matrix[i][j] + pref[i][j + 1] + pref[i + 1][j] - pref[i][j]
+    return pref
+
+
+def dsa_query_range_sum_2d(pref2d: Any, r1: Any, c1: Any, r2: Any, c2: Any) -> Any:
+    row1, col1, row2, col2 = int(r1), int(c1), int(r2), int(c2)
+    return pref2d[row2 + 1][col2 + 1] - pref2d[row1][col2 + 1] - pref2d[row2 + 1][col1] + pref2d[row1][col1]
+
+
+# 10. Two-Pointer Pairs & Triplets
+def dsa_find_pair_sum(sorted_arr: Any, target: Any) -> Optional[List[Any]]:
+    if not isinstance(sorted_arr, (list, tuple)):
+        return None
+    l, r = 0, len(sorted_arr) - 1
+    t = target
+    while l < r:
+        s = sorted_arr[l] + sorted_arr[r]
+        if s == t:
+            return [sorted_arr[l], sorted_arr[r]]
+        elif s < t:
+            l += 1
+        else:
+            r -= 1
+    return None
+
+
+def dsa_find_triplets_sum(nums: Any, target: Any = 0) -> List[List[Any]]:
+    if not isinstance(nums, (list, tuple)):
+        return []
+    arr = sorted(nums)
+    triplets = []
+    n = len(arr)
+    t = target
+    for i in range(n - 2):
+        if i > 0 and arr[i] == arr[i - 1]:
+            continue
+        l, r = i + 1, n - 1
+        while l < r:
+            s = arr[i] + arr[l] + arr[r]
+            if s == t:
+                triplets.append([arr[i], arr[l], arr[r]])
+                while l < r and arr[l] == arr[l + 1]:
+                    l += 1
+                while l < r and arr[r] == arr[r - 1]:
+                    r -= 1
+                l += 1
+                r -= 1
+            elif s < t:
+                l += 1
+            else:
+                r -= 1
+    return triplets
+
+
+# 11. Minimum Spanning Tree (MST)
+def dsa_minimum_spanning_tree(g: Any) -> List[List[Any]]:
+    if not isinstance(g, DsaGraph):
+        return []
+    edges = []
+    for u in g.adj:
+        for v, w in g.adj[u]:
+            if g.directed or u < v:
+                edges.append((w, u, v))
+    edges.sort()
+    nodes = list(g.nodes)
+    node_to_idx = {node: i for i, node in enumerate(nodes)}
+    dsu = DsaDisjointSet(len(nodes))
+    mst_edges = []
+    for w, u, v in edges:
+        iu, iv = node_to_idx[u], node_to_idx[v]
+        if dsu.union(iu, iv):
+            mst_edges.append([u, v, w])
+    return mst_edges
+
+
+def dsa_minimum_spanning_tree_weight(g: Any) -> float:
+    mst = dsa_minimum_spanning_tree(g)
+    return sum(float(e[2]) for e in mst)
+
+
+# 12. Knapsack & Coin Change DP
+def dsa_solve_knapsack_01(weights: Any, values: Any, capacity: Any) -> int:
+    cap = int(capacity)
+    dp = [0] * (cap + 1)
+    for w, v in zip(weights, values):
+        w_int = int(w)
+        v_int = int(v)
+        for c in range(cap, w_int - 1, -1):
+            dp[c] = max(dp[c], dp[c - w_int] + v_int)
+    return dp[cap]
+
+
+def dsa_min_coins(coins: Any, amount: Any) -> int:
+    amt = int(amount)
+    dp = [float("inf")] * (amt + 1)
+    dp[0] = 0
+    for coin in coins:
+        c = int(coin)
+        for x in range(c, amt + 1):
+            dp[x] = min(dp[x], dp[x - c] + 1)
+    return int(dp[amt]) if dp[amt] != float("inf") else -1
+
+
+def dsa_coin_change_ways(coins: Any, amount: Any) -> int:
+    amt = int(amount)
+    dp = [0] * (amt + 1)
+    dp[0] = 1
+    for coin in coins:
+        c = int(coin)
+        for x in range(c, amt + 1):
+            dp[x] += dp[x - c]
+    return dp[amt]
+
+
+# 13. String Palindromes & KMP Pattern Matching
+def dsa_kmp_search(text: Any, pattern: Any) -> List[int]:
+    txt = str(text)
+    pat = str(pattern)
+    if not pat or not txt:
+        return []
+    pi = [0] * len(pat)
+    j = 0
+    for i in range(1, len(pat)):
+        while j > 0 and pat[i] != pat[j]:
+            j = pi[j - 1]
+        if pat[i] == pat[j]:
+            j += 1
+            pi[i] = j
+
+    matches = []
+    j = 0
+    for i in range(len(txt)):
+        while j > 0 and txt[i] != pat[j]:
+            j = pi[j - 1]
+        if txt[i] == pat[j]:
+            j += 1
+        if j == len(pat):
+            matches.append(i - len(pat) + 1)
+            j = pi[j - 1]
+    return matches
+
+
+def dsa_longest_palindromic_substring(text: Any) -> str:
+    s = str(text)
+    if not s:
+        return ""
+    start, max_len = 0, 1
+
+    def expand(l: int, r: int):
+        nonlocal start, max_len
+        while l >= 0 and r < len(s) and s[l] == s[r]:
+            if r - l + 1 > max_len:
+                start = l
+                max_len = r - l + 1
+            l -= 1
+            r += 1
+
+    for i in range(len(s)):
+        expand(i, i)
+        expand(i, i + 1)
+    return s[start : start + max_len]
+
+
+def dsa_is_palindrome(text: Any) -> bool:
+    s = str(text)
+    return s == s[::-1]

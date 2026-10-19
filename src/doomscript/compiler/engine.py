@@ -242,6 +242,8 @@ def execute(source: Any, custom_globals: dict = None, filename: str = "<doom>") 
         "sorted_list": runtime.sorted_list,
         "reversed_list": runtime.reversed_list,
         "copy_value": runtime.copy_value,
+        "null": None,
+        "nil": None,
         "unique_items": runtime.unique_items,
         "insert_list": runtime.insert_list,
         "range_inclusive": runtime.range_inclusive,

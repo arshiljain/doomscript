@@ -401,6 +401,8 @@ slice_item: expr ":" [expr] [":" [expr]] -> slice_full
           | "false"        -> const_false
           | "nothing"      -> const_none
           | "none"         -> const_none
+          | "null"         -> const_none
+          | "nil"          -> const_none
           | list_expr
           | dict_or_set
           | lambda_expr
