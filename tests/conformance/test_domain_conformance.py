@@ -212,3 +212,31 @@ generate signed url for "data.csv" in b into link
         expected_vars=["link"],
     )
 
+
+def test_spoken_english_data_conformance(tmp_path):
+    f = tmp_path / "orders.csv"
+    f.write_text("item,qty,price\nWidget,10,5.0\nGadget,2,40.0\n", encoding="utf-8")
+    source = f"""use data
+
+read csv file "{f.as_posix()}" into items
+items where price is over 10 into premium
+sort premium by qty descending
+count_premium = count of premium
+"""
+    assert_execution_and_export_parity(
+        source,
+        expected_vars=["count_premium"],
+    )
+
+
+def test_universal_introspection_conformance():
+    source = """use finance
+
+explain domain finance into fin_info
+has_verbs = (count of fin_info.verbs) > 0
+"""
+    assert_execution_and_export_parity(
+        source,
+        expected_vars=["has_verbs"],
+    )
+
