@@ -2315,7 +2315,34 @@ def run_dsa_benchmark(fn_name, input_sizes, repeat=3, generator="sorted_integers
     return run_benchmark(spec, scope)
 
 
-from doomscript.domains.dsa.runtime import ListNode, TreeNode, trace_recursion
+from doomscript.domains.dsa.runtime import (
+    ListNode,
+    TreeNode,
+    trace_recursion,
+    DsaHeap,
+    dsa_create_heap,
+    dsa_create_deque,
+    dsa_peek_min,
+    dsa_peek_max,
+    dsa_peek_left,
+    dsa_pop_right,
+    dsa_push_left,
+    dsa_create_grid,
+    dsa_is_inside_grid,
+    dsa_connected_components_grid,
+    dsa_count_connected_components_grid,
+    DsaGraph,
+    dsa_build_graph,
+    dsa_graph_has_cycle,
+    dsa_graph_topological_sort,
+    dsa_graph_shortest_path,
+    dsa_graph_connected_components,
+    dsa_memoize,
+    dsa_merge_intervals,
+    dsa_intersect_intervals,
+    dsa_frequency_map,
+    dsa_sliding_window_max,
+)
 
 from doomscript.domains.nlp.runtime import (
     clean_text,
@@ -2558,32 +2585,41 @@ def accuracy_score_fn(preds: Any, actuals: Any) -> float:
 
 
 def dsa_push(container: Any, item: Any) -> Any:
-    """Push an item into a list or deque."""
+    """Push an item into a heap, list, or deque."""
     from collections import deque
-    if isinstance(container, deque):
+    if hasattr(container, "push") and callable(container.push):
+        container.push(item)
+    elif isinstance(container, deque):
         container.append(item)
     elif isinstance(container, list):
         container.append(item)
     return container
 
 
-def dsa_heap_push(heap_list: list, item: Any) -> list:
-    """Push an item into a min-heap list."""
+def dsa_heap_push(heap_list: Any, item: Any) -> Any:
+    """Push an item into a min/max heap or list."""
+    if hasattr(heap_list, "push") and callable(heap_list.push):
+        heap_list.push(item)
+        return heap_list
     import heapq
     heapq.heappush(heap_list, item)
     return heap_list
 
 
-def dsa_heap_pop_min(heap_list: list) -> Any:
-    """Pop the minimum item from a min-heap list."""
+def dsa_heap_pop_min(heap_list: Any) -> Any:
+    """Pop the minimum item from a min-heap or list."""
+    if hasattr(heap_list, "pop") and callable(heap_list.pop):
+        return heap_list.pop()
     import heapq
     if not heap_list:
         return None
     return heapq.heappop(heap_list)
 
 
-def dsa_heap_pop_max(heap_list: list) -> Any:
-    """Remove and return the maximum item from a collection."""
+def dsa_heap_pop_max(heap_list: Any) -> Any:
+    """Remove and return the maximum item from a max-heap or collection."""
+    if hasattr(heap_list, "pop") and callable(heap_list.pop) and getattr(heap_list, "kind", "") == "max":
+        return heap_list.pop()
     if not heap_list:
         return None
     mx = max(heap_list)

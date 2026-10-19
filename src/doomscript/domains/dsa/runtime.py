@@ -279,3 +279,465 @@ class DsaRuntime(DomainRuntime):
         if not isinstance(ir, BenchmarkSpec):
             raise TypeError(f"DsaRuntime expects BenchmarkSpec, got {type(ir).__name__}")
         return run_benchmark(ir, scope)
+
+
+# =========================================================================
+# Advanced First-Class DSA Primitives & Algorithmic Engines
+# =========================================================================
+
+class _MaxHeapEntry:
+    """Wrapper to invert comparisons for native max-heap without numeric negation."""
+
+    def __init__(self, val: Any):
+        self.val = val
+
+    def __lt__(self, other: Any) -> bool:
+        if isinstance(other, _MaxHeapEntry):
+            return self.val > other.val
+        return self.val > other
+
+    def __le__(self, other: Any) -> bool:
+        if isinstance(other, _MaxHeapEntry):
+            return self.val >= other.val
+        return self.val >= other
+
+    def __gt__(self, other: Any) -> bool:
+        if isinstance(other, _MaxHeapEntry):
+            return self.val < other.val
+        return self.val < other
+
+    def __ge__(self, other: Any) -> bool:
+        if isinstance(other, _MaxHeapEntry):
+            return self.val <= other.val
+        return self.val <= other
+
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, _MaxHeapEntry):
+            return self.val == other.val
+        return self.val == other
+
+    def __repr__(self) -> str:
+        return repr(self.val)
+
+
+class DsaHeap:
+    """Universal min/max priority queue supporting any comparable objects."""
+
+    def __init__(self, kind: str = "min"):
+        import heapq
+        self.kind = kind.lower()
+        self._data: List[Any] = []
+
+    def push(self, item: Any) -> None:
+        import heapq
+        if self.kind == "max":
+            heapq.heappush(self._data, _MaxHeapEntry(item))
+        else:
+            heapq.heappush(self._data, item)
+
+    def pop(self) -> Any:
+        import heapq
+        if not self._data:
+            return None
+        res = heapq.heappop(self._data)
+        if self.kind == "max":
+            return res.val
+        return res
+
+    def peek(self) -> Any:
+        if not self._data:
+            return None
+        item = self._data[0]
+        if self.kind == "max":
+            return item.val
+        return item
+
+    def __len__(self) -> int:
+        return len(self._data)
+
+    def __bool__(self) -> bool:
+        return len(self._data) > 0
+
+    def to_list(self) -> List[Any]:
+        if self.kind == "max":
+            return [x.val for x in self._data]
+        return list(self._data)
+
+    def __repr__(self) -> str:
+        return f"DsaHeap(kind={self.kind}, size={len(self)})"
+
+
+def dsa_create_heap(kind: str = "min") -> DsaHeap:
+    """Create a new universal min or max heap."""
+    return DsaHeap(kind=kind)
+
+
+def dsa_create_deque() -> Any:
+    """Create a double-ended queue."""
+    from collections import deque
+    return deque()
+
+
+def dsa_peek_min(coll: Any) -> Any:
+    """Peek the minimum element from a heap or list without removing."""
+    if isinstance(coll, DsaHeap):
+        return coll.peek()
+    if isinstance(coll, (list, tuple)) and coll:
+        return min(coll)
+    return None
+
+
+def dsa_peek_max(coll: Any) -> Any:
+    """Peek the maximum element from a heap or list without removing."""
+    if isinstance(coll, DsaHeap):
+        return coll.peek()
+    if isinstance(coll, (list, tuple)) and coll:
+        return max(coll)
+    return None
+
+
+def dsa_peek_left(coll: Any) -> Any:
+    """Peek the first/left element without removing."""
+    from collections import deque
+    if isinstance(coll, (list, deque)) and len(coll) > 0:
+        return coll[0]
+    return None
+
+
+def dsa_pop_right(coll: Any) -> Any:
+    """Pop the last/right element from a deque or list."""
+    from collections import deque
+    if isinstance(coll, deque):
+        return coll.pop() if coll else None
+    if isinstance(coll, list):
+        return coll.pop() if coll else None
+    return None
+
+
+def dsa_push_left(coll: Any, item: Any) -> Any:
+    """Push an item to the left/front of a deque or list."""
+    from collections import deque
+    if isinstance(coll, deque):
+        coll.appendleft(item)
+    elif isinstance(coll, list):
+        coll.insert(0, item)
+    return coll
+
+
+# --- Grids & Connected Components ---
+
+def dsa_create_grid(rows: Any, cols: Any, fill: Any = 0) -> List[List[Any]]:
+    """Safely allocate a 2D matrix without list-multiplication reference duplication."""
+    r = int(rows)
+    c = int(cols)
+    return [[fill for _ in range(c)] for _ in range(r)]
+
+
+def dsa_is_inside_grid(r: Any, c: Any, grid: Any) -> bool:
+    """Verify if row and col coordinates fall within grid bounds."""
+    if not isinstance(grid, list) or not grid:
+        return False
+    rows = len(grid)
+    cols = len(grid[0]) if isinstance(grid[0], list) else 0
+    return 0 <= int(r) < rows and 0 <= int(c) < cols
+
+
+def dsa_connected_components_grid(
+    grid: List[List[Any]], cell_val: Any, connectivity: Any = 4
+) -> List[List[Tuple[int, int]]]:
+    """Find connected coordinate groups in a 2D grid using 4-way or 8-way traversal."""
+    if not isinstance(grid, list) or not grid:
+        return []
+    rows = len(grid)
+    cols = len(grid[0]) if isinstance(grid[0], list) else 0
+    visited = set()
+    components: List[List[Tuple[int, int]]] = []
+
+    conn_int = int(connectivity) if str(connectivity).isdigit() else 4
+    if conn_int == 8:
+        directions = [(-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (-1, 1), (1, -1), (1, 1)]
+    else:
+        directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+
+    for r in range(rows):
+        for c in range(cols):
+            if grid[r][c] == cell_val and (r, c) not in visited:
+                comp = []
+                queue = [(r, c)]
+                visited.add((r, c))
+                while queue:
+                    curr_r, curr_c = queue.pop(0)
+                    comp.append((curr_r, curr_c))
+                    for dr, dc in directions:
+                        nr, nc = curr_r + dr, curr_c + dc
+                        if 0 <= nr < rows and 0 <= nc < cols:
+                            if grid[nr][nc] == cell_val and (nr, nc) not in visited:
+                                visited.add((nr, nc))
+                                queue.append((nr, nc))
+                components.append(comp)
+    return components
+
+
+def dsa_count_connected_components_grid(
+    grid: List[List[Any]], cell_val: Any, connectivity: Any = 4
+) -> int:
+    """Count connected coordinate groups in a 2D grid."""
+    return len(dsa_connected_components_grid(grid, cell_val, connectivity))
+
+
+# --- Graphs: Cycle Detection, Topological Sort, Shortest Path ---
+
+class DsaGraph:
+    """Algorithmic graph engine supporting edge parsing, cycle checks, and topological sort."""
+
+    def __init__(self, directed: bool = True):
+        self.directed = directed
+        self.adj: Dict[Any, List[Tuple[Any, float]]] = {}
+        self.nodes: Set[Any] = set()
+
+    def add_edge(self, u: Any, v: Any, weight: float = 1.0) -> None:
+        self.nodes.add(u)
+        self.nodes.add(v)
+        if u not in self.adj:
+            self.adj[u] = []
+        self.adj[u].append((v, weight))
+        if not self.directed:
+            if v not in self.adj:
+                self.adj[v] = []
+            self.adj[v].append((u, weight))
+
+    def has_cycle(self) -> bool:
+        """Cycle detection using 3-color DFS traversal."""
+        visited: Dict[Any, int] = {node: 0 for node in self.nodes}
+
+        def dfs(u: Any) -> bool:
+            visited[u] = 1  # in-progress
+            for v, _ in self.adj.get(u, []):
+                if visited.get(v, 0) == 1:
+                    return True
+                if visited.get(v, 0) == 0:
+                    if dfs(v):
+                        return True
+            visited[u] = 2  # finished
+            return False
+
+        for node in list(self.nodes):
+            if visited[node] == 0:
+                if dfs(node):
+                    return True
+        return False
+
+    def topological_sort(self) -> List[Any]:
+        """Kahn's algorithm for topological ordering."""
+        in_degree: Dict[Any, int] = {node: 0 for node in self.nodes}
+        for u in self.adj:
+            for v, _ in self.adj[u]:
+                in_degree[v] = in_degree.get(v, 0) + 1
+
+        queue = [node for node in self.nodes if in_degree[node] == 0]
+        order = []
+        while queue:
+            u = queue.pop(0)
+            order.append(u)
+            for v, _ in self.adj.get(u, []):
+                in_degree[v] -= 1
+                if in_degree[v] == 0:
+                    queue.append(v)
+
+        if len(order) < len(self.nodes):
+            return []  # Cycle present
+        return order
+
+    def shortest_path(self, start: Any, end: Any) -> Optional[List[Any]]:
+        """Dijkstra's shortest path from start to end."""
+        import heapq
+        if start not in self.nodes:
+            return None
+        pq = [(0.0, start, [start])]
+        visited = set()
+        while pq:
+            cost, curr, path = heapq.heappop(pq)
+            if curr == end:
+                return path
+            if curr in visited:
+                continue
+            visited.add(curr)
+            for neighbor, weight in self.adj.get(curr, []):
+                if neighbor not in visited:
+                    heapq.heappush(pq, (cost + weight, neighbor, path + [neighbor]))
+        return None
+
+    def connected_components(self) -> List[List[Any]]:
+        """Find connected components treating graph as undirected connectivity."""
+        visited = set()
+        comps = []
+        for node in self.nodes:
+            if node not in visited:
+                comp = []
+                queue = [node]
+                visited.add(node)
+                while queue:
+                    curr = queue.pop(0)
+                    comp.append(curr)
+                    neighbors = [v for v, _ in self.adj.get(curr, [])]
+                    for u in self.adj:
+                        for v, _ in self.adj[u]:
+                            if v == curr:
+                                neighbors.append(u)
+                    for nbr in neighbors:
+                        if nbr not in visited:
+                            visited.add(nbr)
+                            queue.append(nbr)
+                comps.append(comp)
+        return comps
+
+
+def dsa_build_graph(edges: Any, directed: bool = True) -> DsaGraph:
+    """Build a DsaGraph directly from an edge list or pairs."""
+    g = DsaGraph(directed=directed)
+    if isinstance(edges, (list, tuple)):
+        for edge in edges:
+            if isinstance(edge, (list, tuple)):
+                if len(edge) >= 3:
+                    g.add_edge(edge[0], edge[1], float(edge[2]))
+                elif len(edge) == 2:
+                    g.add_edge(edge[0], edge[1], 1.0)
+                elif len(edge) == 1:
+                    g.nodes.add(edge[0])
+            else:
+                g.nodes.add(edge)
+    return g
+
+
+def dsa_graph_has_cycle(g: Any) -> bool:
+    if isinstance(g, DsaGraph):
+        return g.has_cycle()
+    return False
+
+
+def dsa_graph_topological_sort(g: Any) -> List[Any]:
+    if isinstance(g, DsaGraph):
+        return g.topological_sort()
+    return []
+
+
+def dsa_graph_shortest_path(g: Any, start: Any, end: Any) -> Optional[List[Any]]:
+    if isinstance(g, DsaGraph):
+        return g.shortest_path(start, end)
+    return None
+
+
+def dsa_graph_connected_components(g: Any) -> List[List[Any]]:
+    if isinstance(g, DsaGraph):
+        return g.connected_components()
+    return []
+
+
+# --- Memoization ---
+
+def dsa_memoize(fn_name_or_fn: Any, scope: Optional[Dict[str, Any]] = None) -> Any:
+    """Automatically memoize a recursive or heavy function, handling unhashable inputs."""
+    if scope is None:
+        import sys
+        f = sys._getframe(1)
+        scope = f.f_globals if (f.f_globals is not None and fn_name_or_fn in f.f_globals) else f.f_locals
+
+    if isinstance(fn_name_or_fn, str):
+        fn = scope.get(fn_name_or_fn)
+        name = fn_name_or_fn
+    else:
+        fn = fn_name_or_fn
+        name = getattr(fn, "__name__", "memoized_fn")
+
+    if not callable(fn):
+        raise ValueError(f"Target '{fn_name_or_fn}' is not callable")
+
+    cache: Dict[Tuple[Any, ...], Any] = {}
+
+    def _to_key(arg: Any) -> Any:
+        if isinstance(arg, list):
+            return tuple(_to_key(x) for x in arg)
+        if isinstance(arg, dict):
+            return tuple(sorted((k, _to_key(v)) for k, v in arg.items()))
+        return arg
+
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        key = (tuple(_to_key(a) for a in args), tuple(sorted((k, _to_key(v)) for k, v in kwargs.items())))
+        if key in cache:
+            return cache[key]
+        res = fn(*args, **kwargs)
+        cache[key] = res
+        return res
+
+    wrapper.__name__ = name
+    wrapper.cache = cache
+    if scope is not None and isinstance(fn_name_or_fn, str):
+        scope[fn_name_or_fn] = wrapper
+    return wrapper
+
+
+# --- Intervals ---
+
+def dsa_merge_intervals(intervals: Any) -> List[List[Any]]:
+    """Merge overlapping intervals in O(n log n) time."""
+    if not isinstance(intervals, (list, tuple)) or not intervals:
+        return []
+    sorted_int = sorted(intervals, key=lambda x: x[0])
+    merged = [list(sorted_int[0])]
+    for current in sorted_int[1:]:
+        prev = merged[-1]
+        if current[0] <= prev[1]:
+            prev[1] = max(prev[1], current[1])
+        else:
+            merged.append(list(current))
+    return merged
+
+
+def dsa_intersect_intervals(a: Any, b: Any) -> List[List[Any]]:
+    """Compute the interval intersections of two sorted interval lists."""
+    if not a or not b:
+        return []
+    i = 0
+    j = 0
+    res = []
+    while i < len(a) and j < len(b):
+        start = max(a[i][0], b[j][0])
+        end = min(a[i][1], b[j][1])
+        if start <= end:
+            res.append([start, end])
+        if a[i][1] < b[j][1]:
+            i += 1
+        else:
+            j += 1
+    return res
+
+
+# --- Frequency Maps & Sliding Window ---
+
+def dsa_frequency_map(collection: Any) -> Dict[Any, int]:
+    """Compute element counts/frequencies in O(n) time."""
+    freq: Dict[Any, int] = {}
+    if collection is None:
+        return freq
+    for item in collection:
+        freq[item] = freq.get(item, 0) + 1
+    return freq
+
+
+def dsa_sliding_window_max(arr: Any, k: Any) -> List[Any]:
+    """Compute sliding window maximum using an optimal O(n) monotonic queue."""
+    from collections import deque
+    if not arr or int(k) <= 0:
+        return []
+    window_k = min(int(k), len(arr))
+    q: deque[int] = deque()
+    res = []
+    for i in range(len(arr)):
+        if q and q[0] < i - window_k + 1:
+            q.popleft()
+        while q and arr[q[-1]] < arr[i]:
+            q.pop()
+        q.append(i)
+        if i >= window_k - 1:
+            res.append(arr[q[0]])
+    return res
