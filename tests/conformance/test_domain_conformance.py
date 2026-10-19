@@ -79,3 +79,31 @@ pipeline "user_orders_pipe":
         source,
         expected_vars=["user_orders_pipe"],
     )
+
+
+def test_nlp_conformance():
+    source = """use nlp
+
+doc = "DoomScript domain architecture"
+clean text in doc into c
+tokenize c into words
+extract 2-grams from c into bigrams
+"""
+    assert_execution_and_export_parity(
+        source,
+        expected_vars=["c", "words", "bigrams"],
+    )
+
+
+def test_geo_conformance():
+    source = """use geo
+
+point at 10.0, 20.0 into p1
+point at 15.0, 25.0 into p2
+distance between p1 and p2 in km into d
+"""
+    assert_execution_and_export_parity(
+        source,
+        expected_vars=["p1", "p2", "d"],
+    )
+

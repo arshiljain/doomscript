@@ -54,15 +54,26 @@ def test_wheel_contains_grammar_and_executes_in_clean_venv():
         assert res_check.returncode == 0, f"Grammar check failed:\n{res_check.stderr}"
         assert "GRAMMAR_EXISTS" in res_check.stdout
 
-        # 4. Execute a real DoomScript program inside the clean environment
+        # 4. Execute a real DoomScript program with domain operations inside the clean environment
         doom_prog = (
             "set a to 10\n"
             "set b to 20\n"
             "say 'Sum is:', a + b\n"
+            "use geo\n"
+            "point at 10.0, 20.0 into p1\n"
+            "point at 10.0, 21.0 into p2\n"
+            "distance between p1 and p2 in km into d\n"
+            "use nlp\n"
+            "clean text in 'Hello World from Isolated Venv' into c\n"
+            "say c\n"
         )
         run_script = (
             "from doomscript.compiler.engine import execute\n"
-            f"execute('''{doom_prog}''')\n"
+            f"env = execute('''{doom_prog}''')\n"
+            "assert 'p1' in env\n"
+            "assert 'd' in env\n"
+            "assert env['c'] == 'hello world from isolated venv'\n"
+            "print('ISOLATED_DOMAINS_SUCCESS')\n"
         )
         res_exec = subprocess.run(
             [str(py_bin), "-c", run_script],
@@ -72,3 +83,5 @@ def test_wheel_contains_grammar_and_executes_in_clean_venv():
         )
         assert res_exec.returncode == 0, f"Execution failed:\n{res_exec.stderr}"
         assert "Sum is: 30" in res_exec.stdout
+        assert "ISOLATED_DOMAINS_SUCCESS" in res_exec.stdout
+
