@@ -34,6 +34,10 @@ from doomscript.domains.finance.runtime import (
     fin_vasicek_simulate,
     fin_bond_duration_convexity,
     fin_heston_simulate,
+    HullWhiteInterestRateTree,
+    MertonJumpDiffusionModel,
+    fin_hull_white_tree,
+    fin_merton_jump_diffusion,
 )
 from doomscript.domains.finance.exporter import FinanceASTExporter
 from doomscript.domains.matcher import VerbSpec
@@ -197,5 +201,9 @@ __all__ = [
     "fin_vasicek_simulate",
     "fin_bond_duration_convexity",
     "fin_heston_simulate",
+    "HullWhiteInterestRateTree",
+    "MertonJumpDiffusionModel",
+    "fin_hull_white_tree",
+    "fin_merton_jump_diffusion",
 ]
 

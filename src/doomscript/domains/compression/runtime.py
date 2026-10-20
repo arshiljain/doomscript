@@ -800,3 +800,205 @@ def compression_delta_decode(encoded_record: Any) -> List[int]:
     d = dict(encoded_record) if not isinstance(encoded_record, dict) else encoded_record
     return DeltaAndBitPackingEncoder.decode(d)
 
+
+# ==============================================================================
+# RANGE ASYMMETRIC NUMERAL SYSTEMS (rANS) ENTROPY CODER
+# ==============================================================================
+
+class AsymmetricNumeralSystemsANS:
+    """Range Asymmetric Numeral Systems (rANS) entropy coding engine."""
+
+    SCALE_BITS = 12
+    M = 1 << SCALE_BITS  # 4096
+
+    @classmethod
+    def _compute_frequencies(cls, text: str) -> Tuple[Dict[str, int], Dict[str, int]]:
+        counts = Counter(text)
+        n = len(text)
+        freqs: Dict[str, int] = {}
+        # Allocate proportional frequencies summing to M
+        allocated = 0
+        symbols = sorted(counts.keys())
+        for ch in symbols:
+            f = max(1, int(round((counts[ch] / n) * cls.M)))
+            freqs[ch] = f
+            allocated += f
+
+        # Adjust sum to exact M
+        diff = cls.M - allocated
+        if diff != 0 and symbols:
+            freqs[symbols[0]] += diff
+
+        # Cumulative frequencies
+        cum_freqs: Dict[str, int] = {}
+        cum = 0
+        for ch in symbols:
+            cum_freqs[ch] = cum
+            cum += freqs[ch]
+
+        return freqs, cum_freqs
+
+    @classmethod
+    def encode(cls, text: str) -> Dict[str, Any]:
+        """Encodes string using rANS integer state transition."""
+        if not text:
+            return {"state": cls.M, "length": 0, "frequencies": {}, "cumulative": {}}
+
+        freqs, cum_freqs = cls._compute_frequencies(text)
+        state = cls.M
+
+        # Encode in reverse order so decoding is forward
+        for ch in reversed(text):
+            f = freqs[ch]
+            c = cum_freqs[ch]
+            # rANS step: state = (state // f) * M + c + (state % f)
+            state = (state // f) * cls.M + c + (state % f)
+
+        # Theoretical bit length: log2(state / M)
+        bits = math.log2(max(1, state)) - cls.SCALE_BITS
+        original_bits = len(text) * 8
+        ratio = round(original_bits / max(1.0, bits), 3)
+
+        return {
+            "state": state,
+            "length": len(text),
+            "frequencies": freqs,
+            "cumulative": cum_freqs,
+            "estimated_bits": round(max(1.0, bits), 2),
+            "compression_ratio": ratio,
+        }
+
+    @classmethod
+    def decode(cls, encoded_dict: Dict[str, Any]) -> str:
+        """Decodes string from rANS final state and frequency distribution."""
+        length = encoded_dict["length"]
+        if length == 0:
+            return ""
+
+        state = encoded_dict["state"]
+        freqs = encoded_dict["frequencies"]
+        cum_freqs = encoded_dict["cumulative"]
+
+        # Invert cumulative map: list of (ch, low, high)
+        ranges = []
+        for ch, low in cum_freqs.items():
+            ranges.append((ch, low, low + freqs[ch]))
+        ranges.sort(key=lambda item: item[1])
+
+        decoded_chars = []
+        for _ in range(length):
+            slot = state % cls.M
+            # Find symbol whose range contains slot
+            matched_ch = None
+            f = 1
+            c = 0
+            for ch, low, high in ranges:
+                if low <= slot < high:
+                    matched_ch = ch
+                    f = freqs[ch]
+                    c = low
+                    break
+
+            if matched_ch is None:
+                matched_ch = ranges[-1][0]
+                f = freqs[matched_ch]
+                c = cum_freqs[matched_ch]
+
+            decoded_chars.append(matched_ch)
+            # Reverse rANS step: state = f * (state // M) + (slot - c)
+            state = f * (state // cls.M) + (slot - c)
+
+        return "".join(decoded_chars)
+
+
+# ==============================================================================
+# PREDICTION BY PARTIAL MATCHING (PPM) CONTEXT MODEL
+# ==============================================================================
+
+class PredictionByPartialMatchingPPM:
+    """Multi-order Markov context modeling with escape probabilities (PPM Method C)."""
+
+    @classmethod
+    def model(cls, text: str, max_order: int = 1) -> Dict[str, Any]:
+        """Calculates PPM context predictions, escape frequencies, and ideal coding bits."""
+        if not text:
+            return {
+                "total_bits": 0.0,
+                "compression_ratio": 1.0,
+                "characters_processed": 0,
+                "contexts_count": 0,
+            }
+
+        order = max(0, min(2, int(max_order)))
+        # Order-1 contexts: {context_str: Counter(next_chars)}
+        contexts: Dict[str, Counter] = {}
+        order0 = Counter()
+
+        total_bits = 0.0
+        escapes_count = 0
+
+        for i, ch in enumerate(text):
+            order0[ch] += 1
+            prob = 0.0
+
+            if order >= 1 and i > 0:
+                ctx = text[max(0, i - order) : i]
+                if ctx not in contexts:
+                    contexts[ctx] = Counter()
+
+                ctx_counts = contexts[ctx]
+                num_distinct = len(ctx_counts)
+                total_ctx_seen = sum(ctx_counts.values())
+
+                if num_distinct > 0:
+                    # Method C: escape count e = num_distinct
+                    denom = total_ctx_seen + num_distinct
+                    if ch in ctx_counts:
+                        prob = ctx_counts[ch] / denom
+                    else:
+                        # Escaped to order 0
+                        p_esc = num_distinct / denom
+                        escapes_count += 1
+                        # Order 0 probability with Laplace smoothing
+                        p_o0 = (order0[ch] + 1) / (sum(order0.values()) + 256)
+                        prob = p_esc * p_o0
+                else:
+                    # First time in this context, use order 0
+                    prob = (order0[ch] + 1) / (sum(order0.values()) + 256)
+
+                contexts[ctx][ch] += 1
+            else:
+                prob = (order0[ch] + 1) / (sum(order0.values()) + 256)
+
+            prob = max(1e-9, min(1.0, prob))
+            total_bits -= math.log2(prob)
+
+        original_bits = len(text) * 8
+        ratio = round(original_bits / max(1.0, total_bits), 3)
+
+        return {
+            "total_bits": round(total_bits, 2),
+            "compression_ratio": ratio,
+            "characters_processed": len(text),
+            "contexts_count": len(contexts),
+            "escapes_count": escapes_count,
+            "bits_per_symbol": round(total_bits / len(text), 3),
+        }
+
+
+def compression_rans_encode(text: str) -> Record:
+    """Compresses text string using Range Asymmetric Numeral Systems."""
+    return Record(AsymmetricNumeralSystemsANS.encode(text))
+
+
+def compression_rans_decode(encoded_record: Any) -> str:
+    """Decompresses rANS state back into original text string."""
+    d = dict(encoded_record) if not isinstance(encoded_record, dict) else encoded_record
+    return AsymmetricNumeralSystemsANS.decode(d)
+
+
+def compression_ppm_model(text: str, order: int = 1) -> Record:
+    """Analyzes text under Prediction by Partial Matching Markov context model."""
+    return Record(PredictionByPartialMatchingPPM.model(text, max_order=order))
+
+

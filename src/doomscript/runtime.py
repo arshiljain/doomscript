@@ -2865,6 +2865,10 @@ from doomscript.domains.agent.runtime import (
     agent_react_run,
     agent_tree_of_thoughts_search,
     agent_run_debate,
+    HierarchicalTaskNetworkHTNPlanner,
+    MonteCarloTreeSearchMCTS,
+    agent_htn_plan,
+    agent_mcts_search,
 )
 
 from doomscript.domains.image.runtime import (
@@ -2973,6 +2977,12 @@ from doomscript.domains.web.runtime import (
     web_multipart_encode,
     web_content_negotiate,
     web_uri_template_expand,
+    WebSocketFrameCodec,
+    HttpChunkedTransferCodec,
+    web_websocket_encode,
+    web_websocket_decode,
+    web_chunked_encode,
+    web_chunked_decode,
 )
 
 from doomscript.domains.audio.runtime import (
@@ -3362,6 +3372,15 @@ from doomscript.domains.sec.runtime import (
     sec_totp_verify,
     sec_shamir_split,
     sec_shamir_combine,
+    MerkleTreeInclusionProof,
+    BlindSignatureChaumRSA,
+    sec_merkle_build_tree,
+    sec_merkle_generate_proof,
+    sec_merkle_verify_proof,
+    sec_chaum_blind_message,
+    sec_chaum_sign_blinded,
+    sec_chaum_unblind_signature,
+    sec_chaum_verify_signature,
 )
 sec_password_entropy = sec_entropy
 sec_password_audit = sec_audit_password
@@ -3750,6 +3769,11 @@ from doomscript.domains.compression.runtime import (
     DeltaAndBitPackingEncoder,
     compression_delta_encode,
     compression_delta_decode,
+    AsymmetricNumeralSystemsANS,
+    PredictionByPartialMatchingPPM,
+    compression_rans_encode,
+    compression_rans_decode,
+    compression_ppm_model,
 )
 
 from doomscript.domains.time_series.runtime import (
@@ -4045,6 +4069,10 @@ from doomscript.domains.finance.runtime import (
     fin_vasicek_simulate,
     fin_bond_duration_convexity,
     fin_heston_simulate,
+    HullWhiteInterestRateTree,
+    MertonJumpDiffusionModel,
+    fin_hull_white_tree,
+    fin_merton_jump_diffusion,
 )
 
 from doomscript.domains.graph.runtime import (

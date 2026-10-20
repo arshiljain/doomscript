@@ -40,6 +40,11 @@ from doomscript.domains.compression.runtime import (
     compression_snappy_decompress,
     compression_delta_encode,
     compression_delta_decode,
+    AsymmetricNumeralSystemsANS,
+    PredictionByPartialMatchingPPM,
+    compression_rans_encode,
+    compression_rans_decode,
+    compression_ppm_model,
 )
 from doomscript.domains.compression.parser import CompressionDomainParser
 from doomscript.domains.compression.exporter import CompressionASTExporter
@@ -137,4 +142,9 @@ __all__ = [
     "compression_snappy_decompress",
     "compression_delta_encode",
     "compression_delta_decode",
+    "AsymmetricNumeralSystemsANS",
+    "PredictionByPartialMatchingPPM",
+    "compression_rans_encode",
+    "compression_rans_decode",
+    "compression_ppm_model",
 ]

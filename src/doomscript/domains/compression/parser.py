@@ -87,6 +87,40 @@ class CompressionDomainParser(DomainParser):
             rec, target = m_dbp_d.group(1).strip(), m_dbp_d.group(2).strip()
             return f"set {target} to compression_delta_decode({rec})"
 
+        # encode rans data <text> into <target>
+        m_rans_e = re.match(
+            r"^encode\s+rans\s+data\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_rans_e:
+            txt, target = m_rans_e.group(1).strip(), m_rans_e.group(2).strip()
+            if not (txt.startswith('"') or txt.startswith("'") or txt.isidentifier()):
+                txt = f'"{txt}"'
+            return f"set {target} to compression_rans_encode({txt})"
+
+        # decode rans state <record> into <target>
+        m_rans_d = re.match(
+            r"^decode\s+rans\s+state\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_rans_d:
+            rec, target = m_rans_d.group(1).strip(), m_rans_d.group(2).strip()
+            return f"set {target} to compression_rans_decode({rec})"
+
+        # model ppm context for <text> [with order <ord>] into <target>
+        m_ppm = re.match(
+            r"^model\s+ppm\s+context\s+for\s+(.+?)(?:\s+with\s+order\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_ppm:
+            txt, ord_val, target = m_ppm.group(1).strip(), m_ppm.group(2) or "1", m_ppm.group(3).strip()
+            if not (txt.startswith('"') or txt.startswith("'") or txt.isidentifier()):
+                txt = f'"{txt}"'
+            return f"set {target} to compression_ppm_model({txt}, order={ord_val})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

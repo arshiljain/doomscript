@@ -50,6 +50,10 @@ from doomscript.domains.agent.runtime import (
     agent_react_run,
     agent_tree_of_thoughts_search,
     agent_run_debate,
+    HierarchicalTaskNetworkHTNPlanner,
+    MonteCarloTreeSearchMCTS,
+    agent_htn_plan,
+    agent_mcts_search,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.agent.exporter import AgentASTExporter
@@ -121,6 +125,8 @@ class AgentDomain(DomainContract):
     ]
 
     def can_handle_line(self, line: str) -> bool:
+        if self.parser.parse_inspect(line, 0) is not None or self.parser.parse_operation(line, 0) is not None:
+            return True
         s = line.strip().lower()
         return (
             s.startswith("create agent ")
@@ -219,4 +225,8 @@ __all__ = [
     "agent_react_run",
     "agent_tree_of_thoughts_search",
     "agent_run_debate",
+    "HierarchicalTaskNetworkHTNPlanner",
+    "MonteCarloTreeSearchMCTS",
+    "agent_htn_plan",
+    "agent_mcts_search",
 ]

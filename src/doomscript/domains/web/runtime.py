@@ -6,6 +6,7 @@ import re
 import os
 import urllib.request
 import urllib.parse
+import struct
 from html.parser import HTMLParser
 from doomscript.runtime import Record
 from doomscript.domains.base import DomainRuntime, DomainIR
@@ -1408,4 +1409,217 @@ def web_content_negotiate(accept_header: str, supported_types: List[str]) -> str
 def web_uri_template_expand(template: str, variables: Dict[str, Any]) -> str:
     """Expands an RFC 6570 URI template with variables."""
     return UriTemplateRFC6570.expand(template, variables)
+
+
+# ==============================================================================
+# RFC 6455 WEBSOCKET FRAME CODEC
+# ==============================================================================
+
+class WebSocketFrameCodec:
+    """RFC 6455 binary frame encoder and decoder with masking."""
+
+    OPCODE_NAMES = {
+        0x0: "continuation",
+        0x1: "text",
+        0x2: "binary",
+        0x8: "close",
+        0x9: "ping",
+        0xA: "pong",
+    }
+
+    @classmethod
+    def encode(
+        cls,
+        payload: Union[str, bytes],
+        opcode: int = 1,
+        fin: bool = True,
+        mask: bool = False,
+        mask_key: Optional[bytes] = None,
+    ) -> bytes:
+        data = payload.encode("utf-8") if isinstance(payload, str) else bytes(payload)
+        b0 = (0x80 if fin else 0x00) | (opcode & 0x0F)
+        length = len(data)
+
+        header = bytearray([b0])
+        mask_bit = 0x80 if mask else 0x00
+
+        if length <= 125:
+            header.append(mask_bit | length)
+        elif length <= 0xFFFF:
+            header.append(mask_bit | 126)
+            header.extend(struct.pack(">H", length))
+        else:
+            header.append(mask_bit | 127)
+            header.extend(struct.pack(">Q", length))
+
+        if mask:
+            mkey = mask_key if (mask_key and len(mask_key) == 4) else b"\x12\x34\x56\x78"
+            header.extend(mkey)
+            masked_payload = bytes(b ^ mkey[i % 4] for i, b in enumerate(data))
+            header.extend(masked_payload)
+        else:
+            header.extend(data)
+
+        return bytes(header)
+
+    @classmethod
+    def decode(cls, frame_bytes: Union[bytes, bytearray]) -> Dict[str, Any]:
+        raw = bytes(frame_bytes)
+        if len(raw) < 2:
+            raise ValueError("Frame too short: header requires at least 2 bytes")
+
+        b0 = raw[0]
+        b1 = raw[1]
+
+        fin = bool(b0 & 0x80)
+        opcode = b0 & 0x0F
+        opcode_name = cls.OPCODE_NAMES.get(opcode, f"unknown_0x{opcode:x}")
+        is_masked = bool(b1 & 0x80)
+        len_indicator = b1 & 0x7F
+
+        idx = 2
+        if len_indicator == 126:
+            if len(raw) < idx + 2:
+                raise ValueError("Frame truncated in 16-bit extended length")
+            payload_len = struct.unpack(">H", raw[idx:idx + 2])[0]
+            idx += 2
+        elif len_indicator == 127:
+            if len(raw) < idx + 8:
+                raise ValueError("Frame truncated in 64-bit extended length")
+            payload_len = struct.unpack(">Q", raw[idx:idx + 8])[0]
+            idx += 8
+        else:
+            payload_len = len_indicator
+
+        mask_key = None
+        if is_masked:
+            if len(raw) < idx + 4:
+                raise ValueError("Frame truncated in masking key")
+            mask_key = raw[idx:idx + 4]
+            idx += 4
+
+        payload_bytes = raw[idx:idx + payload_len]
+        if is_masked and mask_key:
+            payload_bytes = bytes(b ^ mask_key[i % 4] for i, b in enumerate(payload_bytes))
+
+        # Try utf-8 decode if text opcode
+        decoded_text = None
+        if opcode == 0x1:
+            try:
+                decoded_text = payload_bytes.decode("utf-8")
+            except UnicodeDecodeError:
+                decoded_text = None
+
+        return {
+            "fin": fin,
+            "opcode": opcode,
+            "opcode_name": opcode_name,
+            "masked": is_masked,
+            "payload_length": len(payload_bytes),
+            "payload_text": decoded_text,
+            "payload_hex": payload_bytes.hex(),
+        }
+
+
+# ==============================================================================
+# RFC 9112 HTTP CHUNKED TRANSFER CODEC
+# ==============================================================================
+
+class HttpChunkedTransferCodec:
+    """RFC 9112 Section 7.1 Chunked Transfer Coding encoder & decoder."""
+
+    @classmethod
+    def encode(
+        cls,
+        chunks: List[Union[str, bytes]],
+        trailers: Optional[Dict[str, str]] = None,
+    ) -> str:
+        body = []
+        for ch in chunks:
+            chunk_data = ch.encode("utf-8") if isinstance(ch, str) else bytes(ch)
+            hex_len = f"{len(chunk_data):X}"
+            body.append(f"{hex_len}\r\n")
+            body.append(chunk_data.decode("latin1"))
+            body.append("\r\n")
+
+        # Zero length terminating chunk
+        body.append("0\r\n")
+
+        # Optional trailers
+        if trailers:
+            for k, v in trailers.items():
+                body.append(f"{k}: {v}\r\n")
+        body.append("\r\n")
+
+        return "".join(body)
+
+    @classmethod
+    def decode(cls, chunked_str: str) -> Dict[str, Any]:
+        lines = chunked_str.split("\r\n")
+        payload_parts = []
+        trailers: Dict[str, str] = {}
+        idx = 0
+        chunk_count = 0
+        is_trailers = False
+
+        while idx < len(lines):
+            line = lines[idx]
+            idx += 1
+            if not line and idx >= len(lines):
+                break
+
+            if not is_trailers:
+                # Chunk size line (may have chunk extensions: "1a;ext=foo")
+                size_str = line.split(";")[0].strip()
+                if not size_str:
+                    continue
+                try:
+                    chunk_size = int(size_str, 16)
+                except ValueError:
+                    continue
+
+                if chunk_size == 0:
+                    is_trailers = True
+                    continue
+
+                if idx < len(lines):
+                    data = lines[idx]
+                    idx += 1
+                    payload_parts.append(data)
+                    chunk_count += 1
+            else:
+                if ":" in line:
+                    k, v = line.split(":", 1)
+                    trailers[k.strip()] = v.strip()
+
+        full_payload = "".join(payload_parts)
+        return {
+            "payload": full_payload,
+            "total_bytes": len(full_payload.encode("utf-8")),
+            "chunks_count": chunk_count,
+            "trailers": trailers,
+        }
+
+
+def web_websocket_encode(payload: Any, opcode: int = 1, mask: bool = False) -> bytes:
+    """Encodes text or bytes payload into RFC 6455 binary frame."""
+    return WebSocketFrameCodec.encode(payload, opcode=opcode, mask=mask)
+
+
+def web_websocket_decode(frame_bytes: Any) -> Record:
+    """Decodes RFC 6455 binary frame."""
+    return Record(WebSocketFrameCodec.decode(frame_bytes))
+
+
+def web_chunked_encode(chunks: List[Any], trailers: Optional[Dict[str, str]] = None) -> str:
+    """Encodes list of chunk strings into HTTP chunked transfer string."""
+    return HttpChunkedTransferCodec.encode(chunks, trailers=trailers)
+
+
+def web_chunked_decode(chunked_str: str) -> Record:
+    """Decodes HTTP chunked transfer string into reassembled body and trailers."""
+    res = HttpChunkedTransferCodec.decode(chunked_str)
+    res["trailers"] = Record(res["trailers"])
+    return Record(res)
+
 

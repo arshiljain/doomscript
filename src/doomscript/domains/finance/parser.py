@@ -410,6 +410,39 @@ class FinanceDomainParser(DomainParser):
             s0, v0, k, th, xi, rho, target = m_heston.group(1).strip(), m_heston.group(2).strip(), m_heston.group(3).strip(), m_heston.group(4).strip(), m_heston.group(5).strip(), m_heston.group(6).strip(), m_heston.group(7).strip()
             return f"set {target} to fin_heston_simulate({s0}, {v0}, {k}, {th}, {xi}, {rho})"
 
+        # build hull white tree mean reversion <a> vol <sigma> steps <steps> dt <dt> [rate <rate>] into <target>
+        m_hw = re.match(
+            r"^build\s+hull\s+white\s+tree\s+mean\s+reversion\s+(.+?)\s+vol\s+(.+?)\s+steps\s+(\d+)\s+dt\s+(.+?)(?:\s+rate\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_hw:
+            a, sig, steps, dt, init_r, target = m_hw.group(1).strip(), m_hw.group(2).strip(), m_hw.group(3).strip(), m_hw.group(4).strip(), m_hw.group(5), m_hw.group(6).strip()
+            r_arg = f", initial_rate={init_r.strip()}" if init_r else ""
+            return f"set {target} to fin_hull_white_tree(a={a}, sigma={sig}, num_steps={steps}, dt={dt}{r_arg})"
+
+        # price merton jump option spot <spot> strike <strike> rate <rate> vol <vol> lambda <lam> jump mean <jm> jump vol <jv> time <t> [call <bool>] into <target>
+        m_merton = re.match(
+            r"^price\s+merton\s+jump\s+option\s+spot\s+(.+?)\s+strike\s+(.+?)\s+rate\s+(.+?)\s+vol\s+(.+?)\s+lambda\s+(.+?)\s+jump\s+mean\s+(.+?)\s+jump\s+vol\s+(.+?)\s+time\s+(.+?)(?:\s+call\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_merton:
+            s0, k, r, v, lam, jm, jv, t, is_call, target = (
+                m_merton.group(1).strip(),
+                m_merton.group(2).strip(),
+                m_merton.group(3).strip(),
+                m_merton.group(4).strip(),
+                m_merton.group(5).strip(),
+                m_merton.group(6).strip(),
+                m_merton.group(7).strip(),
+                m_merton.group(8).strip(),
+                m_merton.group(9),
+                m_merton.group(10).strip(),
+            )
+            call_arg = f", is_call={is_call.strip()}" if is_call else ""
+            return f"set {target} to fin_merton_jump_diffusion({s0}, {k}, {r}, {v}, {lam}, {jm}, {jv}, {t}{call_arg})"
+
         return None
 
     def parse_block(

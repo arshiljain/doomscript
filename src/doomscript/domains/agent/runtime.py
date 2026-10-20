@@ -1,6 +1,8 @@
 """Runtime execution engine for AI Agents and Multi-Agent Workflows domain."""
 
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+import math
+import random
 from doomscript.runtime import Record, ask_ai
 from doomscript.domains.base import DomainRuntime, DomainIR
 from doomscript.domains.agent.spec import AgentSpec, TaskSpec, TeamSpec
@@ -1164,6 +1166,220 @@ def agent_run_debate(topic: str, rounds: int = 2) -> Dict[str, Any]:
     """Conducts a structured multi-agent debate."""
     debate = MultiAgentDebate()
     return debate.run_debate(topic, rounds=rounds)
+
+
+# ==============================================================================
+# HIERARCHICAL TASK NETWORK (HTN) PLANNER
+# ==============================================================================
+
+class HierarchicalTaskNetworkHTNPlanner:
+    """Total-order Hierarchical Task Network (HTN) decomposition planner."""
+
+    @classmethod
+    def plan(
+        cls,
+        tasks: List[str],
+        initial_state: Dict[str, Any],
+        methods: Dict[str, List[Dict[str, Any]]],
+        operators: Dict[str, Dict[str, Any]],
+        max_depth: int = 50,
+    ) -> Dict[str, Any]:
+        """Solves task network using depth-first search with backtracking."""
+        nodes_expanded = [0]
+
+        def _matches_preconditions(state: Dict[str, Any], preconds: Dict[str, Any]) -> bool:
+            for k, v in preconds.items():
+                if state.get(k) != v:
+                    return False
+            return True
+
+        def _search(curr_tasks: List[str], curr_state: Dict[str, Any], depth: int) -> Optional[Tuple[List[str], Dict[str, Any], float]]:
+            if not curr_tasks:
+                return ([], curr_state, 0.0)
+            if depth > max_depth:
+                return None
+
+            nodes_expanded[0] += 1
+            t = curr_tasks[0]
+            rest = curr_tasks[1:]
+
+            # Case 1: Primitive operator
+            if t in operators:
+                op = operators[t]
+                pre = op.get("preconditions", {})
+                if _matches_preconditions(curr_state, pre):
+                    new_state = dict(curr_state)
+                    # Apply deletions
+                    for del_key in op.get("del_list", []):
+                        new_state.pop(del_key, None)
+                    # Apply additions
+                    for add_k, add_v in op.get("add_list", {}).items():
+                        new_state[add_k] = add_v
+                    cost = float(op.get("cost", 1.0))
+
+                    sub_res = _search(rest, new_state, depth + 1)
+                    if sub_res is not None:
+                        sub_plan, final_st, sub_cost = sub_res
+                        return ([t] + sub_plan, final_st, cost + sub_cost)
+                return None
+
+            # Case 2: Compound task decomposed by methods
+            if t in methods:
+                for method in methods[t]:
+                    pre = method.get("preconditions", {})
+                    if _matches_preconditions(curr_state, pre):
+                        subtasks = method.get("subtasks", [])
+                        new_tasks = list(subtasks) + rest
+                        sub_res = _search(new_tasks, curr_state, depth + 1)
+                        if sub_res is not None:
+                            return sub_res
+                return None
+
+            # Unknown task
+            return None
+
+        init_st = dict(initial_state)
+        res = _search(list(tasks), init_st, 0)
+        if res is not None:
+            plan_ops, final_st, total_cost = res
+            return {
+                "success": True,
+                "plan": plan_ops,
+                "plan_length": len(plan_ops),
+                "total_cost": round(total_cost, 2),
+                "final_state": final_st,
+                "nodes_expanded": nodes_expanded[0],
+            }
+        else:
+            return {
+                "success": False,
+                "plan": [],
+                "plan_length": 0,
+                "total_cost": 0.0,
+                "final_state": init_st,
+                "nodes_expanded": nodes_expanded[0],
+            }
+
+
+# ==============================================================================
+# MONTE CARLO TREE SEARCH (MCTS) UCT ENGINE
+# ==============================================================================
+
+class MCTSNode:
+    def __init__(self, state: Any, parent: Optional["MCTSNode"] = None, action_from_parent: Optional[Any] = None):
+        self.state = state
+        self.parent = parent
+        self.action = action_from_parent
+        self.children: List["MCTSNode"] = []
+        self.visits: int = 0
+        self.total_value: float = 0.0
+
+    @property
+    def q_value(self) -> float:
+        return (self.total_value / self.visits) if self.visits > 0 else 0.0
+
+    def uct_score(self, exploration_c: float) -> float:
+        if self.visits == 0:
+            return float("inf")
+        if not self.parent or self.parent.visits == 0:
+            return self.q_value
+        return self.q_value + exploration_c * math.sqrt(math.log(self.parent.visits) / self.visits)
+
+
+class MonteCarloTreeSearchMCTS:
+    """Upper Confidence Bound applied to Trees (UCT) decision-making engine."""
+
+    @classmethod
+    def search(
+        cls,
+        initial_state: Any,
+        legal_actions: List[Any],
+        transition_fn: Optional[Callable[[Any, Any], Any]] = None,
+        evaluation_fn: Optional[Callable[[Any], float]] = None,
+        iterations: int = 100,
+        exploration_c: float = 1.414,
+        seed: Optional[int] = 42,
+    ) -> Dict[str, Any]:
+        rng = random.Random(seed)
+        root = MCTSNode(initial_state)
+
+        def default_transition(s: Any, a: Any) -> Any:
+            if isinstance(s, dict):
+                ns = dict(s)
+                ns["last_action"] = a
+                ns["step"] = ns.get("step", 0) + 1
+                return ns
+            elif isinstance(s, (int, float)):
+                return s + (hash(a) % 5)
+            else:
+                return f"{s}->{a}"
+
+        def default_evaluation(s: Any) -> float:
+            if isinstance(s, dict):
+                return float(s.get("reward", rng.random()))
+            elif isinstance(s, (int, float)):
+                return float(s) % 10.0
+            return rng.random()
+
+        trans = transition_fn or default_transition
+        eval_fn = evaluation_fn or default_evaluation
+
+        # Expand root immediately with all legal actions
+        for act in legal_actions:
+            next_s = trans(root.state, act)
+            child = MCTSNode(next_s, parent=root, action_from_parent=act)
+            root.children.append(child)
+
+        for _ in range(iterations):
+            # 1. Selection
+            curr = root
+            while curr.children:
+                curr = max(curr.children, key=lambda n: n.uct_score(exploration_c))
+
+            # 2. Simulation / Rollout
+            val = eval_fn(curr.state)
+
+            # 3. Backpropagation
+            node: Optional[MCTSNode] = curr
+            while node is not None:
+                node.visits += 1
+                node.total_value += val
+                node = node.parent
+
+        # Choose best child by highest visit count (robust child policy)
+        best_child = max(root.children, key=lambda c: c.visits)
+        action_stats = {str(c.action): {"visits": c.visits, "q_value": round(c.q_value, 4)} for c in root.children}
+
+        return {
+            "best_action": best_child.action,
+            "best_value": round(best_child.q_value, 4),
+            "root_visits": root.visits,
+            "action_statistics": action_stats,
+            "iterations": iterations,
+        }
+
+
+def agent_htn_plan(
+    tasks: List[str],
+    initial_state: Dict[str, Any],
+    methods: Dict[str, List[Dict[str, Any]]],
+    operators: Dict[str, Dict[str, Any]],
+) -> Record:
+    """Computes primitive plan using Hierarchical Task Network decomposition."""
+    return Record(HierarchicalTaskNetworkHTNPlanner.plan(tasks, initial_state, methods, operators))
+
+
+def agent_mcts_search(
+    initial_state: Any,
+    legal_actions: List[Any],
+    iterations: int = 100,
+    exploration_c: float = 1.414,
+) -> Record:
+    """Executes Monte Carlo Tree Search (MCTS / UCT) to identify optimal action."""
+    res = MonteCarloTreeSearchMCTS.search(initial_state, legal_actions, iterations=iterations, exploration_c=exploration_c)
+    res["action_statistics"] = Record(res["action_statistics"])
+    return Record(res)
+
 
 
 

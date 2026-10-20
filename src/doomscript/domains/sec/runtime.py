@@ -808,3 +808,184 @@ def sec_shamir_combine(shares: Any) -> int:
     return ShamirSecretSharing.combine(s_list)
 
 
+# ==============================================================================
+# MERKLE TREE CRYPTOGRAPHIC INCLUSION PROOF
+# ==============================================================================
+
+class MerkleTreeInclusionProof:
+    """SHA-256 cryptographic binary Merkle tree engine with log(N) inclusion proofs."""
+
+    @staticmethod
+    def _hash_leaf(val: str) -> str:
+        # Domain separation prefix 0x00 for leaves
+        return hashlib.sha256(b"\x00" + str(val).encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _hash_nodes(left: str, right: str) -> str:
+        # Domain separation prefix 0x01 for interior nodes
+        return hashlib.sha256(b"\x01" + bytes.fromhex(left) + bytes.fromhex(right)).hexdigest()
+
+    @classmethod
+    def build_tree(cls, leaves: List[str]) -> Dict[str, Any]:
+        """Builds full Merkle tree layers and computes root hash."""
+        if not leaves:
+            empty_root = hashlib.sha256(b"").hexdigest()
+            return {"root": empty_root, "depth": 0, "leaves_count": 0, "layers": []}
+
+        current_layer = [cls._hash_leaf(x) for x in leaves]
+        layers = [list(current_layer)]
+
+        while len(current_layer) > 1:
+            next_layer = []
+            for i in range(0, len(current_layer), 2):
+                left = current_layer[i]
+                right = current_layer[i + 1] if i + 1 < len(current_layer) else current_layer[i]
+                parent = cls._hash_nodes(left, right)
+                next_layer.append(parent)
+            current_layer = next_layer
+            layers.append(list(current_layer))
+
+        return {
+            "root": current_layer[0],
+            "depth": len(layers) - 1,
+            "leaves_count": len(leaves),
+            "layers": layers,
+        }
+
+    @classmethod
+    def generate_proof(cls, leaves: List[str], leaf_index: int) -> Dict[str, Any]:
+        """Generates audit proof path of sibling hashes up to the Merkle root."""
+        tree = cls.build_tree(leaves)
+        idx = int(leaf_index)
+        if idx < 0 or idx >= len(leaves):
+            raise IndexError("Leaf index out of bounds")
+
+        target_leaf = leaves[idx]
+        target_hash = cls._hash_leaf(target_leaf)
+        proof = []
+
+        curr_idx = idx
+        layers = tree["layers"]
+        for level in range(len(layers) - 1):
+            layer = layers[level]
+            is_right = (curr_idx % 2 == 1)
+            sibling_idx = curr_idx - 1 if is_right else curr_idx + 1
+            if sibling_idx >= len(layer):
+                sibling_idx = curr_idx  # Duplicated odd leaf
+
+            proof.append({
+                "sibling": layer[sibling_idx],
+                "direction": "left" if is_right else "right",
+            })
+            curr_idx = curr_idx // 2
+
+        return {
+            "leaf": target_leaf,
+            "leaf_hash": target_hash,
+            "leaf_index": idx,
+            "root": tree["root"],
+            "proof_path": proof,
+        }
+
+    @classmethod
+    def verify_proof(cls, leaf: str, proof_path: List[Dict[str, str]], expected_root: str) -> bool:
+        """Verifies inclusion of a leaf against root using sibling proof hashes."""
+        curr_hash = cls._hash_leaf(leaf)
+        for step in proof_path:
+            sibling = step["sibling"] if isinstance(step, dict) else step.sibling
+            direction = step["direction"] if isinstance(step, dict) else step.direction
+            if direction == "left":
+                curr_hash = cls._hash_nodes(sibling, curr_hash)
+            else:
+                curr_hash = cls._hash_nodes(curr_hash, sibling)
+
+        return curr_hash.lower() == expected_root.lower()
+
+
+# ==============================================================================
+# DAVID CHAUM RSA BLIND SIGNATURE PROTOCOL
+# ==============================================================================
+
+class BlindSignatureChaumRSA:
+    """David Chaum's RSA blind signature protocol for privacy-preserving digital credentials."""
+
+    @staticmethod
+    def _extended_gcd(a: int, b: int) -> Tuple[int, int, int]:
+        if a == 0:
+            return b, 0, 1
+        gcd, x1, y1 = BlindSignatureChaumRSA._extended_gcd(b % a, a)
+        x = y1 - (b // a) * x1
+        y = x1
+        return gcd, x, y
+
+    @classmethod
+    def mod_inverse(cls, a: int, m: int) -> int:
+        gcd, x, _ = cls._extended_gcd(a % m, m)
+        if gcd != 1:
+            raise ValueError("Modular inverse does not exist")
+        return (x % m + m) % m
+
+    @classmethod
+    def blind_message(cls, message_int: int, e: int, n: int, r: int) -> int:
+        """Blinds message m with random secret factor r: m' = (m * r^e) mod n."""
+        m = int(message_int) % n
+        r_factor = pow(int(r), int(e), int(n))
+        return (m * r_factor) % int(n)
+
+    @classmethod
+    def sign_blinded(cls, blinded_message: int, d: int, n: int) -> int:
+        """Signer produces signature on blinded message without learning m: s' = (m')^d mod n."""
+        return pow(int(blinded_message), int(d), int(n))
+
+    @classmethod
+    def unblind_signature(cls, blind_sig: int, r: int, n: int) -> int:
+        """Unblinds signature to obtain valid signature s = m^d mod n: s = (s' * r^(-1)) mod n."""
+        r_inv = cls.mod_inverse(int(r), int(n))
+        return (int(blind_sig) * r_inv) % int(n)
+
+    @classmethod
+    def verify_signature(cls, signature: int, message_int: int, e: int, n: int) -> bool:
+        """Verifies standard RSA signature s^e = m mod n."""
+        reconstructed = pow(int(signature), int(e), int(n))
+        return reconstructed == (int(message_int) % int(n))
+
+
+def sec_merkle_build_tree(leaves: List[str]) -> Record:
+    """Builds cryptographic Merkle tree over list of leaf strings."""
+    return Record(MerkleTreeInclusionProof.build_tree(leaves))
+
+
+def sec_merkle_generate_proof(leaves: List[str], leaf_index: int) -> Record:
+    """Generates Merkle inclusion proof for a given leaf index."""
+    res = MerkleTreeInclusionProof.generate_proof(leaves, leaf_index)
+    res["proof_path"] = [Record(p) for p in res["proof_path"]]
+    return Record(res)
+
+
+def sec_merkle_verify_proof(leaf: str, proof_record: Any, expected_root: str) -> bool:
+    """Verifies a Merkle inclusion proof path against root hash."""
+    path = proof_record.proof_path if hasattr(proof_record, "proof_path") else proof_record
+    return MerkleTreeInclusionProof.verify_proof(leaf, path, expected_root)
+
+
+def sec_chaum_blind_message(message_int: int, e: int, n: int, r: int) -> int:
+    """Blinds message integer with secret blinding factor r."""
+    return BlindSignatureChaumRSA.blind_message(message_int, e, n, r)
+
+
+def sec_chaum_sign_blinded(blinded_int: int, d: int, n: int) -> int:
+    """Signer signs blinded message using private key d."""
+    return BlindSignatureChaumRSA.sign_blinded(blinded_int, d, n)
+
+
+def sec_chaum_unblind_signature(blind_sig: int, r: int, n: int) -> int:
+    """Unblinds signature using secret blinding factor r."""
+    return BlindSignatureChaumRSA.unblind_signature(blind_sig, r, n)
+
+
+def sec_chaum_verify_signature(signature: int, message_int: int, e: int, n: int) -> bool:
+    """Verifies that signature s^e == m mod n."""
+    return BlindSignatureChaumRSA.verify_signature(signature, message_int, e, n)
+
+
+

@@ -54,6 +54,12 @@ from doomscript.domains.web.runtime import (
     web_multipart_encode,
     web_content_negotiate,
     web_uri_template_expand,
+    WebSocketFrameCodec,
+    HttpChunkedTransferCodec,
+    web_websocket_encode,
+    web_websocket_decode,
+    web_chunked_encode,
+    web_chunked_decode,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.web.exporter import WebASTExporter
@@ -250,4 +256,10 @@ __all__ = [
     "web_multipart_encode",
     "web_content_negotiate",
     "web_uri_template_expand",
+    "WebSocketFrameCodec",
+    "HttpChunkedTransferCodec",
+    "web_websocket_encode",
+    "web_websocket_decode",
+    "web_chunked_encode",
+    "web_chunked_decode",
 ]

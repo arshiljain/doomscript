@@ -384,6 +384,28 @@ class AgentDomainParser(DomainParser):
             agent, out_file, target = m_ect.group(1).strip(), m_ect.group(2).strip(), m_ect.group(3).strip()
             return f"set {target} to agent_export_chat_transcript({agent}, {out_file})"
 
+        # plan htn tasks <tasks> state <state> methods <methods> operators <ops> into <target>
+        m_htn = re.match(
+            r"^plan\s+htn\s+tasks\s+(.+?)\s+state\s+(.+?)\s+methods\s+(.+?)\s+operators\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_htn:
+            tasks, state, methods, ops, target = m_htn.group(1).strip(), m_htn.group(2).strip(), m_htn.group(3).strip(), m_htn.group(4).strip(), m_htn.group(5).strip()
+            return f"set {target} to agent_htn_plan({tasks}, {state}, {methods}, {ops})"
+
+        # run mcts planning state <state> actions <actions> [iterations <iter>] [exploration <c>] into <target>
+        m_mcts = re.match(
+            r"^run\s+mcts\s+planning\s+state\s+(.+?)\s+actions\s+(.+?)(?:\s+iterations\s+(\d+))?(?:\s+exploration\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_mcts:
+            st, acts, iters, expl, target = m_mcts.group(1).strip(), m_mcts.group(2).strip(), m_mcts.group(3), m_mcts.group(4), m_mcts.group(5).strip()
+            it_val = iters if iters else "100"
+            ex_val = expl.strip() if expl else "1.414"
+            return f"set {target} to agent_mcts_search({st}, {acts}, iterations={it_val}, exploration_c={ex_val})"
+
         return None
 
     def parse_block(

@@ -37,6 +37,15 @@ from doomscript.domains.sec.runtime import (
     sec_totp_verify,
     sec_shamir_split,
     sec_shamir_combine,
+    MerkleTreeInclusionProof,
+    BlindSignatureChaumRSA,
+    sec_merkle_build_tree,
+    sec_merkle_generate_proof,
+    sec_merkle_verify_proof,
+    sec_chaum_blind_message,
+    sec_chaum_sign_blinded,
+    sec_chaum_unblind_signature,
+    sec_chaum_verify_signature,
 )
 from doomscript.domains.sec.parser import SecDomainParser
 from doomscript.domains.sec.exporter import SecASTExporter
@@ -145,4 +154,13 @@ __all__ = [
     "sec_totp_verify",
     "sec_shamir_split",
     "sec_shamir_combine",
+    "MerkleTreeInclusionProof",
+    "BlindSignatureChaumRSA",
+    "sec_merkle_build_tree",
+    "sec_merkle_generate_proof",
+    "sec_merkle_verify_proof",
+    "sec_chaum_blind_message",
+    "sec_chaum_sign_blinded",
+    "sec_chaum_unblind_signature",
+    "sec_chaum_verify_signature",
 ]

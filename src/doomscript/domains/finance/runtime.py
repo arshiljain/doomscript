@@ -1624,3 +1624,217 @@ def fin_heston_simulate(
     res = HestonStochasticVolatility.simulate(s0, v0, kappa, theta, xi, rho, t_years=t_years, steps=steps)
     return Record(res)
 
+
+# ==============================================================================
+# HULL-WHITE TRINOMIAL SHORT-RATE TREE
+# ==============================================================================
+
+class HullWhiteInterestRateTree:
+    """Trinomial lattice short-rate model calibrated to interest rate term structures."""
+
+    @classmethod
+    def build_tree(
+        cls,
+        a: float = 0.1,           # Mean reversion speed
+        sigma: float = 0.015,     # Short rate volatility
+        num_steps: int = 10,      # Number of tree steps
+        dt: float = 0.25,         # Time step in years
+        initial_rate: float = 0.03,  # Baseline flat short rate
+    ) -> Dict[str, Any]:
+        """Constructs trinomial tree and computes Arrow-Debreu state prices Q(n, j)."""
+        a_val = max(1e-4, float(a))
+        sig_val = max(1e-5, float(sigma))
+        n_steps = max(2, min(50, int(num_steps)))
+        dt_val = max(1e-4, float(dt))
+
+        dr = sig_val * math.sqrt(3.0 * dt_val)
+        j_max = max(1, int(math.ceil(0.184 / (a_val * dt_val))))
+
+        # State prices Q[step][j] where j in -j_max .. j_max
+        q_prices: Dict[int, Dict[int, float]] = {0: {0: 1.0}}
+        alpha: List[float] = [float(initial_rate)]  # Calibration shifts
+        zero_bond_prices = [1.0]
+
+        for n in range(n_steps):
+            current_q = q_prices[n]
+            next_q: Dict[int, float] = {}
+
+            # Discount factor for step n
+            step_sum = sum(current_q.values())
+            zero_bond_prices.append(round(step_sum, 6))
+
+            # Alpha for this step (analytical drift calibration)
+            alpha_n = initial_rate + (sig_val ** 2 / (2 * a_val ** 2)) * (1.0 - math.exp(-a_val * n * dt_val)) ** 2
+            alpha.append(alpha_n)
+
+            for j, q_val in current_q.items():
+                r_nj = alpha_n + j * dr
+                discount = math.exp(-r_nj * dt_val)
+
+                # Branching probabilities
+                ajdt = a_val * j * dt_val
+                if j == j_max:
+                    # Top boundary branching: j -> j, j-1, j-2
+                    pu = 7.0 / 6.0 + 0.5 * (ajdt ** 2 - 3.0 * ajdt)
+                    pm = -1.0 / 3.0 - ajdt ** 2 + 2.0 * ajdt
+                    pd = 1.0 / 6.0 + 0.5 * (ajdt ** 2 - ajdt)
+                    transitions = [(j, pu), (j - 1, pm), (j - 2, pd)]
+                elif j == -j_max:
+                    # Bottom boundary branching: j -> j+2, j+1, j
+                    pu = 1.0 / 6.0 + 0.5 * (ajdt ** 2 + ajdt)
+                    pm = -1.0 / 3.0 - ajdt ** 2 - 2.0 * ajdt
+                    pd = 7.0 / 6.0 + 0.5 * (ajdt ** 2 + 3.0 * ajdt)
+                    transitions = [(j + 2, pu), (j + 1, pm), (j, pd)]
+                else:
+                    # Standard symmetric branching: j -> j+1, j, j-1
+                    pu = 1.0 / 6.0 + 0.5 * (ajdt ** 2 - ajdt)
+                    pm = 2.0 / 3.0 - ajdt ** 2
+                    pd = 1.0 / 6.0 + 0.5 * (ajdt ** 2 + ajdt)
+                    transitions = [(j + 1, pu), (j, pm), (j - 1, pd)]
+
+                for next_j, prob in transitions:
+                    next_q[next_j] = next_q.get(next_j, 0.0) + q_val * prob * discount
+
+            q_prices[n + 1] = next_q
+
+        # Compute forward rates from zero coupon bond curve
+        forward_rates = []
+        for i in range(len(zero_bond_prices) - 1):
+            p1 = zero_bond_prices[i]
+            p2 = zero_bond_prices[i + 1]
+            f_rate = (math.log(p1 / max(1e-12, p2))) / dt_val
+            forward_rates.append(round(f_rate, 4))
+
+        return {
+            "num_steps": n_steps,
+            "dt": dt_val,
+            "mean_reversion_a": a_val,
+            "volatility_sigma": sig_val,
+            "j_max": j_max,
+            "dr_spacing": round(dr, 6),
+            "zero_bond_prices": zero_bond_prices,
+            "forward_rates": forward_rates,
+            "arrow_debreu_final_sum": round(sum(q_prices[n_steps].values()), 6),
+        }
+
+
+# ==============================================================================
+# MERTON JUMP-DIFFUSION OPTION PRICING MODEL
+# ==============================================================================
+
+class MertonJumpDiffusionModel:
+    """Analytical series pricing of European options under Merton's (1976) Jump-Diffusion process."""
+
+    @staticmethod
+    def _bs_call(s: float, k: float, t: float, r: float, sigma: float) -> float:
+        if t <= 1e-8:
+            return max(0.0, s - k)
+        vol_sqrt = sigma * math.sqrt(t)
+        if vol_sqrt <= 1e-12:
+            return max(0.0, s - k * math.exp(-r * t))
+        d1 = (math.log(s / k) + (r + 0.5 * sigma ** 2) * t) / vol_sqrt
+        d2 = d1 - vol_sqrt
+        return s * _norm_cdf(d1) - k * math.exp(-r * t) * _norm_cdf(d2)
+
+    @classmethod
+    def price(
+        cls,
+        spot: float,
+        strike: float,
+        rate: float,
+        volatility: float,
+        jump_intensity_lambda: float,
+        jump_mean_mu_j: float,
+        jump_vol_sigma_j: float,
+        time_to_maturity: float,
+        is_call: bool = True,
+        max_terms: int = 50,
+    ) -> Dict[str, Any]:
+        """Calculates exact Poisson-weighted Black-Scholes sum for jump diffusion."""
+        s = float(spot)
+        k = float(strike)
+        r = float(rate)
+        sig = float(volatility)
+        lam = float(jump_intensity_lambda)
+        mu_j = float(jump_mean_mu_j)
+        sig_j = float(jump_vol_sigma_j)
+        t = float(time_to_maturity)
+
+        # Expected percentage jump in asset price k_jump
+        k_jump = math.exp(mu_j + 0.5 * sig_j ** 2) - 1.0
+        lambda_prime = lam * (1.0 + k_jump)
+
+        # Base Black-Scholes price (no jumps)
+        bs_call_base = cls._bs_call(s, k, t, r, sig)
+
+        # Merton series summation
+        merton_call = 0.0
+        poisson_factor = math.exp(-lambda_prime * t)
+        current_term = poisson_factor  # For n=0
+
+        terms_summed = 0
+        for n in range(max_terms):
+            if n > 0:
+                current_term *= (lambda_prime * t) / n
+
+            if current_term < 1e-15 and n > 5:
+                break
+
+            sig_n = math.sqrt(sig ** 2 + (n * sig_j ** 2) / max(1e-8, t))
+            r_n = r - lam * k_jump + (n * math.log(1.0 + k_jump)) / max(1e-8, t)
+
+            c_n = cls._bs_call(s, k, t, r_n, sig_n)
+            merton_call += current_term * c_n
+            terms_summed += 1
+
+        final_price = merton_call
+        if not is_call:
+            # Put-Call Parity: P = C - S + K * exp(-r * T)
+            final_price = merton_call - s + k * math.exp(-r * t)
+            base_price = bs_call_base - s + k * math.exp(-r * t)
+        else:
+            base_price = bs_call_base
+
+        final_price = max(0.0, final_price)
+        base_price = max(0.0, base_price)
+
+        return {
+            "option_price": round(final_price, 4),
+            "black_scholes_base_price": round(base_price, 4),
+            "jump_premium": round(final_price - base_price, 4),
+            "lambda_intensity": lam,
+            "terms_summed": terms_summed,
+            "is_call": is_call,
+        }
+
+
+def fin_hull_white_tree(
+    a: float = 0.1,
+    sigma: float = 0.015,
+    num_steps: int = 10,
+    dt: float = 0.25,
+    initial_rate: float = 0.03,
+) -> Any:
+    """Builds Hull-White trinomial interest rate tree calibrated to short rate."""
+    from doomscript.runtime import Record
+    return Record(HullWhiteInterestRateTree.build_tree(a=a, sigma=sigma, num_steps=num_steps, dt=dt, initial_rate=initial_rate))
+
+
+def fin_merton_jump_diffusion(
+    spot: float,
+    strike: float,
+    rate: float,
+    volatility: float,
+    jump_intensity: float,
+    jump_mean: float,
+    jump_vol: float,
+    time_to_maturity: float,
+    is_call: bool = True,
+) -> Any:
+    """Prices European option under Merton Jump-Diffusion model."""
+    from doomscript.runtime import Record
+    return Record(MertonJumpDiffusionModel.price(
+        spot, strike, rate, volatility, jump_intensity, jump_mean, jump_vol, time_to_maturity, is_call=is_call
+    ))
+
+

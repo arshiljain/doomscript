@@ -439,6 +439,50 @@ class WebDomainParser(DomainParser):
             tmpl, vars_dict, target = m_uri.group(1).strip(), m_uri.group(2).strip(), m_uri.group(3).strip()
             return f"set {target} to web_uri_template_expand({tmpl}, {vars_dict})"
 
+        # encode websocket frame payload <payload> [opcode <op>] [masked <bool>] into <target>
+        m_ws_enc = re.match(
+            r"^encode\s+websocket\s+frame\s+payload\s+(.+?)(?:\s+opcode\s+(\d+))?(?:\s+masked\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_ws_enc:
+            payload = m_ws_enc.group(1).strip()
+            op = m_ws_enc.group(2) or "1"
+            masked = m_ws_enc.group(3).strip() if m_ws_enc.group(3) else "False"
+            target = m_ws_enc.group(4).strip()
+            return f"set {target} to web_websocket_encode({payload}, opcode={op}, mask={masked})"
+
+        # decode websocket frame bytes <bytes> into <target>
+        m_ws_dec = re.match(
+            r"^decode\s+websocket\s+frame\s+bytes\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_ws_dec:
+            fb, target = m_ws_dec.group(1).strip(), m_ws_dec.group(2).strip()
+            return f"set {target} to web_websocket_decode({fb})"
+
+        # encode chunked transfer chunks <chunks> [with trailers <trailers>] into <target>
+        m_chk_enc = re.match(
+            r"^encode\s+chunked\s+transfer\s+chunks\s+(.+?)(?:\s+with\s+trailers\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_chk_enc:
+            chunks, trailers, target = m_chk_enc.group(1).strip(), m_chk_enc.group(2), m_chk_enc.group(3).strip()
+            tr_arg = f", trailers={trailers.strip()}" if trailers else ""
+            return f"set {target} to web_chunked_encode({chunks}{tr_arg})"
+
+        # decode chunked transfer body <chunked_str> into <target>
+        m_chk_dec = re.match(
+            r"^decode\s+chunked\s+transfer\s+body\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_chk_dec:
+            c_str, target = m_chk_dec.group(1).strip(), m_chk_dec.group(2).strip()
+            return f"set {target} to web_chunked_decode({c_str})"
+
         return None
 
     def parse_block(
