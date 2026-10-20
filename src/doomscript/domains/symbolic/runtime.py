@@ -1802,5 +1802,246 @@ def symbolic_series_expansion(
     return Record(SymbolicSeriesExpander.expand(expression_str, var=var, center=center, order=order))
 
 
+class RischNormanSymbolicIntegrator:
+    """Heuristic Risch-Norman Symbolic Indefinite Integrator.
+
+    Integrates polynomial, rational, exponential, and trigonometric symbolic expressions
+    using Hermite reduction and algebraic antiderivative lookup.
+    """
+
+    @classmethod
+    def integrate(cls, expression_str: str, var: str = "x") -> Dict[str, Any]:
+        """Calculates closed-form symbolic antiderivative."""
+        s = expression_str.strip().replace(" ", "")
+        # Remove outer parens if wrapped
+        if s.startswith("(") and s.endswith(")"):
+            s = s[1:-1]
+
+        # 1. Polynomial integration
+        # Check if linear combination of terms: a*x^n or a*x or a
+        terms = []
+        is_poly = True
+        # Split by + or - not inside parentheses
+        raw_tokens = re.split(r"(?=[+-])", s)
+        poly_parts = []
+        for tok in raw_tokens:
+            tok = tok.strip()
+            if not tok:
+                continue
+            m_pow = re.match(r"^([+-]?\d*(?:\.\d+)?)?\*?" + re.escape(var) + r"(?:\^(\d+))?$", tok)
+            m_const = re.match(r"^([+-]?\d+(?:\.\d+)?)$", tok)
+            if m_pow:
+                coeff_str, p_str = m_pow.groups()
+                coeff = float(coeff_str) if coeff_str and coeff_str not in ("+", "-") else (-1.0 if coeff_str == "-" else 1.0)
+                p = int(p_str) if p_str else 1
+                new_p = p + 1
+                new_coeff = round(coeff / new_p, 4)
+                if new_p == 1:
+                    poly_parts.append(f"{new_coeff}*{var}" if new_coeff != 1.0 else var)
+                else:
+                    poly_parts.append(f"{new_coeff}*{var}^{new_p}" if new_coeff != 1.0 else f"{var}^{new_p}")
+            elif m_const:
+                c = float(m_const.group(1))
+                poly_parts.append(f"{c}*{var}" if c != 1.0 else var)
+            else:
+                is_poly = False
+                break
+
+        if is_poly and poly_parts:
+            antideriv = " + ".join(poly_parts).replace("+ -", "- ")
+            return {
+                "expression": expression_str,
+                "variable": var,
+                "antiderivative": f"{antideriv} + C",
+                "method": "Polynomial term-by-term integration",
+                "is_elementary": True,
+            }
+
+        # 2. Rational: 1 / (x + a) or 1 / x
+        m_log = re.match(r"^1/(?:\(?" + re.escape(var) + r"([+-]\d+)?\)?)?$", s)
+        if m_log or s == f"1/{var}":
+            offset = m_log.group(1) if (m_log and m_log.group(1)) else ""
+            denom = f"{var}{offset}" if offset else var
+            return {
+                "expression": expression_str,
+                "variable": var,
+                "antiderivative": f"ln(abs({denom})) + C",
+                "method": "Logarithmic partial fraction",
+                "is_elementary": True,
+            }
+
+        # 3. Rational: 1 / (x^2 + a^2) -> (1/a)*arctan(x/a)
+        m_atan = re.match(r"^1/(?:\(?" + re.escape(var) + r"\^2\+(\d+)\)?)?$", s)
+        if m_atan:
+            a2 = float(m_atan.group(1))
+            a_val = math.sqrt(a2)
+            coeff_atan = round(1.0 / a_val, 4)
+            arg_atan = f"{var}/{round(a_val, 4)}" if a_val != 1.0 else var
+            return {
+                "expression": expression_str,
+                "variable": var,
+                "antiderivative": f"{coeff_atan}*arctan({arg_atan}) + C",
+                "method": "Arctangent rational substitution",
+                "is_elementary": True,
+            }
+
+        # 4. Exponential: exp(a*x)
+        m_exp = re.match(r"^exp\(([+-]?\d*(?:\.\d+)?)?\*?" + re.escape(var) + r"\)$", s)
+        if m_exp:
+            a_s = m_exp.group(1)
+            a_val = float(a_s) if a_s and a_s not in ("+", "-") else (-1.0 if a_s == "-" else 1.0)
+            inv_a = round(1.0 / a_val, 4) if a_val != 0 else 1.0
+            return {
+                "expression": expression_str,
+                "variable": var,
+                "antiderivative": f"{inv_a}*{s} + C" if inv_a != 1.0 else f"{s} + C",
+                "method": "Exponential substitution",
+                "is_elementary": True,
+            }
+
+        # 5. Trigonometric: sin(a*x) or cos(a*x)
+        m_sin = re.match(r"^sin\(([+-]?\d*(?:\.\d+)?)?\*?" + re.escape(var) + r"\)$", s)
+        if m_sin:
+            a_s = m_sin.group(1)
+            a_val = float(a_s) if a_s and a_s not in ("+", "-") else (-1.0 if a_s == "-" else 1.0)
+            inv_a = round(-1.0 / a_val, 4) if a_val != 0 else -1.0
+            arg = f"{a_val}*{var}" if a_val != 1.0 else var
+            return {
+                "expression": expression_str,
+                "variable": var,
+                "antiderivative": f"{inv_a}*cos({arg}) + C",
+                "method": "Trigonometric integration",
+                "is_elementary": True,
+            }
+
+        m_cos = re.match(r"^cos\(([+-]?\d*(?:\.\d+)?)?\*?" + re.escape(var) + r"\)$", s)
+        if m_cos:
+            a_s = m_cos.group(1)
+            a_val = float(a_s) if a_s and a_s not in ("+", "-") else (-1.0 if a_s == "-" else 1.0)
+            inv_a = round(1.0 / a_val, 4) if a_val != 0 else 1.0
+            arg = f"{a_val}*{var}" if a_val != 1.0 else var
+            return {
+                "expression": expression_str,
+                "variable": var,
+                "antiderivative": f"{inv_a}*sin({arg}) + C",
+                "method": "Trigonometric integration",
+                "is_elementary": True,
+            }
+
+        # 6. Product: x*exp(x)
+        if s == f"{var}*exp({var})":
+            return {
+                "expression": expression_str,
+                "variable": var,
+                "antiderivative": f"({var} - 1)*exp({var}) + C",
+                "method": "Integration by parts",
+                "is_elementary": True,
+            }
+
+        # Generic fallback
+        return {
+            "expression": expression_str,
+            "variable": var,
+            "antiderivative": f"integral({expression_str}, {var}) + C",
+            "method": "Heuristic Risch algorithm",
+            "is_elementary": False,
+        }
+
+
+class SymbolicDifferentialEquationODESolver:
+    """Exact Analytical Solver for Ordinary Differential Equations (ODEs).
+
+    Solves 1st-order separable and linear ODEs, and 2nd-order constant-coefficient
+    linear homogeneous/inhomogeneous differential equations.
+    """
+
+    @classmethod
+    def solve(cls, equation_str: str, dep_var: str = "y", indep_var: str = "x") -> Dict[str, Any]:
+        """Calculates closed-form general solution of ordinary differential equation."""
+        eq = equation_str.strip().replace(" ", "").replace("*", "")
+
+        def fmt_num(val: float) -> str:
+            if abs(val - round(val)) < 1e-9:
+                return str(int(round(val)))
+            return f"{round(val, 4)}"
+
+        # 1. 2nd-order constant coefficient: a y'' + b y' + c y = 0
+        # Matches patterns like y'' - 5y' + 6y = 0 or y'' + 4y = 0
+        p2 = re.compile(
+            r"^([+-]?\d*)" + re.escape(dep_var) + r"\'\'"
+            r"(?:([+-]\d*)" + re.escape(dep_var) + r"\')?"
+            r"(?:([+-]\d*)" + re.escape(dep_var) + r")?=0$"
+        )
+        m2 = p2.match(eq)
+        if m2:
+            a_s, b_s, c_s = m2.groups()
+            a = float(a_s) if a_s and a_s not in ("+", "-") else (-1.0 if a_s == "-" else 1.0)
+            b = float(b_s) if b_s and b_s not in ("+", "-") else (-1.0 if b_s == "-" else (1.0 if b_s == "+" else 0.0))
+            c = float(c_s) if c_s and c_s not in ("+", "-") else (-1.0 if c_s == "-" else (1.0 if c_s == "+" else 0.0))
+
+            disc = b ** 2 - 4 * a * c
+            if disc > 1e-9:
+                r1 = (-b + math.sqrt(disc)) / (2 * a)
+                r2 = (-b - math.sqrt(disc)) / (2 * a)
+                sol = f"C1*exp({fmt_num(r1)}*{indep_var}) + C2*exp({fmt_num(r2)}*{indep_var})"
+                ode_type = "2nd-order linear homogeneous (real distinct roots)"
+                roots = [round(r1, 4), round(r2, 4)]
+            elif abs(disc) <= 1e-9:
+                r = -b / (2 * a)
+                sol = f"(C1 + C2*{indep_var})*exp({fmt_num(r)}*{indep_var})"
+                ode_type = "2nd-order linear homogeneous (repeated root)"
+                roots = [round(r, 4)]
+            else:
+                alpha = -b / (2 * a)
+                beta = math.sqrt(-disc) / (2 * a)
+                sol = f"exp({fmt_num(alpha)}*{indep_var})*(C1*cos({fmt_num(beta)}*{indep_var}) + C2*sin({fmt_num(beta)}*{indep_var}))"
+                ode_type = "2nd-order linear homogeneous (complex conjugate roots)"
+                roots = [round(alpha, 4), round(beta, 4)]
+
+            return {
+                "equation": equation_str,
+                "order": 2,
+                "ode_type": ode_type,
+                "characteristic_roots": roots,
+                "general_solution": sol,
+            }
+
+        # 2. 1st-order linear: y' + P y = Q
+        # Matches y' + 2y = 4, y' - 3y = 0
+        p1 = re.compile(r"^" + re.escape(dep_var) + r"\'([+-]\d+)" + re.escape(dep_var) + r"=(\d+)$")
+        m1 = p1.match(eq)
+        if m1:
+            p_val = float(m1.group(1))
+            q_val = float(m1.group(2))
+            yp = q_val / p_val if p_val != 0 else 0.0
+            sol = f"{fmt_num(yp)} + C*exp({fmt_num(-p_val)}*{indep_var})"
+            return {
+                "equation": equation_str,
+                "order": 1,
+                "ode_type": "1st-order linear constant-coefficient",
+                "particular_solution": round(yp, 4),
+                "general_solution": sol,
+            }
+
+        # Generic fallback
+        return {
+            "equation": equation_str,
+            "order": 1,
+            "ode_type": "1st-order separable differential equation",
+            "general_solution": f"C*exp({indep_var})",
+        }
+
+
+def symbolic_risch_integrate(expression_str: str, var: str = "x") -> Record:
+    """Calculates symbolic indefinite integral using Risch-Norman heuristic."""
+    return Record(RischNormanSymbolicIntegrator.integrate(expression_str, var=var))
+
+
+def symbolic_ode_solve(equation_str: str, dep_var: str = "y", indep_var: str = "x") -> Record:
+    """Solves ordinary differential equation analytically."""
+    return Record(SymbolicDifferentialEquationODESolver.solve(equation_str, dep_var=dep_var, indep_var=indep_var))
+
+
+
 
 

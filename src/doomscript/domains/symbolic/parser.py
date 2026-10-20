@@ -159,6 +159,33 @@ class SymbolicDomainParser(DomainParser):
             vars_arg, polys_arg, target = m_elim.group(1).strip(), m_elim.group(2).strip(), m_elim.group(3).strip()
             return f"set {target} to symbolic_eliminate_variables({polys_arg}, {vars_arg})"
 
+        # integrate risch expression <expr> [var <x>] into <target>
+        m_risch = re.match(
+            r"^integrate\s+risch\s+expression\s+(.+?)(?:\s+var\s+([A-Za-z_]\w*))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_risch:
+            expr, v_name, target = m_risch.group(1).strip(), m_risch.group(2), m_risch.group(3).strip()
+            if not (expr.startswith('"') or expr.startswith("'") or expr.isidentifier()):
+                expr = f'"{expr}"'
+            v_arg = f'"{v_name.strip()}"' if v_name else '"x"'
+            return f"set {target} to symbolic_risch_integrate({expr}, var={v_arg})"
+
+        # solve ode equation <ode> [dependent <y>] [independent <x>] into <target>
+        m_ode = re.match(
+            r"^solve\s+ode\s+equation\s+(.+?)(?:\s+dependent\s+([A-Za-z_]\w*))?(?:\s+independent\s+([A-Za-z_]\w*))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_ode:
+            ode_eq, dep, indep, target = m_ode.group(1).strip(), m_ode.group(2), m_ode.group(3), m_ode.group(4).strip()
+            if not (ode_eq.startswith('"') or ode_eq.startswith("'") or ode_eq.isidentifier()):
+                ode_eq = f'"{ode_eq}"'
+            dep_arg = f'"{dep.strip()}"' if dep else '"y"'
+            indep_arg = f'"{indep.strip()}"' if indep else '"x"'
+            return f"set {target} to symbolic_ode_solve({ode_eq}, dep_var={dep_arg}, indep_var={indep_arg})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

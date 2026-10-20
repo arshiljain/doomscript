@@ -47,6 +47,11 @@ from doomscript.domains.robotics.runtime import (
     DynamicWindowApproachDWA,
     robotics_rrt_star_3d,
     robotics_dwa_velocity,
+    SixDOFManipulatorKinematics,
+    StateLatticeMotionPlanner,
+    robotics_6dof_fk,
+    robotics_6dof_ik,
+    robotics_state_lattice_plan,
 )
 from doomscript.domains.robotics.parser import RoboticsDomainParser
 from doomscript.domains.robotics.exporter import RoboticsASTExporter
@@ -125,4 +130,9 @@ __all__ = [
     "DynamicWindowApproachDWA",
     "robotics_rrt_star_3d",
     "robotics_dwa_velocity",
+    "SixDOFManipulatorKinematics",
+    "StateLatticeMotionPlanner",
+    "robotics_6dof_fk",
+    "robotics_6dof_ik",
+    "robotics_state_lattice_plan",
 ]

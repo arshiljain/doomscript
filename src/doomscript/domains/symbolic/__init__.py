@@ -49,6 +49,10 @@ from doomscript.domains.symbolic.runtime import (
     GroebnerBasisBuchberger,
     symbolic_groebner_basis,
     symbolic_eliminate_variables,
+    RischNormanSymbolicIntegrator,
+    SymbolicDifferentialEquationODESolver,
+    symbolic_risch_integrate,
+    symbolic_ode_solve,
 )
 from doomscript.domains.symbolic.parser import SymbolicDomainParser
 from doomscript.domains.symbolic.exporter import SymbolicASTExporter
@@ -152,4 +156,8 @@ __all__ = [
     "GroebnerBasisBuchberger",
     "symbolic_groebner_basis",
     "symbolic_eliminate_variables",
+    "RischNormanSymbolicIntegrator",
+    "SymbolicDifferentialEquationODESolver",
+    "symbolic_risch_integrate",
+    "symbolic_ode_solve",
 ]

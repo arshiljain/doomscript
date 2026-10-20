@@ -119,6 +119,49 @@ class AutomataDomainParser(DomainParser):
             g_arg = f", gamma={gamma.strip()}" if gamma else ""
             return f"set {target} to automata_mdp_value_iteration({states}, {acts}, {trans}, {rew}{g_arg})"
 
+        # build glushkov nfa for regex <regex> into <target>
+        m_glush = re.match(
+            r"^build\s+glushkov\s+nfa\s+for\s+regex\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_glush:
+            regex, target = m_glush.group(1).strip(), m_glush.group(2).strip()
+            if not (regex.startswith('"') or regex.startswith("'") or regex.isidentifier()):
+                regex = f'"{regex}"'
+            return f"set {target} to automata_glushkov_compile({regex})"
+
+        # test glushkov nfa <nfa> on text <text> into <target>
+        m_glush_t = re.match(
+            r"^test\s+glushkov\s+nfa\s+(.+?)\s+on\s+text\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_glush_t:
+            nfa_arg, txt_arg, target = m_glush_t.group(1).strip(), m_glush_t.group(2).strip(), m_glush_t.group(3).strip()
+            if not (txt_arg.startswith('"') or txt_arg.startswith("'") or txt_arg.isidentifier()):
+                txt_arg = f'"{txt_arg}"'
+            return f"set {target} to automata_glushkov_accepts({nfa_arg}, {txt_arg})"
+
+        # model check ltl formula <formula> on kripke system states <states> initial <init> transitions <trans> labels <labels> into <target>
+        m_ltl = re.match(
+            r"^model\s+check\s+ltl\s+formula\s+(.+?)\s+on\s+kripke\s+system\s+states\s+(.+?)\s+initial\s+(.+?)\s+transitions\s+(.+?)\s+labels\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_ltl:
+            formula, states, init, trans, labels, target = (
+                m_ltl.group(1).strip(),
+                m_ltl.group(2).strip(),
+                m_ltl.group(3).strip(),
+                m_ltl.group(4).strip(),
+                m_ltl.group(5).strip(),
+                m_ltl.group(6).strip(),
+            )
+            if not (formula.startswith('"') or formula.startswith("'") or formula.isidentifier()):
+                formula = f'"{formula}"'
+            return f"set {target} to automata_ltl_model_check({states}, {init}, {trans}, {labels}, {formula})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

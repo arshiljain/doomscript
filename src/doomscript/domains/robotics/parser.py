@@ -178,6 +178,39 @@ class RoboticsDomainParser(DomainParser):
             target = m_dwa.group(4).strip()
             return f"set {target} to robotics_dwa_velocity({st}, {gl}, max_speed={spd})"
 
+        # calculate 6dof fk dh params <dh> joint angles <q> into <target>
+        m_fk6 = re.match(
+            r"^calculate\s+6dof\s+fk\s+dh\s+params\s+(.+?)\s+joint\s+angles\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_fk6:
+            dh, q, target = m_fk6.group(1).strip(), m_fk6.group(2).strip(), m_fk6.group(3).strip()
+            return f"set {target} to robotics_6dof_fk({dh}, {q})"
+
+        # solve 6dof ik dh params <dh> target position <target_pos> [initial angles <q0>] into <target>
+        m_ik6 = re.match(
+            r"^solve\s+6dof\s+ik\s+dh\s+params\s+(.+?)\s+target\s+position\s+(.+?)(?:\s+initial\s+angles\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_ik6:
+            dh, tgt, init_q, target = m_ik6.group(1).strip(), m_ik6.group(2).strip(), m_ik6.group(3), m_ik6.group(4).strip()
+            init_arg = f", initial_q={init_q.strip()}" if init_q else ""
+            return f"set {target} to robotics_6dof_ik({dh}, {tgt}{init_arg})"
+
+        # plan state lattice path from <start> to <goal> [obstacles <obs>] [step <step>] into <target>
+        m_lat = re.match(
+            r"^plan\s+state\s+lattice\s+path\s+from\s+(.+?)\s+to\s+(.+?)(?:\s+obstacles\s+(.+?))?(?:\s+step\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_lat:
+            st, gl, obs, step, target = m_lat.group(1).strip(), m_lat.group(2).strip(), m_lat.group(3), m_lat.group(4), m_lat.group(5).strip()
+            obs_arg = f", obstacles={obs.strip()}" if obs else ""
+            step_arg = f", step_len={step.strip()}" if step else ""
+            return f"set {target} to robotics_state_lattice_plan({st}, {gl}{obs_arg}{step_arg})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

@@ -1176,3 +1176,247 @@ def timeseries_kalman_filter_smooth(
     ))
 
 
+class NaturalCubicSpline:
+    """Natural cubic spline interpolation for time-series envelope estimation."""
+
+    def __init__(self, x: List[float], y: List[float]) -> None:
+        n = len(x)
+        self.x = list(x)
+        self.y = list(y)
+        if n < 2:
+            return
+
+        h = [x[i + 1] - x[i] for i in range(n - 1)]
+        alpha = [0.0] * n
+        for i in range(1, n - 1):
+            alpha[i] = (3.0 / h[i]) * (y[i + 1] - y[i]) - (3.0 / h[i - 1]) * (y[i] - y[i - 1])
+
+        l = [1.0] * n
+        mu = [0.0] * n
+        z = [0.0] * n
+        for i in range(1, n - 1):
+            l[i] = 2.0 * (x[i + 1] - x[i - 1]) - h[i - 1] * mu[i - 1]
+            mu[i] = h[i] / l[i]
+            z[i] = (alpha[i] - h[i - 1] * z[i - 1]) / l[i]
+
+        self.c = [0.0] * n
+        self.b = [0.0] * (n - 1)
+        self.d = [0.0] * (n - 1)
+        self.a = [y[i] for i in range(n - 1)]
+
+        for j in range(n - 2, -1, -1):
+            self.c[j] = z[j] - mu[j] * self.c[j + 1]
+            self.b[j] = (y[j + 1] - y[j]) / h[j] - h[j] * (self.c[j + 1] + 2.0 * self.c[j]) / 3.0
+            self.d[j] = (self.c[j + 1] - self.c[j]) / (3.0 * h[j])
+
+    def eval(self, xi: float) -> float:
+        n = len(self.x)
+        if n == 0:
+            return 0.0
+        if n == 1:
+            return self.y[0]
+        if xi <= self.x[0]:
+            return self.y[0]
+        if xi >= self.x[-1]:
+            return self.y[-1]
+
+        low, high = 0, n - 2
+        while low <= high:
+            mid = (low + high) // 2
+            if self.x[mid] <= xi <= self.x[mid + 1]:
+                dx = xi - self.x[mid]
+                return self.a[mid] + self.b[mid] * dx + self.c[mid] * (dx ** 2) + self.d[mid] * (dx ** 3)
+            elif xi < self.x[mid]:
+                high = mid - 1
+            else:
+                low = mid + 1
+        return self.y[-1]
+
+
+class SeasonalARIMASARIMA:
+    """Seasonal AutoRegressive Integrated Moving Average SARIMA(p,d,q)x(P,D,Q)_s Engine."""
+
+    @staticmethod
+    def _difference(series: List[float], d: int, s: int, D: int) -> Tuple[List[float], List[List[float]], List[List[float]]]:
+        curr = list(series)
+        diff_d_history = []
+        for _ in range(d):
+            diff_d_history.append(list(curr))
+            curr = [curr[i] - curr[i - 1] for i in range(1, len(curr))]
+
+        diff_D_history = []
+        for _ in range(D):
+            diff_D_history.append(list(curr))
+            curr = [curr[i] - curr[i - s] for i in range(s, len(curr))]
+        return curr, diff_d_history, diff_D_history
+
+    @staticmethod
+    def _integrate(forecasts: List[float], orig_series: List[float], d: int, s: int, D: int) -> List[float]:
+        res = list(forecasts)
+        for _ in range(D):
+            extended = list(orig_series)
+            out = []
+            for f in res:
+                prev_s = extended[-s] if len(extended) >= s else 0.0
+                val = f + prev_s
+                extended.append(val)
+                out.append(val)
+            res = out
+
+        for _ in range(d):
+            last_val = orig_series[-1] if orig_series else 0.0
+            out = []
+            for f in res:
+                last_val = last_val + f
+                out.append(last_val)
+            res = out
+        return res
+
+    @classmethod
+    def fit_and_forecast(
+        cls,
+        series: List[float],
+        p: int = 1,
+        d: int = 1,
+        q: int = 0,
+        P: int = 0,
+        D: int = 0,
+        Q: int = 0,
+        s: int = 4,
+        forecast_steps: int = 4,
+    ) -> Dict[str, Any]:
+        """Fits SARIMA model and generates out-of-sample forecasts."""
+        diff_series, _, _ = cls._difference(series, d, s, D)
+        n = len(diff_series)
+        if n < 4:
+            last = series[-1] if series else 0.0
+            return {
+                "order": f"SARIMA({p},{d},{q})x({P},{D},{Q})_{s}",
+                "coefficients": [0.0],
+                "forecast": [round(last, 4)] * forecast_steps,
+                "forecast_steps": forecast_steps,
+            }
+
+        X = []
+        Y = []
+        max_lag = max(p, 1)
+        for t in range(max_lag, n):
+            row = [diff_series[t - lag] for lag in range(1, p + 1)] if p > 0 else []
+            X.append(row)
+            Y.append(diff_series[t])
+
+        if X and X[0]:
+            k = len(X[0])
+            XTX = [[sum(X[r][i] * X[r][j] for r in range(len(X))) for j in range(k)] for i in range(k)]
+            for i in range(k):
+                XTX[i][i] += 1e-4  # Ridge regularization
+            XTY = [sum(X[r][i] * Y[r] for r in range(len(X))) for i in range(k)]
+
+            if k == 1:
+                beta = [XTY[0] / XTX[0][0]]
+            else:
+                det = XTX[0][0] * XTX[1][1] - XTX[0][1] * XTX[1][0]
+                if abs(det) > 1e-12:
+                    beta = [
+                        (XTX[1][1] * XTY[0] - XTX[0][1] * XTY[1]) / det,
+                        (-XTX[1][0] * XTY[0] + XTX[0][0] * XTY[1]) / det,
+                    ]
+                else:
+                    beta = [0.0] * k
+        else:
+            beta = [0.0]
+
+        diff_hist = list(diff_series)
+        diff_preds = []
+        for _ in range(forecast_steps):
+            pred = 0.0
+            for lag in range(1, p + 1):
+                if lag <= len(diff_hist):
+                    pred += beta[lag - 1] * diff_hist[-lag]
+            diff_preds.append(pred)
+            diff_hist.append(pred)
+
+        integrated_preds = cls._integrate(diff_preds, series, d, s, D)
+
+        return {
+            "order": f"SARIMA({p},{d},{q})x({P},{D},{Q})_{s}",
+            "coefficients": [round(b, 4) for b in beta],
+            "forecast": [round(v, 4) for v in integrated_preds],
+            "forecast_steps": forecast_steps,
+        }
+
+
+class EmpiricalModeDecompositionEMD:
+    """Empirical Mode Decomposition (EMD) & Hilbert-Huang Transform."""
+
+    @classmethod
+    def decompose(cls, signal: List[float], max_imfs: int = 3, max_sifts: int = 5) -> Dict[str, Any]:
+        """Decomposes nonlinear non-stationary signals into Intrinsic Mode Functions (IMFs)."""
+        n = len(signal)
+        t = [float(i) for i in range(n)]
+        r = list(signal)
+        imfs = []
+
+        for _ in range(max_imfs):
+            h = list(r)
+            for _ in range(max_sifts):
+                max_idx = [i for i in range(1, n - 1) if h[i] > h[i - 1] and h[i] >= h[i + 1]]
+                min_idx = [i for i in range(1, n - 1) if h[i] < h[i - 1] and h[i] <= h[i + 1]]
+                if len(max_idx) < 2 or len(min_idx) < 2:
+                    break
+
+                max_x = [0.0] + [t[i] for i in max_idx] + [float(n - 1)]
+                max_y = [h[max_idx[0]]] + [h[i] for i in max_idx] + [h[max_idx[-1]]]
+                min_x = [0.0] + [t[i] for i in min_idx] + [float(n - 1)]
+                min_y = [h[min_idx[0]]] + [h[i] for i in min_idx] + [h[min_idx[-1]]]
+
+                upper_sp = NaturalCubicSpline(max_x, max_y)
+                lower_sp = NaturalCubicSpline(min_x, min_y)
+
+                m = [(upper_sp.eval(ti) + lower_sp.eval(ti)) / 2.0 for ti in t]
+                h = [h[i] - m[i] for i in range(n)]
+
+            max_cnt = sum(1 for i in range(1, n - 1) if h[i] > h[i - 1] and h[i] >= h[i + 1])
+            min_cnt = sum(1 for i in range(1, n - 1) if h[i] < h[i - 1] and h[i] <= h[i + 1])
+            if max_cnt < 2 and min_cnt < 2:
+                break
+
+            imfs.append([round(v, 4) for v in h])
+            r = [r[i] - h[i] for i in range(n)]
+
+        return {
+            "imfs": imfs,
+            "residual": [round(v, 4) for v in r],
+            "total_imfs": len(imfs),
+        }
+
+
+def timeseries_sarima_forecast(
+    series: List[float],
+    p: int = 1,
+    d: int = 1,
+    q: int = 0,
+    P: int = 0,
+    D: int = 0,
+    Q: int = 0,
+    s: int = 4,
+    forecast_steps: int = 4,
+) -> Record:
+    """Fits SARIMA model and computes multi-step out-of-sample forecasts."""
+    return Record(SeasonalARIMASARIMA.fit_and_forecast(
+        series, p=p, d=d, q=q, P=P, D=D, Q=Q, s=s, forecast_steps=forecast_steps
+    ))
+
+
+def timeseries_emd_decompose(
+    signal: List[float],
+    max_imfs: int = 3,
+    max_sifts: int = 5,
+) -> Record:
+    """Decomposes signal into Intrinsic Mode Functions using Empirical Mode Decomposition."""
+    return Record(EmpiricalModeDecompositionEMD.decompose(
+        signal, max_imfs=max_imfs, max_sifts=max_sifts
+    ))
+
+
+

@@ -121,6 +121,40 @@ class CompressionDomainParser(DomainParser):
                 txt = f'"{txt}"'
             return f"set {target} to compression_ppm_model({txt}, order={ord_val})"
 
+        # compress lzma text <text> into <target>
+        m_lzma_e = re.match(
+            r"^compress\s+lzma\s+text\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_lzma_e:
+            txt, target = m_lzma_e.group(1).strip(), m_lzma_e.group(2).strip()
+            if not (txt.startswith('"') or txt.startswith("'") or txt.isidentifier()):
+                txt = f'"{txt}"'
+            return f"set {target} to compression_lzma_encode({txt})"
+
+        # decompress lzma record <rec> into <target>
+        m_lzma_d = re.match(
+            r"^decompress\s+lzma\s+record\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_lzma_d:
+            rec, target = m_lzma_d.group(1).strip(), m_lzma_d.group(2).strip()
+            return f"set {target} to compression_lzma_decode({rec})"
+
+        # model ctw context for sequence <seq> [with depth <d>] into <target>
+        m_ctw = re.match(
+            r"^model\s+ctw\s+context\s+for\s+sequence\s+(.+?)(?:\s+with\s+depth\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_ctw:
+            seq, depth_arg, target = m_ctw.group(1).strip(), m_ctw.group(2) or "4", m_ctw.group(3).strip()
+            if not (seq.startswith('"') or seq.startswith("'") or seq.isidentifier()):
+                seq = f'"{seq}"'
+            return f"set {target} to compression_ctw_model({seq}, max_depth={depth_arg})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

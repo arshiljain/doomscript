@@ -37,6 +37,11 @@ from doomscript.domains.time_series.runtime import (
     KalmanFilterStateSpace,
     timeseries_fit_var_model,
     timeseries_kalman_filter_smooth,
+    NaturalCubicSpline,
+    SeasonalARIMASARIMA,
+    EmpiricalModeDecompositionEMD,
+    timeseries_sarima_forecast,
+    timeseries_emd_decompose,
 )
 from doomscript.domains.time_series.parser import TimeSeriesDomainParser
 from doomscript.domains.time_series.exporter import TimeSeriesASTExporter
@@ -126,4 +131,9 @@ __all__ = [
     "KalmanFilterStateSpace",
     "timeseries_fit_var_model",
     "timeseries_kalman_filter_smooth",
+    "NaturalCubicSpline",
+    "SeasonalARIMASARIMA",
+    "EmpiricalModeDecompositionEMD",
+    "timeseries_sarima_forecast",
+    "timeseries_emd_decompose",
 ]

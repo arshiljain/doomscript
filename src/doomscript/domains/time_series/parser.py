@@ -129,6 +129,37 @@ class TimeSeriesDomainParser(DomainParser):
             r_val = r_arg.strip() if r_arg else "1e-2"
             return f"set {target} to timeseries_kalman_filter_smooth({data_arg}, process_variance_q={q_val}, measurement_variance_r={r_val})"
 
+        # fit sarima on <data> [order <p> <d> <q>] [seasonal <P> <D> <Q> <s>] [forecast <h>] into <target>
+        m_sarima = re.match(
+            r"^fit\s+sarima\s+on\s+(.+?)(?:\s+order\s+(\d+)\s+(\d+)\s+(\d+))?(?:\s+seasonal\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+))?(?:\s+forecast\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_sarima:
+            data_arg = m_sarima.group(1).strip()
+            p = m_sarima.group(2) if m_sarima.group(2) else "1"
+            d = m_sarima.group(3) if m_sarima.group(3) else "1"
+            q = m_sarima.group(4) if m_sarima.group(4) else "0"
+            P = m_sarima.group(5) if m_sarima.group(5) else "0"
+            D = m_sarima.group(6) if m_sarima.group(6) else "0"
+            Q = m_sarima.group(7) if m_sarima.group(7) else "0"
+            s_val = m_sarima.group(8) if m_sarima.group(8) else "4"
+            h = m_sarima.group(9) if m_sarima.group(9) else "4"
+            target = m_sarima.group(10).strip()
+            return f"set {target} to timeseries_sarima_forecast({data_arg}, p={p}, d={d}, q={q}, P={P}, D={D}, Q={Q}, s={s_val}, forecast_steps={h})"
+
+        # decompose emd series <data> [max imfs <m>] into <target>
+        m_emd = re.match(
+            r"^decompose\s+emd\s+series\s+(.+?)(?:\s+max\s+imfs\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_emd:
+            data_arg = m_emd.group(1).strip()
+            m_val = m_emd.group(2) if m_emd.group(2) else "3"
+            target = m_emd.group(3).strip()
+            return f"set {target} to timeseries_emd_decompose({data_arg}, max_imfs={m_val})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

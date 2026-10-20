@@ -45,6 +45,11 @@ from doomscript.domains.compression.runtime import (
     compression_rans_encode,
     compression_rans_decode,
     compression_ppm_model,
+    LZMAPureEngine,
+    ContextTreeWeightingCTW,
+    compression_lzma_encode,
+    compression_lzma_decode,
+    compression_ctw_model,
 )
 from doomscript.domains.compression.parser import CompressionDomainParser
 from doomscript.domains.compression.exporter import CompressionASTExporter
@@ -147,4 +152,9 @@ __all__ = [
     "compression_rans_encode",
     "compression_rans_decode",
     "compression_ppm_model",
+    "LZMAPureEngine",
+    "ContextTreeWeightingCTW",
+    "compression_lzma_encode",
+    "compression_lzma_decode",
+    "compression_ctw_model",
 ]

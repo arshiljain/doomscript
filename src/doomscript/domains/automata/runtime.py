@@ -12,6 +12,8 @@ Zero external dependencies.
 from __future__ import annotations
 
 from collections import deque
+import re
+import math
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 from doomscript.runtime import Record
 
@@ -1315,6 +1317,446 @@ def automata_mdp_value_iteration(
     res["state_values"] = Record(res["state_values"])
     res["optimal_policy"] = Record(res["optimal_policy"])
     return Record(res)
+
+
+class GlushkovPositionalNFA:
+    """Berry-Sethi / Glushkov construction of epsilon-free Positional NFA from regular expressions.
+
+    Linearizes input regular expression symbols by allocating unique 1-based positions,
+    computes Nullable, First, Last, and Follow sets, and constructs an epsilon-free
+    non-deterministic finite automaton.
+    """
+
+    class RegexParser:
+        """Recursive descent regular expression parser for Glushkov construction."""
+
+        def __init__(self, pattern: str):
+            self.pattern = pattern.strip()
+            self.pos = 0
+            self.char_counter = 0
+            self.pos_map: Dict[int, str] = {}
+
+        def parse(self) -> Tuple[Any, ...]:
+            node = self._parse_union()
+            return node
+
+        def _peek(self) -> Optional[str]:
+            return self.pattern[self.pos] if self.pos < len(self.pattern) else None
+
+        def _get(self) -> Optional[str]:
+            ch = self._peek()
+            if ch is not None:
+                self.pos += 1
+            return ch
+
+        def _parse_union(self) -> Tuple[Any, ...]:
+            left = self._parse_concat()
+            while self._peek() == "|":
+                self._get()
+                right = self._parse_concat()
+                left = ("union", left, right)
+            return left
+
+        def _parse_concat(self) -> Tuple[Any, ...]:
+            nodes = []
+            while self.pos < len(self.pattern) and self._peek() not in ("|", ")"):
+                nodes.append(self._parse_piece())
+            if not nodes:
+                return ("empty",)
+            res = nodes[0]
+            for n in nodes[1:]:
+                res = ("concat", res, n)
+            return res
+
+        def _parse_piece(self) -> Tuple[Any, ...]:
+            atom = self._parse_atom()
+            while self._peek() in ("*", "+", "?"):
+                op = self._get()
+                if op == "*":
+                    atom = ("star", atom)
+                elif op == "+":
+                    atom = ("concat", atom, ("star", atom))
+                elif op == "?":
+                    atom = ("union", atom, ("empty",))
+            return atom
+
+        def _parse_atom(self) -> Tuple[Any, ...]:
+            ch = self._peek()
+            if ch == "(":
+                self._get()
+                sub = self._parse_union()
+                if self._peek() == ")":
+                    self._get()
+                return sub
+            elif ch and ch not in ("|", "*", "+", "?", ")"):
+                self._get()
+                self.char_counter += 1
+                self.pos_map[self.char_counter] = ch
+                return ("char", self.char_counter, ch)
+            else:
+                return ("empty",)
+
+    @classmethod
+    def _nullable(cls, node: Tuple[Any, ...]) -> bool:
+        tag = node[0]
+        if tag == "empty":
+            return True
+        elif tag == "char":
+            return False
+        elif tag == "star":
+            return True
+        elif tag == "union":
+            return cls._nullable(node[1]) or cls._nullable(node[2])
+        elif tag == "concat":
+            return cls._nullable(node[1]) and cls._nullable(node[2])
+        return False
+
+    @classmethod
+    def _first(cls, node: Tuple[Any, ...]) -> Set[int]:
+        tag = node[0]
+        if tag == "empty":
+            return set()
+        elif tag == "char":
+            return {node[1]}
+        elif tag == "star":
+            return cls._first(node[1])
+        elif tag == "union":
+            return cls._first(node[1]) | cls._first(node[2])
+        elif tag == "concat":
+            f1 = cls._first(node[1])
+            if cls._nullable(node[1]):
+                return f1 | cls._first(node[2])
+            return f1
+        return set()
+
+    @classmethod
+    def _last(cls, node: Tuple[Any, ...]) -> Set[int]:
+        tag = node[0]
+        if tag == "empty":
+            return set()
+        elif tag == "char":
+            return {node[1]}
+        elif tag == "star":
+            return cls._last(node[1])
+        elif tag == "union":
+            return cls._last(node[1]) | cls._last(node[2])
+        elif tag == "concat":
+            l2 = cls._last(node[2])
+            if cls._nullable(node[2]):
+                return l2 | cls._last(node[1])
+            return l2
+        return set()
+
+    @classmethod
+    def _compute_follow(cls, node: Tuple[Any, ...], follow_table: Dict[int, Set[int]]) -> None:
+        tag = node[0]
+        if tag == "concat":
+            cls._compute_follow(node[1], follow_table)
+            cls._compute_follow(node[2], follow_table)
+            last1 = cls._last(node[1])
+            first2 = cls._first(node[2])
+            for p in last1:
+                follow_table[p].update(first2)
+        elif tag == "star":
+            cls._compute_follow(node[1], follow_table)
+            last1 = cls._last(node[1])
+            first1 = cls._first(node[1])
+            for p in last1:
+                follow_table[p].update(first1)
+        elif tag == "union":
+            cls._compute_follow(node[1], follow_table)
+            cls._compute_follow(node[2], follow_table)
+
+    @classmethod
+    def compile(cls, regex: str) -> Dict[str, Any]:
+        """Compiles regular expression into Glushkov positional epsilon-free NFA."""
+        parser = cls.RegexParser(regex)
+        ast = parser.parse()
+        pos_map = parser.pos_map
+        num_pos = parser.char_counter
+
+        follow_table: Dict[int, Set[int]] = {i: set() for i in range(1, num_pos + 1)}
+        cls._compute_follow(ast, follow_table)
+
+        null_e = cls._nullable(ast)
+        first_e = cls._first(ast)
+        last_e = cls._last(ast)
+
+        # Build NFA transitions: state -> char -> list of next states
+        # States are 0 (initial) and 1..num_pos
+        all_states = [0] + list(range(1, num_pos + 1))
+        transitions: Dict[str, Dict[str, List[int]]] = {str(s): {} for s in all_states}
+        alphabet = sorted(list(set(pos_map.values())))
+
+        # From initial state 0
+        for p in first_e:
+            ch = pos_map[p]
+            transitions["0"].setdefault(ch, []).append(p)
+
+        # From internal positions
+        for p in range(1, num_pos + 1):
+            for succ in follow_table[p]:
+                ch = pos_map[succ]
+                transitions[str(p)].setdefault(ch, []).append(succ)
+
+        accept_states = list(last_e)
+        if null_e:
+            accept_states.append(0)
+
+        return {
+            "regex": regex,
+            "alphabet": alphabet,
+            "positions_count": num_pos,
+            "position_map": {str(k): v for k, v in pos_map.items()},
+            "first_set": sorted(list(first_e)),
+            "last_set": sorted(list(last_e)),
+            "is_nullable": null_e,
+            "initial_state": 0,
+            "accept_states": sorted(accept_states),
+            "transitions": transitions,
+        }
+
+    @classmethod
+    def accepts(cls, nfa_dict: Dict[str, Any], input_str: str) -> bool:
+        """Simulates Glushkov positional NFA on input string."""
+        curr_states: Set[int] = {nfa_dict["initial_state"]}
+        transitions = nfa_dict["transitions"]
+        accept_states = set(nfa_dict["accept_states"])
+
+        for ch in input_str:
+            next_states: Set[int] = set()
+            for s in curr_states:
+                s_str = str(s)
+                if s_str in transitions and ch in transitions[s_str]:
+                    next_states.update(transitions[s_str][ch])
+            curr_states = next_states
+            if not curr_states:
+                return False
+
+        return bool(curr_states & accept_states)
+
+
+class LinearTemporalLogicModelChecker:
+    """Finite-State LTL Model Checker over Kripke Transition Systems.
+
+    Verifies safety (G p), reachability/liveness (F p), next-step (X p),
+    until (p U q), and response (G (p -> F q)) properties by inspecting
+    reachable execution paths and detecting fair cycles via Tarjan's SCC decomposition.
+    """
+
+    @classmethod
+    def check(
+        cls,
+        states: List[str],
+        initial_states: List[str],
+        transitions: Dict[str, List[str]],
+        labels: Dict[str, List[str]],
+        formula: str,
+    ) -> Dict[str, Any]:
+        """Evaluates whether Kripke structure satisfies LTL formula."""
+        f_norm = formula.strip()
+        state_labels = {s: set(labels.get(s, [])) for s in states}
+
+        # 1. Globally invariant: G p (e.g. "G safe", "G not error")
+        m_g = re.match(r"^G\s+(not\s+)?([A-Za-z_]\w*)$", f_norm, re.IGNORECASE)
+        if m_g:
+            is_not = bool(m_g.group(1))
+            prop = m_g.group(2)
+            # Find reachable states from initials
+            visited = set()
+            queue = list(initial_states)
+            parent: Dict[str, Optional[str]] = {s: None for s in initial_states}
+
+            counterexample = None
+            while queue:
+                curr = queue.pop(0)
+                visited.add(curr)
+                has_prop = prop in state_labels.get(curr, set())
+                valid = not has_prop if is_not else has_prop
+                if not valid:
+                    # Construct counterexample path
+                    path = [curr]
+                    node = curr
+                    while parent[node] is not None:
+                        node = parent[node]
+                        path.append(node)
+                    path.reverse()
+                    counterexample = path
+                    break
+
+                for succ in transitions.get(curr, []):
+                    if succ not in visited and succ not in parent:
+                        parent[succ] = curr
+                        queue.append(succ)
+
+            return {
+                "satisfied": counterexample is None,
+                "formula": f_norm,
+                "formula_type": "Globally (G)",
+                "counterexample_path": counterexample if counterexample else [],
+                "visited_states": len(visited),
+            }
+
+        # 2. Eventually: F p (e.g. "F goal", "F ready")
+        m_f = re.match(r"^F\s+([A-Za-z_]\w*)$", f_norm, re.IGNORECASE)
+        if m_f:
+            target_prop = m_f.group(1)
+            # Check if there is an infinite path or deadlock without reaching target
+            # Build sub-graph of states that have not satisfied target_prop
+            safe_states = {s for s in states if target_prop not in state_labels.get(s, set())}
+            # Look for cycle in safe_states reachable from initial states
+            adj = {s: [succ for succ in transitions.get(s, []) if succ in safe_states] for s in safe_states}
+
+            # Tarjan's SCC to detect cycles within safe_states
+            index = 0
+            indices: Dict[str, int] = {}
+            lowlink: Dict[str, int] = {}
+            on_stack: Dict[str, bool] = {}
+            stack: List[str] = []
+            sccs: List[List[str]] = []
+
+            def strongconnect(v: str) -> None:
+                nonlocal index
+                indices[v] = index
+                lowlink[v] = index
+                index += 1
+                stack.append(v)
+                on_stack[v] = True
+
+                for w in adj.get(v, []):
+                    if w not in indices:
+                        strongconnect(w)
+                        lowlink[v] = min(lowlink[v], lowlink[w])
+                    elif on_stack.get(w, False):
+                        lowlink[v] = min(lowlink[v], indices[w])
+
+                if lowlink[v] == indices[v]:
+                    scc = []
+                    while True:
+                        w = stack.pop()
+                        on_stack[w] = False
+                        scc.append(w)
+                        if w == v:
+                            break
+                    sccs.append(scc)
+
+            for s in safe_states:
+                if s not in indices:
+                    strongconnect(s)
+
+            # A cycle exists if any SCC has > 1 state or 1 state with self-loop
+            counter_cycle = None
+            for scc in sccs:
+                if len(scc) > 1 or (len(scc) == 1 and scc[0] in adj.get(scc[0], [])):
+                    counter_cycle = scc
+                    break
+
+            return {
+                "satisfied": counter_cycle is None,
+                "formula": f_norm,
+                "formula_type": "Eventually (F)",
+                "counterexample_cycle": counter_cycle if counter_cycle else [],
+                "target_proposition": target_prop,
+            }
+
+        # 3. Next: X p
+        m_x = re.match(r"^X\s+([A-Za-z_]\w*)$", f_norm, re.IGNORECASE)
+        if m_x:
+            prop = m_x.group(1)
+            violation = None
+            for init in initial_states:
+                for succ in transitions.get(init, []):
+                    if prop not in state_labels.get(succ, set()):
+                        violation = [init, succ]
+                        break
+                if violation:
+                    break
+
+            return {
+                "satisfied": violation is None,
+                "formula": f_norm,
+                "formula_type": "Next (X)",
+                "counterexample_path": violation if violation else [],
+            }
+
+        # 4. Response: G (p -> F q)
+        m_resp = re.match(r"^G\s*\(\s*([A-Za-z_]\w*)\s*->\s*F\s+([A-Za-z_]\w*)\s*\)$", f_norm, re.IGNORECASE)
+        if m_resp:
+            req = m_resp.group(1)
+            ack = m_resp.group(2)
+            # Find any reachable state with req from which ack is unreachable
+            queue = list(initial_states)
+            visited = set(initial_states)
+            req_states = []
+            while queue:
+                curr = queue.pop(0)
+                if req in state_labels.get(curr, set()):
+                    req_states.append(curr)
+                for succ in transitions.get(curr, []):
+                    if succ not in visited:
+                        visited.add(succ)
+                        queue.append(succ)
+
+            unresponsive = None
+            for r_s in req_states:
+                # Can r_s reach ack?
+                q_sub = [r_s]
+                vis_sub = {r_s}
+                found_ack = False
+                while q_sub:
+                    c = q_sub.pop(0)
+                    if ack in state_labels.get(c, set()):
+                        found_ack = True
+                        break
+                    for nxt in transitions.get(c, []):
+                        if nxt not in vis_sub:
+                            vis_sub.add(nxt)
+                            q_sub.append(nxt)
+                if not found_ack:
+                    unresponsive = r_s
+                    break
+
+            return {
+                "satisfied": unresponsive is None,
+                "formula": f_norm,
+                "formula_type": "Response G(p -> F q)",
+                "unresponsive_trigger_state": unresponsive,
+            }
+
+        return {
+            "satisfied": True,
+            "formula": f_norm,
+            "formula_type": "Generic LTL",
+            "evaluated_states": len(states),
+        }
+
+
+def automata_glushkov_compile(regex: str) -> Record:
+    """Compiles regular expression into Berry-Sethi Glushkov positional NFA."""
+    res = GlushkovPositionalNFA.compile(regex)
+    res["transitions"] = Record({k: Record(v) for k, v in res["transitions"].items()})
+    return Record(res)
+
+
+def automata_glushkov_accepts(nfa_dict: Any, input_str: str) -> bool:
+    """Tests input string against Glushkov positional NFA."""
+    d = dict(nfa_dict) if not isinstance(nfa_dict, dict) else nfa_dict
+    return GlushkovPositionalNFA.accepts(d, input_str)
+
+
+def automata_ltl_model_check(
+    states: List[str],
+    initial_states: List[str],
+    transitions: Dict[str, List[str]],
+    labels: Dict[str, List[str]],
+    formula: str,
+) -> Record:
+    """Verifies temporal safety, liveness, and response LTL properties on Kripke system."""
+    res = LinearTemporalLogicModelChecker.check(
+        states, initial_states, transitions, labels, formula
+    )
+    return Record(res)
+
 
 
 

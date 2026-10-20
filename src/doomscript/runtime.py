@@ -3730,6 +3730,11 @@ from doomscript.domains.robotics.runtime import (
     DynamicWindowApproachDWA,
     robotics_rrt_star_3d,
     robotics_dwa_velocity,
+    SixDOFManipulatorKinematics,
+    StateLatticeMotionPlanner,
+    robotics_6dof_fk,
+    robotics_6dof_ik,
+    robotics_state_lattice_plan,
 )
 
 from doomscript.domains.signals.runtime import (
@@ -3875,6 +3880,11 @@ from doomscript.domains.compression.runtime import (
     compression_rans_encode,
     compression_rans_decode,
     compression_ppm_model,
+    LZMAPureEngine,
+    ContextTreeWeightingCTW,
+    compression_lzma_encode,
+    compression_lzma_decode,
+    compression_ctw_model,
 )
 
 from doomscript.domains.time_series.runtime import (
@@ -3902,6 +3912,11 @@ from doomscript.domains.time_series.runtime import (
     KalmanFilterStateSpace,
     timeseries_fit_var_model,
     timeseries_kalman_filter_smooth,
+    NaturalCubicSpline,
+    SeasonalARIMASARIMA,
+    EmpiricalModeDecompositionEMD,
+    timeseries_sarima_forecast,
+    timeseries_emd_decompose,
 )
 
 from doomscript.domains.symbolic.runtime import (
@@ -3941,6 +3956,10 @@ from doomscript.domains.symbolic.runtime import (
     GroebnerBasisBuchberger,
     symbolic_groebner_basis,
     symbolic_eliminate_variables,
+    RischNormanSymbolicIntegrator,
+    SymbolicDifferentialEquationODESolver,
+    symbolic_risch_integrate,
+    symbolic_ode_solve,
 )
 
 from doomscript.domains.graphics.runtime import (
@@ -4076,6 +4095,11 @@ from doomscript.domains.automata.runtime import (
     MarkovDecisionProcessValueIteration,
     automata_hopcroft_minimize,
     automata_mdp_value_iteration,
+    GlushkovPositionalNFA,
+    LinearTemporalLogicModelChecker,
+    automata_glushkov_compile,
+    automata_glushkov_accepts,
+    automata_ltl_model_check,
 )
 
 from doomscript.domains.metrics.runtime import (

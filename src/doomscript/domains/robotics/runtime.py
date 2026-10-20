@@ -1313,4 +1313,270 @@ def robotics_dwa_velocity(
     ))
 
 
+class SixDOFManipulatorKinematics:
+    """6-DOF Industrial Serial Manipulator Kinematics & Differential Geometry Engine.
+
+    Calculates forward kinematics, homogeneous transformation chains, end-effector
+    Euler RPY orientation, geometric Jacobian, and Damped Least Squares (DLS)
+    singularity-robust numerical inverse kinematics.
+    """
+
+    @staticmethod
+    def _dh_matrix(a: float, alpha: float, d: float, theta: float) -> List[List[float]]:
+        ct = math.cos(theta)
+        st = math.sin(theta)
+        ca = math.cos(alpha)
+        sa = math.sin(alpha)
+        return [
+            [ct, -st * ca, st * sa, a * ct],
+            [st, ct * ca, -ct * sa, a * st],
+            [0.0, sa, ca, d],
+            [0.0, 0.0, 0.0, 1.0],
+        ]
+
+    @staticmethod
+    def _mat4_mul(A: List[List[float]], B: List[List[float]]) -> List[List[float]]:
+        C = [[0.0] * 4 for _ in range(4)]
+        for i in range(4):
+            for j in range(4):
+                C[i][j] = sum(A[i][k] * B[k][j] for k in range(4))
+        return C
+
+    @staticmethod
+    def _cross(u: List[float], v: List[float]) -> List[float]:
+        return [
+            u[1] * v[2] - u[2] * v[1],
+            u[2] * v[0] - u[0] * v[2],
+            u[0] * v[1] - u[1] * v[0],
+        ]
+
+    @classmethod
+    def forward_kinematics(
+        cls,
+        dh_params: List[Dict[str, float]],
+        joint_angles: List[float],
+    ) -> Dict[str, Any]:
+        """Calculates 6-DOF end-effector pose and transformation chain."""
+        T = [[1.0 if i == j else 0.0 for j in range(4)] for i in range(4)]
+        origins = [[0.0, 0.0, 0.0]]
+        z_axes = [[0.0, 0.0, 1.0]]
+
+        for i, dh in enumerate(dh_params):
+            q = joint_angles[i] + dh.get("theta_offset", 0.0)
+            A = cls._dh_matrix(dh.get("a", 0.0), dh.get("alpha", 0.0), dh.get("d", 0.0), q)
+            T = cls._mat4_mul(T, A)
+            origins.append([T[0][3], T[1][3], T[2][3]])
+            z_axes.append([T[0][2], T[1][2], T[2][2]])
+
+        ee_pos = [round(T[0][3], 4), round(T[1][3], 4), round(T[2][3], 4)]
+        pitch = math.atan2(-T[2][0], max(1e-9, math.sqrt(T[0][0] ** 2 + T[1][0] ** 2)))
+        yaw = math.atan2(T[1][0], T[0][0])
+        roll = math.atan2(T[2][1], T[2][2])
+
+        return {
+            "end_effector_position": ee_pos,
+            "rpy_radians": [round(roll, 4), round(pitch, 4), round(yaw, 4)],
+            "transform_matrix": [[round(v, 4) for v in row] for row in T],
+            "num_joints": len(joint_angles),
+        }
+
+    @classmethod
+    def inverse_kinematics_dls(
+        cls,
+        dh_params: List[Dict[str, float]],
+        target_pos: List[float],
+        initial_q: Optional[List[float]] = None,
+        max_iter: int = 100,
+        tol: float = 1e-3,
+        damping: float = 0.02,
+    ) -> Dict[str, Any]:
+        """Solves 6-DOF position inverse kinematics using Damped Least Squares."""
+        n_joints = len(dh_params)
+        q = list(initial_q) if initial_q else [0.0] * n_joints
+
+        success = False
+        final_err = 0.0
+
+        for _ in range(max_iter):
+            # Compute FK
+            T = [[1.0 if i == j else 0.0 for j in range(4)] for i in range(4)]
+            origins = [[0.0, 0.0, 0.0]]
+            z_axes = [[0.0, 0.0, 1.0]]
+
+            for i, dh in enumerate(dh_params):
+                ang = q[i] + dh.get("theta_offset", 0.0)
+                A = cls._dh_matrix(dh.get("a", 0.0), dh.get("alpha", 0.0), dh.get("d", 0.0), ang)
+                T = cls._mat4_mul(T, A)
+                origins.append([T[0][3], T[1][3], T[2][3]])
+                z_axes.append([T[0][2], T[1][2], T[2][2]])
+
+            curr_pos = [T[0][3], T[1][3], T[2][3]]
+            err = [target_pos[k] - curr_pos[k] for k in range(3)]
+            err_norm = math.sqrt(sum(e ** 2 for e in err))
+            final_err = err_norm
+            if err_norm < tol:
+                success = True
+                break
+
+            p_end = origins[-1]
+            J = []
+            for j_idx in range(n_joints):
+                zi = z_axes[j_idx]
+                pi = origins[j_idx]
+                r = [p_end[k] - pi[k] for k in range(3)]
+                col = cls._cross(zi, r)
+                J.append(col)
+
+            # JJT is 3x3
+            JJT = [[sum(J[c][r1] * J[c][r2] for c in range(n_joints)) for r2 in range(3)] for r1 in range(3)]
+            for d_idx in range(3):
+                JJT[d_idx][d_idx] += damping ** 2
+
+            det = (
+                JJT[0][0] * (JJT[1][1] * JJT[2][2] - JJT[1][2] * JJT[2][1])
+                - JJT[0][1] * (JJT[1][0] * JJT[2][2] - JJT[1][2] * JJT[2][0])
+                + JJT[0][2] * (JJT[1][0] * JJT[2][1] - JJT[1][1] * JJT[2][0])
+            )
+            if abs(det) < 1e-12:
+                break
+
+            inv_JJT = [
+                [(JJT[1][1] * JJT[2][2] - JJT[1][2] * JJT[2][1]) / det, -(JJT[0][1] * JJT[2][2] - JJT[0][2] * JJT[2][1]) / det, (JJT[0][1] * JJT[1][2] - JJT[0][2] * JJT[1][1]) / det],
+                [-(JJT[1][0] * JJT[2][2] - JJT[1][2] * JJT[2][0]) / det, (JJT[0][0] * JJT[2][2] - JJT[0][2] * JJT[2][0]) / det, -(JJT[0][0] * JJT[1][2] - JJT[0][2] * JJT[1][0]) / det],
+                [(JJT[1][0] * JJT[2][1] - JJT[1][1] * JJT[2][0]) / det, -(JJT[0][0] * JJT[2][1] - JJT[0][1] * JJT[2][0]) / det, (JJT[0][0] * JJT[1][1] - JJT[0][1] * JJT[1][0]) / det],
+            ]
+
+            alpha = [sum(inv_JJT[r1][k] * err[k] for k in range(3)) for r1 in range(3)]
+            dq = [sum(J[c][r] * alpha[r] for r in range(3)) for c in range(n_joints)]
+
+            step_scale = min(1.0, 0.25 / max(1e-4, math.sqrt(sum(d ** 2 for d in dq))))
+            for j_idx in range(n_joints):
+                q[j_idx] += dq[j_idx] * step_scale
+
+        return {
+            "success": success,
+            "joint_angles": [round(ang, 4) for ang in q],
+            "position_error_m": round(final_err, 5),
+            "target_position": list(target_pos),
+        }
+
+
+class StateLatticeMotionPlanner:
+    """State Lattice Motion Planner for Non-Holonomic Vehicles.
+
+    Plans dynamically feasible trajectories via discrete graph search over
+    kinematic motion primitives with circular and polygonal collision avoidance.
+    """
+
+    @classmethod
+    def plan(
+        cls,
+        start: Tuple[float, float, float],
+        goal: Tuple[float, float, float],
+        obstacles: Optional[List[Dict[str, float]]] = None,
+        step_len: float = 1.0,
+        turn_angle_rad: float = math.pi / 4.0,
+        max_expansions: int = 500,
+        goal_tolerance: float = 1.5,
+    ) -> Dict[str, Any]:
+        """Plans kinematically feasible collision-free path across lattice."""
+        import heapq
+
+        obs_list = obstacles if obstacles else []
+        sx, sy, stheta = start
+        gx, gy, gtheta = goal
+
+        def is_collision(x: float, y: float) -> bool:
+            for obs in obs_list:
+                ox = obs.get("x", 0.0)
+                oy = obs.get("y", 0.0)
+                r = obs.get("radius", 1.0)
+                if (x - ox) ** 2 + (y - oy) ** 2 <= (r + 0.15) ** 2:
+                    return True
+            return False
+
+        def heuristic(x: float, y: float) -> float:
+            return math.sqrt((x - gx) ** 2 + (y - gy) ** 2)
+
+        pq = [(heuristic(sx, sy), 0.0, (sx, sy, stheta), [(sx, sy, stheta)])]
+        visited = set()
+        best_path = None
+        expansions = 0
+
+        while pq and expansions < max_expansions:
+            f, g, (x, y, th), path = heapq.heappop(pq)
+            expansions += 1
+
+            if math.sqrt((x - gx) ** 2 + (y - gy) ** 2) <= goal_tolerance:
+                best_path = path
+                break
+
+            state_key = (round(x, 1), round(y, 1), round(th % (2 * math.pi), 1))
+            if state_key in visited:
+                continue
+            visited.add(state_key)
+
+            actions = [
+                (step_len, 0.0),
+                (step_len, turn_angle_rad),
+                (step_len, -turn_angle_rad),
+            ]
+
+            for L, dth in actions:
+                new_th = (th + dth) % (2 * math.pi)
+                mid_th = th + dth / 2.0
+                nx = x + L * math.cos(mid_th)
+                ny = y + L * math.sin(mid_th)
+
+                if is_collision(nx, ny):
+                    continue
+
+                new_g = g + L
+                new_f = new_g + heuristic(nx, ny)
+                heapq.heappush(pq, (new_f, new_g, (nx, ny, new_th), path + [(nx, ny, new_th)]))
+
+        waypoints = [[round(p[0], 3), round(p[1], 3), round(p[2], 3)] for p in best_path] if best_path else []
+
+        return {
+            "success": best_path is not None,
+            "waypoints": waypoints,
+            "path_length": round(sum(step_len for _ in range(max(0, len(waypoints) - 1))), 3),
+            "expansions": expansions,
+            "start": list(start),
+            "goal": list(goal),
+        }
+
+
+def robotics_6dof_fk(
+    dh_params: List[Dict[str, float]],
+    joint_angles: List[float],
+) -> Record:
+    """Calculates forward kinematics pose for 6-DOF robotic manipulator."""
+    return Record(SixDOFManipulatorKinematics.forward_kinematics(dh_params, joint_angles))
+
+
+def robotics_6dof_ik(
+    dh_params: List[Dict[str, float]],
+    target_pos: List[float],
+    initial_q: Optional[List[float]] = None,
+) -> Record:
+    """Calculates numerical inverse kinematics for 6-DOF robotic manipulator."""
+    return Record(SixDOFManipulatorKinematics.inverse_kinematics_dls(
+        dh_params, target_pos, initial_q=initial_q
+    ))
+
+
+def robotics_state_lattice_plan(
+    start: Tuple[float, float, float],
+    goal: Tuple[float, float, float],
+    obstacles: Optional[List[Dict[str, float]]] = None,
+    step_len: float = 1.0,
+) -> Record:
+    """Plans kinematically feasible path for vehicle on state lattice."""
+    return Record(StateLatticeMotionPlanner.plan(
+        start, goal, obstacles=obstacles, step_len=step_len
+    ))
+
+
+
 

@@ -1002,3 +1002,188 @@ def compression_ppm_model(text: str, order: int = 1) -> Record:
     return Record(PredictionByPartialMatchingPPM.model(text, max_order=order))
 
 
+class LZMAPureEngine:
+    """Lempel-Ziv-Markov chain Algorithm (LZMA) Pure Parsing Engine.
+
+    Decomposes arbitrary input strings into literal and back-reference distance/length
+    match tokens using sliding dictionary window analysis.
+    """
+
+    @classmethod
+    def encode(
+        cls,
+        text: str,
+        min_match: int = 3,
+        max_match: int = 258,
+        max_dist: int = 4096,
+    ) -> Dict[str, Any]:
+        """Encodes text into LZMA literal and match token sequences."""
+        if not text:
+            return {
+                "tokens": [],
+                "total_tokens": 0,
+                "literal_count": 0,
+                "match_count": 0,
+                "original_length": 0,
+                "compression_ratio": 1.0,
+            }
+
+        tokens: List[Tuple[Any, ...]] = []
+        i = 0
+        n = len(text)
+        literal_count = 0
+        match_count = 0
+
+        while i < n:
+            best_dist = 0
+            best_len = 0
+            window_start = max(0, i - max_dist)
+            max_cand = min(max_match, n - i)
+
+            for j in range(window_start, i):
+                length = 0
+                while length < max_cand and text[j + length] == text[i + length]:
+                    length += 1
+                if length >= min_match and length > best_len:
+                    best_len = length
+                    best_dist = i - j
+
+            if best_len >= min_match:
+                tokens.append(("M", best_dist, best_len))
+                match_count += 1
+                i += best_len
+            else:
+                tokens.append(("L", text[i]))
+                literal_count += 1
+                i += 1
+
+        token_size = len(tokens) * 2
+        ratio = round(n / max(1, token_size), 2)
+
+        return {
+            "tokens": [list(t) for t in tokens],
+            "total_tokens": len(tokens),
+            "literal_count": literal_count,
+            "match_count": match_count,
+            "original_length": n,
+            "compression_ratio": ratio,
+        }
+
+    @classmethod
+    def decode(cls, encoded: Dict[str, Any]) -> str:
+        """Decompresses LZMA token list back into exact original text."""
+        tokens = encoded.get("tokens", [])
+        out: List[str] = []
+        for tok in tokens:
+            tag = tok[0]
+            if tag == "L":
+                out.append(tok[1])
+            elif tag == "M":
+                dist = int(tok[1])
+                length = int(tok[2])
+                start = len(out) - dist
+                for k in range(length):
+                    out.append(out[start + k])
+        return "".join(out)
+
+
+class ContextTreeWeightingCTW:
+    """Context Tree Weighting (CTW) Lossless Source Coding Algorithm.
+
+    Universal compression algorithm that computes Krichevsky-Trofimov block probability
+    estimates across suffix context trees, evaluating optimal model weighting.
+    """
+
+    class _Node:
+        def __init__(self) -> None:
+            self.a = 0  # zeros count
+            self.b = 0  # ones count
+            self.pw = 1.0  # weighted probability
+            self.pe = 1.0  # KT probability
+            self.children: Dict[int, ContextTreeWeightingCTW._Node] = {}
+
+    @classmethod
+    def analyze_sequence(cls, bit_sequence: str, max_depth: int = 4) -> Dict[str, Any]:
+        """Analyzes binary sequence under Context Tree Weighting model."""
+        bits = [1 if ch == "1" else 0 for ch in bit_sequence if ch in ("0", "1")]
+        if not bits:
+            return {
+                "total_bits": 0,
+                "code_length_bits": 0.0,
+                "bits_per_symbol": 0.0,
+                "compression_ratio": 1.0,
+                "nodes_count": 0,
+                "root_zero_count": 0,
+                "root_one_count": 0,
+            }
+
+        root = cls._Node()
+        nodes_created = 1
+        history: List[int] = []
+
+        for bit in bits:
+            context = history[-max_depth:] if history else []
+            path: List[ContextTreeWeightingCTW._Node] = [root]
+            curr = root
+
+            for sym in reversed(context):
+                if sym not in curr.children:
+                    curr.children[sym] = cls._Node()
+                    nodes_created += 1
+                curr = curr.children[sym]
+                path.append(curr)
+
+            for node in reversed(path):
+                if bit == 0:
+                    node.pe *= (node.a + 0.5) / (node.a + node.b + 1.0)
+                    node.a += 1
+                else:
+                    node.pe *= (node.b + 0.5) / (node.a + node.b + 1.0)
+                    node.b += 1
+
+                if not node.children:
+                    node.pw = node.pe
+                else:
+                    p0 = node.children[0].pw if 0 in node.children else 1.0
+                    p1 = node.children[1].pw if 1 in node.children else 1.0
+                    node.pw = 0.5 * node.pe + 0.5 * (p0 * p1)
+
+            history.append(bit)
+
+        total_bits = len(bits)
+        final_pw = max(root.pw, 1e-300)
+        code_length = -math.log2(final_pw)
+
+        return {
+            "total_bits": total_bits,
+            "code_length_bits": round(code_length, 2),
+            "bits_per_symbol": round(code_length / total_bits, 3),
+            "compression_ratio": round(total_bits / max(1e-4, code_length), 2),
+            "nodes_count": nodes_created,
+            "root_zero_count": root.a,
+            "root_one_count": root.b,
+        }
+
+
+def compression_lzma_encode(
+    text: str,
+    min_match: int = 3,
+    max_match: int = 258,
+    max_dist: int = 4096,
+) -> Record:
+    """Encodes text using LZMA sliding dictionary match parsing."""
+    return Record(LZMAPureEngine.encode(text, min_match=min_match, max_match=max_match, max_dist=max_dist))
+
+
+def compression_lzma_decode(encoded_record: Any) -> str:
+    """Decodes LZMA token list back into original text."""
+    d = dict(encoded_record) if not isinstance(encoded_record, dict) else encoded_record
+    return LZMAPureEngine.decode(d)
+
+
+def compression_ctw_model(sequence: str, max_depth: int = 4) -> Record:
+    """Analyzes binary sequence under Context Tree Weighting (CTW) model."""
+    return Record(ContextTreeWeightingCTW.analyze_sequence(sequence, max_depth=max_depth))
+
+
+

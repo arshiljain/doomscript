@@ -44,6 +44,11 @@ from doomscript.domains.automata.runtime import (
     MarkovDecisionProcessValueIteration,
     automata_hopcroft_minimize,
     automata_mdp_value_iteration,
+    GlushkovPositionalNFA,
+    LinearTemporalLogicModelChecker,
+    automata_glushkov_compile,
+    automata_glushkov_accepts,
+    automata_ltl_model_check,
 )
 from doomscript.domains.automata.parser import AutomataDomainParser
 from doomscript.domains.automata.exporter import AutomataASTExporter
@@ -140,4 +145,9 @@ __all__ = [
     "MarkovDecisionProcessValueIteration",
     "automata_hopcroft_minimize",
     "automata_mdp_value_iteration",
+    "GlushkovPositionalNFA",
+    "LinearTemporalLogicModelChecker",
+    "automata_glushkov_compile",
+    "automata_glushkov_accepts",
+    "automata_ltl_model_check",
 ]
