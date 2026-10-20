@@ -36,6 +36,10 @@ from doomscript.domains.automata.runtime import (
     GameOfLife2D,
     automata_simulate_rule,
     automata_simulate_life,
+    MultiTapeTuringMachineSimulator,
+    ContextFreeGrammarCYKParser,
+    automata_run_multitape_tm,
+    automata_cyk_parse,
 )
 from doomscript.domains.automata.parser import AutomataDomainParser
 from doomscript.domains.automata.exporter import AutomataASTExporter
@@ -86,6 +90,8 @@ class AutomataDomain(DomainContract):
             or s.startswith("check if dfa ")
             or s.startswith("simulate cellular rule ")
             or s.startswith("simulate game of life ")
+            or s.startswith("simulate multitape turing machine ")
+            or s.startswith("parse cyk grammar ")
         )
 
     def can_handle_block(self, header: str) -> bool:
@@ -122,4 +128,8 @@ __all__ = [
     "automata_buchi_accepts_cycle",
     "automata_simulate_rule",
     "automata_simulate_life",
+    "MultiTapeTuringMachineSimulator",
+    "ContextFreeGrammarCYKParser",
+    "automata_run_multitape_tm",
+    "automata_cyk_parse",
 ]

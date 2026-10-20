@@ -79,6 +79,38 @@ class SymbolicDomainParser(DomainParser):
                 expr = f'"{expr}"'
             return f"set {target} to symbolic_brent_root({expr}, {a}, {b})"
 
+        # factor square free polynomial <coeffs> into <target>
+        m_sqf = re.match(
+            r"^factor\s+square\s+free\s+polynomial\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_sqf:
+            coeffs, target = m_sqf.group(1).strip(), m_sqf.group(2).strip()
+            return f"set {target} to symbolic_square_free_factorization({coeffs})"
+
+        # calculate resultant of polynomials <p> and <q> into <target>
+        m_res = re.match(
+            r"^calculate\s+resultant\s+of\s+polynomials\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_res:
+            p, q, target = m_res.group(1).strip(), m_res.group(2).strip(), m_res.group(3).strip()
+            return f"set {target} to symbolic_polynomial_resultant({p}, {q})"
+
+        # calculate pade approximant coefficients <coeffs> m <m> n <n> [with eval <pts>] into <target>
+        m_pade = re.match(
+            r"^calculate\s+pade\s+approximant\s+coefficients\s+(.+?)\s+m\s+(\d+)\s+n\s+(\d+)(?:\s+with\s+eval\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_pade:
+            coeffs, m, n = m_pade.group(1).strip(), m_pade.group(2).strip(), m_pade.group(3).strip()
+            eval_pts = m_pade.group(4).strip() if m_pade.group(4) else "None"
+            target = m_pade.group(5).strip()
+            return f"set {target} to symbolic_pade_approximant({coeffs}, {m}, {n}, eval_points={eval_pts})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

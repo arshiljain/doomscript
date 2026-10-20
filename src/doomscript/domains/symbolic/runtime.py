@@ -1128,3 +1128,267 @@ def symbolic_brent_root(expr: str, a: float, b: float) -> Any:
     return Record(BrentRootFinder.find_root(expr, a, b))
 
 
+class UnivariatePolynomialEuclideanFactorizer:
+    """Implements square-free polynomial factorization and Sylvester resultant calculation."""
+
+    @classmethod
+    def _trim(cls, p: List[float], tol: float = 1e-9) -> List[float]:
+        p = list(p)
+        while len(p) > 1 and abs(p[-1]) < tol:
+            p.pop()
+        return p
+
+    @classmethod
+    def _poly_div(cls, a: List[float], b: List[float]) -> Tuple[List[float], List[float]]:
+        a = cls._trim(a)
+        b = cls._trim(b)
+        if len(b) == 1 and abs(b[0]) < 1e-12:
+            raise ZeroDivisionError("Polynomial division by zero")
+        if len(a) < len(b):
+            return [0.0], a
+
+        rem = list(a)
+        deg_b = len(b) - 1
+        deg_a = len(a) - 1
+        quot = [0.0] * (deg_a - deg_b + 1)
+        lead_b = b[-1]
+
+        for i in range(deg_a - deg_b, -1, -1):
+            coeff = rem[i + deg_b] / lead_b
+            quot[i] = coeff
+            for j in range(deg_b + 1):
+                rem[i + j] -= coeff * b[j]
+
+        return cls._trim(quot), cls._trim(rem)
+
+    @classmethod
+    def _poly_gcd(cls, a: List[float], b: List[float]) -> List[float]:
+        x = cls._trim(a)
+        y = cls._trim(b)
+        while len(y) > 1 or (len(y) == 1 and abs(y[0]) > 1e-9):
+            _, r = cls._poly_div(x, y)
+            x = y
+            y = r
+        lead = x[-1] if x else 1.0
+        if abs(lead) > 1e-12:
+            return [round(c / lead, 6) for c in x]
+        return x
+
+    @classmethod
+    def _derivative(cls, p: List[float]) -> List[float]:
+        if len(p) <= 1:
+            return [0.0]
+        return [round(i * c, 6) for i, c in enumerate(p[1:], start=1)]
+
+    @classmethod
+    def square_free_factors(cls, coeffs: List[float]) -> Dict[str, Any]:
+        """Yun's algorithm for square-free factorization of monic polynomial."""
+        p = cls._trim(coeffs)
+        if len(p) <= 1:
+            return {
+                "degree": 0,
+                "factors_count": 0,
+                "factors": [],
+                "is_square_free": True,
+            }
+        lead = p[-1]
+        p = [c / lead for c in p]
+
+        p_prime = cls._derivative(p)
+        a0 = p
+        b0 = cls._poly_gcd(a0, p_prime)
+        c0, _ = cls._poly_div(a0, b0)
+        d0, _ = cls._poly_div(p_prime, b0)
+
+        c_i = c0
+        d_i = d0
+        factors = []
+        i = 1
+
+        while len(c_i) > 1:
+            c_prime = cls._derivative(c_i)
+            diff = [0.0] * max(len(d_i), len(c_prime))
+            for k in range(len(diff)):
+                d_val = d_i[k] if k < len(d_i) else 0.0
+                cp_val = c_prime[k] if k < len(c_prime) else 0.0
+                diff[k] = d_val - cp_val
+            a_i = cls._poly_gcd(c_i, diff)
+            if len(a_i) > 1:
+                factors.append({"multiplicity": i, "factor": [round(c, 4) for c in a_i]})
+            c_i, _ = cls._poly_div(c_i, a_i)
+            diff_adj, _ = cls._poly_div(diff, a_i)
+            d_i = diff_adj
+            i += 1
+            if i > 20:
+                break
+
+        is_sq_free = len(factors) == 1 and factors[0]["multiplicity"] == 1
+
+        return {
+            "degree": len(coeffs) - 1,
+            "factors_count": len(factors),
+            "factors": [Record(f) for f in factors],
+            "is_square_free": is_sq_free,
+        }
+
+    @classmethod
+    def resultant(cls, p: List[float], q: List[float]) -> Dict[str, Any]:
+        """Calculates resultant of p and q via Sylvester determinant."""
+        p = cls._trim(p)
+        q = cls._trim(q)
+        m = len(p) - 1
+        n = len(q) - 1
+        if m < 0 or n < 0:
+            return {"resultant": 0.0, "has_common_root": False}
+        if m == 0 and n == 0:
+            return {"resultant": 1.0, "has_common_root": False}
+
+        dim = m + n
+        matrix = [[0.0] * dim for _ in range(dim)]
+
+        p_desc = list(reversed(p))
+        q_desc = list(reversed(q))
+
+        for i in range(n):
+            for j in range(len(p_desc)):
+                matrix[i][i + j] = p_desc[j]
+
+        for i in range(m):
+            for j in range(len(q_desc)):
+                matrix[n + i][i + j] = q_desc[j]
+
+        det = 1.0
+        mat = [list(row) for row in matrix]
+        for i in range(dim):
+            pivot = i
+            max_val = abs(mat[i][i])
+            for r in range(i + 1, dim):
+                if abs(mat[r][i]) > max_val:
+                    max_val = abs(mat[r][i])
+                    pivot = r
+            if max_val < 1e-12:
+                det = 0.0
+                break
+            if pivot != i:
+                mat[i], mat[pivot] = mat[pivot], mat[i]
+                det = -det
+            det *= mat[i][i]
+            for r in range(i + 1, dim):
+                factor = mat[r][i] / mat[i][i]
+                for c in range(i + 1, dim):
+                    mat[r][c] -= factor * mat[i][c]
+
+        return {
+            "p_degree": m,
+            "q_degree": n,
+            "sylvester_dim": dim,
+            "resultant": round(det, 6),
+            "has_common_root": abs(det) < 1e-5,
+        }
+
+
+class PadeApproximantGenerator:
+    """Constructs Padé rational approximants [M/N] from Taylor series coefficients."""
+
+    @classmethod
+    def compute(
+        cls,
+        taylor_coeffs: List[float],
+        m_degree: int,
+        n_degree: int,
+        eval_points: Optional[List[float]] = None,
+    ) -> Dict[str, Any]:
+        c = [float(x) for x in taylor_coeffs]
+        needed = m_degree + n_degree + 1
+        while len(c) < needed:
+            c.append(0.0)
+
+        q = [1.0] + [0.0] * n_degree
+        if n_degree > 0:
+            mat = [[0.0] * n_degree for _ in range(n_degree)]
+            rhs = [0.0] * n_degree
+            for i in range(1, n_degree + 1):
+                row_idx = i - 1
+                rhs[row_idx] = -c[m_degree + i]
+                for j in range(1, n_degree + 1):
+                    col_idx = j - 1
+                    idx = m_degree + i - j
+                    mat[row_idx][col_idx] = c[idx] if idx >= 0 else 0.0
+
+            for i in range(n_degree):
+                pivot = i
+                for r in range(i + 1, n_degree):
+                    if abs(mat[r][i]) > abs(mat[pivot][i]):
+                        pivot = r
+                mat[i], mat[pivot] = mat[pivot], mat[i]
+                rhs[i], rhs[pivot] = rhs[pivot], rhs[i]
+
+                if abs(mat[i][i]) > 1e-12:
+                    for r in range(i + 1, n_degree):
+                        factor = mat[r][i] / mat[i][i]
+                        for col in range(i + 1, n_degree):
+                            mat[r][col] -= factor * mat[i][col]
+                        rhs[r] -= factor * rhs[i]
+
+            q_sol = [0.0] * n_degree
+            for i in range(n_degree - 1, -1, -1):
+                if abs(mat[i][i]) > 1e-12:
+                    s = sum(mat[i][j] * q_sol[j] for j in range(i + 1, n_degree))
+                    q_sol[i] = (rhs[i] - s) / mat[i][i]
+
+            for j in range(1, n_degree + 1):
+                q[j] = q_sol[j - 1]
+
+        p = [0.0] * (m_degree + 1)
+        for k in range(m_degree + 1):
+            p[k] = sum(c[k - j] * q[j] for j in range(min(k, n_degree) + 1))
+
+        def eval_rational(x: float) -> float:
+            num = sum(p[k] * (x ** k) for k in range(len(p)))
+            den = sum(q[k] * (x ** k) for k in range(len(q)))
+            return num / den if abs(den) > 1e-12 else float("inf")
+
+        def eval_taylor(x: float) -> float:
+            return sum(c[k] * (x ** k) for k in range(min(len(c), m_degree + n_degree + 1)))
+
+        eval_results = []
+        if eval_points:
+            for pt in eval_points:
+                val_pade = eval_rational(pt)
+                val_taylor = eval_taylor(pt)
+                eval_results.append({
+                    "x": pt,
+                    "pade_value": round(val_pade, 6),
+                    "taylor_value": round(val_taylor, 6),
+                    "difference": round(abs(val_pade - val_taylor), 6),
+                })
+
+        return {
+            "m_degree": m_degree,
+            "n_degree": n_degree,
+            "numerator_coeffs": [round(x, 6) for x in p],
+            "denominator_coeffs": [round(x, 6) for x in q],
+            "evaluations": [Record(e) for e in eval_results],
+        }
+
+
+def symbolic_square_free_factorization(coeffs: List[float]) -> Any:
+    """Performs Yun square-free factorization on polynomial."""
+    return Record(UnivariatePolynomialEuclideanFactorizer.square_free_factors(coeffs))
+
+
+def symbolic_polynomial_resultant(p: List[float], q: List[float]) -> Any:
+    """Calculates polynomial Sylvester resultant."""
+    return Record(UnivariatePolynomialEuclideanFactorizer.resultant(p, q))
+
+
+def symbolic_pade_approximant(
+    taylor_coeffs: List[float],
+    m_degree: int,
+    n_degree: int,
+    eval_points: Optional[List[float]] = None,
+) -> Any:
+    """Computes [M/N] Padé rational approximant from Taylor series coefficients."""
+    return Record(PadeApproximantGenerator.compute(taylor_coeffs, m_degree, n_degree, eval_points=eval_points))
+
+

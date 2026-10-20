@@ -29,6 +29,10 @@ from doomscript.domains.time_series.runtime import (
     AutoregressiveModelAR,
     timeseries_holt_winters,
     timeseries_ar_forecast,
+    DynamicTimeWarpingSakoeChiba,
+    SpectralDensityPeriodogram,
+    timeseries_dtw_sakoe_chiba,
+    timeseries_spectral_periodogram,
 )
 from doomscript.domains.time_series.parser import TimeSeriesDomainParser
 from doomscript.domains.time_series.exporter import TimeSeriesASTExporter
@@ -79,6 +83,8 @@ class TimeSeriesDomain(DomainContract):
             or s.startswith("calculate pacf of ")
             or s.startswith("forecast holt winters on ")
             or s.startswith("forecast ar model on ")
+            or s.startswith("calculate sakoe chiba dtw ")
+            or s.startswith("calculate spectral periodogram ")
         )
 
     def can_handle_block(self, header: str) -> bool:
@@ -108,4 +114,8 @@ __all__ = [
     "AutoregressiveModelAR",
     "timeseries_holt_winters",
     "timeseries_ar_forecast",
+    "DynamicTimeWarpingSakoeChiba",
+    "SpectralDensityPeriodogram",
+    "timeseries_dtw_sakoe_chiba",
+    "timeseries_spectral_periodogram",
 ]

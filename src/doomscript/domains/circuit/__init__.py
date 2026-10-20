@@ -40,6 +40,10 @@ from doomscript.domains.circuit.runtime import (
     circuit_solve_diode,
     circuit_transmission_line,
     circuit_simulate_rlc_step,
+    ActiveSallenKeyFilterDesigner,
+    RLCTransientLaplaceSolver,
+    circuit_design_sallen_key,
+    circuit_rlc_laplace_transient,
 )
 from doomscript.domains.circuit.parser import CircuitDomainParser
 from doomscript.domains.circuit.exporter import CircuitASTExporter
@@ -98,6 +102,8 @@ class CircuitDomain(DomainContract):
             or s.startswith("solve diode circuit ")
             or s.startswith("analyze transmission line ")
             or s.startswith("simulate rlc step response ")
+            or s.startswith("design sallen key filter ")
+            or s.startswith("solve rlc laplace transient ")
         )
 
     def can_handle_block(self, header: str) -> bool:
@@ -138,4 +144,8 @@ __all__ = [
     "circuit_solve_diode",
     "circuit_transmission_line",
     "circuit_simulate_rlc_step",
+    "ActiveSallenKeyFilterDesigner",
+    "RLCTransientLaplaceSolver",
+    "circuit_design_sallen_key",
+    "circuit_rlc_laplace_transient",
 ]

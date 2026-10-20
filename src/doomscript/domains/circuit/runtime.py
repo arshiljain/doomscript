@@ -931,3 +931,203 @@ def circuit_simulate_rlc_step(
     """Simulates transient state-space step response of series RLC network."""
     return Record(StateSpaceRLCSimulator.simulate_series_step(r, l, c, v_step=v_step, duration=duration))
 
+
+class ActiveSallenKeyFilterDesigner:
+    """Designs active 2nd-order Sallen-Key filters and calculates frequency response."""
+
+    E24_SERIES = [
+        1.0, 1.1, 1.2, 1.3, 1.5, 1.6, 1.8, 2.0, 2.2, 2.4, 2.7, 3.0,
+        3.3, 3.6, 3.9, 4.3, 4.7, 5.1, 5.6, 6.2, 6.8, 7.5, 8.2, 9.1,
+    ]
+
+    @classmethod
+    def find_nearest_e24(cls, val: float) -> float:
+        if val <= 0:
+            return val
+        dec = math.floor(math.log10(val))
+        mant = val / (10 ** dec)
+        best = min(cls.E24_SERIES, key=lambda x: abs(x - mant))
+        return round(best * (10 ** dec), 2)
+
+    @classmethod
+    def design(
+        cls,
+        filter_type: str,
+        cutoff_hz: float,
+        q_factor: float = 0.7071,
+        gain: float = 1.0,
+    ) -> Dict[str, Any]:
+        w0 = 2.0 * math.pi * cutoff_hz
+        ft = filter_type.lower().strip()
+        c1 = 1e-8  # 10 nF standard base capacitor
+
+        if ft in ("lowpass", "low_pass", "lp"):
+            # Low-pass Sallen-Key
+            c2 = c1 / (4.0 * (q_factor ** 2))
+            r1 = 1.0 / (w0 * math.sqrt(c1 * c2))
+            r2 = r1
+        elif ft in ("highpass", "high_pass", "hp"):
+            # High-pass Sallen-Key
+            c2 = c1
+            r2 = 1.0 / (2.0 * q_factor * w0 * c1)
+            r1 = 4.0 * (q_factor ** 2) * r2
+        else:
+            # Band-pass Sallen-Key
+            c2 = c1
+            r1 = 1.0 / (w0 * c1 * (2.0 * q_factor))
+            r2 = (2.0 * q_factor) / (w0 * c1)
+
+        r1_std = cls.find_nearest_e24(r1)
+        r2_std = cls.find_nearest_e24(r2)
+
+        if ft in ("lowpass", "low_pass", "lp"):
+            actual_w0 = 1.0 / math.sqrt(r1_std * r2_std * c1 * c2)
+            actual_q = math.sqrt(r1_std * r2_std * c1 * c2) / (c2 * (r1_std + r2_std))
+        elif ft in ("highpass", "high_pass", "hp"):
+            actual_w0 = 1.0 / math.sqrt(r1_std * r2_std * c1 * c2)
+            actual_q = math.sqrt(r1_std * r2_std * c1 * c2) / (r1_std * (c1 + c2))
+        else:
+            actual_w0 = 1.0 / math.sqrt(r1_std * r2_std * c1 * c2)
+            actual_q = 0.5 * math.sqrt(r2_std / r1_std)
+
+        actual_fc = actual_w0 / (2.0 * math.pi)
+
+        freq_points = [0.1 * cutoff_hz, 0.5 * cutoff_hz, cutoff_hz, 2.0 * cutoff_hz, 10.0 * cutoff_hz]
+        response = []
+        for f in freq_points:
+            w = 2.0 * math.pi * f
+            s = complex(0.0, w)
+            if ft in ("lowpass", "low_pass", "lp"):
+                num = gain * (actual_w0 ** 2)
+                den = (s ** 2) + (actual_w0 / actual_q) * s + (actual_w0 ** 2)
+            elif ft in ("highpass", "high_pass", "hp"):
+                num = gain * (s ** 2)
+                den = (s ** 2) + (actual_w0 / actual_q) * s + (actual_w0 ** 2)
+            else:
+                num = gain * (actual_w0 / actual_q) * s
+                den = (s ** 2) + (actual_w0 / actual_q) * s + (actual_w0 ** 2)
+            h = num / den
+            mag_db = 20.0 * math.log10(max(abs(h), 1e-12))
+            phase_deg = math.degrees(math.atan2(h.imag, h.real))
+            response.append({
+                "freq_hz": round(f, 2),
+                "gain_db": round(mag_db, 2),
+                "phase_deg": round(phase_deg, 2),
+            })
+
+        return {
+            "filter_type": ft,
+            "target_cutoff_hz": cutoff_hz,
+            "actual_cutoff_hz": round(actual_fc, 2),
+            "target_q": q_factor,
+            "actual_q": round(actual_q, 4),
+            "r1_ohms": round(r1, 2),
+            "r2_ohms": round(r2, 2),
+            "r1_e24_ohms": r1_std,
+            "r2_e24_ohms": r2_std,
+            "c1_farads": c1,
+            "c2_farads": c2,
+            "response_points": [Record(pt) for pt in response],
+        }
+
+
+class RLCTransientLaplaceSolver:
+    """Solves exact analytical transient step response of series or parallel RLC network."""
+
+    @classmethod
+    def solve(
+        cls,
+        topology: str,
+        r: float,
+        l: float,
+        c: float,
+        v_step: float = 1.0,
+        duration: float = 0.005,
+        points: int = 50,
+    ) -> Dict[str, Any]:
+        top = topology.lower().strip()
+        if top not in ("series", "parallel"):
+            top = "series"
+
+        if top == "series":
+            alpha = r / (2.0 * l)
+        else:
+            alpha = 1.0 / (2.0 * r * c)
+
+        w0 = 1.0 / math.sqrt(l * c)
+        zeta = alpha / w0
+
+        dt = duration / max(points - 1, 1)
+        time_points = [i * dt for i in range(points)]
+        v_t = []
+
+        if abs(zeta - 1.0) < 1e-5:
+            regime = "critically_damped"
+            for t in time_points:
+                val = v_step * (1.0 - (1.0 + alpha * t) * math.exp(-alpha * t))
+                v_t.append(round(val, 5))
+            overshoot = 0.0
+            peak_time = 0.0
+        elif zeta > 1.0:
+            regime = "overdamped"
+            s1 = -alpha + math.sqrt(alpha ** 2 - w0 ** 2)
+            s2 = -alpha - math.sqrt(alpha ** 2 - w0 ** 2)
+            for t in time_points:
+                val = v_step * (1.0 - (s2 * math.exp(s1 * t) - s1 * math.exp(s2 * t)) / (s2 - s1))
+                v_t.append(round(val, 5))
+            overshoot = 0.0
+            peak_time = 0.0
+        else:
+            regime = "underdamped"
+            wd = math.sqrt(w0 ** 2 - alpha ** 2)
+            phi = math.atan2(wd, alpha)
+            max_v = 0.0
+            peak_t_val = 0.0
+            for t in time_points:
+                val = v_step * (1.0 - (w0 / wd) * math.exp(-alpha * t) * math.sin(wd * t + phi))
+                if val > max_v:
+                    max_v = val
+                    peak_t_val = t
+                v_t.append(round(val, 5))
+            overshoot = max(0.0, (max_v - v_step) / v_step * 100.0)
+            peak_time = round(math.pi / wd, 6)
+
+        settling_time = round(4.0 / alpha, 6) if alpha > 0 else duration
+
+        return {
+            "topology": top,
+            "damping_factor_alpha": round(alpha, 3),
+            "resonant_freq_w0": round(w0, 3),
+            "damping_ratio_zeta": round(zeta, 4),
+            "regime": regime,
+            "v_step": v_step,
+            "overshoot_percent": round(overshoot, 2),
+            "peak_time": peak_time,
+            "settling_time": settling_time,
+            "samples_count": len(v_t),
+            "final_voltage": v_t[-1] if v_t else 0.0,
+        }
+
+
+def circuit_design_sallen_key(
+    filter_type: str,
+    cutoff_hz: float,
+    q_factor: float = 0.7071,
+    gain: float = 1.0,
+) -> Any:
+    """Designs active 2nd-order Sallen-Key filter with standard E24 components."""
+    return Record(ActiveSallenKeyFilterDesigner.design(filter_type, cutoff_hz, q_factor=q_factor, gain=gain))
+
+
+def circuit_rlc_laplace_transient(
+    topology: str,
+    r: float,
+    l: float,
+    c: float,
+    v_step: float = 1.0,
+    duration: float = 0.005,
+    points: int = 50,
+) -> Any:
+    """Solves analytical transient Laplace step response for series or parallel RLC circuit."""
+    return Record(RLCTransientLaplaceSolver.solve(topology, r, l, c, v_step=v_step, duration=duration, points=points))
+

@@ -41,6 +41,11 @@ from doomscript.domains.symbolic.runtime import (
     symbolic_polynomial_gcd,
     symbolic_rational_roots,
     symbolic_brent_root,
+    UnivariatePolynomialEuclideanFactorizer,
+    PadeApproximantGenerator,
+    symbolic_square_free_factorization,
+    symbolic_polynomial_resultant,
+    symbolic_pade_approximant,
 )
 from doomscript.domains.symbolic.parser import SymbolicDomainParser
 from doomscript.domains.symbolic.exporter import SymbolicASTExporter
@@ -92,6 +97,9 @@ class SymbolicDomain(DomainContract):
             or s.startswith("calculate polynomial gcd ")
             or s.startswith("find rational roots ")
             or s.startswith("find root for expression ")
+            or s.startswith("factor square free polynomial ")
+            or s.startswith("calculate resultant of polynomials ")
+            or s.startswith("calculate pade approximant ")
         )
 
     def can_handle_block(self, header: str) -> bool:
@@ -133,4 +141,9 @@ __all__ = [
     "symbolic_polynomial_gcd",
     "symbolic_rational_roots",
     "symbolic_brent_root",
+    "UnivariatePolynomialEuclideanFactorizer",
+    "PadeApproximantGenerator",
+    "symbolic_square_free_factorization",
+    "symbolic_polynomial_resultant",
+    "symbolic_pade_approximant",
 ]

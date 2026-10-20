@@ -728,3 +728,164 @@ def timeseries_ar_forecast(
     """Fits AR(p) autoregressive model via Yule-Walker and forecasts future steps."""
     return Record(AutoregressiveModelAR.fit_and_forecast(series, order_p=order_p, forecast_steps=forecast_steps))
 
+
+class DynamicTimeWarpingSakoeChiba:
+    """Constrained Dynamic Time Warping using Sakoe-Chiba band window."""
+
+    @classmethod
+    def align(
+        cls,
+        series_a: List[float],
+        series_b: List[float],
+        band_window: int = 5,
+    ) -> Dict[str, Any]:
+        n = len(series_a)
+        m = len(series_b)
+        if n == 0 or m == 0:
+            return {
+                "alignment_cost": 0.0,
+                "normalized_distance": 0.0,
+                "path_length": 0,
+                "warping_path": [],
+            }
+
+        w = max(int(band_window), abs(n - m))
+        INF = float("inf")
+        dp = [[INF] * (m + 1) for _ in range(n + 1)]
+        dp[0][0] = 0.0
+
+        for i in range(1, n + 1):
+            j_start = max(1, i - w)
+            j_end = min(m, i + w)
+            for j in range(j_start, j_end + 1):
+                cost = abs(float(series_a[i - 1]) - float(series_b[j - 1]))
+                dp[i][j] = cost + min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1])
+
+        path = []
+        i, j = n, m
+        while i > 0 or j > 0:
+            path.append([i - 1, j - 1])
+            if i == 0:
+                j -= 1
+            elif j == 0:
+                i -= 1
+            else:
+                prev_min = min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1])
+                if prev_min == dp[i - 1][j - 1]:
+                    i -= 1
+                    j -= 1
+                elif prev_min == dp[i - 1][j]:
+                    i -= 1
+                else:
+                    j -= 1
+
+        path.reverse()
+        total_cost = dp[n][m] if dp[n][m] != INF else 0.0
+        norm_dist = total_cost / max(len(path), 1)
+
+        return {
+            "alignment_cost": round(total_cost, 4),
+            "normalized_distance": round(norm_dist, 4),
+            "path_length": len(path),
+            "warping_path": path,
+        }
+
+
+class SpectralDensityPeriodogram:
+    """Discrete spectral power density periodogram estimation and peak detection."""
+
+    @classmethod
+    def analyze(
+        cls,
+        series: List[float],
+        sampling_rate: float = 1.0,
+        window_type: str = "hann",
+        top_k_peaks: int = 3,
+    ) -> Dict[str, Any]:
+        data = [float(x) for x in series]
+        n = len(data)
+        if n == 0:
+            return {
+                "sampling_rate": sampling_rate,
+                "frequencies_count": 0,
+                "peak_frequencies": [],
+                "spectral_entropy": 0.0,
+                "total_power": 0.0,
+            }
+
+        mean_val = sum(data) / n
+        centered = [x - mean_val for x in data]
+
+        w_type = window_type.lower().strip()
+        win = [1.0] * n
+        if w_type == "hann" and n > 1:
+            win = [0.5 * (1.0 - math.cos(2.0 * math.pi * i / (n - 1))) for i in range(n)]
+        elif w_type == "hamming" and n > 1:
+            win = [0.54 - 0.46 * math.cos(2.0 * math.pi * i / (n - 1)) for i in range(n)]
+        elif w_type == "blackman" and n > 1:
+            win = [0.42 - 0.5 * math.cos(2.0 * math.pi * i / (n - 1)) + 0.08 * math.cos(4.0 * math.pi * i / (n - 1)) for i in range(n)]
+
+        win_sum_sq = sum(w * w for w in win) or 1.0
+        tapered = [centered[i] * win[i] for i in range(n)]
+
+        n_freqs = n // 2 + 1
+        freqs = [k * sampling_rate / n for k in range(n_freqs)]
+        psd = []
+
+        for k in range(n_freqs):
+            w = 2.0 * math.pi * k / n
+            re_part = sum(tapered[t] * math.cos(w * t) for t in range(n))
+            im_part = -sum(tapered[t] * math.sin(w * t) for t in range(n))
+            mag_sq = re_part * re_part + im_part * im_part
+            factor = 2.0 if 0 < k < (n / 2.0) else 1.0
+            power = (factor * mag_sq) / (sampling_rate * win_sum_sq)
+            psd.append(power)
+
+        total_power = sum(psd)
+
+        entropy = 0.0
+        if total_power > 1e-12:
+            for p in psd:
+                p_norm = p / total_power
+                if p_norm > 1e-12:
+                    entropy -= p_norm * math.log2(p_norm)
+
+        indexed_peaks = []
+        for k in range(1, n_freqs):
+            indexed_peaks.append((psd[k], freqs[k]))
+        indexed_peaks.sort(key=lambda item: item[0], reverse=True)
+        top_peaks = [
+            {"frequency_hz": round(f, 4), "power": round(p, 4)}
+            for p, f in indexed_peaks[:max(1, top_k_peaks)]
+        ]
+
+        return {
+            "sampling_rate": sampling_rate,
+            "window_applied": w_type,
+            "frequencies_count": n_freqs,
+            "total_power": round(total_power, 4),
+            "spectral_entropy": round(entropy, 4),
+            "peak_frequencies": [Record(pk) for pk in top_peaks],
+        }
+
+
+def timeseries_dtw_sakoe_chiba(
+    series_a: List[float],
+    series_b: List[float],
+    band_window: int = 5,
+) -> Any:
+    """Calculates Sakoe-Chiba band constrained Dynamic Time Warping distance and path."""
+    return Record(DynamicTimeWarpingSakoeChiba.align(series_a, series_b, band_window=band_window))
+
+
+def timeseries_spectral_periodogram(
+    series: List[float],
+    sampling_rate: float = 1.0,
+    window_type: str = "hann",
+    top_k_peaks: int = 3,
+) -> Any:
+    """Estimates spectral power density periodogram and identifies peak frequencies."""
+    return Record(SpectralDensityPeriodogram.analyze(
+        series, sampling_rate=sampling_rate, window_type=window_type, top_k_peaks=top_k_peaks
+    ))
+

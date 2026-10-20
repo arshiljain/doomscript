@@ -191,6 +191,40 @@ class CircuitDomainParser(DomainParser):
             target = m_rlc.group(6).strip()
             return f"set {target} to circuit_simulate_rlc_step({r_val}, {l_val}, {c_val}, v_step={vs}, duration={dur})"
 
+        # design sallen key filter type <type> cutoff <fc> [with q <q>] [with gain <k>] into <target>
+        m_sk = re.match(
+            r"^design\s+sallen\s+key\s+filter\s+type\s+(.+?)\s+cutoff\s+(.+?)(?:\s+with\s+q\s+(.+?))?(?:\s+with\s+gain\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_sk:
+            ftype = m_sk.group(1).strip()
+            if not (ftype.startswith('"') or ftype.startswith("'")):
+                ftype = f'"{ftype}"'
+            fc = m_sk.group(2).strip()
+            q_val = m_sk.group(3).strip() if m_sk.group(3) else "0.7071"
+            gain_val = m_sk.group(4).strip() if m_sk.group(4) else "1.0"
+            target = m_sk.group(5).strip()
+            return f"set {target} to circuit_design_sallen_key({ftype}, {fc}, q_factor={q_val}, gain={gain_val})"
+
+        # solve rlc laplace transient topology <topo> r <r> l <l> c <c> [with v_step <vs>] [with duration <dur>] into <target>
+        m_rlc_lap = re.match(
+            r"^solve\s+rlc\s+laplace\s+transient\s+topology\s+(.+?)\s+r\s+(.+?)\s+l\s+(.+?)\s+c\s+(.+?)(?:\s+with\s+v_step\s+(.+?))?(?:\s+with\s+duration\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_rlc_lap:
+            topo = m_rlc_lap.group(1).strip()
+            if not (topo.startswith('"') or topo.startswith("'")):
+                topo = f'"{topo}"'
+            r_val = m_rlc_lap.group(2).strip()
+            l_val = m_rlc_lap.group(3).strip()
+            c_val = m_rlc_lap.group(4).strip()
+            vs = m_rlc_lap.group(5).strip() if m_rlc_lap.group(5) else "1.0"
+            dur = m_rlc_lap.group(6).strip() if m_rlc_lap.group(6) else "0.005"
+            target = m_rlc_lap.group(7).strip()
+            return f"set {target} to circuit_rlc_laplace_transient({topo}, {r_val}, {l_val}, {c_val}, v_step={vs}, duration={dur})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

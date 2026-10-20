@@ -918,3 +918,183 @@ def automata_simulate_life(rows: int, cols: int, live_cells: List[Tuple[int, int
     return Record(gol.simulate(steps=steps))
 
 
+class MultiTapeTuringMachineSimulator:
+    """Simulates a multi-tape deterministic or non-deterministic Turing Machine."""
+
+    @classmethod
+    def run(
+        cls,
+        num_tapes: int,
+        initial_tapes: List[str],
+        initial_state: str,
+        accept_states: List[str],
+        transitions: List[Dict[str, Any]],
+        max_steps: int = 500,
+        blank_symbol: str = " ",
+    ) -> Dict[str, Any]:
+        accept_set = set(accept_states)
+        tapes: List[List[str]] = []
+        for i in range(num_tapes):
+            if i < len(initial_tapes):
+                tapes.append(list(str(initial_tapes[i])) if initial_tapes[i] else [blank_symbol])
+            else:
+                tapes.append([blank_symbol])
+
+        heads = [0] * num_tapes
+        current_state = str(initial_state)
+
+        delta = {}
+        for tr in transitions:
+            s_from = str(tr.get("from", tr.get("state", "")))
+            read_syms = tuple(str(x) for x in tr.get("read", []))
+            s_to = str(tr.get("to", tr.get("next_state", "")))
+            write_syms = tuple(str(x) for x in tr.get("write", []))
+            dirs = tuple(str(x).upper() for x in tr.get("move", tr.get("direction", [])))
+            delta[(s_from, read_syms)] = (s_to, write_syms, dirs)
+
+        steps_taken = 0
+        halted = False
+        accepted = False
+
+        while steps_taken < max_steps:
+            if current_state in accept_set:
+                halted = True
+                accepted = True
+                break
+
+            current_read = []
+            for t_idx in range(num_tapes):
+                h = heads[t_idx]
+                if h < 0:
+                    tapes[t_idx].insert(0, blank_symbol)
+                    heads[t_idx] = 0
+                    h = 0
+                while h >= len(tapes[t_idx]):
+                    tapes[t_idx].append(blank_symbol)
+                current_read.append(tapes[t_idx][h])
+
+            key = (current_state, tuple(current_read))
+            if key not in delta:
+                halted = True
+                accepted = current_state in accept_set
+                break
+
+            next_st, write_syms, move_dirs = delta[key]
+
+            for t_idx in range(num_tapes):
+                if t_idx < len(write_syms):
+                    tapes[t_idx][heads[t_idx]] = write_syms[t_idx]
+
+            for t_idx in range(num_tapes):
+                d = move_dirs[t_idx] if t_idx < len(move_dirs) else "S"
+                if d == "R":
+                    heads[t_idx] += 1
+                elif d == "L":
+                    heads[t_idx] -= 1
+
+            current_state = next_st
+            steps_taken += 1
+
+        final_tapes = ["".join(t).strip(blank_symbol) for t in tapes]
+        return {
+            "num_tapes": num_tapes,
+            "final_state": current_state,
+            "is_accepted": accepted,
+            "steps_executed": steps_taken,
+            "is_halted": halted,
+            "tapes_output": final_tapes,
+            "head_positions": heads,
+        }
+
+
+class ContextFreeGrammarCYKParser:
+    """Cocke-Younger-Kasami (CYK) dynamic programming algorithm for Chomsky Normal Form grammars."""
+
+    @classmethod
+    def parse(
+        cls,
+        cnf_grammar: Dict[str, List[Any]],
+        start_symbol: str,
+        input_tokens: List[str],
+    ) -> Dict[str, Any]:
+        tokens = [str(tok) for tok in input_tokens]
+        n = len(tokens)
+        if n == 0:
+            return {
+                "start_symbol": start_symbol,
+                "is_accepted": False,
+                "tokens_count": 0,
+                "table_cells_filled": 0,
+                "root_variables": [],
+            }
+
+        unit_rules: Dict[str, Set[str]] = {}
+        binary_rules: List[Tuple[str, str, str]] = []
+
+        for lhs, rhs_list in cnf_grammar.items():
+            for rhs in rhs_list:
+                if isinstance(rhs, (list, tuple)) and len(rhs) == 2:
+                    binary_rules.append((str(lhs), str(rhs[0]), str(rhs[1])))
+                elif isinstance(rhs, str) and " " in rhs.strip():
+                    parts = rhs.strip().split()
+                    if len(parts) == 2:
+                        binary_rules.append((str(lhs), parts[0], parts[1]))
+                    else:
+                        unit_rules.setdefault(rhs, set()).add(str(lhs))
+                elif isinstance(rhs, str) and len(rhs) == 2 and rhs[0].isupper() and rhs[1].isupper():
+                    binary_rules.append((str(lhs), rhs[0], rhs[1]))
+                else:
+                    unit_rules.setdefault(str(rhs), set()).add(str(lhs))
+
+        table: List[List[Set[str]]] = [[set() for _ in range(n + 1)] for _ in range(n)]
+
+        for i, tok in enumerate(tokens):
+            if tok in unit_rules:
+                table[i][1].update(unit_rules[tok])
+
+        for length in range(2, n + 1):
+            for i in range(n - length + 1):
+                for k in range(1, length):
+                    left_set = table[i][k]
+                    right_set = table[i + k][length - k]
+                    if not left_set or not right_set:
+                        continue
+                    for A, B, C in binary_rules:
+                        if B in left_set and C in right_set:
+                            table[i][length].add(A)
+
+        total_cells_filled = sum(len(table[i][l]) for i in range(n) for l in range(1, n + 1))
+        is_accepted = str(start_symbol) in table[0][n]
+
+        return {
+            "start_symbol": start_symbol,
+            "is_accepted": is_accepted,
+            "tokens_count": n,
+            "table_cells_filled": total_cells_filled,
+            "root_variables": sorted(list(table[0][n])),
+        }
+
+
+def automata_run_multitape_tm(
+    num_tapes: int,
+    initial_tapes: List[str],
+    initial_state: str,
+    accept_states: List[str],
+    transitions: List[Dict[str, Any]],
+    max_steps: int = 500,
+) -> Any:
+    """Simulates multi-tape Turing Machine."""
+    return Record(MultiTapeTuringMachineSimulator.run(
+        num_tapes, initial_tapes, initial_state, accept_states, transitions, max_steps=max_steps
+    ))
+
+
+def automata_cyk_parse(
+    cnf_grammar: Dict[str, List[Any]],
+    start_symbol: str,
+    input_tokens: List[str],
+) -> Any:
+    """Parses token sequence using Cocke-Younger-Kasami (CYK) algorithm for CNF grammars."""
+    return Record(ContextFreeGrammarCYKParser.parse(cnf_grammar, start_symbol, input_tokens))
+
+

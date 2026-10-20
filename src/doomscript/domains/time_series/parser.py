@@ -67,6 +67,34 @@ class TimeSeriesDomainParser(DomainParser):
             target = m_ar.group(4).strip()
             return f"set {target} to timeseries_ar_forecast({series}, order_p={order}, forecast_steps={steps})"
 
+        # calculate sakoe chiba dtw between <a> and <b> [with window <w>] into <target>
+        m_dtw = re.match(
+            r"^calculate\s+sakoe\s+chiba\s+dtw\s+between\s+(.+?)\s+and\s+(.+?)(?:\s+with\s+window\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_dtw:
+            a, b = m_dtw.group(1).strip(), m_dtw.group(2).strip()
+            w = m_dtw.group(3) if m_dtw.group(3) else "5"
+            target = m_dtw.group(4).strip()
+            return f"set {target} to timeseries_dtw_sakoe_chiba({a}, {b}, band_window={w})"
+
+        # calculate spectral periodogram of <series> [with rate <fs>] [with window <win>] [with peaks <k>] into <target>
+        m_spec = re.match(
+            r"^calculate\s+spectral\s+periodogram\s+of\s+(.+?)(?:\s+with\s+rate\s+(.+?))?(?:\s+with\s+window\s+(.+?))?(?:\s+with\s+peaks\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_spec:
+            series = m_spec.group(1).strip()
+            rate = m_spec.group(2).strip() if m_spec.group(2) else "1.0"
+            win = m_spec.group(3).strip() if m_spec.group(3) else '"hann"'
+            if not (win.startswith('"') or win.startswith("'")):
+                win = f'"{win}"'
+            peaks = m_spec.group(4) if m_spec.group(4) else "3"
+            target = m_spec.group(5).strip()
+            return f"set {target} to timeseries_spectral_periodogram({series}, sampling_rate={rate}, window_type={win}, top_k_peaks={peaks})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

@@ -1169,4 +1169,227 @@ def compiler_build_dominator_tree(entry: str, nodes: List[str], edges: List[Tupl
     return Record(DominatorTreeBuilder.compute(entry, nodes, edges))
 
 
+class LL1GrammarTableGenerator:
+    """Computes FIRST and FOLLOW sets, conflict detection, and LL(1) predictive parsing tables."""
+
+    EPSILON = "ε"
+
+    @classmethod
+    def compute(
+        cls,
+        start_symbol: str,
+        grammar: Dict[str, List[Any]],
+    ) -> Dict[str, Any]:
+        prods: Dict[str, List[List[str]]] = {}
+        nonterminals = set(grammar.keys())
+        all_symbols = set()
+
+        for lhs, rhs_list in grammar.items():
+            prods[str(lhs)] = []
+            for rhs in rhs_list:
+                if isinstance(rhs, str):
+                    tokens = rhs.strip().split() if rhs.strip() else []
+                elif isinstance(rhs, (list, tuple)):
+                    tokens = [str(t) for t in rhs]
+                else:
+                    tokens = [str(rhs)]
+                if not tokens or tokens == ["ε"] or tokens == ["EPS"] or tokens == ["epsilon"]:
+                    prods[str(lhs)].append([cls.EPSILON])
+                else:
+                    prods[str(lhs)].append(tokens)
+                for t in tokens:
+                    all_symbols.add(t)
+
+        terminals = {s for s in all_symbols if s not in nonterminals and s != cls.EPSILON}
+        terminals.add("$")
+
+        first: Dict[str, Set[str]] = {nt: set() for nt in nonterminals}
+        for t in terminals:
+            first[t] = {t}
+        first[cls.EPSILON] = {cls.EPSILON}
+
+        changed = True
+        while changed:
+            changed = False
+            for A, rhs_list in prods.items():
+                for alpha in rhs_list:
+                    can_be_eps = True
+                    for sym in alpha:
+                        sym_first = first.get(sym, {sym})
+                        for f_sym in sym_first:
+                            if f_sym != cls.EPSILON:
+                                if f_sym not in first[A]:
+                                    first[A].add(f_sym)
+                                    changed = True
+                        if cls.EPSILON not in sym_first:
+                            can_be_eps = False
+                            break
+                    if can_be_eps:
+                        if cls.EPSILON not in first[A]:
+                            first[A].add(cls.EPSILON)
+                            changed = True
+
+        def first_of_seq(seq: List[str]) -> Tuple[Set[str], bool]:
+            res = set()
+            is_nullable = True
+            for sym in seq:
+                sym_first = first.get(sym, {sym})
+                res.update({s for s in sym_first if s != cls.EPSILON})
+                if cls.EPSILON not in sym_first:
+                    is_nullable = False
+                    break
+            if is_nullable:
+                res.add(cls.EPSILON)
+            return res, is_nullable
+
+        follow: Dict[str, Set[str]] = {nt: set() for nt in nonterminals}
+        follow[str(start_symbol)].add("$")
+
+        changed = True
+        while changed:
+            changed = False
+            for A, rhs_list in prods.items():
+                for alpha in rhs_list:
+                    for i, B in enumerate(alpha):
+                        if B in nonterminals:
+                            beta = alpha[i + 1:]
+                            beta_first, beta_nullable = first_of_seq(beta)
+                            for s in beta_first:
+                                if s != cls.EPSILON and s not in follow[B]:
+                                    follow[B].add(s)
+                                    changed = True
+                            if beta_nullable or not beta:
+                                for s in follow[A]:
+                                    if s not in follow[B]:
+                                        follow[B].add(s)
+                                        changed = True
+
+        table: Dict[str, Dict[str, List[str]]] = {nt: {} for nt in nonterminals}
+        conflicts = []
+
+        for A, rhs_list in prods.items():
+            for alpha in rhs_list:
+                alpha_first, alpha_nullable = first_of_seq(alpha)
+                for a in alpha_first:
+                    if a != cls.EPSILON:
+                        if a in table[A]:
+                            conflicts.append({
+                                "nonterminal": A,
+                                "lookahead": a,
+                                "existing": table[A][a],
+                                "conflict": alpha,
+                                "type": "FIRST-FIRST",
+                            })
+                        else:
+                            table[A][a] = alpha
+                if alpha_nullable:
+                    for b in follow[A]:
+                        if b in table[A]:
+                            conflicts.append({
+                                "nonterminal": A,
+                                "lookahead": b,
+                                "existing": table[A][b],
+                                "conflict": alpha,
+                                "type": "FIRST-FOLLOW",
+                            })
+                        else:
+                            table[A][b] = alpha
+
+        is_ll1 = len(conflicts) == 0
+
+        formatted_table = {}
+        for nt, row in table.items():
+            formatted_table[nt] = {term: " ".join(prod) if prod != [cls.EPSILON] else "ε" for term, prod in row.items()}
+
+        return {
+            "start_symbol": str(start_symbol),
+            "is_ll1": is_ll1,
+            "conflicts_count": len(conflicts),
+            "conflicts": conflicts,
+            "first_sets": {k: sorted(list(v)) for k, v in first.items() if k in nonterminals},
+            "follow_sets": {k: sorted(list(v)) for k, v in follow.items()},
+            "table": formatted_table,
+            "terminals": sorted(list(terminals)),
+            "nonterminals": sorted(list(nonterminals)),
+        }
+
+
+class LoopInvariantCodeMotionLICM:
+    """Analyzes and hoists loop-invariant instructions into loop pre-headers."""
+
+    @classmethod
+    def optimize(
+        cls,
+        blocks: List[Dict[str, Any]],
+        loop_header: str,
+        loop_body_labels: List[str],
+    ) -> Dict[str, Any]:
+        body_set = set(loop_body_labels)
+        defs_inside_loop = set()
+        all_block_map = {b["label"]: b for b in blocks}
+
+        for lbl in body_set:
+            if lbl in all_block_map:
+                for inst in all_block_map[lbl].get("instructions", []):
+                    dest = inst.get("dest")
+                    if dest:
+                        defs_inside_loop.add(dest)
+
+        invariant_insts = []
+        invariant_defs = set()
+        changed = True
+
+        while changed:
+            changed = False
+            for lbl in body_set:
+                if lbl in all_block_map:
+                    for inst in all_block_map[lbl].get("instructions", []):
+                        dest = inst.get("dest")
+                        if not dest or dest in invariant_defs:
+                            continue
+                        op = inst.get("op", "")
+                        if op in ("call", "store", "print", "ret", "br", "cbr"):
+                            continue
+                        args = inst.get("args", [])
+                        is_invariant = True
+                        for a in args:
+                            a_str = str(a)
+                            if a_str.lstrip("-").replace(".", "", 1).isdigit():
+                                continue
+                            if a_str in defs_inside_loop and a_str not in invariant_defs:
+                                is_invariant = False
+                                break
+                        if is_invariant:
+                            invariant_defs.add(dest)
+                            invariant_insts.append({
+                                "source_block": lbl,
+                                "instruction": inst,
+                            })
+                            changed = True
+
+        hoisted = [inv["instruction"] for inv in invariant_insts]
+
+        return {
+            "loop_header": loop_header,
+            "loop_blocks_count": len(body_set),
+            "hoisted_instructions_count": len(hoisted),
+            "invariant_variables": sorted(list(invariant_defs)),
+            "hoisted_instructions": hoisted,
+        }
+
+
+def compiler_build_ll1_table(start_symbol: str, grammar: Dict[str, List[Any]]) -> Any:
+    """Computes FIRST/FOLLOW sets and constructs LL(1) predictive parse table."""
+    return Record(LL1GrammarTableGenerator.compute(start_symbol, grammar))
+
+
+def compiler_optimize_licm(
+    blocks: List[Dict[str, Any]],
+    loop_header: str,
+    loop_body_labels: List[str],
+) -> Any:
+    """Identifies and hoists loop-invariant instructions into loop pre-header."""
+    return Record(LoopInvariantCodeMotionLICM.optimize(blocks, loop_header, loop_body_labels))
+
+
 

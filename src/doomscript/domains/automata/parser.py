@@ -70,6 +70,32 @@ class AutomataDomainParser(DomainParser):
             target = m_gol.group(5).strip()
             return f"set {target} to automata_simulate_life({rows}, {cols}, {cells}, steps={steps})"
 
+        # simulate multitape turing machine with tapes <tapes> state <q0> accept <f> transitions <trans> [with max_steps <m>] into <target>
+        m_mt = re.match(
+            r"^simulate\s+multitape\s+turing\s+machine\s+with\s+tapes\s+(.+?)\s+state\s+(.+?)\s+accept\s+(.+?)\s+transitions\s+(.+?)(?:\s+with\s+max_steps\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_mt:
+            tapes, q0, acc, trans = m_mt.group(1).strip(), m_mt.group(2).strip(), m_mt.group(3).strip(), m_mt.group(4).strip()
+            if not (q0.startswith('"') or q0.startswith("'")):
+                q0 = f'"{q0}"'
+            max_s = m_mt.group(5) if m_mt.group(5) else "500"
+            target = m_mt.group(6).strip()
+            return f"set {target} to automata_run_multitape_tm(len({tapes}), {tapes}, {q0}, {acc}, {trans}, max_steps={max_s})"
+
+        # parse cyk grammar <grammar> start <start> tokens <tokens> into <target>
+        m_cyk = re.match(
+            r"^parse\s+cyk\s+grammar\s+(.+?)\s+start\s+(.+?)\s+tokens\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_cyk:
+            gram, start, toks, target = m_cyk.group(1).strip(), m_cyk.group(2).strip(), m_cyk.group(3).strip(), m_cyk.group(4).strip()
+            if not (start.startswith('"') or start.startswith("'")):
+                start = f'"{start}"'
+            return f"set {target} to automata_cyk_parse({gram}, {start}, {toks})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

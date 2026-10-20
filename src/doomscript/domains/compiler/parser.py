@@ -61,6 +61,30 @@ class CompilerDomainParser(DomainParser):
             entry, nodes, edges, target = m_dom.group(1).strip(), m_dom.group(2).strip(), m_dom.group(3).strip(), m_dom.group(4).strip()
             return f"set {target} to compiler_build_dominator_tree({entry}, {nodes}, {edges})"
 
+        # build ll1 parse table start <start> grammar <grammar> into <target>
+        m_ll1 = re.match(
+            r"^build\s+ll1\s+parse\s+table\s+start\s+(.+?)\s+grammar\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_ll1:
+            start, grammar, target = m_ll1.group(1).strip(), m_ll1.group(2).strip(), m_ll1.group(3).strip()
+            if not (start.startswith('"') or start.startswith("'")):
+                start = f'"{start}"'
+            return f"set {target} to compiler_build_ll1_table({start}, {grammar})"
+
+        # optimize loop invariants in blocks <blocks> header <header> body <body_blocks> into <target>
+        m_licm = re.match(
+            r"^optimize\s+loop\s+invariants\s+in\s+blocks\s+(.+?)\s+header\s+(.+?)\s+body\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_licm:
+            blocks, header, body_blocks, target = m_licm.group(1).strip(), m_licm.group(2).strip(), m_licm.group(3).strip(), m_licm.group(4).strip()
+            if not (header.startswith('"') or header.startswith("'")):
+                header = f'"{header}"'
+            return f"set {target} to compiler_optimize_licm({blocks}, {header}, {body_blocks})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

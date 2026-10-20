@@ -3420,6 +3420,10 @@ from doomscript.domains.circuit.runtime import (
     circuit_solve_diode,
     circuit_transmission_line,
     circuit_simulate_rlc_step,
+    ActiveSallenKeyFilterDesigner,
+    RLCTransientLaplaceSolver,
+    circuit_design_sallen_key,
+    circuit_rlc_laplace_transient,
 )
 
 from doomscript.domains.chain.runtime import (
@@ -3527,6 +3531,10 @@ from doomscript.domains.compiler.runtime import (
     DominatorTreeBuilder,
     compiler_optimize_dce_and_fold,
     compiler_build_dominator_tree,
+    LL1GrammarTableGenerator,
+    LoopInvariantCodeMotionLICM,
+    compiler_build_ll1_table,
+    compiler_optimize_licm,
 )
 
 from doomscript.domains.robotics.runtime import (
@@ -3698,6 +3706,10 @@ from doomscript.domains.time_series.runtime import (
     AutoregressiveModelAR,
     timeseries_holt_winters,
     timeseries_ar_forecast,
+    DynamicTimeWarpingSakoeChiba,
+    SpectralDensityPeriodogram,
+    timeseries_dtw_sakoe_chiba,
+    timeseries_spectral_periodogram,
 )
 
 from doomscript.domains.symbolic.runtime import (
@@ -3729,6 +3741,11 @@ from doomscript.domains.symbolic.runtime import (
     symbolic_polynomial_gcd,
     symbolic_rational_roots,
     symbolic_brent_root,
+    UnivariatePolynomialEuclideanFactorizer,
+    PadeApproximantGenerator,
+    symbolic_square_free_factorization,
+    symbolic_polynomial_resultant,
+    symbolic_pade_approximant,
 )
 
 from doomscript.domains.graphics.runtime import (
@@ -3833,6 +3850,10 @@ from doomscript.domains.automata.runtime import (
     GameOfLife2D,
     automata_simulate_rule,
     automata_simulate_life,
+    MultiTapeTuringMachineSimulator,
+    ContextFreeGrammarCYKParser,
+    automata_run_multitape_tm,
+    automata_cyk_parse,
 )
 
 from doomscript.domains.metrics.runtime import (

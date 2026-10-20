@@ -34,6 +34,10 @@ from doomscript.domains.compiler.runtime import (
     DominatorTreeBuilder,
     compiler_optimize_dce_and_fold,
     compiler_build_dominator_tree,
+    LL1GrammarTableGenerator,
+    LoopInvariantCodeMotionLICM,
+    compiler_build_ll1_table,
+    compiler_optimize_licm,
 )
 from doomscript.domains.compiler.parser import CompilerDomainParser
 from doomscript.domains.compiler.exporter import CompilerASTExporter
@@ -90,6 +94,8 @@ class CompilerDomain(DomainContract):
             or s.startswith("parse pratt expression ")
             or s.startswith("optimize instructions ")
             or s.startswith("build dominator tree ")
+            or s.startswith("build ll1 parse table ")
+            or s.startswith("optimize loop invariants ")
         )
 
     def can_handle_block(self, header: str) -> bool:
@@ -122,4 +128,8 @@ __all__ = [
     "DominatorTreeBuilder",
     "compiler_optimize_dce_and_fold",
     "compiler_build_dominator_tree",
+    "LL1GrammarTableGenerator",
+    "LoopInvariantCodeMotionLICM",
+    "compiler_build_ll1_table",
+    "compiler_optimize_licm",
 ]
