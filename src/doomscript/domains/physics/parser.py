@@ -152,6 +152,44 @@ class PhysicsDomainParser(DomainParser):
             target = m_pid_up.group(5).strip()
             return f"set {target} to physics_pid_update({pid}, {sp}, {meas}, {dt})"
 
+        # simulate cloth with rows <rows> cols <cols> [steps <steps>] into <target>
+        m_cloth = re.match(
+            r"^simulate\s+cloth\s+with\s+rows\s+(.+?)\s+cols\s+(.+?)(?:\s+steps\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_cloth:
+            rows, cols = m_cloth.group(1).strip(), m_cloth.group(2).strip()
+            steps = m_cloth.group(3) if m_cloth.group(3) else "40"
+            target = m_cloth.group(4).strip()
+            return f"set {target} to physics_simulate_cloth({rows}, {cols}, {steps})"
+
+        # simulate rigid body 3d with mass <m> inertia <ixx> <iyy> <izz> torque <t> [duration <dur>] into <target>
+        m_rb = re.match(
+            r"^simulate\s+rigid\s+body\s+3d\s+with\s+mass\s+(.+?)\s+inertia\s+(.+?)\s+(.+?)\s+(.+?)\s+torque\s+(.+?)(?:\s+duration\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_rb:
+            m = m_rb.group(1).strip()
+            ixx, iyy, izz = m_rb.group(2).strip(), m_rb.group(3).strip(), m_rb.group(4).strip()
+            torque = m_rb.group(5).strip()
+            dur = m_rb.group(6).strip() if m_rb.group(6) else "1.0"
+            target = m_rb.group(7).strip()
+            return f"set {target} to physics_rigid_body_3d({m}, {ixx}, {iyy}, {izz}, {torque}, duration={dur})"
+
+        # simulate sph fluid with particles <n> [steps <steps>] into <target>
+        m_sph = re.match(
+            r"^simulate\s+sph\s+fluid\s+with\s+particles\s+(.+?)(?:\s+steps\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_sph:
+            n = m_sph.group(1).strip()
+            steps = m_sph.group(2) if m_sph.group(2) else "20"
+            target = m_sph.group(3).strip()
+            return f"set {target} to physics_simulate_sph({n}, {steps})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

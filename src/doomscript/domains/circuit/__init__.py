@@ -34,6 +34,12 @@ from doomscript.domains.circuit.runtime import (
     circuit_mna_dc_solve,
     circuit_bode_plot,
     circuit_opamp_amplify,
+    NonlinearDiodeSolver,
+    TransmissionLineRLGC,
+    StateSpaceRLCSimulator,
+    circuit_solve_diode,
+    circuit_transmission_line,
+    circuit_simulate_rlc_step,
 )
 from doomscript.domains.circuit.parser import CircuitDomainParser
 from doomscript.domains.circuit.exporter import CircuitASTExporter
@@ -72,6 +78,8 @@ class CircuitDomain(DomainContract):
     blocks = []
 
     def can_handle_line(self, line: str) -> bool:
+        if self.parser.parse_inspect(line, 0) is not None or self.parser.parse_operation(line, 0) is not None:
+            return True
         s = line.strip().lower()
         return (
             s.startswith("calculate voltage with current ")
@@ -87,6 +95,9 @@ class CircuitDomain(DomainContract):
             or s.startswith("calculate pwm duty cycle ")
             or s.startswith("set gpio pin ")
             or s.startswith("read gpio pin ")
+            or s.startswith("solve diode circuit ")
+            or s.startswith("analyze transmission line ")
+            or s.startswith("simulate rlc step response ")
         )
 
     def can_handle_block(self, header: str) -> bool:
@@ -121,4 +132,10 @@ __all__ = [
     "circuit_mna_dc_solve",
     "circuit_bode_plot",
     "circuit_opamp_amplify",
+    "NonlinearDiodeSolver",
+    "TransmissionLineRLGC",
+    "StateSpaceRLCSimulator",
+    "circuit_solve_diode",
+    "circuit_transmission_line",
+    "circuit_simulate_rlc_step",
 ]

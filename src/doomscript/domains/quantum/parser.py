@@ -148,6 +148,40 @@ class QuantumDomainParser(DomainParser):
             target = m_grover.group(3).strip()
             return f"set {target} to quantum_grover_search(num_qubits={n}, target={t})"
 
+        # analyze density matrix for <n> qubits into <target>
+        m_dm = re.match(
+            r"^analyze\s+density\s+matrix\s+for\s+(.+?)\s+qubits?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_dm:
+            n, target = m_dm.group(1).strip(), m_dm.group(2).strip()
+            return f"set {target} to quantum_density_matrix_analyze({n})"
+
+        # apply qft to <reg> [inverse] into <target>
+        m_qft = re.match(
+            r"^apply\s+qft\s+to\s+(.+?)(?:\s+(inverse))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_qft:
+            reg = m_qft.group(1).strip()
+            is_inv = "True" if m_qft.group(2) else "False"
+            target = m_qft.group(3).strip()
+            return f"set {target} to quantum_apply_qft({reg}, inverse={is_inv})"
+
+        # solve vqe ground state for hamiltonian <h_terms> [with iterations <iters>] into <target>
+        m_vqe = re.match(
+            r"^solve\s+vqe\s+ground\s+state\s+for\s+hamiltonian\s+(.+?)(?:\s+with\s+iterations\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_vqe:
+            h_terms = m_vqe.group(1).strip()
+            iters = m_vqe.group(2) if m_vqe.group(2) else "40"
+            target = m_vqe.group(3).strip()
+            return f"set {target} to quantum_vqe_ground_state({h_terms}, iterations={iters})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

@@ -33,6 +33,12 @@ from doomscript.domains.physics.runtime import (
     physics_barnes_hut_step,
     physics_resolve_collision,
     physics_van_der_waals_pressure,
+    ClothLatticeSimulation,
+    RigidBody3DInertia,
+    FluidSPH,
+    physics_simulate_cloth,
+    physics_rigid_body_3d,
+    physics_simulate_sph,
 )
 from doomscript.domains.physics.parser import PhysicsDomainParser
 from doomscript.domains.physics.exporter import PhysicsASTExporter
@@ -79,6 +85,8 @@ class PhysicsDomain(DomainContract):
     blocks = []
 
     def can_handle_line(self, line: str) -> bool:
+        if self.parser.parse_inspect(line, 0) is not None or self.parser.parse_operation(line, 0) is not None:
+            return True
         s = line.strip().lower()
         return (
             s.startswith("calculate kinetic energy ")
@@ -92,6 +100,9 @@ class PhysicsDomain(DomainContract):
             or s.startswith("escape velocity for mass ")
             or s.startswith("create pid controller ")
             or s.startswith("update pid ")
+            or s.startswith("simulate cloth ")
+            or s.startswith("simulate rigid body 3d ")
+            or s.startswith("simulate sph fluid ")
         )
 
     def can_handle_block(self, header: str) -> bool:
@@ -125,4 +136,10 @@ __all__ = [
     "physics_barnes_hut_step",
     "physics_resolve_collision",
     "physics_van_der_waals_pressure",
+    "ClothLatticeSimulation",
+    "RigidBody3DInertia",
+    "FluidSPH",
+    "physics_simulate_cloth",
+    "physics_rigid_body_3d",
+    "physics_simulate_sph",
 ]

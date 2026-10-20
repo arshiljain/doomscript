@@ -9,6 +9,7 @@ import math
 import re
 from typing import Any, Dict, List, Optional, Tuple, Set
 from doomscript.domains.base import DomainRuntime, DomainIR
+from doomscript.runtime import Record
 
 
 # Resistor color code values
@@ -688,3 +689,245 @@ def circuit_opamp_amplify(v_plus: float, v_minus: float, gain: float = 100000.0,
     """Simulates operational amplifier differential gain with rails."""
     op = OpAmpModel(gain_ol=gain, v_sat_pos=v_sat, v_sat_neg=-v_sat)
     return op.amplify(v_plus, v_minus)
+
+
+# ==============================================================================
+# NONLINEAR SHOCKLEY DIODE OPERATING POINT SOLVER (NEWTON-RAPHSON)
+# ==============================================================================
+
+class NonlinearDiodeSolver:
+    """Solves non-linear DC operating point for a Shockley diode in series with a resistor.
+
+    I_D = I_s * (exp(V_D / (n * V_T)) - 1)
+    """
+
+    @classmethod
+    def solve(
+        cls,
+        v_source: float,
+        resistance: float,
+        i_sat: float = 1e-14,
+        ideality: float = 1.0,
+        temp_k: float = 300.0,
+        max_iters: int = 50,
+        tol: float = 1e-9,
+    ) -> Dict[str, Any]:
+        vs = float(v_source)
+        r = float(resistance)
+        isat = float(i_sat)
+        n = float(ideality)
+        k_b = 1.380649e-23
+        q = 1.60217663e-19
+        vt = (k_b * temp_k) / q  # ~0.02585 V at 300K
+
+        if r <= 0:
+            raise ValueError("Resistance must be positive")
+
+        # Initial guess: 0.65V for forward bias, vs for reverse bias
+        vd = 0.65 if vs > 0 else vs
+        converged = False
+        iters_taken = 0
+
+        for it in range(max_iters):
+            iters_taken = it + 1
+            # Bound exponent to avoid math.exp overflow
+            exponent = max(-50.0, min(40.0, vd / (n * vt)))
+            exp_val = math.exp(exponent)
+
+            # Diode current
+            id_val = isat * (exp_val - 1.0)
+            # Dynamic conductance gd = dId / dVd
+            gd = (isat / (n * vt)) * exp_val
+
+            # KCL error at diode anode: f(vd) = (vs - vd)/r - id = 0
+            f_val = (vs - vd) / r - id_val
+            f_prime = -1.0 / r - gd
+
+            delta_vd = -f_val / f_prime
+
+            # Voltage damping limit to prevent oscillation
+            max_step = 2.0 * vt
+            if abs(delta_vd) > max_step:
+                delta_vd = math.copysign(max_step, delta_vd)
+
+            vd += delta_vd
+
+            if abs(f_val) < tol or abs(delta_vd) < 1e-7:
+                converged = True
+                break
+
+        final_exp = max(-50.0, min(40.0, vd / (n * vt)))
+        id_final = isat * (math.exp(final_exp) - 1.0)
+        vr_final = vs - vd
+        power_diode = vd * id_final
+        rd_small_signal = (n * vt) / max(1e-12, id_final + isat)
+
+        return {
+            "v_source": vs,
+            "resistance": r,
+            "v_diode": round(vd, 4),
+            "i_diode_mA": round(id_final * 1000.0, 4),
+            "v_resistor": round(vr_final, 4),
+            "power_diode_mW": round(power_diode * 1000.0, 4),
+            "dynamic_resistance_ohms": round(rd_small_signal, 2),
+            "converged": converged,
+            "iterations": iters_taken,
+        }
+
+
+# ==============================================================================
+# TRANSMISSION LINE DISTRIBUTED RLGC PARAMETER SOLVER
+# ==============================================================================
+
+class TransmissionLineRLGC:
+    """Distributed Telegrapher's transmission line characteristics and reflections."""
+
+    @classmethod
+    def analyze(
+        cls,
+        r_per_m: float,
+        l_per_m: float,
+        g_per_m: float,
+        c_per_m: float,
+        freq_hz: float,
+        length_m: float = 1.0,
+        z_load: complex = 50.0 + 0.0j,
+    ) -> Dict[str, Any]:
+        r, l, g, c = float(r_per_m), float(l_per_m), float(g_per_m), float(c_per_m)
+        f = max(1.0, float(freq_hz))
+        omega = 2.0 * math.pi * f
+
+        # Complex series impedance Z = R + j*omega*L
+        z_ser = complex(r, omega * l)
+        # Complex shunt admittance Y = G + j*omega*C
+        y_sh = complex(g, omega * c)
+
+        # Characteristic impedance Z0 = sqrt(Z / Y)
+        z0 = (z_ser / y_sh) ** 0.5
+
+        # Propagation constant gamma = alpha + j*beta = sqrt(Z * Y)
+        gamma = (z_ser * y_sh) ** 0.5
+        alpha = gamma.real  # attenuation (Np/m)
+        beta = gamma.imag   # phase constant (rad/m)
+
+        alpha_db_per_m = alpha * 8.68589  # 1 Np = 8.68589 dB
+        wavelength_m = (2.0 * math.pi / beta) if beta > 1e-12 else float("inf")
+        v_phase_mps = (omega / beta) if beta > 1e-12 else float("inf")
+
+        # Voltage reflection coefficient Gamma = (ZL - Z0) / (ZL + Z0)
+        refl_coeff = (z_load - z0) / (z_load + z0)
+        gamma_mag = abs(refl_coeff)
+
+        # VSWR = (1 + |Gamma|) / (1 - |Gamma|)
+        vswr = (1.0 + gamma_mag) / max(1e-6, (1.0 - gamma_mag)) if gamma_mag < 0.999999 else 999.0
+        return_loss_db = -20.0 * math.log10(max(1e-6, gamma_mag)) if gamma_mag > 0 else 999.0
+
+        return {
+            "frequency_hz": f,
+            "z0_ohms_real": round(z0.real, 2),
+            "z0_ohms_imag": round(z0.imag, 2),
+            "attenuation_db_per_m": round(alpha_db_per_m, 6),
+            "phase_constant_rad_per_m": round(beta, 4),
+            "wavelength_m": round(wavelength_m, 4),
+            "phase_velocity_mps": round(v_phase_mps, 1),
+            "reflection_coefficient_mag": round(gamma_mag, 4),
+            "vswr": round(vswr, 3),
+            "return_loss_db": round(return_loss_db, 2),
+        }
+
+
+# ==============================================================================
+# STATE-SPACE RLC RESONANT NETWORK SIMULATOR
+# ==============================================================================
+
+class StateSpaceRLCSimulator:
+    """Transient state-space step response and resonant tuning of RLC circuits."""
+
+    @classmethod
+    def simulate_series_step(
+        cls,
+        r: float,
+        l: float,
+        c: float,
+        v_step: float = 5.0,
+        duration: float = 0.001,
+        steps: int = 50,
+    ) -> Dict[str, Any]:
+        r, l, c, v_in = float(r), float(l), float(c), float(v_step)
+        if l <= 0 or c <= 0:
+            raise ValueError("L and C must be positive")
+
+        w0 = 1.0 / math.sqrt(l * c)
+        alpha = r / (2.0 * l)
+        zeta = alpha / w0
+        q_factor = w0 * l / r if r > 0 else float("inf")
+
+        if zeta < 0.999:
+            regime = "underdamped"
+        elif zeta > 1.001:
+            regime = "overdamped"
+        else:
+            regime = "critically_damped"
+
+        dt = duration / steps
+        vc = 0.0
+        il = 0.0
+        voltages = []
+
+        for _ in range(steps):
+            voltages.append(round(vc, 3))
+            # dvc/dt = il / C
+            dvc = il / c
+            # dil/dt = (Vin - vc - R*il) / L
+            dil = (v_in - vc - r * il) / l
+
+            vc += dt * dvc
+            il += dt * dil
+
+        max_vc = max(voltages)
+        overshoot_pct = max(0.0, ((max_vc - v_in) / v_in) * 100.0) if v_in > 0 else 0.0
+
+        return {
+            "resonant_freq_hz": round(w0 / (2.0 * math.pi), 2),
+            "damping_ratio": round(zeta, 4),
+            "quality_factor": round(q_factor, 2),
+            "regime": regime,
+            "v_step": v_in,
+            "max_capacitor_voltage": round(max_vc, 3),
+            "overshoot_percent": round(overshoot_pct, 2),
+            "final_capacitor_voltage": round(vc, 3),
+        }
+
+
+def circuit_solve_diode(
+    v_source: float,
+    resistance: float,
+    i_sat: float = 1e-14,
+    ideality: float = 1.0,
+) -> Any:
+    """Solves non-linear Shockley diode DC operating point."""
+    return Record(NonlinearDiodeSolver.solve(v_source, resistance, i_sat=i_sat, ideality=ideality))
+
+
+def circuit_transmission_line(
+    r_per_m: float,
+    l_per_m: float,
+    g_per_m: float,
+    c_per_m: float,
+    freq_hz: float,
+    z_load_ohms: float = 50.0,
+) -> Any:
+    """Analyzes distributed RLGC transmission line parameters and VSWR."""
+    return Record(TransmissionLineRLGC.analyze(r_per_m, l_per_m, g_per_m, c_per_m, freq_hz, z_load=complex(z_load_ohms, 0.0)))
+
+
+def circuit_simulate_rlc_step(
+    r: float,
+    l: float,
+    c: float,
+    v_step: float = 5.0,
+    duration: float = 0.001,
+) -> Any:
+    """Simulates transient state-space step response of series RLC network."""
+    return Record(StateSpaceRLCSimulator.simulate_series_step(r, l, c, v_step=v_step, duration=duration))
+

@@ -155,6 +155,42 @@ class CircuitDomainParser(DomainParser):
             target = m_gpio_r.group(3).strip()
             return f"set {target} to circuit_gpio_read({board}, {pin})"
 
+        # solve diode circuit with v_source <vs> and resistance <r> into <target>
+        m_diode = re.match(
+            r"^solve\s+diode\s+circuit\s+with\s+v_source\s+(.+?)\s+and\s+resistance\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_diode:
+            vs, r, target = m_diode.group(1).strip(), m_diode.group(2).strip(), m_diode.group(3).strip()
+            return f"set {target} to circuit_solve_diode({vs}, {r})"
+
+        # analyze transmission line r <r> l <l> g <g> c <c> frequency <f> [with z_load <zl>] into <target>
+        m_tline = re.match(
+            r"^analyze\s+transmission\s+line\s+r\s+(.+?)\s+l\s+(.+?)\s+g\s+(.+?)\s+c\s+(.+?)\s+frequency\s+(.+?)(?:\s+with\s+z_load\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_tline:
+            r_val, l_val, g_val, c_val = m_tline.group(1).strip(), m_tline.group(2).strip(), m_tline.group(3).strip(), m_tline.group(4).strip()
+            f_val = m_tline.group(5).strip()
+            zl = m_tline.group(6).strip() if m_tline.group(6) else "50.0"
+            target = m_tline.group(7).strip()
+            return f"set {target} to circuit_transmission_line({r_val}, {l_val}, {g_val}, {c_val}, {f_val}, z_load_ohms={zl})"
+
+        # simulate rlc step response with r <r> l <l> c <c> [with v_step <vs>] [with duration <dur>] into <target>
+        m_rlc = re.match(
+            r"^simulate\s+rlc\s+step\s+response\s+with\s+r\s+(.+?)\s+l\s+(.+?)\s+c\s+(.+?)(?:\s+with\s+v_step\s+(.+?))?(?:\s+with\s+duration\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_rlc:
+            r_val, l_val, c_val = m_rlc.group(1).strip(), m_rlc.group(2).strip(), m_rlc.group(3).strip()
+            vs = m_rlc.group(4).strip() if m_rlc.group(4) else "5.0"
+            dur = m_rlc.group(5).strip() if m_rlc.group(5) else "0.001"
+            target = m_rlc.group(6).strip()
+            return f"set {target} to circuit_simulate_rlc_step({r_val}, {l_val}, {c_val}, v_step={vs}, duration={dur})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

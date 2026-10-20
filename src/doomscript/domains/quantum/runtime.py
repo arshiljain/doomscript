@@ -10,6 +10,7 @@ import math
 import random
 from typing import Any, Dict, List, Optional, Tuple, Set
 from doomscript.domains.base import DomainRuntime, DomainIR
+from doomscript.runtime import Record
 
 
 class QuantumRuntime(DomainRuntime):
@@ -507,5 +508,276 @@ class QuantumTeleportation:
 
 
 def quantum_grover_search(num_qubits: int = 3, target: int = 0) -> Any:
-    from doomscript.runtime import Record
     return Record(GroverSearch(int(num_qubits), int(target)).run_optimal())
+
+
+# ==============================================================================
+# DENSITY MATRIX & MIXED STATE ENTANGLEMENT SIMULATOR
+# ==============================================================================
+
+class DensityMatrixSimulator:
+    """Density matrix representation for pure and mixed quantum states.
+
+    Computes state purity, von Neumann entropy, partial trace, and entanglement.
+    """
+
+    def __init__(self, num_qubits: int):
+        self.num_qubits = max(1, min(6, int(num_qubits)))
+        self.dim = 1 << self.num_qubits
+        # Initialize to pure ground state |0...0><0...0|
+        self.matrix: List[List[complex]] = [[0.0 + 0.0j] * self.dim for _ in range(self.dim)]
+        self.matrix[0][0] = 1.0 + 0.0j
+
+    @classmethod
+    def from_statevector(cls, num_qubits: int, state: List[complex]) -> "DensityMatrixSimulator":
+        dm = cls(num_qubits)
+        dim = 1 << num_qubits
+        for i in range(dim):
+            for j in range(dim):
+                dm.matrix[i][j] = state[i] * state[j].conjugate()
+        return dm
+
+    @classmethod
+    def maximally_mixed(cls, num_qubits: int) -> "DensityMatrixSimulator":
+        dm = cls(num_qubits)
+        dim = 1 << num_qubits
+        prob = 1.0 / dim
+        dm.matrix = [[0.0 + 0.0j] * dim for _ in range(dim)]
+        for i in range(dim):
+            dm.matrix[i][i] = complex(prob, 0.0)
+        return dm
+
+    def trace(self) -> float:
+        """Computes Tr(rho)."""
+        tr = sum(self.matrix[i][i] for i in range(self.dim))
+        return round(tr.real, 6)
+
+    def purity(self) -> float:
+        """Computes Tr(rho^2). For pure states = 1.0, for mixed states < 1.0."""
+        pur = 0.0
+        for i in range(self.dim):
+            for j in range(self.dim):
+                pur += (self.matrix[i][j] * self.matrix[j][i]).real
+        return round(pur, 6)
+
+    def partial_trace_qubit(self, trace_qubit: int) -> List[List[complex]]:
+        """Traces out a single qubit to obtain the reduced density matrix."""
+        if self.num_qubits <= 1:
+            raise ValueError("Cannot partially trace a single qubit system")
+
+        reduced_qubits = self.num_qubits - 1
+        reduced_dim = 1 << reduced_qubits
+        reduced = [[0.0 + 0.0j] * reduced_dim for _ in range(reduced_dim)]
+
+        shift = trace_qubit
+        mask_low = (1 << shift) - 1
+        mask_high = ~((1 << (shift + 1)) - 1)
+
+        for i_red in range(reduced_dim):
+            for j_red in range(reduced_dim):
+                sum_val = 0.0 + 0.0j
+                for b in (0, 1):
+                    # Reconstruct full indices with qubit 'trace_qubit' set to b
+                    i_full = ((i_red & mask_high) << 1) | (b << shift) | (i_red & mask_low)
+                    j_full = ((j_red & mask_high) << 1) | (b << shift) | (j_red & mask_low)
+                    sum_val += self.matrix[i_full][j_full]
+                reduced[i_red][j_red] = sum_val
+
+        return reduced
+
+    def analyze(self) -> Dict[str, Any]:
+        pur = self.purity()
+        tr = self.trace()
+        is_pure = abs(pur - 1.0) < 1e-4
+
+        # 2x2 analytical eigenvalues for 1-qubit reduced subsystem
+        entropy = 0.0
+        if self.dim == 2:
+            a = self.matrix[0][0].real
+            d = self.matrix[1][1].real
+            bc = (self.matrix[0][1] * self.matrix[1][0]).real
+            disc = math.sqrt(max(0.0, ((a - d) ** 2) + 4.0 * bc))
+            l1 = max(0.0, min(1.0, 0.5 * (a + d + disc)))
+            l2 = max(0.0, min(1.0, 0.5 * (a + d - disc)))
+            for lam in (l1, l2):
+                if lam > 1e-12:
+                    entropy -= lam * math.log2(lam)
+        else:
+            # Linear entropy approximation S_L = 1 - Tr(rho^2)
+            entropy = max(0.0, 1.0 - pur)
+
+        return {
+            "num_qubits": self.num_qubits,
+            "dimension": self.dim,
+            "trace": tr,
+            "purity": pur,
+            "is_pure": is_pure,
+            "entropy": round(entropy, 4),
+        }
+
+
+# ==============================================================================
+# QUANTUM FOURIER TRANSFORM (QFT)
+# ==============================================================================
+
+class QuantumFourierTransform:
+    """Exact Discrete Quantum Fourier Transform and Inverse QFT."""
+
+    @classmethod
+    def apply(cls, state: List[complex], inverse: bool = False) -> List[complex]:
+        n = len(state)
+        if n == 0:
+            return []
+
+        sign = -1.0 if inverse else 1.0
+        factor = 1.0 / math.sqrt(n)
+        result: List[complex] = [0.0 + 0.0j] * n
+
+        for k in range(n):
+            acc = 0.0 + 0.0j
+            for j in range(n):
+                angle = sign * 2.0 * math.pi * j * k / n
+                phase = complex(math.cos(angle), math.sin(angle))
+                acc += state[j] * phase
+            result[k] = acc * factor
+
+        return result
+
+    @classmethod
+    def run_on_register(cls, reg: QuantumRegister, inverse: bool = False) -> Dict[str, Any]:
+        new_state = cls.apply(reg.state, inverse=inverse)
+        reg.state = new_state
+        probabilities = [round(abs(amp) ** 2, 6) for amp in new_state]
+        peak_idx = probabilities.index(max(probabilities))
+        return {
+            "num_qubits": reg.num_qubits,
+            "peak_index": peak_idx,
+            "peak_probability": max(probabilities),
+            "inverse": inverse,
+            "probabilities": probabilities,
+        }
+
+
+# ==============================================================================
+# VARIATIONAL QUANTUM EIGENSOLVER (VQE)
+# ==============================================================================
+
+class VariationalQuantumEigensolver:
+    """VQE ground state energy solver for 2-qubit molecular/spin Hamiltonians."""
+
+    def __init__(self, h_terms: Dict[str, float]):
+        """Hamiltonian specified as dict: e.g. {'II': -1.0, 'ZI': 0.5, 'IZ': 0.5, 'XX': 0.2, 'ZZ': 0.3}"""
+        self.h_terms = h_terms
+
+    def _state_from_angles(self, theta: List[float]) -> List[complex]:
+        # 2-qubit parameterized state:
+        # |00> -> Ry(theta[0]) x Ry(theta[1]) -> CNOT -> Ry(theta[2]) x Ry(theta[3])
+        c0, s0 = math.cos(theta[0] / 2.0), math.sin(theta[0] / 2.0)
+        c1, s1 = math.cos(theta[1] / 2.0), math.sin(theta[1] / 2.0)
+
+        # After first Ry layer on |00>:
+        # [c0*c1, c0*s1, s0*c1, s0*s1]
+        s = [c0 * c1, c0 * s1, s0 * c1, s0 * s1]
+
+        # CNOT(0 -> 1): flips target qubit 1 if control qubit 0 is 1
+        # |10> (idx 2) <-> |11> (idx 3)
+        s[2], s[3] = s[3], s[2]
+
+        # Second Ry layer
+        c2, s2 = math.cos(theta[2] / 2.0), math.sin(theta[2] / 2.0)
+        c3, s3 = math.cos(theta[3] / 2.0), math.sin(theta[3] / 2.0)
+
+        # Tensor product of rotation matrices Ry(theta2) x Ry(theta3) applied to s
+        m00, m01 = c2 * c3, -c2 * s3
+        m02, m03 = -s2 * c3, s2 * s3
+        # Direct calculation of final amplitudes
+        final_state = [0.0] * 4
+        # Ry2 on q0: [[c2, -s2], [s2, c2]]
+        # Ry3 on q1: [[c3, -s3], [s3, c3]]
+        # Combine manually for exact precision:
+        q0_u = [[c2, -s2], [s2, c2]]
+        q1_u = [[c3, -s3], [s3, c3]]
+        for i in range(2):
+            for j in range(2):
+                idx_out = (i << 1) | j
+                acc = 0.0
+                for k in range(2):
+                    for l in range(2):
+                        idx_in = (k << 1) | l
+                        acc += q0_u[i][k] * q1_u[j][l] * s[idx_in]
+                final_state[idx_out] = acc
+
+        return [complex(val, 0.0) for val in final_state]
+
+    def energy(self, theta: List[float]) -> float:
+        """Evaluates expectation value <psi(theta)|H|psi(theta)>."""
+        psi = self._state_from_angles(theta)
+        total_energy = 0.0
+
+        for pauli, coeff in self.h_terms.items():
+            pauli = pauli.upper()
+            exp_val = 0.0
+            if pauli == "II":
+                exp_val = 1.0
+            elif pauli == "ZI":
+                exp_val = abs(psi[0]) ** 2 + abs(psi[1]) ** 2 - abs(psi[2]) ** 2 - abs(psi[3]) ** 2
+            elif pauli == "IZ":
+                exp_val = abs(psi[0]) ** 2 - abs(psi[1]) ** 2 + abs(psi[2]) ** 2 - abs(psi[3]) ** 2
+            elif pauli == "ZZ":
+                exp_val = abs(psi[0]) ** 2 - abs(psi[1]) ** 2 - abs(psi[2]) ** 2 + abs(psi[3]) ** 2
+            elif pauli == "XX":
+                # X0X1 flips both qubits: 00 <-> 11, 01 <-> 10
+                exp_val = 2.0 * (psi[0].conjugate() * psi[3] + psi[1].conjugate() * psi[2]).real
+            total_energy += coeff * exp_val
+
+        return total_energy
+
+    def optimize(self, initial_angles: Optional[List[float]] = None, iterations: int = 40, lr: float = 0.2) -> Dict[str, Any]:
+        """Gradient descent optimization of ansatz parameters."""
+        theta = list(initial_angles) if initial_angles is not None else [0.5, 0.5, 0.5, 0.5]
+        best_e = self.energy(theta)
+        eps = 1e-4
+
+        for _ in range(iterations):
+            grad = [0.0] * 4
+            current_e = self.energy(theta)
+            for d in range(4):
+                theta_plus = list(theta)
+                theta_plus[d] += eps
+                e_plus = self.energy(theta_plus)
+                grad[d] = (e_plus - current_e) / eps
+
+            # Update parameters
+            for d in range(4):
+                theta[d] -= lr * grad[d]
+
+            new_e = self.energy(theta)
+            if new_e < best_e:
+                best_e = new_e
+
+        return {
+            "optimal_energy": round(best_e, 4),
+            "optimal_parameters": [round(th, 4) for th in theta],
+            "iterations": iterations,
+        }
+
+
+def quantum_density_matrix_analyze(num_qubits: int, state_vector: Optional[List[complex]] = None) -> Any:
+    """Analyzes purity, trace, and entropy of pure or mixed quantum state."""
+    if state_vector is not None:
+        dm = DensityMatrixSimulator.from_statevector(num_qubits, state_vector)
+    else:
+        dm = DensityMatrixSimulator(num_qubits)
+    return Record(dm.analyze())
+
+
+def quantum_apply_qft(reg: QuantumRegister, inverse: bool = False) -> Any:
+    """Executes Quantum Fourier Transform on quantum register."""
+    return Record(QuantumFourierTransform.run_on_register(reg, inverse=inverse))
+
+
+def quantum_vqe_ground_state(hamiltonian_terms: Dict[str, float], iterations: int = 40) -> Any:
+    """Computes ground state energy of Hamiltonian using Variational Quantum Eigensolver."""
+    vqe = VariationalQuantumEigensolver(hamiltonian_terms)
+    return Record(vqe.optimize(iterations=iterations))
+

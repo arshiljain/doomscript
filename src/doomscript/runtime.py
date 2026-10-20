@@ -3234,6 +3234,12 @@ from doomscript.domains.physics.runtime import (
     physics_barnes_hut_step,
     physics_resolve_collision,
     physics_van_der_waals_pressure,
+    ClothLatticeSimulation,
+    RigidBody3DInertia,
+    FluidSPH,
+    physics_simulate_cloth,
+    physics_rigid_body_3d,
+    physics_simulate_sph,
 )
 physics_trajectory = physics_projectile_trajectory
 physics_ballistic_range = physics_projectile_range
@@ -3315,6 +3321,12 @@ from doomscript.domains.quantum.runtime import (
     GroverSearch,
     QuantumTeleportation,
     quantum_grover_search,
+    DensityMatrixSimulator,
+    QuantumFourierTransform,
+    VariationalQuantumEigensolver,
+    quantum_density_matrix_analyze,
+    quantum_apply_qft,
+    quantum_vqe_ground_state,
 )
 quantum_register_create = quantum_create_register
 quantum_apply_hadamard = quantum_apply_h
@@ -3343,6 +3355,12 @@ from doomscript.domains.circuit.runtime import (
     circuit_mna_dc_solve,
     circuit_bode_plot,
     circuit_opamp_amplify,
+    NonlinearDiodeSolver,
+    TransmissionLineRLGC,
+    StateSpaceRLCSimulator,
+    circuit_solve_diode,
+    circuit_transmission_line,
+    circuit_simulate_rlc_step,
 )
 
 from doomscript.domains.chain.runtime import (

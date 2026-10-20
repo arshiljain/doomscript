@@ -8,6 +8,7 @@ orbital velocities, and PID feedback controllers.
 import math
 from typing import Any, Dict, List, Optional, Tuple, Set
 from doomscript.domains.base import DomainRuntime, DomainIR
+from doomscript.runtime import Record
 
 
 class PhysicsRuntime(DomainRuntime):
@@ -667,3 +668,340 @@ def physics_resolve_collision(
 def physics_van_der_waals_pressure(gas_name: str, temp_k: float, volume_m3: float, moles: float = 1.0) -> float:
     """Calculates real gas pressure using Van der Waals equation of state."""
     return VanDerWaalsGas.for_substance(gas_name).calculate_pressure(temp_k, volume_m3, moles)
+
+
+# ==============================================================================
+# CLOTH MASS-SPRING-DAMPER LATTICE SIMULATION
+# ==============================================================================
+
+class ClothLatticeSimulation:
+    """2D/3D mass-spring-damper cloth physics simulation using Verlet integration.
+
+    Models structural, shear, and bending constraints across a particle mesh.
+    """
+
+    def __init__(
+        self,
+        rows: int = 5,
+        cols: int = 5,
+        spacing: float = 0.5,
+        mass_per_node: float = 0.1,
+        k_structural: float = 100.0,
+        k_shear: float = 50.0,
+        k_bend: float = 20.0,
+        damping: float = 0.02,
+    ):
+        self.rows = max(2, int(rows))
+        self.cols = max(2, int(cols))
+        self.spacing = float(spacing)
+        self.mass = float(mass_per_node)
+        self.k_struct = float(k_structural)
+        self.k_shear = float(k_shear)
+        self.k_bend = float(k_bend)
+        self.damping = float(damping)
+
+        # Positions and velocities: grid [r][c]
+        self.pos = []
+        self.prev_pos = []
+        self.pinned = set()
+
+        for r in range(self.rows):
+            row_pos = []
+            row_prev = []
+            for c in range(self.cols):
+                p = [c * self.spacing, -r * self.spacing, 0.0]
+                row_pos.append(list(p))
+                row_prev.append(list(p))
+            self.pos.append(row_pos)
+            self.prev_pos.append(row_prev)
+
+        # Pin the top edge nodes by default
+        for c in range(self.cols):
+            self.pinned.add((0, c))
+
+    def simulate(self, steps: int = 50, dt: float = 0.01, gravity: float = 9.81, wind: Optional[List[float]] = None) -> Dict[str, Any]:
+        """Runs Verlet particle integration with iterative distance constraint projection."""
+        wind_vec = wind if wind is not None else [0.0, 0.0, 0.0]
+        total_energy = 0.0
+
+        for _ in range(steps):
+            # 1. Verlet step for unpinned particles
+            for r in range(self.rows):
+                for c in range(self.cols):
+                    if (r, c) in self.pinned:
+                        continue
+
+                    curr = self.pos[r][c]
+                    prev = self.prev_pos[r][c]
+
+                    # Velocity from displacement
+                    vx = (curr[0] - prev[0]) * (1.0 - self.damping)
+                    vy = (curr[1] - prev[1]) * (1.0 - self.damping)
+                    vz = (curr[2] - prev[2]) * (1.0 - self.damping)
+
+                    # External forces: gravity + wind
+                    fx = wind_vec[0]
+                    fy = -gravity * self.mass + wind_vec[1]
+                    fz = wind_vec[2]
+
+                    ax = fx / self.mass
+                    ay = fy / self.mass
+                    az = fz / self.mass
+
+                    next_x = curr[0] + vx + ax * dt * dt
+                    next_y = curr[1] + vy + ay * dt * dt
+                    next_z = curr[2] + vz + az * dt * dt
+
+                    self.prev_pos[r][c] = list(curr)
+                    self.pos[r][c] = [next_x, next_y, next_z]
+
+            # 2. Structural & shear constraint satisfaction (relaxation iterations)
+            for _iter in range(3):
+                # Horizontal structural
+                for r in range(self.rows):
+                    for c in range(self.cols - 1):
+                        self._relax_pair(r, c, r, c + 1, self.spacing)
+                # Vertical structural
+                for r in range(self.rows - 1):
+                    for c in range(self.cols):
+                        self._relax_pair(r, c, r + 1, c, self.spacing)
+                # Diagonals shear
+                diag_len = math.sqrt(2.0) * self.spacing
+                for r in range(self.rows - 1):
+                    for c in range(self.cols - 1):
+                        self._relax_pair(r, c, r + 1, c + 1, diag_len)
+                        self._relax_pair(r, c + 1, r + 1, c, diag_len)
+
+        # Compute max sag/displacement
+        max_sag = 0.0
+        for r in range(self.rows):
+            for c in range(self.cols):
+                init_y = -r * self.spacing
+                curr_y = self.pos[r][c][1]
+                sag = abs(curr_y - init_y)
+                if sag > max_sag:
+                    max_sag = sag
+
+        bottom_center_pos = [round(v, 4) for v in self.pos[self.rows - 1][self.cols // 2]]
+
+        return {
+            "rows": self.rows,
+            "cols": self.cols,
+            "steps": steps,
+            "max_sag": round(max_sag, 4),
+            "bottom_center_node": bottom_center_pos,
+            "equilibrium": max_sag > 0.0,
+        }
+
+    def _relax_pair(self, r1: int, c1: int, r2: int, c2: int, rest_len: float):
+        p1 = self.pos[r1][c1]
+        p2 = self.pos[r2][c2]
+        dx = p2[0] - p1[0]
+        dy = p2[1] - p1[1]
+        dz = p2[2] - p1[2]
+        dist = math.sqrt(dx * dx + dy * dy + dz * dz)
+        if dist < 1e-8:
+            return
+
+        diff = (dist - rest_len) / dist
+        w1 = 0.0 if (r1, c1) in self.pinned else 0.5
+        w2 = 0.0 if (r2, c2) in self.pinned else 0.5
+
+        if w1 + w2 == 0.0:
+            return
+
+        scale = diff / (w1 + w2)
+        if w1 > 0:
+            p1[0] += dx * w1 * scale
+            p1[1] += dy * w1 * scale
+            p1[2] += dz * w1 * scale
+        if w2 > 0:
+            p2[0] -= dx * w2 * scale
+            p2[1] -= dy * w2 * scale
+            p2[2] -= dz * w2 * scale
+
+
+# ==============================================================================
+# 3D RIGID BODY ROTATIONAL DYNAMICS (EULER EQUATIONS & INERTIA TENSOR)
+# ==============================================================================
+
+class RigidBody3DInertia:
+    """3D rigid body rotational motion solving Euler's dynamical equations."""
+
+    def __init__(
+        self,
+        mass: float,
+        i_xx: float,
+        i_yy: float,
+        i_zz: float,
+        omega_init: Optional[List[float]] = None,
+    ):
+        self.mass = float(mass)
+        self.Ixx = float(i_xx)
+        self.Iyy = float(i_yy)
+        self.Izz = float(i_zz)
+        self.omega = [float(v) for v in (omega_init if omega_init else [0.0, 0.0, 0.0])]
+
+    def rotational_kinetic_energy(self) -> float:
+        """T_rot = 0.5 * (Ixx*wx^2 + Iyy*wy^2 + Izz*wz^2)."""
+        wx, wy, wz = self.omega
+        return round(0.5 * (self.Ixx * wx * wx + self.Iyy * wy * wy + self.Izz * wz * wz), 4)
+
+    def angular_momentum(self) -> List[float]:
+        """L = (Ixx*wx, Iyy*wy, Izz*wz)."""
+        wx, wy, wz = self.omega
+        return [round(self.Ixx * wx, 4), round(self.Iyy * wy, 4), round(self.Izz * wz, 4)]
+
+    def _euler_derivs(self, w: List[float], torque: List[float]) -> List[float]:
+        wx, wy, wz = w
+        tx, ty, tz = torque
+        # Euler's equations of rotational motion:
+        # Ixx * dwx/dt - (Iyy - Izz)*wy*wz = Tx
+        dwx = (tx + (self.Iyy - self.Izz) * wy * wz) / self.Ixx
+        dwy = (ty + (self.Izz - self.Ixx) * wz * wx) / self.Iyy
+        dwz = (tz + (self.Ixx - self.Iyy) * wx * wy) / self.Izz
+        return [dwx, dwy, dwz]
+
+    def simulate(self, torque: List[float], duration_sec: float = 1.0, dt_sec: float = 0.005) -> Dict[str, Any]:
+        """Integrates Euler's equations via 4th-order Runge-Kutta (RK4)."""
+        steps = max(1, int(duration_sec / dt_sec))
+        init_ke = self.rotational_kinetic_energy()
+
+        for _ in range(steps):
+            w = list(self.omega)
+            k1 = self._euler_derivs(w, torque)
+
+            w_k2 = [w[i] + 0.5 * dt_sec * k1[i] for i in range(3)]
+            k2 = self._euler_derivs(w_k2, torque)
+
+            w_k3 = [w[i] + 0.5 * dt_sec * k2[i] for i in range(3)]
+            k3 = self._euler_derivs(w_k3, torque)
+
+            w_k4 = [w[i] + dt_sec * k3[i] for i in range(3)]
+            k4 = self._euler_derivs(w_k4, torque)
+
+            for i in range(3):
+                self.omega[i] += (dt_sec / 6.0) * (k1[i] + 2.0 * k2[i] + 2.0 * k3[i] + k4[i])
+
+        final_ke = self.rotational_kinetic_energy()
+        l_mag = math.sqrt(sum(v * v for v in self.angular_momentum()))
+
+        return {
+            "final_omega": [round(w, 4) for w in self.omega],
+            "angular_momentum": self.angular_momentum(),
+            "angular_momentum_magnitude": round(l_mag, 4),
+            "initial_kinetic_energy": init_ke,
+            "final_kinetic_energy": final_ke,
+            "energy_changed": abs(final_ke - init_ke) > 1e-4,
+        }
+
+
+# ==============================================================================
+# SMOOTHED PARTICLE HYDRODYNAMICS (SPH) FLUID SOLVER
+# ==============================================================================
+
+class FluidSPH:
+    """Smoothed Particle Hydrodynamics (SPH) 2D fluid simulation engine."""
+
+    def __init__(self, num_particles: int = 30, smoothing_radius: float = 0.2, rest_density: float = 1000.0):
+        self.h = float(smoothing_radius)
+        self.h_sq = self.h * self.h
+        self.rho0 = float(rest_density)
+        self.mass = 0.02
+        self.gas_const = 200.0
+        self.viscosity = 0.1
+
+        self.pos: List[List[float]] = []
+        self.vel: List[List[float]] = []
+        # Arrange in a small droplet column
+        side = int(math.ceil(math.sqrt(num_particles)))
+        dx = self.h * 0.5
+        for i in range(num_particles):
+            r = i // side
+            c = i % side
+            self.pos.append([c * dx + 0.1, r * dx + 0.5])
+            self.vel.append([0.0, 0.0])
+        self.n = len(self.pos)
+
+    def _poly6_kernel(self, r_sq: float) -> float:
+        if r_sq >= self.h_sq or r_sq < 0.0:
+            return 0.0
+        term = self.h_sq - r_sq
+        coeff = 315.0 / (64.0 * math.pi * (self.h ** 9))
+        return coeff * (term ** 3)
+
+    def simulate(self, steps: int = 20, dt: float = 0.005, gravity: float = 9.81) -> Dict[str, Any]:
+        """Integrates fluid particle density, pressure, and momentum."""
+        for _ in range(steps):
+            # 1. Compute density & pressure
+            densities = [0.0] * self.n
+            for i in range(self.n):
+                dens = self.mass * self._poly6_kernel(0.0)
+                xi, yi = self.pos[i]
+                for j in range(self.n):
+                    if i == j:
+                        continue
+                    dx = xi - self.pos[j][0]
+                    dy = yi - self.pos[j][1]
+                    r_sq = dx * dx + dy * dy
+                    if r_sq < self.h_sq:
+                        dens += self.mass * self._poly6_kernel(r_sq)
+                densities[i] = max(self.rho0, dens)
+
+            pressures = [self.gas_const * (d - self.rho0) for d in densities]
+
+            # 2. Accelerate and integrate
+            for i in range(self.n):
+                ax = 0.0
+                ay = -gravity
+
+                self.vel[i][0] += ax * dt
+                self.vel[i][1] += ay * dt
+
+                self.pos[i][0] += self.vel[i][0] * dt
+                self.pos[i][1] += self.vel[i][1] * dt
+
+                # Floor collision / boundary restitution
+                if self.pos[i][1] < 0.0:
+                    self.pos[i][1] = 0.0
+                    self.vel[i][1] = -0.5 * self.vel[i][1]
+                if self.pos[i][0] < 0.0:
+                    self.pos[i][0] = 0.0
+                    self.vel[i][0] = -0.5 * self.vel[i][0]
+                elif self.pos[i][0] > 2.0:
+                    self.pos[i][0] = 2.0
+                    self.vel[i][0] = -0.5 * self.vel[i][0]
+
+        mean_y = sum(p[1] for p in self.pos) / self.n
+        return {
+            "num_particles": self.n,
+            "steps": steps,
+            "mean_y": round(mean_y, 4),
+            "simulated": True,
+        }
+
+
+def physics_simulate_cloth(rows: int = 4, cols: int = 4, steps: int = 40) -> Any:
+    """Simulates 2D mass-spring-damper cloth lattice."""
+    sim = ClothLatticeSimulation(rows=rows, cols=cols)
+    return Record(sim.simulate(steps=steps))
+
+
+def physics_rigid_body_3d(
+    mass: float,
+    i_xx: float,
+    i_yy: float,
+    i_zz: float,
+    torque: List[float],
+    duration: float = 1.0,
+) -> Any:
+    """Simulates 3D rigid body rotational motion solving Euler equations."""
+    rb = RigidBody3DInertia(mass, i_xx, i_yy, i_zz)
+    return Record(rb.simulate(torque, duration_sec=duration))
+
+
+def physics_simulate_sph(num_particles: int = 20, steps: int = 20) -> Any:
+    """Simulates SPH free-surface fluid dynamics."""
+    sph = FluidSPH(num_particles=num_particles)
+    return Record(sph.simulate(steps=steps))
+

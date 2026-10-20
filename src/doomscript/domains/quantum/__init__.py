@@ -30,6 +30,12 @@ from doomscript.domains.quantum.runtime import (
     QuantumErrorCorrection,
     GroverSearch,
     QuantumTeleportation,
+    DensityMatrixSimulator,
+    QuantumFourierTransform,
+    VariationalQuantumEigensolver,
+    quantum_density_matrix_analyze,
+    quantum_apply_qft,
+    quantum_vqe_ground_state,
 )
 from doomscript.domains.quantum.parser import QuantumDomainParser
 from doomscript.domains.quantum.exporter import QuantumASTExporter
@@ -113,4 +119,10 @@ __all__ = [
     "QuantumErrorCorrection",
     "GroverSearch",
     "QuantumTeleportation",
+    "DensityMatrixSimulator",
+    "QuantumFourierTransform",
+    "VariationalQuantumEigensolver",
+    "quantum_density_matrix_analyze",
+    "quantum_apply_qft",
+    "quantum_vqe_ground_state",
 ]
