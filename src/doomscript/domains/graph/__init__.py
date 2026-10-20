@@ -54,6 +54,9 @@ from doomscript.domains.graph.runtime import (
     graph_tarjan_scc,
     graph_mst,
     graph_johnson_apsp,
+    graph_hopcroft_karp,
+    graph_eulerian_path,
+    graph_boruvka_mst,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.graph.exporter import GraphASTExporter
@@ -240,5 +243,8 @@ __all__ = [
     "graph_tarjan_scc",
     "graph_mst",
     "graph_johnson_apsp",
+    "graph_hopcroft_karp",
+    "graph_eulerian_path",
+    "graph_boruvka_mst",
 ]
 

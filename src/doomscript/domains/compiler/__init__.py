@@ -24,6 +24,12 @@ from doomscript.domains.compiler.runtime import (
     PrattParser,
     compiler_run_bytecode,
     compiler_assemble_string,
+    LALR1Parser,
+    SSAFormBuilder,
+    ChaitinRegisterAllocator,
+    compiler_lalr1_parse,
+    compiler_build_ssa,
+    compiler_allocate_registers,
 )
 from doomscript.domains.compiler.parser import CompilerDomainParser
 from doomscript.domains.compiler.exporter import CompilerASTExporter
@@ -98,4 +104,10 @@ __all__ = [
     "compiler_run_bytecode",
     "compiler_assemble_string",
     "compiler_parse_pratt",
+    "LALR1Parser",
+    "SSAFormBuilder",
+    "ChaitinRegisterAllocator",
+    "compiler_lalr1_parse",
+    "compiler_build_ssa",
+    "compiler_allocate_registers",
 ]

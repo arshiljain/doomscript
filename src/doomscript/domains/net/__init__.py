@@ -44,6 +44,12 @@ from doomscript.domains.net.runtime import (
     DNSWireProtocol,
     net_dns_build_query,
     net_dns_parse_packet,
+    TLS13ClientHelloParser,
+    SOCKS5Protocol,
+    CIDRPrefixTrie,
+    net_parse_tls_client_hello,
+    net_build_socks5_response,
+    net_create_cidr_trie,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.net.exporter import NetASTExporter
@@ -208,4 +214,10 @@ __all__ = [
     "DNSWireProtocol",
     "net_dns_build_query",
     "net_dns_parse_packet",
+    "TLS13ClientHelloParser",
+    "SOCKS5Protocol",
+    "CIDRPrefixTrie",
+    "net_parse_tls_client_hello",
+    "net_build_socks5_response",
+    "net_create_cidr_trie",
 ]

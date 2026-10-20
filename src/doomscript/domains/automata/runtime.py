@@ -432,3 +432,331 @@ def automata_run_turing_machine(
     """Simulates a Turing Machine."""
     tm = TuringMachine(transitions, tape, start_state, set(accept_states or ["q_accept"]))
     return tm.run(max_steps)
+
+
+# --- 5. Pushdown Automaton (PDA) ---
+
+class PushdownAutomaton:
+    """Non-deterministic Pushdown Automaton (PDA) with epsilon-transitions.
+    
+    Acceptance modes:
+    - 'final_state': accepts if input is consumed and state is in accept_states
+    - 'empty_stack': accepts if input is consumed and stack is empty
+    - 'both': accepts if input is consumed, state is in accept_states, and stack is empty
+    """
+
+    def __init__(
+        self,
+        states: Set[str],
+        input_alphabet: Set[str],
+        stack_alphabet: Set[str],
+        transitions: Dict[Tuple[str, str, str], List[Tuple[str, List[str]]]],
+        start_state: str,
+        start_stack_symbol: str = "Z0",
+        accept_states: Optional[Set[str]] = None,
+        acceptance_mode: str = "final_state",
+    ):
+        self.states = set(states)
+        self.input_alphabet = set(input_alphabet)
+        self.stack_alphabet = set(stack_alphabet)
+        # key: (current_state, input_char_or_empty, stack_top) -> [(next_state, [pushed_symbols])]
+        self.transitions = dict(transitions)
+        self.start_state = start_state
+        self.start_stack_symbol = start_stack_symbol
+        self.accept_states = set(accept_states or set())
+        self.acceptance_mode = acceptance_mode.lower()
+
+    def accepts(self, input_str: str, max_steps: int = 2000) -> bool:
+        """Determines if the PDA accepts input_str using breadth-first search."""
+        # Queue item: (current_state, char_index, stack_tuple)
+        init_stack = (self.start_stack_symbol,) if self.start_stack_symbol else ()
+        queue = deque([(self.start_state, 0, init_stack)])
+        visited = set()
+        steps = 0
+
+        while queue and steps < max_steps:
+            steps += 1
+            state, idx, stack = queue.popleft()
+            config_key = (state, idx, stack)
+            if config_key in visited:
+                continue
+            visited.add(config_key)
+
+            # Check acceptance condition if entire input is consumed
+            if idx == len(input_str):
+                if self.acceptance_mode == "final_state" and state in self.accept_states:
+                    return True
+                elif self.acceptance_mode == "empty_stack" and len(stack) == 0:
+                    return True
+                elif self.acceptance_mode == "both" and state in self.accept_states and len(stack) == 0:
+                    return True
+
+            top = stack[-1] if stack else ""
+
+            # 1. Epsilon transitions (no input symbol consumed)
+            for (q_cur, in_sym, s_top), targets in self.transitions.items():
+                if q_cur == state and in_sym == "" and (s_top == "" or s_top == top):
+                    for next_q, push_symbols in targets:
+                        base_stack = stack[:-1] if (s_top != "" and stack) else stack
+                        new_stack = base_stack + tuple(push_symbols)
+                        queue.append((next_q, idx, new_stack))
+
+            # 2. Consuming transitions (read next character from input_str)
+            if idx < len(input_str):
+                curr_char = input_str[idx]
+                for (q_cur, in_sym, s_top), targets in self.transitions.items():
+                    if q_cur == state and in_sym == curr_char and (s_top == "" or s_top == top):
+                        for next_q, push_symbols in targets:
+                            base_stack = stack[:-1] if (s_top != "" and stack) else stack
+                            new_stack = base_stack + tuple(push_symbols)
+                            queue.append((next_q, idx + 1, new_stack))
+
+        return False
+
+
+# --- 6. Moore & Mealy Finite State Machines ---
+
+class MooreMealyFSM:
+    """Synchronous finite state machine supporting both Moore and Mealy models."""
+
+    def __init__(
+        self,
+        machine_type: str = "moore",
+        states: Optional[Set[str]] = None,
+        alphabet: Optional[Set[str]] = None,
+        transitions: Optional[Dict[Tuple[str, str], str]] = None,
+        outputs: Optional[Dict[Any, Any]] = None,
+        start_state: str = "s0",
+    ):
+        self.machine_type = machine_type.lower()
+        self.states = set(states or set())
+        self.alphabet = set(alphabet or set())
+        self.transitions = dict(transitions or {})
+        self.outputs = dict(outputs or {})
+        self.start_state = start_state
+        self.current_state = start_state
+
+    def reset(self):
+        self.current_state = self.start_state
+
+    def step(self, sym: str) -> Tuple[str, Any]:
+        """Executes a single step given input symbol and returns (new_state, output)."""
+        key = (self.current_state, sym)
+        if key not in self.transitions:
+            raise ValueError(f"No transition defined for state '{self.current_state}' on symbol '{sym}'")
+        next_state = self.transitions[key]
+
+        if self.machine_type == "moore":
+            output_val = self.outputs.get(next_state)
+        else:  # mealy
+            output_val = self.outputs.get((self.current_state, sym))
+
+        self.current_state = next_state
+        return (next_state, output_val)
+
+    def run(self, input_sequence: Union[str, List[str]]) -> Dict[str, Any]:
+        """Runs the machine on an input sequence and returns state history and outputs."""
+        self.reset()
+        history_states = [self.current_state]
+        history_outputs = []
+
+        if self.machine_type == "moore":
+            # Initial state output
+            history_outputs.append(self.outputs.get(self.current_state))
+
+        for sym in input_sequence:
+            next_s, out_val = self.step(sym)
+            history_states.append(next_s)
+            history_outputs.append(out_val)
+
+        return {
+            "machine_type": self.machine_type,
+            "final_state": self.current_state,
+            "states": history_states,
+            "outputs": history_outputs,
+        }
+
+    def to_mealy(self) -> MooreMealyFSM:
+        """Converts a Moore machine to an equivalent Mealy machine."""
+        if self.machine_type == "mealy":
+            return self
+        mealy_outputs = {}
+        for (st, sym), next_st in self.transitions.items():
+            mealy_outputs[(st, sym)] = self.outputs.get(next_st)
+        return MooreMealyFSM(
+            machine_type="mealy",
+            states=set(self.states),
+            alphabet=set(self.alphabet),
+            transitions=dict(self.transitions),
+            outputs=mealy_outputs,
+            start_state=self.start_state,
+        )
+
+
+# --- 7. Büchi Automaton (Infinite Word Recognition) ---
+
+class BuchiAutomaton:
+    """Nondeterministic Büchi Automaton (NBA) over infinite words.
+    
+    Recognizes omega-words structured as lasso words: u . v^omega (prefix u, repeating cycle v).
+    """
+
+    def __init__(
+        self,
+        states: Set[str],
+        alphabet: Set[str],
+        transitions: Dict[Tuple[str, str], Set[str]],
+        start_state: str,
+        accept_states: Set[str],
+    ):
+        self.states = set(states)
+        self.alphabet = set(alphabet)
+        self.transitions = dict(transitions)
+        self.start_state = start_state
+        self.accept_states = set(accept_states)
+
+    def accepts_lasso(self, prefix: Union[str, List[str]], cycle: Union[str, List[str]]) -> bool:
+        """Determines if the Büchi automaton accepts the lasso word prefix . cycle^omega."""
+        # 1. Compute reachable states after prefix
+        current_states = {self.start_state}
+        for sym in prefix:
+            next_states = set()
+            for s in current_states:
+                targets = self.transitions.get((s, sym), set())
+                next_states.update(targets)
+            current_states = next_states
+            if not current_states:
+                return False
+
+        # 2. For each state reachable after prefix, check if reading cycle can loop back
+        #    to itself while traversing at least one accept state
+        for pivot in current_states:
+            # Queue of (current_state, visited_accept)
+            configs = {(pivot, pivot in self.accept_states)}
+            for sym in cycle:
+                next_configs = set()
+                for cur_s, seen_accept in configs:
+                    for nxt in self.transitions.get((cur_s, sym), set()):
+                        next_configs.add((nxt, seen_accept or (nxt in self.accept_states)))
+                configs = next_configs
+                if not configs:
+                    break
+
+            # If pivot is reachable from itself with seen_accept == True, lasso is accepted!
+            if (pivot, True) in configs:
+                return True
+
+        return False
+
+    def is_empty(self) -> Dict[str, Any]:
+        """Checks language emptiness by finding reachable cycles containing an accepting state."""
+        # BFS from start to find all reachable states
+        visited_from_start = set()
+        queue = deque([self.start_state])
+        while queue:
+            s = queue.popleft()
+            if s not in visited_from_start:
+                visited_from_start.add(s)
+                for (src, _), tgts in self.transitions.items():
+                    if src == s:
+                        for t in tgts:
+                            if t not in visited_from_start:
+                                queue.append(t)
+
+        # For each reachable accept state, check if it can reach itself (non-trivial cycle)
+        reachable_accept = visited_from_start.intersection(self.accept_states)
+        for acc in reachable_accept:
+            cycle_q = deque([acc])
+            seen_cycle = set()
+            first = True
+            while cycle_q:
+                curr = cycle_q.popleft()
+                if curr == acc and not first:
+                    return {
+                        "is_empty": False,
+                        "accepting_state": acc,
+                    }
+                first = False
+                if curr not in seen_cycle:
+                    seen_cycle.add(curr)
+                    for (src, _), tgts in self.transitions.items():
+                        if src == curr:
+                            for t in tgts:
+                                if t == acc or t not in seen_cycle:
+                                    cycle_q.append(t)
+
+        return {"is_empty": True, "accepting_state": None}
+
+
+# --- Public High-Level Runtime Functions for PDA, FSM, Büchi ---
+
+def automata_create_pda(
+    states: List[str],
+    input_alphabet: List[str],
+    stack_alphabet: List[str],
+    transitions: Dict[Tuple[str, str, str], List[Tuple[str, List[str]]]],
+    start_state: str,
+    start_stack_symbol: str = "Z0",
+    accept_states: Optional[List[str]] = None,
+    acceptance_mode: str = "final_state",
+) -> PushdownAutomaton:
+    """Creates a Pushdown Automaton."""
+    return PushdownAutomaton(
+        set(states),
+        set(input_alphabet),
+        set(stack_alphabet),
+        transitions,
+        start_state,
+        start_stack_symbol,
+        set(accept_states or []),
+        acceptance_mode,
+    )
+
+
+def automata_pda_accepts(pda: PushdownAutomaton, input_str: str) -> bool:
+    """Evaluates whether PDA accepts input string."""
+    return pda.accepts(input_str)
+
+
+def automata_create_moore_fsm(
+    states: List[str],
+    alphabet: List[str],
+    transitions: Dict[Tuple[str, str], str],
+    outputs: Dict[str, Any],
+    start_state: str,
+) -> MooreMealyFSM:
+    """Creates a Moore Finite State Machine."""
+    return MooreMealyFSM("moore", set(states), set(alphabet), transitions, outputs, start_state)
+
+
+def automata_create_mealy_fsm(
+    states: List[str],
+    alphabet: List[str],
+    transitions: Dict[Tuple[str, str], str],
+    outputs: Dict[Tuple[str, str], Any],
+    start_state: str,
+) -> MooreMealyFSM:
+    """Creates a Mealy Finite State Machine."""
+    return MooreMealyFSM("mealy", set(states), set(alphabet), transitions, outputs, start_state)
+
+
+def automata_run_fsm(fsm: MooreMealyFSM, input_sequence: Union[str, List[str]]) -> Dict[str, Any]:
+    """Runs a Moore or Mealy FSM on an input sequence."""
+    return fsm.run(input_sequence)
+
+
+def automata_create_buchi(
+    states: List[str],
+    alphabet: List[str],
+    transitions: Dict[Tuple[str, str], Set[str]],
+    start_state: str,
+    accept_states: List[str],
+) -> BuchiAutomaton:
+    """Creates a Büchi Automaton."""
+    return BuchiAutomaton(set(states), set(alphabet), transitions, start_state, set(accept_states))
+
+
+def automata_buchi_accepts_cycle(buchi: BuchiAutomaton, prefix: str, cycle: str) -> bool:
+    """Tests if a Büchi automaton accepts the infinite periodic lasso word prefix . cycle^omega."""
+    return buchi.accepts_lasso(prefix, cycle)
+

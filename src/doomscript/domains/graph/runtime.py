@@ -1225,4 +1225,357 @@ def graph_johnson_apsp(g: Any) -> Dict[str, Any]:
     return {"distances": apsp, "has_negative_cycle": False}
 
 
+# =========================================================================
+# Cluster A Deepened Graph Algorithms: Tarjan SCC, Hopcroft-Karp, Euler, Boruvka
+# =========================================================================
+
+class SCCResult(list):
+    """List of SCC components that also supports dictionary-style key access."""
+
+    def __init__(self, sccs: List[List[str]]):
+        super().__init__(sccs)
+        self.sccs = sccs
+        self.count = len(sccs)
+        self.is_strongly_connected = len(sccs) == 1 if sccs else False
+
+    def __getitem__(self, key):
+        if isinstance(key, str):
+            if key == "sccs":
+                return self.sccs
+            elif key == "count":
+                return self.count
+            elif key == "is_strongly_connected":
+                return self.is_strongly_connected
+            raise KeyError(key)
+        return super().__getitem__(key)
+
+    def get(self, key, default=None):
+        if key == "sccs":
+            return self.sccs
+        elif key == "count":
+            return self.count
+        elif key == "is_strongly_connected":
+            return self.is_strongly_connected
+        return default
+
+
+def graph_tarjan_scc(g: Any) -> Any:
+    """Computes Strongly Connected Components (SCC) using Tarjan's DFS algorithm."""
+    graph = _ensure_graph(g)
+    index = 0
+    indices: Dict[str, int] = {}
+    lowlink: Dict[str, int] = {}
+    on_stack: Dict[str, bool] = {}
+    stack: List[str] = []
+    sccs: List[List[str]] = []
+
+    def strongconnect(v: str):
+        nonlocal index
+        indices[v] = index
+        lowlink[v] = index
+        index += 1
+        stack.append(v)
+        on_stack[v] = True
+
+        for w in graph.adj.get(v, {}).keys():
+            if w not in indices:
+                strongconnect(w)
+                lowlink[v] = min(lowlink[v], lowlink[w])
+            elif on_stack.get(w, False):
+                lowlink[v] = min(lowlink[v], indices[w])
+
+        if lowlink[v] == indices[v]:
+            scc = []
+            while True:
+                w = stack.pop()
+                on_stack[w] = False
+                scc.append(w)
+                if w == v:
+                    break
+            sccs.append(scc)
+
+    for node in graph.nodes.keys():
+        if node not in indices:
+            strongconnect(node)
+
+    return SCCResult(sccs)
+
+
+def graph_hopcroft_karp(
+    left_or_graph: Any,
+    right_nodes: Optional[List[Any]] = None,
+    edges: Optional[List[Tuple[Any, Any]]] = None,
+    partition_u: Optional[List[Any]] = None,
+) -> Dict[str, Any]:
+    """Finds maximum cardinality bipartite matching in O(E * sqrt(V)) using Hopcroft-Karp."""
+    if isinstance(left_or_graph, (DoomGraph, dict)) or partition_u is not None or right_nodes is None:
+        graph = _ensure_graph(left_or_graph)
+        all_nodes = set(graph.nodes.keys())
+        if partition_u is not None:
+            u_set = set(str(x) for x in partition_u)
+            v_set = all_nodes - u_set
+        else:
+            bipartite_info = graph_bipartite_check(graph)
+            if not bipartite_info.get("is_bipartite", False):
+                raise ValueError("Graph is not bipartite")
+            color_map = bipartite_info.get("coloring", {})
+            u_set = {n for n, c in color_map.items() if c == 0}
+            v_set = {n for n, c in color_map.items() if c == 1}
+
+        left_nodes = sorted(list(u_set))
+        right_nodes = sorted(list(v_set))
+        edges = []
+        for u in left_nodes:
+            for v in graph.adj.get(u, {}):
+                if v in v_set:
+                    edges.append((u, v))
+    else:
+        left_nodes = left_or_graph
+        right_nodes = right_nodes or []
+        edges = edges or []
+
+    u_nodes = [str(u) for u in left_nodes]
+    v_nodes = [str(v) for v in right_nodes]
+    adj: Dict[str, List[str]] = {u: [] for u in u_nodes}
+    for u, v in edges:
+        su, sv = str(u), str(v)
+        if su in adj:
+            adj[su].append(sv)
+
+    pair_u: Dict[str, Optional[str]] = {u: None for u in u_nodes}
+    pair_v: Dict[str, Optional[str]] = {v: None for v in v_nodes}
+    dist: Dict[str, int] = {}
+
+    def bfs() -> bool:
+        from collections import deque
+        queue = deque()
+        for u in u_nodes:
+            if pair_u[u] is None:
+                dist[u] = 0
+                queue.append(u)
+            else:
+                dist[u] = float("inf")
+
+        found_augmenting = False
+        while queue:
+            u = queue.popleft()
+            for v in adj.get(u, []):
+                pu = pair_v.get(v)
+                if pu is None:
+                    found_augmenting = True
+                elif dist.get(pu, float("inf")) == float("inf"):
+                    dist[pu] = dist[u] + 1
+                    queue.append(pu)
+        return found_augmenting
+
+    def dfs(u: str) -> bool:
+        for v in adj.get(u, []):
+            pu = pair_v.get(v)
+            if pu is None or (dist.get(pu, float("inf")) == dist[u] + 1 and dfs(pu)):
+                pair_u[u] = v
+                pair_v[v] = u
+                return True
+        dist[u] = float("inf")
+        return False
+
+    matching_size = 0
+    while bfs():
+        for u in u_nodes:
+            if pair_u[u] is None and dfs(u):
+                matching_size += 1
+
+    matches = [(u, v) for u, v in pair_u.items() if v is not None]
+    return {
+        "matching_size": matching_size,
+        "matches": matches,
+        "pair_u": pair_u,
+        "pair_v": pair_v,
+    }
+
+
+def graph_eulerian_path(g: Any) -> Dict[str, Any]:
+    """Finds an Eulerian path or circuit using Hierholzer's algorithm."""
+    graph = _ensure_graph(g)
+    nodes = list(graph.nodes.keys())
+    if not nodes:
+        return {"has_eulerian_path": True, "has_eulerian_circuit": True, "path": []}
+
+    is_directed = graph.directed
+    # Calculate degrees
+    if is_directed:
+        out_deg = {n: len(graph.adj.get(n, {})) for n in nodes}
+        in_deg = {n: 0 for n in nodes}
+        for u in nodes:
+            for v in graph.adj.get(u, {}).keys():
+                in_deg[v] = in_deg.get(v, 0) + 1
+
+        start_node = None
+        end_node = None
+        for n in nodes:
+            diff = out_deg[n] - in_deg[n]
+            if diff == 1:
+                if start_node is not None:
+                    return {"has_eulerian_path": False, "has_eulerian_circuit": False, "path": []}
+                start_node = n
+            elif diff == -1:
+                if end_node is not None:
+                    return {"has_eulerian_path": False, "has_eulerian_circuit": False, "path": []}
+                end_node = n
+            elif diff != 0:
+                return {"has_eulerian_path": False, "has_eulerian_circuit": False, "path": []}
+
+        if start_node is None:
+            # Circuit: pick any node with out-degree > 0
+            start_node = next((n for n in nodes if out_deg[n] > 0), nodes[0])
+            is_circuit = (start_node is not None and in_deg == out_deg)
+        else:
+            is_circuit = False
+
+        # Hierholzer's DFS
+        adj_copy = {u: list(graph.adj.get(u, {}).keys()) for u in nodes}
+        path = []
+        stack = [start_node]
+        while stack:
+            curr = stack[-1]
+            if adj_copy.get(curr):
+                nxt = adj_copy[curr].pop()
+                stack.append(nxt)
+            else:
+                path.append(stack.pop())
+        path.reverse()
+        return {
+            "has_eulerian_path": True,
+            "has_eulerian_circuit": is_circuit,
+            "path": path,
+        }
+    else:
+        # Undirected graph
+        degrees = {n: len(graph.adj.get(n, {})) for n in nodes}
+        odd_nodes = [n for n, d in degrees.items() if d % 2 != 0]
+        if len(odd_nodes) not in (0, 2):
+            return {"has_eulerian_path": False, "has_eulerian_circuit": False, "path": []}
+
+        start_node = odd_nodes[0] if odd_nodes else next((n for n in nodes if degrees[n] > 0), nodes[0])
+        is_circuit = (len(odd_nodes) == 0)
+
+        # Build edge list copies with multi-edge count tracking
+        edge_counts: Dict[Tuple[str, str], int] = {}
+        for u in nodes:
+            for v in graph.adj.get(u, {}).keys():
+                edge_key = (min(u, v), max(u, v))
+                edge_counts[edge_key] = edge_counts.get(edge_key, 0) + 1
+        for k in edge_counts:
+            edge_counts[k] = edge_counts[k] // 2  # Bidirectional
+
+        adj_copy = {u: list(graph.adj.get(u, {}).keys()) for u in nodes}
+        path = []
+        stack = [start_node]
+        while stack:
+            curr = stack[-1]
+            found = False
+            while adj_copy.get(curr):
+                nxt = adj_copy[curr].pop()
+                k = (min(curr, nxt), max(curr, nxt))
+                if edge_counts.get(k, 0) > 0:
+                    edge_counts[k] -= 1
+                    stack.append(nxt)
+                    found = True
+                    break
+            if not found:
+                path.append(stack.pop())
+        path.reverse()
+        return {
+            "has_eulerian_path": True,
+            "has_eulerian_circuit": is_circuit,
+            "path": path,
+        }
+
+
+def graph_boruvka_mst(g: Any) -> Dict[str, Any]:
+    """Finds Minimum Spanning Tree (MST) using Borůvka's component-contraction algorithm."""
+    graph = _ensure_graph(g)
+    nodes = sorted(list(graph.nodes.keys()))
+    node_to_id = {n: i for i, n in enumerate(nodes)}
+    id_to_node = {i: n for i, n in enumerate(nodes)}
+    n_nodes = len(nodes)
+
+    # Edge list (u, v, weight)
+    edge_set = set()
+    edges = []
+    for u in nodes:
+        for v, w in graph.adj.get(u, {}).items():
+            if u != v:
+                e_key = (min(u, v), max(u, v))
+                if e_key not in edge_set:
+                    edge_set.add(e_key)
+                    edges.append((node_to_id[u], node_to_id[v], float(w)))
+
+    # Union-Find for components
+    parent = list(range(n_nodes))
+    rank = [0] * n_nodes
+
+    def find(i: int) -> int:
+        if parent[i] != i:
+            parent[i] = find(parent[i])
+        return parent[i]
+
+    def union(i: int, j: int) -> bool:
+        root_i = find(i)
+        root_j = find(j)
+        if root_i == root_j:
+            return False
+        if rank[root_i] < rank[root_j]:
+            parent[root_i] = root_j
+        elif rank[root_i] > rank[root_j]:
+            parent[root_j] = root_i
+        else:
+            parent[root_j] = root_i
+            rank[root_i] += 1
+        return True
+
+    num_trees = n_nodes
+    mst_edges: List[Dict[str, Any]] = []
+    total_weight = 0.0
+
+    while num_trees > 1:
+        cheapest: List[Optional[Tuple[int, int, float]]] = [None] * n_nodes
+
+        for u, v, w in edges:
+            set_u = find(u)
+            set_v = find(v)
+            if set_u != set_v:
+                if cheapest[set_u] is None or cheapest[set_u][2] > w:
+                    cheapest[set_u] = (u, v, w)
+                if cheapest[set_v] is None or cheapest[set_v][2] > w:
+                    cheapest[set_v] = (u, v, w)
+
+        added_edge = False
+        for i in range(n_nodes):
+            edge = cheapest[i]
+            if edge is not None:
+                u, v, w = edge
+                set_u = find(u)
+                set_v = find(v)
+                if set_u != set_v:
+                    union(set_u, set_v)
+                    mst_edges.append({
+                        "u": id_to_node[u],
+                        "v": id_to_node[v],
+                        "weight": w,
+                    })
+                    total_weight += w
+                    num_trees -= 1
+                    added_edge = True
+
+        if not added_edge:
+            break
+
+    return {
+        "mst_edges": mst_edges,
+        "total_weight": round(total_weight, 4),
+        "is_connected": len(mst_edges) == n_nodes - 1 if n_nodes > 0 else True,
+    }
+
+
+
 

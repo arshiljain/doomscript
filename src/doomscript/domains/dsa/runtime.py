@@ -4,7 +4,8 @@ import math
 import random
 import time
 import tracemalloc
-from typing import Any, Callable, Dict, List, Optional, Tuple
+import hashlib
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 from doomscript.domains.base import DomainRuntime, DomainIR
 from doomscript.domains.dsa.spec import BenchmarkSpec, ComplexityReport
 
@@ -2871,4 +2872,494 @@ def dsa_btree(t: int = 2) -> BTree:
 def dsa_prefix_trie() -> PrefixTrie:
     """Creates a new Prefix Trie."""
     return PrefixTrie()
+
+
+# =========================================================================
+# Cluster A Deepened DSA Algorithms: Fibonacci Heap, DSU, Fenwick, Bloom
+# =========================================================================
+
+class FibonacciHeapNode:
+    """A node in a Fibonacci Heap."""
+
+    def __init__(self, key: Any, value: Any = None):
+        self.key = key
+        self.value = value
+        self.degree = 0
+        self.mark = False
+        self.parent: Optional["FibonacciHeapNode"] = None
+        self.child: Optional["FibonacciHeapNode"] = None
+        self.left: "FibonacciHeapNode" = self
+        self.right: "FibonacciHeapNode" = self
+
+
+class FibonacciHeap:
+    """Zero-dependency Fibonacci Heap with amortized O(1) insert/decrease-key and O(log n) extract-min."""
+
+    def __init__(self):
+        self.min_node: Optional[FibonacciHeapNode] = None
+        self.total_nodes = 0
+
+    def __len__(self) -> int:
+        return self.total_nodes
+
+    def is_empty(self) -> bool:
+        return self.min_node is None
+
+    def find_min(self) -> Optional[FibonacciHeapNode]:
+        return self.min_node
+
+    def insert(self, key: Any, value: Any = None) -> FibonacciHeapNode:
+        node = FibonacciHeapNode(key, value)
+        if self.min_node is None:
+            self.min_node = node
+        else:
+            self._link_root(node)
+            if node.key < self.min_node.key:
+                self.min_node = node
+        self.total_nodes += 1
+        return node
+
+    def minimum(self) -> Optional[Tuple[Any, Any]]:
+        if self.min_node is None:
+            return None
+        return (self.min_node.key, self.min_node.value)
+
+    def extract_min(self) -> Optional[Any]:
+        z = self.min_node
+        if z is None:
+            return None
+
+        # Add all children of z to the root list
+        if z.child is not None:
+            children = self._iterate_ring(z.child)
+            for child in children:
+                self._link_root(child)
+                child.parent = None
+
+        # Remove z from root list
+        if z.right == z:
+            self.min_node = None
+        else:
+            z.left.right = z.right
+            z.right.left = z.left
+            self.min_node = z.right
+            self._consolidate()
+
+        self.total_nodes -= 1
+
+        class HeapMinResult(tuple):
+            @property
+            def key(self):
+                return self[0]
+            @property
+            def value(self):
+                return self[1]
+
+        return HeapMinResult((z.key, z.value))
+
+    def decrease_key(self, node: FibonacciHeapNode, new_key: Any) -> None:
+        if new_key > node.key:
+            raise ValueError(f"Cannot increase key in decrease_key: {new_key} > {node.key}")
+        node.key = new_key
+        p = node.parent
+        if p is not None and node.key < p.key:
+            self._cut(node, p)
+            self._cascading_cut(p)
+        if self.min_node is not None and node.key < self.min_node.key:
+            self.min_node = node
+
+    def union(self, other: "FibonacciHeap") -> "FibonacciHeap":
+        if other.min_node is not None:
+            if self.min_node is None:
+                self.min_node = other.min_node
+            else:
+                self_right = self.min_node.right
+                other_left = other.min_node.left
+
+                self.min_node.right = other.min_node
+                other.min_node.left = self.min_node
+                self_right.left = other_left
+                other_left.right = self_right
+
+                if other.min_node.key < self.min_node.key:
+                    self.min_node = other.min_node
+
+            self.total_nodes += other.total_nodes
+
+        other.min_node = None
+        other.total_nodes = 0
+        return self
+
+    def _link_root(self, node: FibonacciHeapNode) -> None:
+        if self.min_node is None:
+            self.min_node = node
+            node.left = node
+            node.right = node
+        else:
+            node.right = self.min_node.right
+            node.left = self.min_node
+            self.min_node.right.left = node
+            self.min_node.right = node
+
+    def _cut(self, x: FibonacciHeapNode, y: FibonacciHeapNode) -> None:
+        # Remove x from child list of y
+        if x.right == x:
+            y.child = None
+        else:
+            x.left.right = x.right
+            x.right.left = x.left
+            if y.child == x:
+                y.child = x.right
+        y.degree -= 1
+        self._link_root(x)
+        x.parent = None
+        x.mark = False
+
+    def _cascading_cut(self, y: FibonacciHeapNode) -> None:
+        z = y.parent
+        if z is not None:
+            if not y.mark:
+                y.mark = True
+            else:
+                self._cut(y, z)
+                self._cascading_cut(z)
+
+    def _consolidate(self) -> None:
+        max_deg = int(math.log(max(self.total_nodes, 1), 1.61803398875)) + 4
+        A: List[Optional[FibonacciHeapNode]] = [None] * max_deg
+
+        roots = self._iterate_ring(self.min_node)
+        for w in roots:
+            x = w
+            d = x.degree
+            while d < len(A) and A[d] is not None:
+                y = A[d]
+                if y is not None:
+                    if x.key > y.key:
+                        x, y = y, x
+                    self._heap_link(y, x)
+                    A[d] = None
+                    d += 1
+            if d < len(A):
+                A[d] = x
+
+        self.min_node = None
+        for i in range(len(A)):
+            node = A[i]
+            if node is not None:
+                if self.min_node is None:
+                    self.min_node = node
+                    node.left = node
+                    node.right = node
+                else:
+                    self._link_root(node)
+                    if node.key < self.min_node.key:
+                        self.min_node = node
+
+    def _heap_link(self, y: FibonacciHeapNode, x: FibonacciHeapNode) -> None:
+        y.left.right = y.right
+        y.right.left = y.left
+        y.parent = x
+        if x.child is None:
+            x.child = y
+            y.left = y
+            y.right = y
+        else:
+            y.right = x.child.right
+            y.left = x.child
+            x.child.right.left = y
+            x.child.right = y
+        x.degree += 1
+        y.mark = False
+
+    def _iterate_ring(self, start: Optional[FibonacciHeapNode]) -> List[FibonacciHeapNode]:
+        if start is None:
+            return []
+        nodes = []
+        curr = start
+        while True:
+            nodes.append(curr)
+            curr = curr.right
+            if curr == start:
+                break
+        return nodes
+
+
+class DisjointSetUnion:
+    """Disjoint Set Union (Union-Find) with path compression, union by rank, and rollback checkpoints."""
+
+    def __init__(self, elements: Optional[Any] = None):
+        self.parent: Dict[Any, Any] = {}
+        self.rank: Dict[Any, int] = {}
+        self.size: Dict[Any, int] = {}
+        self.history: List[Tuple[Any, Any, int, int]] = []  # (root_y, root_x, old_rank_x, old_size_x)
+        if elements is not None:
+            for el in elements:
+                self.make_set(el)
+
+    @property
+    def num_sets(self) -> int:
+        if not self.parent:
+            return 0
+        return len(set(self.find(x) for x in self.parent))
+
+    def make_set(self, x: Any) -> None:
+        if x not in self.parent:
+            self.parent[x] = x
+            self.rank[x] = 0
+            self.size[x] = 1
+
+    def find(self, x: Any) -> Any:
+        if x not in self.parent:
+            self.make_set(x)
+        curr = x
+        while curr != self.parent[curr]:
+            curr = self.parent[curr]
+        return curr
+
+    def union(self, x: Any, y: Any) -> bool:
+        root_x = self.find(x)
+        root_y = self.find(y)
+        if root_x == root_y:
+            return False
+
+        if self.rank[root_x] < self.rank[root_y]:
+            root_x, root_y = root_y, root_x
+
+        self.history.append((root_y, root_x, self.rank[root_x], self.size[root_x]))
+        self.parent[root_y] = root_x
+        self.size[root_x] += self.size[root_y]
+        if self.rank[root_x] == self.rank[root_y]:
+            self.rank[root_x] += 1
+        return True
+
+    def connected(self, x: Any, y: Any) -> bool:
+        return self.find(x) == self.find(y)
+
+    def get_size(self, x: Any) -> int:
+        return self.size[self.find(x)]
+
+    def checkpoint(self) -> int:
+        return len(self.history)
+
+    def rollback(self, checkpoint_id: int) -> None:
+        target = max(0, min(len(self.history), int(checkpoint_id)))
+        while len(self.history) > target:
+            root_y, root_x, old_rank_x, old_size_x = self.history.pop()
+            self.parent[root_y] = root_y
+            self.rank[root_x] = old_rank_x
+            self.size[root_x] = old_size_x
+
+
+class FenwickTree:
+    """1D Binary Indexed Tree for prefix sums and point updates in O(log n)."""
+
+    def __init__(self, size_or_values: Union[int, List[float]]):
+        if isinstance(size_or_values, int):
+            self.n = max(0, size_or_values)
+            self.tree = [0.0] * (self.n + 1)
+        else:
+            vals = list(size_or_values)
+            self.n = len(vals)
+            self.tree = [0.0] * (self.n + 1)
+            for i, val in enumerate(vals, start=1):
+                self.add(i, val)
+
+    def add(self, idx: int, delta: float) -> None:
+        """Add delta to 1-based index."""
+        i = int(idx)
+        d = float(delta)
+        while i <= self.n:
+            self.tree[i] += d
+            i += (i & -i)
+
+    def update(self, idx: int, delta: float) -> None:
+        """Alias for add."""
+        self.add(idx, delta)
+
+    def prefix_sum(self, idx: int) -> float:
+        """Query sum of elements in 1-based range [1, idx]."""
+        i = min(int(idx), self.n)
+        s = 0.0
+        while i > 0:
+            s += self.tree[i]
+            i -= (i & -i)
+        return s
+
+    def range_sum(self, left: int, right: int) -> float:
+        """Query sum in 1-based range [left, right]."""
+        if left > right:
+            return 0.0
+        return self.prefix_sum(right) - self.prefix_sum(left - 1)
+
+
+class FenwickTree2D:
+    """2D Binary Indexed Tree for rectangular 2D prefix sums and point updates in O(log n * log m)."""
+
+    def __init__(self, rows: int, cols: int):
+        self.rows = max(1, int(rows))
+        self.cols = max(1, int(cols))
+        self.tree = [[0.0] * (self.cols + 1) for _ in range(self.rows + 1)]
+
+    def add(self, r: int, c: int, delta: float) -> None:
+        """Add delta at 1-based (r, c)."""
+        d = float(delta)
+        i = int(r)
+        while i <= self.rows:
+            j = int(c)
+            while j <= self.cols:
+                self.tree[i][j] += d
+                j += (j & -j)
+            i += (i & -i)
+
+    def update(self, r: int, c: int, delta: float) -> None:
+        """Alias for add."""
+        self.add(r, c, delta)
+
+    def query(self, r: int, c: int) -> float:
+        """Query 2D sum from (1, 1) to (r, c)."""
+        return self.prefix_sum(r, c)
+
+    def range_query(self, r1: int, c1: int, r2: int, c2: int) -> float:
+        """Query sum in 2D rectangle [(r1, c1), (r2, c2)]."""
+        return self.range_sum(r1, c1, r2, c2)
+
+    def prefix_sum(self, r: int, c: int) -> float:
+        """Query 2D sum from (1, 1) to (r, c)."""
+        s = 0.0
+        i = min(int(r), self.rows)
+        while i > 0:
+            j = min(int(c), self.cols)
+            while j > 0:
+                s += self.tree[i][j]
+                j -= (j & -j)
+            i -= (i & -i)
+        return s
+
+    def range_sum(self, r1: int, c1: int, r2: int, c2: int) -> float:
+        """Query sum in 2D rectangle [(r1, c1), (r2, c2)]."""
+        if r1 > r2 or c1 > c2:
+            return 0.0
+        return (
+            self.prefix_sum(r2, c2)
+            - self.prefix_sum(r1 - 1, c2)
+            - self.prefix_sum(r2, c1 - 1)
+            + self.prefix_sum(r1 - 1, c1 - 1)
+        )
+
+
+class BloomFilter:
+    """Space-efficient probabilistic Bloom Filter for set membership with zero false negatives."""
+
+    def __init__(self, expected_items: int = 1000, fp_rate: float = 0.01, capacity: Optional[int] = None, error_rate: Optional[float] = None):
+        if capacity is not None:
+            expected_items = capacity
+        if error_rate is not None:
+            fp_rate = error_rate
+        n = max(1, int(expected_items))
+        p = max(1e-6, min(0.5, float(fp_rate)))
+        self.size = max(64, int(-n * math.log(p) / (math.log(2) ** 2)))
+        self.num_hashes = max(1, int((self.size / n) * math.log(2)))
+        self.bits = bytearray((self.size + 7) // 8)
+        self.count = 0
+
+    def _hashes(self, item: Any) -> List[int]:
+        s = str(item).encode("utf-8")
+        h1 = int(hashlib.md5(s).hexdigest(), 16)
+        h2 = int(hashlib.sha256(s).hexdigest(), 16)
+        return [(h1 + i * h2) % self.size for i in range(self.num_hashes)]
+
+    def add(self, item: Any) -> None:
+        for bit_idx in self._hashes(item):
+            byte_idx = bit_idx // 8
+            bit_pos = bit_idx % 8
+            self.bits[byte_idx] |= (1 << bit_pos)
+        self.count += 1
+
+    def contains(self, item: Any) -> bool:
+        for bit_idx in self._hashes(item):
+            byte_idx = bit_idx // 8
+            bit_pos = bit_idx % 8
+            if not (self.bits[byte_idx] & (1 << bit_pos)):
+                return False
+        return True
+
+    def __contains__(self, item: Any) -> bool:
+        return self.contains(item)
+
+
+class CountingBloomFilter:
+    """Counting Bloom Filter supporting item deletion."""
+
+    def __init__(self, expected_items: int = 1000, fp_rate: float = 0.01, capacity: Optional[int] = None, error_rate: Optional[float] = None):
+        if capacity is not None:
+            expected_items = capacity
+        if error_rate is not None:
+            fp_rate = error_rate
+        n = max(1, int(expected_items))
+        p = max(1e-6, min(0.5, float(fp_rate)))
+        self.size = max(64, int(-n * math.log(p) / (math.log(2) ** 2)))
+        self.num_hashes = max(1, int((self.size / n) * math.log(2)))
+        self.counters = [0] * self.size
+        self.count = 0
+
+    def _hashes(self, item: Any) -> List[int]:
+        s = str(item).encode("utf-8")
+        h1 = int(hashlib.md5(s).hexdigest(), 16)
+        h2 = int(hashlib.sha256(s).hexdigest(), 16)
+        return [(h1 + i * h2) % self.size for i in range(self.num_hashes)]
+
+    def add(self, item: Any) -> None:
+        for bit_idx in self._hashes(item):
+            self.counters[bit_idx] += 1
+        self.count += 1
+
+    def remove(self, item: Any) -> bool:
+        if not self.contains(item):
+            return False
+        for bit_idx in self._hashes(item):
+            if self.counters[bit_idx] > 0:
+                self.counters[bit_idx] -= 1
+        self.count -= 1
+        return True
+
+    def contains(self, item: Any) -> bool:
+        for bit_idx in self._hashes(item):
+            if self.counters[bit_idx] <= 0:
+                return False
+        return True
+
+    def __contains__(self, item: Any) -> bool:
+        return self.contains(item)
+
+
+def dsa_fibonacci_heap() -> FibonacciHeap:
+    """Creates a new Fibonacci Heap."""
+    return FibonacciHeap()
+
+
+def dsa_dsu() -> DisjointSetUnion:
+    """Creates a new Disjoint Set Union (Union-Find) structure."""
+    return DisjointSetUnion()
+
+
+def dsa_fenwick_tree(size_or_values: Union[int, List[float]]) -> FenwickTree:
+    """Creates a 1D Fenwick Tree (Binary Indexed Tree)."""
+    return FenwickTree(size_or_values)
+
+
+def dsa_fenwick_tree_2d(rows: int, cols: int) -> FenwickTree2D:
+    """Creates a 2D Fenwick Tree (Binary Indexed Tree)."""
+    return FenwickTree2D(rows, cols)
+
+
+def dsa_bloom_filter(expected_items: int = 1000, fp_rate: float = 0.01) -> BloomFilter:
+    """Creates a standard bit-array Bloom Filter."""
+    return BloomFilter(expected_items=expected_items, fp_rate=fp_rate)
+
+
+def dsa_counting_bloom_filter(expected_items: int = 1000, fp_rate: float = 0.01) -> CountingBloomFilter:
+    """Creates a Counting Bloom Filter supporting deletions."""
+    return CountingBloomFilter(expected_items=expected_items, fp_rate=fp_rate)
+
 

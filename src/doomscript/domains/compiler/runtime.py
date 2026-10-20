@@ -386,3 +386,570 @@ def compiler_parse_pratt(expression_str: str) -> Any:
     parser = PrattParser()
     return parser.parse(tokens)
 
+
+class LALR1Parser:
+    """Deterministic LALR(1) parser generator and runtime parser."""
+
+    def __init__(self, grammar: Dict[str, Any]):
+        self.start_sym = grammar.get("start", "S")
+        self.terminals = set(grammar.get("terminals", [])) | {"$"}
+        self.nonterminals = set(grammar.get("nonterminals", []))
+        self.rules: List[Tuple[str, List[str]]] = [
+            (r[0], list(r[1])) for r in grammar.get("rules", [])
+        ]
+        # Augmented start rule: S' -> S
+        self.augmented_start = f"{self.start_sym}'"
+        self.rules.insert(0, (self.augmented_start, [self.start_sym]))
+        self.nonterminals.add(self.augmented_start)
+
+        self.first_sets: Dict[str, set] = {}
+        self._compute_first_sets()
+        self.states: List[List[Tuple[str, Tuple[str, ...], int, frozenset]]] = []
+        self.action_table: Dict[Tuple[int, str], Tuple[str, Any]] = {}
+        self.goto_table: Dict[Tuple[int, str], int] = {}
+        self._build_tables()
+
+    def _compute_first_sets(self):
+        for t in self.terminals:
+            self.first_sets[t] = {t}
+        for nt in self.nonterminals:
+            self.first_sets[nt] = set()
+
+        changed = True
+        while changed:
+            changed = False
+            for lhs, rhs in self.rules:
+                if not rhs:
+                    if "" not in self.first_sets[lhs]:
+                        self.first_sets[lhs].add("")
+                        changed = True
+                    continue
+                can_be_empty = True
+                for sym in rhs:
+                    sym_first = self.first_sets.get(sym, {sym})
+                    before = len(self.first_sets[lhs])
+                    self.first_sets[lhs] |= (sym_first - {""})
+                    if len(self.first_sets[lhs]) > before:
+                        changed = True
+                    if "" not in sym_first:
+                        can_be_empty = False
+                        break
+                if can_be_empty and "" not in self.first_sets[lhs]:
+                    self.first_sets[lhs].add("")
+                    changed = True
+
+    def _first_of_sequence(self, symbols: List[str]) -> set:
+        res = set()
+        can_be_empty = True
+        for sym in symbols:
+            s_first = self.first_sets.get(sym, {sym})
+            res |= (s_first - {""})
+            if "" not in s_first:
+                can_be_empty = False
+                break
+        if can_be_empty:
+            res.add("")
+        return res
+
+    def _closure(self, items: set) -> set:
+        """Computes LR(1) closure of a set of items: (lhs, rhs_tuple, dot, lookahead_frozenset)."""
+        closure_map: Dict[Tuple[str, Tuple[str, ...], int], set] = {}
+        for lhs, rhs, dot, la in items:
+            key = (lhs, rhs, dot)
+            closure_map.setdefault(key, set()).update(la)
+
+        changed = True
+        while changed:
+            changed = False
+            curr_keys = list(closure_map.keys())
+            for lhs, rhs, dot in curr_keys:
+                if dot < len(rhs):
+                    b = rhs[dot]
+                    if b in self.nonterminals:
+                        beta = list(rhs[dot + 1:])
+                        current_las = list(closure_map[(lhs, rhs, dot)])
+                        for la in current_las:
+                            seq = beta + [la]
+                            b_las = self._first_of_sequence(seq) - {""}
+                            for prod_lhs, prod_rhs in self.rules:
+                                if prod_lhs == b:
+                                    rule_key = (prod_lhs, tuple(prod_rhs), 0)
+                                    target_set = closure_map.setdefault(rule_key, set())
+                                    before_len = len(target_set)
+                                    target_set.update(b_las)
+                                    if len(target_set) > before_len:
+                                        changed = True
+
+        return {(k[0], k[1], k[2], frozenset(v)) for k, v in closure_map.items()}
+
+    def _goto(self, items: set, symbol: str) -> set:
+        moved = set()
+        for lhs, rhs, dot, la in items:
+            if dot < len(rhs) and rhs[dot] == symbol:
+                moved.add((lhs, rhs, dot + 1, la))
+        return self._closure(moved)
+
+    def _build_tables(self):
+        init_item = (self.augmented_start, (self.start_sym,), 0, frozenset(["$"]))
+        init_state = self._closure({init_item})
+
+        lr1_states = [init_state]
+        state_map = {frozenset(init_state): 0}
+
+        transitions: Dict[Tuple[int, str], int] = {}
+        all_symbols = sorted(list(self.terminals | self.nonterminals))
+
+        queue = [0]
+        while queue:
+            s_idx = queue.pop(0)
+            cur_items = lr1_states[s_idx]
+
+            for sym in all_symbols:
+                if sym == "$":
+                    continue
+                next_items = self._goto(cur_items, sym)
+                if not next_items:
+                    continue
+                frozen = frozenset(next_items)
+                if frozen not in state_map:
+                    new_idx = len(lr1_states)
+                    state_map[frozen] = new_idx
+                    lr1_states.append(next_items)
+                    queue.append(new_idx)
+                transitions[(s_idx, sym)] = state_map[frozen]
+
+        # Merge LR(1) states into LALR(1) states based on LR(0) cores
+        core_map: Dict[frozenset, List[int]] = {}
+        for idx, state in enumerate(lr1_states):
+            core = frozenset((lhs, rhs, dot) for lhs, rhs, dot, _ in state)
+            core_map.setdefault(core, []).append(idx)
+
+        state_relabel: Dict[int, int] = {}
+        merged_states: List[set] = []
+        for core, old_indices in core_map.items():
+            new_idx = len(merged_states)
+            merged_item_map: Dict[Tuple[str, Tuple[str, ...], int], set] = {}
+            for old_idx in old_indices:
+                state_relabel[old_idx] = new_idx
+                for lhs, rhs, dot, la in lr1_states[old_idx]:
+                    merged_item_map.setdefault((lhs, rhs, dot), set()).update(la)
+            merged_state = {
+                (k[0], k[1], k[2], frozenset(v)) for k, v in merged_item_map.items()
+            }
+            merged_states.append(merged_state)
+
+        self.states = [list(s) for s in merged_states]
+
+        # Populate action and goto tables
+        for old_from, sym in transitions:
+            old_to = transitions[(old_from, sym)]
+            new_from = state_relabel[old_from]
+            new_to = state_relabel[old_to]
+            if sym in self.terminals:
+                self.action_table[(new_from, sym)] = ("shift", new_to)
+            elif sym in self.nonterminals:
+                self.goto_table[(new_from, sym)] = new_to
+
+        for s_idx, state in enumerate(merged_states):
+            for lhs, rhs, dot, lookaheads in state:
+                if dot == len(rhs):
+                    if lhs == self.augmented_start:
+                        self.action_table[(s_idx, "$")] = ("accept", 0)
+                    else:
+                        rule_idx = -1
+                        for r_i, (r_lhs, r_rhs) in enumerate(self.rules):
+                            if r_lhs == lhs and tuple(r_rhs) == rhs:
+                                rule_idx = r_i
+                                break
+                        for la in lookaheads:
+                            existing = self.action_table.get((s_idx, la))
+                            if existing is None:
+                                self.action_table[(s_idx, la)] = ("reduce", rule_idx)
+                            elif existing[0] == "shift":
+                                pass  # Standard shift preference
+
+    def parse(self, tokens: List[str]) -> Dict[str, Any]:
+        """Parses a sequence of terminal tokens and returns parse tree."""
+        in_tokens = list(tokens) + ["$"]
+        state_stack = [0]
+        sym_stack: List[Any] = []
+        cursor = 0
+        steps = []
+
+        while True:
+            cur_state = state_stack[-1]
+            tok = in_tokens[cursor] if cursor < len(in_tokens) else "$"
+            action = self.action_table.get((cur_state, tok))
+
+            if action is None:
+                return {
+                    "success": False,
+                    "error": f"Syntax error at token '{tok}' in state {cur_state}",
+                    "steps": steps,
+                    "tree": None,
+                }
+
+            act_type, act_val = action
+            steps.append({
+                "state": cur_state,
+                "token": tok,
+                "action": act_type,
+                "value": act_val,
+            })
+
+            if act_type == "shift":
+                state_stack.append(act_val)
+                sym_stack.append({"type": "terminal", "value": tok})
+                cursor += 1
+            elif act_type == "reduce":
+                rule_lhs, rule_rhs = self.rules[act_val]
+                rhs_len = len(rule_rhs)
+                popped_children = []
+                for _ in range(rhs_len):
+                    state_stack.pop()
+                    popped_children.insert(0, sym_stack.pop())
+                node = {
+                    "type": "nonterminal",
+                    "symbol": rule_lhs,
+                    "rule_idx": act_val,
+                    "children": popped_children,
+                }
+                sym_stack.append(node)
+                top_state = state_stack[-1]
+                next_state = self.goto_table.get((top_state, rule_lhs))
+                if next_state is None:
+                    return {
+                        "success": False,
+                        "error": f"Goto missing for nonterminal '{rule_lhs}' in state {top_state}",
+                        "steps": steps,
+                        "tree": None,
+                    }
+                state_stack.append(next_state)
+            elif act_type == "accept":
+                return {
+                    "success": True,
+                    "steps": steps,
+                    "tree": sym_stack[0] if sym_stack else None,
+                }
+
+
+class SSAFormBuilder:
+    """Transforms Control Flow Graph (CFG) basic blocks into Static Single Assignment (SSA) form."""
+
+    def __init__(self):
+        pass
+
+    def build_ssa(self, cfg: Dict[str, Any]) -> Dict[str, Any]:
+        """Converts basic blocks CFG to SSA form."""
+        entry = cfg.get("entry", "b0")
+        blocks = {k: dict(v) for k, v in cfg.get("blocks", {}).items()}
+
+        # Build predecessor map
+        preds: Dict[str, List[str]] = {b: [] for b in blocks}
+        for b, data in blocks.items():
+            for succ in data.get("succs", []):
+                if succ in preds:
+                    preds[succ].append(b)
+
+        # 1. Compute Dominators Dom(n)
+        all_blocks = set(blocks.keys())
+        dom: Dict[str, set] = {}
+        for b in blocks:
+            dom[b] = {b} if b == entry else set(all_blocks)
+
+        changed = True
+        while changed:
+            changed = False
+            for b in blocks:
+                if b == entry:
+                    continue
+                p_doms = [dom[p] for p in preds[b] if p in dom]
+                new_dom = {b} | (set.intersection(*p_doms) if p_doms else set())
+                if new_dom != dom[b]:
+                    dom[b] = new_dom
+                    changed = True
+
+        # 2. Compute Immediate Dominator idom(n)
+        idom: Dict[str, Optional[str]] = {b: None for b in blocks}
+        for b in blocks:
+            if b == entry:
+                continue
+            strict_doms = dom[b] - {b}
+            for d in strict_doms:
+                # d is idom if no other strict dominator in strict_doms is strictly dominated by d
+                is_idom = True
+                for other in strict_doms:
+                    if other != d and other in dom[d]:
+                        is_idom = False
+                        break
+                if is_idom:
+                    idom[b] = d
+                    break
+
+        # 3. Compute Dominance Frontiers DF(n)
+        df: Dict[str, set] = {b: set() for b in blocks}
+        for b in blocks:
+            if len(preds[b]) >= 2:
+                for p in preds[b]:
+                    runner = p
+                    while runner != idom[b] and runner is not None:
+                        df[runner].add(b)
+                        runner = idom[runner]
+
+        # 4. Insert Phi Nodes
+        # Collect all variables and their assignment sites
+        def_sites: Dict[str, set] = {}
+        for b, data in blocks.items():
+            for inst in data.get("instructions", []):
+                target = inst.get("target")
+                if target:
+                    def_sites.setdefault(target, set()).add(b)
+
+        phi_placed: Dict[str, set] = {v: set() for v in def_sites}
+        phi_nodes: Dict[str, List[Dict[str, Any]]] = {b: [] for b in blocks}
+
+        for var, sites in def_sites.items():
+            work = list(sites)
+            while work:
+                site = work.pop(0)
+                for df_block in df.get(site, set()):
+                    if df_block not in phi_placed[var]:
+                        phi_placed[var].add(df_block)
+                        phi_nodes[df_block].append({
+                            "op": "phi",
+                            "var": var,
+                            "target": var,
+                            "sources": {p: var for p in preds[df_block]},
+                        })
+                        if df_block not in sites:
+                            work.append(df_block)
+
+        # 5. Variable Renaming
+        var_stacks: Dict[str, List[str]] = {v: [f"{v}_0"] for v in def_sites}
+        var_counters: Dict[str, int] = {v: 0 for v in def_sites}
+        new_blocks: Dict[str, Any] = {}
+
+        # Dom tree children
+        dom_children: Dict[str, List[str]] = {b: [] for b in blocks}
+        for b, d in idom.items():
+            if d is not None:
+                dom_children[d].append(b)
+
+        def rename(block_id: str):
+            pushed: Dict[str, int] = {v: 0 for v in def_sites}
+            renamed_insts = []
+
+            # Process phi nodes in this block
+            for phi in phi_nodes.get(block_id, []):
+                var = phi["var"]
+                var_counters[var] += 1
+                new_name = f"{var}_{var_counters[var]}"
+                var_stacks[var].append(new_name)
+                pushed[var] += 1
+                phi["target"] = new_name
+                renamed_insts.append(phi)
+
+            # Process ordinary instructions
+            for inst in blocks[block_id].get("instructions", []):
+                new_inst = dict(inst)
+                args = new_inst.get("args", [])
+                new_args = []
+                for a in args:
+                    if a in var_stacks and var_stacks[a]:
+                        new_args.append(var_stacks[a][-1])
+                    else:
+                        new_args.append(a)
+                new_inst["args"] = new_args
+
+                target = new_inst.get("target")
+                if target in var_stacks:
+                    var_counters[target] += 1
+                    new_target = f"{target}_{var_counters[target]}"
+                    var_stacks[target].append(new_target)
+                    pushed[target] += 1
+                    new_inst["target"] = new_target
+
+                renamed_insts.append(new_inst)
+
+            # Update phi nodes in successors
+            for succ in blocks[block_id].get("succs", []):
+                for phi in phi_nodes.get(succ, []):
+                    var = phi["var"]
+                    if var in var_stacks and var_stacks[var]:
+                        phi["sources"][block_id] = var_stacks[var][-1]
+
+            new_blocks[block_id] = {
+                "instructions": renamed_insts,
+                "succs": list(blocks[block_id].get("succs", [])),
+                "preds": list(preds[block_id]),
+            }
+
+            # Recurse on dom children
+            for child in dom_children.get(block_id, []):
+                rename(child)
+
+            # Pop stacks
+            for var, count in pushed.items():
+                for _ in range(count):
+                    var_stacks[var].pop()
+
+        rename(entry)
+
+        return {
+            "entry": entry,
+            "blocks": new_blocks,
+            "dominance_frontiers": {k: sorted(list(v)) for k, v in df.items()},
+            "idom": idom,
+        }
+
+    def deconstruct_ssa(self, ssa_cfg: Dict[str, Any]) -> Dict[str, Any]:
+        """Deconstructs SSA form back to standard form with parallel copies."""
+        blocks = {k: dict(v) for k, v in ssa_cfg.get("blocks", {}).items()}
+        for b_id, b_data in blocks.items():
+            non_phi_insts = []
+            for inst in b_data.get("instructions", []):
+                if inst.get("op") == "phi":
+                    target = inst.get("target")
+                    for pred, source in inst.get("sources", {}).items():
+                        if pred in blocks:
+                            copy_inst = {
+                                "op": "copy",
+                                "target": target,
+                                "args": [source],
+                            }
+                            # Insert before branch or at end of pred
+                            pred_insts = blocks[pred].setdefault("instructions", [])
+                            pred_insts.append(copy_inst)
+                else:
+                    non_phi_insts.append(inst)
+            b_data["instructions"] = non_phi_insts
+
+        return {"entry": ssa_cfg.get("entry", "b0"), "blocks": blocks}
+
+
+class ChaitinRegisterAllocator:
+    """Interference graph register allocator using Kempe's degree-K coloring heuristic."""
+
+    def __init__(self, k_registers: int = 4):
+        self.k = max(1, int(k_registers))
+
+    def allocate(self, instructions: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Allocates registers for a sequence of instructions.
+        Each instruction has format:
+        {"id": int, "def": ["x"], "use": ["y", "z"], "op": "add"}
+        """
+        # 1. Compute liveness intervals
+        all_vars = set()
+        first_def: Dict[str, int] = {}
+        last_use: Dict[str, int] = {}
+
+        for idx, inst in enumerate(instructions):
+            defs = inst.get("def", [])
+            uses = inst.get("use", [])
+            for d in defs:
+                all_vars.add(d)
+                if d not in first_def:
+                    first_def[d] = idx
+            for u in uses:
+                all_vars.add(u)
+                last_use[u] = max(last_use.get(u, idx), idx)
+
+        intervals: Dict[str, Tuple[int, int]] = {}
+        for v in all_vars:
+            start = first_def.get(v, 0)
+            end = max(last_use.get(v, start), start)
+            intervals[v] = (start, end)
+
+        # 2. Build Interference Graph
+        adj: Dict[str, set] = {v: set() for v in all_vars}
+        var_list = sorted(list(all_vars))
+        for i in range(len(var_list)):
+            v1 = var_list[i]
+            s1, e1 = intervals[v1]
+            for j in range(i + 1, len(var_list)):
+                v2 = var_list[j]
+                s2, e2 = intervals[v2]
+                # Overlap test: not (e1 < s2 or e2 < s1)
+                if not (e1 < s2 or e2 < s1):
+                    adj[v1].add(v2)
+                    adj[v2].add(v1)
+
+        # 3. Kempe degree-K heuristic simplification
+        current_graph = {v: set(neighbors) for v, neighbors in adj.items()}
+        stack: List[str] = []
+        spilled_candidates: set = set()
+
+        while current_graph:
+            # Find candidate with degree < K
+            low_deg_cand = None
+            for v, neighbors in current_graph.items():
+                if len(neighbors) < self.k:
+                    low_deg_cand = v
+                    break
+
+            if low_deg_cand is not None:
+                stack.append(low_deg_cand)
+                # Remove from graph
+                for n in current_graph[low_deg_cand]:
+                    current_graph[n].discard(low_deg_cand)
+                del current_graph[low_deg_cand]
+            else:
+                # Potential spill: select node with max degree (or min cost/deg)
+                spill_cand = max(current_graph.keys(), key=lambda node: len(current_graph[node]))
+                spilled_candidates.add(spill_cand)
+                stack.append(spill_cand)
+                for n in current_graph[spill_cand]:
+                    current_graph[n].discard(spill_cand)
+                del current_graph[spill_cand]
+
+        # 4. Color Assignment (Select phase)
+        allocations: Dict[str, Dict[str, Any]] = {}
+        next_spill_slot = 0
+
+        while stack:
+            v = stack.pop()
+            neighbor_colors = set()
+            for n in adj[v]:
+                if n in allocations and allocations[n].get("type") == "register":
+                    neighbor_colors.add(allocations[n]["reg"])
+
+            assigned_color = None
+            for c in range(self.k):
+                if c not in neighbor_colors:
+                    assigned_color = c
+                    break
+
+            if assigned_color is not None:
+                allocations[v] = {"type": "register", "reg": assigned_color}
+            else:
+                allocations[v] = {"type": "spill", "slot": next_spill_slot}
+                next_spill_slot += 1
+
+        return {
+            "k_registers": self.k,
+            "allocations": allocations,
+            "spill_count": next_spill_slot,
+            "intervals": intervals,
+            "interference_graph": {v: sorted(list(neighbors)) for v, neighbors in adj.items()},
+        }
+
+
+def compiler_lalr1_parse(grammar: Dict[str, Any], tokens: List[str]) -> Dict[str, Any]:
+    """Generates LALR(1) tables and parses token sequence."""
+    parser = LALR1Parser(grammar)
+    return parser.parse(tokens)
+
+
+def compiler_build_ssa(cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """Transforms a basic block CFG into SSA form with phi nodes and renamed variables."""
+    builder = SSAFormBuilder()
+    return builder.build_ssa(cfg)
+
+
+def compiler_allocate_registers(instructions: List[Dict[str, Any]], k_registers: int = 4) -> Dict[str, Any]:
+    """Allocates hardware registers via Chaitin's Kempe graph-coloring heuristic."""
+    allocator = ChaitinRegisterAllocator(k_registers)
+    return allocator.allocate(instructions)
+
+

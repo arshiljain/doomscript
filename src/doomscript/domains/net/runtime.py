@@ -917,3 +917,412 @@ def net_dns_parse_packet(packet_bytes: bytes) -> Dict[str, Any]:
     return DNSWireProtocol.parse_packet(packet_bytes)
 
 
+class TLS13ClientHelloParser:
+    """Pure-Python parser and mock generator for TLS 1.2 / 1.3 ClientHello records (RFC 8446)."""
+
+    EXT_SERVER_NAME = 0x0000
+    EXT_SUPPORTED_GROUPS = 0x000A
+    EXT_ALPN = 0x0010
+    EXT_KEY_SHARE = 0x0033
+    EXT_SUPPORTED_VERSIONS = 0x002B
+
+    CIPHER_NAMES = {
+        0x1301: "TLS_AES_128_GCM_SHA256",
+        0x1302: "TLS_AES_256_GCM_SHA384",
+        0x1303: "TLS_CHACHA20_POLY1305_SHA256",
+        0xC02F: "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+        0xC030: "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+    }
+
+    NAMED_GROUPS = {
+        0x001D: "x25519",
+        0x0017: "secp256r1",
+        0x0018: "secp384r1",
+    }
+
+    @classmethod
+    def parse(cls, data: bytes) -> Dict[str, Any]:
+        """Parses a TLS record containing a ClientHello handshake."""
+        if len(data) < 5:
+            raise ValueError("Data too short for TLS record header")
+
+        content_type, legacy_ver, record_len = struct.unpack(">BHH", data[:5])
+        if content_type != 0x16:  # Handshake
+            raise ValueError(f"Expected Handshake record (0x16), got 0x{content_type:02x}")
+
+        offset = 5
+        if offset + 4 > len(data):
+            raise ValueError("Truncated handshake message")
+
+        msg_type = data[offset]
+        msg_len = int.from_bytes(data[offset + 1 : offset + 4], "big")
+        offset += 4
+
+        if msg_type != 0x01:  # ClientHello
+            raise ValueError(f"Expected ClientHello (0x01), got 0x{msg_type:02x}")
+
+        client_version = struct.unpack(">H", data[offset : offset + 2])[0]
+        offset += 2
+        client_random = data[offset : offset + 32].hex()
+        offset += 32
+
+        # Session ID
+        sess_id_len = data[offset]
+        offset += 1
+        sess_id = data[offset : offset + sess_id_len].hex()
+        offset += sess_id_len
+
+        # Cipher Suites
+        cs_len = struct.unpack(">H", data[offset : offset + 2])[0]
+        offset += 2
+        cipher_suites = []
+        for i in range(0, cs_len, 2):
+            cs_val = struct.unpack(">H", data[offset + i : offset + i + 2])[0]
+            cipher_suites.append(cls.CIPHER_NAMES.get(cs_val, f"0x{cs_val:04X}"))
+        offset += cs_len
+
+        # Compression Methods
+        comp_len = data[offset]
+        offset += 1
+        compression_methods = list(data[offset : offset + comp_len])
+        offset += comp_len
+
+        # Extensions
+        extensions: Dict[str, Any] = {}
+        if offset + 2 <= len(data):
+            ext_total_len = struct.unpack(">H", data[offset : offset + 2])[0]
+            offset += 2
+            ext_end = offset + ext_total_len
+
+            while offset + 4 <= ext_end and offset + 4 <= len(data):
+                ext_type, ext_len = struct.unpack(">HH", data[offset : offset + 4])
+                offset += 4
+                ext_data = data[offset : offset + ext_len]
+                offset += ext_len
+
+                if ext_type == cls.EXT_SERVER_NAME:
+                    # SNI parsing
+                    if len(ext_data) >= 5:
+                        sni_len = struct.unpack(">H", ext_data[3:5])[0]
+                        sni_name = ext_data[5 : 5 + sni_len].decode("utf-8", errors="replace")
+                        extensions["server_name"] = sni_name
+                elif ext_type == cls.EXT_SUPPORTED_VERSIONS:
+                    # Supported Versions
+                    if len(ext_data) >= 1:
+                        sv_len = ext_data[0]
+                        vers = []
+                        for j in range(1, sv_len + 1, 2):
+                            if j + 1 < len(ext_data):
+                                v = struct.unpack(">H", ext_data[j : j + 2])[0]
+                                if v == 0x0304:
+                                    vers.append("TLS 1.3")
+                                elif v == 0x0303:
+                                    vers.append("TLS 1.2")
+                                else:
+                                    vers.append(f"0x{v:04X}")
+                        extensions["supported_versions"] = vers
+                elif ext_type == cls.EXT_SUPPORTED_GROUPS:
+                    if len(ext_data) >= 2:
+                        g_len = struct.unpack(">H", ext_data[:2])[0]
+                        groups = []
+                        for j in range(2, 2 + g_len, 2):
+                            g = struct.unpack(">H", ext_data[j : j + 2])[0]
+                            groups.append(cls.NAMED_GROUPS.get(g, f"0x{g:04X}"))
+                        extensions["supported_groups"] = groups
+                elif ext_type == cls.EXT_ALPN:
+                    if len(ext_data) >= 2:
+                        alpn_list_len = struct.unpack(">H", ext_data[:2])[0]
+                        alpn_protos = []
+                        idx = 2
+                        while idx < 2 + alpn_list_len and idx < len(ext_data):
+                            p_len = ext_data[idx]
+                            idx += 1
+                            alpn_protos.append(ext_data[idx : idx + p_len].decode("utf-8", errors="replace"))
+                            idx += p_len
+                        extensions["alpn"] = alpn_protos
+                else:
+                    extensions[f"ext_0x{ext_type:04X}"] = ext_data.hex()
+
+        return {
+            "record_version": f"0x{legacy_ver:04X}",
+            "client_version": f"0x{client_version:04X}",
+            "random": client_random,
+            "session_id": sess_id,
+            "cipher_suites": cipher_suites,
+            "compression_methods": compression_methods,
+            "extensions": extensions,
+            "is_tls13": "TLS 1.3" in extensions.get("supported_versions", []),
+        }
+
+    @classmethod
+    def build_mock_client_hello(cls, server_name: str = "example.com") -> bytes:
+        """Constructs a valid RFC 8446 TLS 1.3 ClientHello record."""
+        # 1. Extensions
+        ext_bytes = bytearray()
+
+        # SNI extension
+        sni_raw = server_name.encode("utf-8")
+        sni_entry = b"\x00" + struct.pack(">H", len(sni_raw)) + sni_raw
+        sni_ext_data = struct.pack(">H", len(sni_entry)) + sni_entry
+        ext_bytes += struct.pack(">HH", cls.EXT_SERVER_NAME, len(sni_ext_data)) + sni_ext_data
+
+        # Supported Versions extension (TLS 1.3 = 0x0304, TLS 1.2 = 0x0303)
+        sv_data = b"\x04\x03\x04\x03\x03"
+        ext_bytes += struct.pack(">HH", cls.EXT_SUPPORTED_VERSIONS, len(sv_data)) + sv_data
+
+        # Supported groups: x25519 (0x001D), secp256r1 (0x0017)
+        groups_data = b"\x00\x04\x00\x1d\x00\x17"
+        ext_bytes += struct.pack(">HH", cls.EXT_SUPPORTED_GROUPS, len(groups_data)) + groups_data
+
+        # 2. Handshake message
+        hs = bytearray()
+        hs += struct.pack(">H", 0x0303)  # Legacy client version TLS 1.2
+        hs += b"\x42" * 32  # 32 bytes client random
+        hs += b"\x00"  # Session ID length 0
+
+        # Cipher suites: TLS_AES_128_GCM_SHA256 (0x1301), TLS_AES_256_GCM_SHA384 (0x1302)
+        hs += struct.pack(">H", 4) + b"\x13\x01\x13\x02"
+
+        # Compression: 1 method (null)
+        hs += b"\x01\x00"
+
+        # Extensions length + data
+        hs += struct.pack(">H", len(ext_bytes)) + ext_bytes
+
+        # Handshake wrapper (type=1 ClientHello, 3-byte len)
+        hs_msg = b"\x01" + len(hs).to_bytes(3, "big") + hs
+
+        # TLS Record wrapper (type=0x16 Handshake, version=0x0301, 2-byte len)
+        record = b"\x16\x03\x01" + struct.pack(">H", len(hs_msg)) + hs_msg
+        return bytes(record)
+
+
+class SOCKS5Protocol:
+    """RFC 1928 SOCKS5 Protocol framing and parsing."""
+
+    AUTH_NONE = 0x00
+    AUTH_GSSAPI = 0x01
+    AUTH_USER_PASS = 0x02
+    AUTH_NO_ACCEPTABLE = 0xFF
+
+    CMD_CONNECT = 0x01
+    CMD_BIND = 0x02
+    CMD_UDP_ASSOCIATE = 0x03
+
+    ATYP_IPV4 = 0x01
+    ATYP_DOMAIN = 0x03
+    ATYP_IPV6 = 0x04
+
+    REP_SUCCESS = 0x00
+    REP_GENERAL_FAILURE = 0x01
+    REP_CONN_NOT_ALLOWED = 0x02
+    REP_NETWORK_UNREACHABLE = 0x03
+    REP_HOST_UNREACHABLE = 0x04
+    REP_CONN_REFUSED = 0x05
+    REP_TTL_EXPIRED = 0x06
+    REP_CMD_NOT_SUPPORTED = 0x07
+    REP_ATYP_NOT_SUPPORTED = 0x08
+
+    @classmethod
+    def parse_client_greeting(cls, data: bytes) -> Dict[str, Any]:
+        """Parses SOCKS5 client version identifier and method selection message."""
+        if len(data) < 2:
+            raise ValueError("Greeting data too short")
+        ver, nmethods = data[0], data[1]
+        if ver != 0x05:
+            raise ValueError(f"Unsupported SOCKS version: 0x{ver:02x}")
+        if len(data) < 2 + nmethods:
+            raise ValueError("Truncated greeting methods")
+        methods = list(data[2 : 2 + nmethods])
+        return {"version": ver, "methods": methods}
+
+    @classmethod
+    def build_server_greeting(cls, method: int = 0x00) -> bytes:
+        """Constructs server method selection response."""
+        return bytes([0x05, method])
+
+    @classmethod
+    def parse_request(cls, data: bytes) -> Dict[str, Any]:
+        """Parses RFC 1928 SOCKS5 client connection request."""
+        if len(data) < 6:
+            raise ValueError("Request packet too short")
+        ver, cmd, rsv, atyp = data[0], data[1], data[2], data[3]
+        if ver != 0x05:
+            raise ValueError(f"Invalid SOCKS version: {ver}")
+
+        offset = 4
+        dest_addr = ""
+        if atyp == cls.ATYP_IPV4:
+            if len(data) < offset + 4 + 2:
+                raise ValueError("Truncated IPv4 request")
+            dest_addr = ".".join(str(b) for b in data[offset : offset + 4])
+            offset += 4
+        elif atyp == cls.ATYP_DOMAIN:
+            domain_len = data[offset]
+            offset += 1
+            if len(data) < offset + domain_len + 2:
+                raise ValueError("Truncated domain request")
+            dest_addr = data[offset : offset + domain_len].decode("utf-8", errors="replace")
+            offset += domain_len
+        elif atyp == cls.ATYP_IPV6:
+            if len(data) < offset + 16 + 2:
+                raise ValueError("Truncated IPv6 request")
+            raw_v6 = data[offset : offset + 16]
+            dest_addr = ":".join(f"{raw_v6[i]:02x}{raw_v6[i+1]:02x}" for i in range(0, 16, 2))
+            offset += 16
+        else:
+            raise ValueError(f"Unknown address type: 0x{atyp:02x}")
+
+        dest_port = struct.unpack(">H", data[offset : offset + 2])[0]
+        cmd_names = {1: "CONNECT", 2: "BIND", 3: "UDP_ASSOCIATE"}
+
+        return {
+            "version": ver,
+            "cmd": cmd_names.get(cmd, f"CMD_{cmd}"),
+            "cmd_code": cmd,
+            "atyp": atyp,
+            "dest_address": dest_addr,
+            "dest_port": dest_port,
+        }
+
+    @classmethod
+    def build_response(
+        cls,
+        rep: int = 0x00,
+        bind_addr: str = "0.0.0.0",
+        bind_port: int = 0,
+    ) -> bytes:
+        """Builds RFC 1928 server reply packet."""
+        resp = bytearray([0x05, rep, 0x00])
+        # Detect IPv4 vs domain
+        octets = bind_addr.split(".")
+        if len(octets) == 4 and all(o.isdigit() and 0 <= int(o) <= 255 for o in octets):
+            resp.append(cls.ATYP_IPV4)
+            for o in octets:
+                resp.append(int(o))
+        else:
+            domain_bytes = bind_addr.encode("utf-8")
+            resp.append(cls.ATYP_DOMAIN)
+            resp.append(len(domain_bytes))
+            resp.extend(domain_bytes)
+
+        resp.extend(struct.pack(">H", bind_port))
+        return bytes(resp)
+
+
+class CIDRPrefixTrieNode:
+    """Node in binary radix trie for IP prefix lookup."""
+
+    def __init__(self):
+        self.children: Dict[int, Optional[CIDRPrefixTrieNode]] = {0: None, 1: None}
+        self.is_terminal: bool = False
+        self.cidr: Optional[str] = None
+        self.value: Any = None
+
+
+class CIDRPrefixTrie:
+    """Longest Prefix Match (LPM) binary routing trie for IPv4 and IPv6."""
+
+    def __init__(self):
+        self.root_v4 = CIDRPrefixTrieNode()
+        self.root_v6 = CIDRPrefixTrieNode()
+
+    def _ip_to_bits(self, ip_str: str) -> Tuple[str, int]:
+        """Converts an IP address string to binary bit string ('4' or '6', bit_string)."""
+        if ":" in ip_str:
+            # IPv6
+            parts = ip_str.split("::")
+            if len(parts) == 2:
+                left = parts[0].split(":") if parts[0] else []
+                right = parts[1].split(":") if parts[1] else []
+                missing = 8 - (len(left) + len(right))
+                blocks = left + ["0"] * missing + right
+            else:
+                blocks = ip_str.split(":")
+            bit_str = "".join(f"{int(b, 16):016b}" for b in blocks)
+            return ("6", bit_str)
+        else:
+            # IPv4
+            octets = [int(o) for o in ip_str.split(".")]
+            bit_str = "".join(f"{o:08b}" for o in octets)
+            return ("4", bit_str)
+
+    def insert(self, cidr: str, value: Any = None) -> None:
+        """Inserts a CIDR prefix (e.g. '192.168.1.0/24') with associated value."""
+        if "/" in cidr:
+            ip_part, prefix_len_str = cidr.split("/", 1)
+            prefix_len = int(prefix_len_str)
+        else:
+            ip_part = cidr
+            prefix_len = 128 if ":" in cidr else 32
+
+        ip_ver, bits = self._ip_to_bits(ip_part)
+        cur = self.root_v6 if ip_ver == "6" else self.root_v4
+
+        for i in range(prefix_len):
+            bit = int(bits[i])
+            if cur.children[bit] is None:
+                cur.children[bit] = CIDRPrefixTrieNode()
+            cur = cur.children[bit]
+
+        cur.is_terminal = True
+        cur.cidr = cidr
+        cur.value = value
+
+    def lookup(self, ip: str) -> Optional[Dict[str, Any]]:
+        """Finds the longest matching prefix for an IP address."""
+        ip_ver, bits = self._ip_to_bits(ip)
+        cur = self.root_v6 if ip_ver == "6" else self.root_v4
+
+        best_match: Optional[CIDRPrefixTrieNode] = None
+        for bit_char in bits:
+            if cur.is_terminal:
+                best_match = cur
+            bit = int(bit_char)
+            if cur.children[bit] is None:
+                break
+            cur = cur.children[bit]
+
+        if cur.is_terminal:
+            best_match = cur
+
+        if best_match is not None:
+            return {
+                "matched_cidr": best_match.cidr,
+                "value": best_match.value,
+                "ip": ip,
+            }
+        return None
+
+    def all_routes(self) -> List[Dict[str, Any]]:
+        """Returns all registered CIDR routes."""
+        routes = []
+
+        def traverse(node: CIDRPrefixTrieNode):
+            if node.is_terminal:
+                routes.append({"cidr": node.cidr, "value": node.value})
+            for ch in node.children.values():
+                if ch is not None:
+                    traverse(ch)
+
+        traverse(self.root_v4)
+        traverse(self.root_v6)
+        return routes
+
+
+def net_parse_tls_client_hello(raw_bytes: bytes) -> Dict[str, Any]:
+    """Parses a TLS ClientHello packet record."""
+    return TLS13ClientHelloParser.parse(raw_bytes)
+
+
+def net_build_socks5_response(rep: int = 0, bind_addr: str = "0.0.0.0", bind_port: int = 0) -> bytes:
+    """Builds an RFC 1928 SOCKS5 server response byte packet."""
+    return SOCKS5Protocol.build_response(rep, bind_addr, bind_port)
+
+
+def net_create_cidr_trie() -> CIDRPrefixTrie:
+    """Creates a new CIDR Longest Prefix Match (LPM) routing trie."""
+    return CIDRPrefixTrie()
+
+
+

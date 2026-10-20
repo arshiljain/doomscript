@@ -3262,6 +3262,12 @@ from doomscript.domains.compiler.runtime import (
     compiler_run_bytecode,
     compiler_assemble_string,
     compiler_parse_pratt,
+    LALR1Parser,
+    SSAFormBuilder,
+    ChaitinRegisterAllocator,
+    compiler_lalr1_parse,
+    compiler_build_ssa,
+    compiler_allocate_registers,
 )
 
 from doomscript.domains.robotics.runtime import (
@@ -3414,6 +3420,16 @@ from doomscript.domains.automata.runtime import (
     automata_minimize_dfa,
     automata_regex_to_dfa,
     automata_run_turing_machine,
+    PushdownAutomaton,
+    MooreMealyFSM,
+    BuchiAutomaton,
+    automata_create_pda,
+    automata_pda_accepts,
+    automata_create_moore_fsm,
+    automata_create_mealy_fsm,
+    automata_run_fsm,
+    automata_create_buchi,
+    automata_buchi_accepts_cycle,
 )
 
 from doomscript.domains.metrics.runtime import (
@@ -3455,6 +3471,19 @@ from doomscript.domains.dsa.runtime import (
     TrieNode,
     dsa_btree,
     dsa_prefix_trie,
+    FibonacciHeap,
+    FibonacciHeapNode,
+    DisjointSetUnion,
+    FenwickTree,
+    FenwickTree2D,
+    BloomFilter,
+    CountingBloomFilter,
+    dsa_fibonacci_heap,
+    dsa_dsu,
+    dsa_fenwick_tree,
+    dsa_fenwick_tree_2d,
+    dsa_bloom_filter,
+    dsa_counting_bloom_filter,
 )
 
 from doomscript.domains.ml.runtime import (
@@ -3468,12 +3497,22 @@ from doomscript.domains.finance.runtime import (
 
 from doomscript.domains.graph.runtime import (
     graph_johnson_apsp,
+    graph_tarjan_scc,
+    graph_hopcroft_karp,
+    graph_eulerian_path,
+    graph_boruvka_mst,
 )
 
 from doomscript.domains.net.runtime import (
     DNSWireProtocol,
     net_dns_build_query,
     net_dns_parse_packet,
+    TLS13ClientHelloParser,
+    SOCKS5Protocol,
+    CIDRPrefixTrie,
+    net_parse_tls_client_hello,
+    net_build_socks5_response,
+    net_create_cidr_trie,
 )
 
 from doomscript.domains.sim.runtime import (
