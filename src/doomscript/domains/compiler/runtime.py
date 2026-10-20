@@ -2,6 +2,7 @@
 
 import re
 from typing import List, Dict, Any, Optional, Union, Tuple, Callable
+from doomscript.runtime import Record
 
 
 class Opcode:
@@ -951,5 +952,221 @@ def compiler_allocate_registers(instructions: List[Dict[str, Any]], k_registers:
     """Allocates hardware registers via Chaitin's Kempe graph-coloring heuristic."""
     allocator = ChaitinRegisterAllocator(k_registers)
     return allocator.allocate(instructions)
+
+
+# ==============================================================================
+# DEAD CODE ELIMINATION & CONSTANT FOLDING OPTIMIZATION PASS
+# ==============================================================================
+
+class OptimizationPassDCEAndFold:
+    """Multi-pass optimizer performing constant propagation, folding, and dead code elimination."""
+
+    @classmethod
+    def optimize(cls, tac_instructions: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Iteratively optimizes Three-Address Code instructions to fixed point."""
+        instructions = [dict(inst) for inst in tac_instructions]
+        total_folded = 0
+        total_eliminated = 0
+        changed = True
+
+        while changed:
+            changed = False
+            # Pass 1: Constant Propagation & Algebraic Folding
+            const_map: Dict[str, Union[int, float]] = {}
+            new_instructions = []
+
+            for inst in instructions:
+                op = inst.get("op", "").lower()
+                target = inst.get("target")
+                arg1 = inst.get("arg1")
+                arg2 = inst.get("arg2")
+
+                # Substitute known constants
+                val1 = const_map.get(arg1, arg1) if isinstance(arg1, str) else arg1
+                val2 = const_map.get(arg2, arg2) if isinstance(arg2, str) else arg2
+
+                # Fold binary constants
+                if isinstance(val1, (int, float)) and isinstance(val2, (int, float)):
+                    res_val = None
+                    if op in ("+", "add"):
+                        res_val = val1 + val2
+                    elif op in ("-", "sub"):
+                        res_val = val1 - val2
+                    elif op in ("*", "mul"):
+                        res_val = val1 * val2
+                    elif op in ("/", "div"):
+                        res_val = (val1 / val2) if val2 != 0 else None
+
+                    if res_val is not None:
+                        total_folded += 1
+                        changed = True
+                        if target:
+                            const_map[target] = res_val
+                        new_instructions.append({"op": "const", "target": target, "value": res_val})
+                        continue
+
+                # Algebraic identities
+                if op in ("*", "mul") and (val1 == 0 or val2 == 0):
+                    total_folded += 1
+                    changed = True
+                    if target:
+                        const_map[target] = 0
+                    new_instructions.append({"op": "const", "target": target, "value": 0})
+                    continue
+
+                if op in ("+", "add") and val2 == 0:
+                    total_folded += 1
+                    changed = True
+                    new_instructions.append({"op": "copy", "target": target, "arg1": val1})
+                    continue
+
+                if op == "const" and target and "value" in inst:
+                    const_map[target] = inst["value"]
+
+                inst_copy = dict(inst)
+                if val1 != arg1:
+                    inst_copy["arg1"] = val1
+                if val2 != arg2:
+                    inst_copy["arg2"] = val2
+                new_instructions.append(inst_copy)
+
+            # Pass 2: Dead Code Elimination
+            # Find all used variables
+            used_vars: Set[str] = set()
+            for inst in new_instructions:
+                if inst.get("op") == "return":
+                    val = inst.get("value")
+                    if isinstance(val, str):
+                        used_vars.add(val)
+                for key in ("arg1", "arg2"):
+                    arg = inst.get(key)
+                    if isinstance(arg, str):
+                        used_vars.add(arg)
+
+            pruned = []
+            for inst in new_instructions:
+                t = inst.get("target")
+                op = inst.get("op")
+                # If instruction defines a variable that is never used and has no side effects, eliminate it
+                if t and t not in used_vars and op not in ("call", "print", "return"):
+                    total_eliminated += 1
+                    changed = True
+                else:
+                    pruned.append(inst)
+
+            instructions = pruned
+
+        return {
+            "optimized_instructions": instructions,
+            "constants_folded": total_folded,
+            "dead_instructions_eliminated": total_eliminated,
+            "instruction_count": len(instructions),
+        }
+
+
+# ==============================================================================
+# DOMINATOR TREE & LOOP IDENTIFIER
+# ==============================================================================
+
+class DominatorTreeBuilder:
+    """Computes immediate dominators, dominance frontiers, and natural loops in a CFG."""
+
+    @classmethod
+    def compute(cls, entry: str, nodes: List[str], edges: List[Tuple[str, str]]) -> Dict[str, Any]:
+        node_set = set(nodes)
+        preds: Dict[str, Set[str]] = {n: set() for n in node_set}
+        succs: Dict[str, Set[str]] = {n: set() for n in node_set}
+
+        for u, v in edges:
+            if u in node_set and v in node_set:
+                succs[u].add(v)
+                preds[v].add(u)
+
+        # Iterative Dominator algorithm
+        # Dom(entry) = {entry}
+        # Dom(n) = {n} union (intersection of Dom(p) for p in preds(n))
+        dom: Dict[str, Set[str]] = {}
+        for n in node_set:
+            dom[n] = set(node_set) if n != entry else {entry}
+
+        changed = True
+        while changed:
+            changed = False
+            for n in node_set:
+                if n == entry:
+                    continue
+                p_doms = [dom[p] for p in preds[n] if p in dom]
+                if p_doms:
+                    common = set.intersection(*p_doms)
+                else:
+                    common = set()
+                new_dom = {n} | common
+                if new_dom != dom[n]:
+                    dom[n] = new_dom
+                    changed = True
+
+        # Compute immediate dominators (idom)
+        # idom(n) is the unique d in Dom(n) - {n} that is dominated by all other nodes in Dom(n) - {n}
+        idom: Dict[str, Optional[str]] = {entry: None}
+        for n in node_set:
+            if n == entry:
+                continue
+            strict_doms = dom[n] - {n}
+            # The idom is the strict dominator whose dom set has size len(strict_doms)
+            idom_node = None
+            max_size = -1
+            for d in strict_doms:
+                if len(dom[d]) > max_size:
+                    max_size = len(dom[d])
+                    idom_node = d
+            idom[n] = idom_node
+
+        # Compute Dominance Frontiers (DF)
+        df: Dict[str, Set[str]] = {n: set() for n in node_set}
+        for u in node_set:
+            if len(preds[u]) >= 2:
+                for p in preds[u]:
+                    runner = p
+                    while runner != idom.get(u) and runner is not None:
+                        df[runner].add(u)
+                        runner = idom.get(runner)
+
+        # Detect natural loops: back edges m -> h where h dominates m
+        loops: List[Dict[str, Any]] = []
+        for u, v in edges:
+            if v in dom.get(u, set()):
+                # v is loop header, u is loop latch
+                # Loop body = nodes that can reach u without going through v
+                loop_body = {v, u}
+                stack = [u]
+                while stack:
+                    curr = stack.pop()
+                    for p in preds[curr]:
+                        if p not in loop_body:
+                            loop_body.add(p)
+                            stack.append(p)
+                loops.append({
+                    "header": v,
+                    "latch": u,
+                    "body": sorted(list(loop_body)),
+                })
+
+        return {
+            "entry": entry,
+            "idom": idom,
+            "dominance_frontiers": {k: sorted(list(v)) for k, v in df.items()},
+            "natural_loops": loops,
+        }
+
+
+def compiler_optimize_dce_and_fold(instructions: List[Dict[str, Any]]) -> Any:
+    """Optimizes instruction stream with constant folding and dead code elimination."""
+    return Record(OptimizationPassDCEAndFold.optimize(instructions))
+
+
+def compiler_build_dominator_tree(entry: str, nodes: List[str], edges: List[Tuple[str, str]]) -> Any:
+    """Computes immediate dominators, dominance frontiers, and natural loops in CFG."""
+    return Record(DominatorTreeBuilder.compute(entry, nodes, edges))
+
 
 

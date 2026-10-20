@@ -41,6 +41,26 @@ class CompilerDomainParser(DomainParser):
             expr, target = m_pratt.group(1).strip(), m_pratt.group(2).strip()
             return f"set {target} to compiler_parse_pratt({expr})"
 
+        # optimize instructions <insts> with dce and constant folding into <target>
+        m_opt = re.match(
+            r"^optimize\s+instructions\s+(.+?)\s+with\s+dce\s+and\s+constant\s+folding\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_opt:
+            insts, target = m_opt.group(1).strip(), m_opt.group(2).strip()
+            return f"set {target} to compiler_optimize_dce_and_fold({insts})"
+
+        # build dominator tree with entry <entry> nodes <nodes> edges <edges> into <target>
+        m_dom = re.match(
+            r"^build\s+dominator\s+tree\s+with\s+entry\s+(.+?)\s+nodes\s+(.+?)\s+edges\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_dom:
+            entry, nodes, edges, target = m_dom.group(1).strip(), m_dom.group(2).strip(), m_dom.group(3).strip(), m_dom.group(4).strip()
+            return f"set {target} to compiler_build_dominator_tree({entry}, {nodes}, {edges})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

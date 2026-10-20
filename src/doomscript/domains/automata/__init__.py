@@ -32,6 +32,10 @@ from doomscript.domains.automata.runtime import (
     automata_run_fsm,
     automata_create_buchi,
     automata_buchi_accepts_cycle,
+    CellularAutomata1D,
+    GameOfLife2D,
+    automata_simulate_rule,
+    automata_simulate_life,
 )
 from doomscript.domains.automata.parser import AutomataDomainParser
 from doomscript.domains.automata.exporter import AutomataASTExporter
@@ -73,11 +77,15 @@ class AutomataDomain(DomainContract):
     blocks = []
 
     def can_handle_line(self, line: str) -> bool:
+        if self.parser.parse_inspect(line, 0) is not None or self.parser.parse_operation(line, 0) is not None:
+            return True
         s = line.strip().lower()
         return (
             s.startswith("compile regex ")
             or s.startswith("minimize dfa ")
             or s.startswith("check if dfa ")
+            or s.startswith("simulate cellular rule ")
+            or s.startswith("simulate game of life ")
         )
 
     def can_handle_block(self, header: str) -> bool:
@@ -95,14 +103,16 @@ __all__ = [
     "NFA",
     "ThompsonRegex",
     "TuringMachine",
+    "PushdownAutomaton",
+    "MooreMealyFSM",
+    "BuchiAutomaton",
+    "CellularAutomata1D",
+    "GameOfLife2D",
     "automata_create_dfa",
     "automata_dfa_accepts",
     "automata_minimize_dfa",
     "automata_regex_to_dfa",
     "automata_run_turing_machine",
-    "PushdownAutomaton",
-    "MooreMealyFSM",
-    "BuchiAutomaton",
     "automata_create_pda",
     "automata_pda_accepts",
     "automata_create_moore_fsm",
@@ -110,4 +120,6 @@ __all__ = [
     "automata_run_fsm",
     "automata_create_buchi",
     "automata_buchi_accepts_cycle",
+    "automata_simulate_rule",
+    "automata_simulate_life",
 ]

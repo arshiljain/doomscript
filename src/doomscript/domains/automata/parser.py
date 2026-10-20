@@ -45,6 +45,31 @@ class AutomataDomainParser(DomainParser):
                 input_str = f'"{input_str}"'
             return f"set {target} to automata_dfa_accepts({dfa}, {input_str})"
 
+        # simulate cellular rule <rule> [with width <w>] [with generations <gen>] into <target>
+        m_ca = re.match(
+            r"^simulate\s+cellular\s+rule\s+(\d+)(?:\s+with\s+width\s+(\d+))?(?:\s+with\s+generations\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_ca:
+            rule = m_ca.group(1).strip()
+            w = m_ca.group(2) if m_ca.group(2) else "31"
+            gen = m_ca.group(3) if m_ca.group(3) else "20"
+            target = m_ca.group(4).strip()
+            return f"set {target} to automata_simulate_rule({rule}, width={w}, generations={gen})"
+
+        # simulate game of life with rows <rows> cols <cols> live <cells> [with steps <steps>] into <target>
+        m_gol = re.match(
+            r"^simulate\s+game\s+of\s+life\s+with\s+rows\s+(.+?)\s+cols\s+(.+?)\s+live\s+(.+?)(?:\s+with\s+steps\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_gol:
+            rows, cols, cells = m_gol.group(1).strip(), m_gol.group(2).strip(), m_gol.group(3).strip()
+            steps = m_gol.group(4) if m_gol.group(4) else "10"
+            target = m_gol.group(5).strip()
+            return f"set {target} to automata_simulate_life({rows}, {cols}, {cells}, steps={steps})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

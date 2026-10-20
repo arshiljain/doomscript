@@ -30,6 +30,10 @@ from doomscript.domains.compiler.runtime import (
     compiler_lalr1_parse,
     compiler_build_ssa,
     compiler_allocate_registers,
+    OptimizationPassDCEAndFold,
+    DominatorTreeBuilder,
+    compiler_optimize_dce_and_fold,
+    compiler_build_dominator_tree,
 )
 from doomscript.domains.compiler.parser import CompilerDomainParser
 from doomscript.domains.compiler.exporter import CompilerASTExporter
@@ -77,11 +81,15 @@ class CompilerDomain(DomainContract):
     blocks = []
 
     def can_handle_line(self, line: str) -> bool:
+        if self.parser.parse_inspect(line, 0) is not None or self.parser.parse_operation(line, 0) is not None:
+            return True
         s = line.strip().lower()
         return (
             s.startswith("assemble bytecode from text ")
             or s.startswith("execute bytecode program ")
             or s.startswith("parse pratt expression ")
+            or s.startswith("optimize instructions ")
+            or s.startswith("build dominator tree ")
         )
 
     def can_handle_block(self, header: str) -> bool:
@@ -110,4 +118,8 @@ __all__ = [
     "compiler_lalr1_parse",
     "compiler_build_ssa",
     "compiler_allocate_registers",
+    "OptimizationPassDCEAndFold",
+    "DominatorTreeBuilder",
+    "compiler_optimize_dce_and_fold",
+    "compiler_build_dominator_tree",
 ]

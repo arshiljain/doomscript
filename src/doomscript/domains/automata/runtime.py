@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from collections import deque
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from doomscript.runtime import Record
 
 
 # --- 1. Deterministic Finite Automaton (DFA) ---
@@ -759,4 +760,161 @@ def automata_create_buchi(
 def automata_buchi_accepts_cycle(buchi: BuchiAutomaton, prefix: str, cycle: str) -> bool:
     """Tests if a Büchi automaton accepts the infinite periodic lasso word prefix . cycle^omega."""
     return buchi.accepts_lasso(prefix, cycle)
+
+
+# ==============================================================================
+# WOLFRAM 1D CELLULAR AUTOMATA (RULE 30, 90, 110, 184)
+# ==============================================================================
+
+class CellularAutomata1D:
+    """Simulates 1D elementary cellular automata for any Wolfram rule [0, 255]."""
+
+    def __init__(self, rule: int, width: int = 31, initial_state: Optional[List[int]] = None):
+        self.rule = max(0, min(255, int(rule)))
+        self.width = max(3, int(width))
+        if initial_state is not None:
+            self.state = [1 if x else 0 for x in initial_state[:self.width]]
+            if len(self.state) < self.width:
+                self.state.extend([0] * (self.width - len(self.state)))
+        else:
+            # Single centered active cell
+            self.state = [0] * self.width
+            self.state[self.width // 2] = 1
+
+        # Lookup table for 3-neighborhood (left, center, right) -> bit value
+        self.lookup: Dict[Tuple[int, int, int], int] = {}
+        for pattern in range(8):
+            bit = (self.rule >> pattern) & 1
+            left = (pattern >> 2) & 1
+            center = (pattern >> 1) & 1
+            right = pattern & 1
+            self.lookup[(left, center, right)] = bit
+
+    def step(self) -> List[int]:
+        """Advances one generation with periodic boundary wrap-around."""
+        next_state = [0] * self.width
+        for i in range(self.width):
+            left = self.state[(i - 1) % self.width]
+            center = self.state[i]
+            right = self.state[(i + 1) % self.width]
+            next_state[i] = self.lookup[(left, center, right)]
+        self.state = next_state
+        return list(self.state)
+
+    def simulate(self, generations: int = 20) -> Dict[str, Any]:
+        """Evolves the automaton for multiple generations and computes metrics."""
+        history = [list(self.state)]
+        densities = [sum(self.state) / self.width]
+
+        for _ in range(generations):
+            nxt = self.step()
+            history.append(list(nxt))
+            densities.append(sum(nxt) / self.width)
+
+        # Final generation active cells
+        final_active = sum(self.state)
+        # Empirical entropy of final state
+        p1 = final_active / self.width
+        p0 = 1.0 - p1
+        import math
+        entropy = 0.0
+        if p1 > 1e-12:
+            entropy -= p1 * math.log2(p1)
+        if p0 > 1e-12:
+            entropy -= p0 * math.log2(p0)
+
+        return {
+            "rule": self.rule,
+            "width": self.width,
+            "generations": generations,
+            "final_active_count": final_active,
+            "final_density": round(p1, 4),
+            "entropy": round(entropy, 4),
+            "history": history,
+        }
+
+
+# ==============================================================================
+# CONWAY'S 2D GAME OF LIFE SIMULATOR
+# ==============================================================================
+
+class GameOfLife2D:
+    """Conway's Game of Life 2D cellular automaton with oscillator detection."""
+
+    def __init__(self, rows: int = 10, cols: int = 10, live_cells: Optional[List[Tuple[int, int]]] = None):
+        self.rows = max(3, int(rows))
+        self.cols = max(3, int(cols))
+        self.grid = [[0] * self.cols for _ in range(self.rows)]
+        if live_cells:
+            for r, c in live_cells:
+                if 0 <= r < self.rows and 0 <= c < self.cols:
+                    self.grid[r][c] = 1
+
+    def step(self) -> int:
+        """Executes one tick of B3/S23 rule and returns new population count."""
+        new_grid = [[0] * self.cols for _ in range(self.rows)]
+        population = 0
+
+        for r in range(self.rows):
+            for c in range(self.cols):
+                # Count 8-neighbors
+                neighbors = 0
+                for dr in (-1, 0, 1):
+                    for dc in (-1, 0, 1):
+                        if dr == 0 and dc == 0:
+                            continue
+                        nr = (r + dr) % self.rows
+                        nc = (c + dc) % self.cols
+                        neighbors += self.grid[nr][nc]
+
+                curr = self.grid[r][c]
+                if curr == 1 and (neighbors == 2 or neighbors == 3):
+                    new_grid[r][c] = 1
+                    population += 1
+                elif curr == 0 and neighbors == 3:
+                    new_grid[r][c] = 1
+                    population += 1
+
+        self.grid = new_grid
+        return population
+
+    def simulate(self, steps: int = 10) -> Dict[str, Any]:
+        """Simulates steps and checks for cycle / stability."""
+        seen: Dict[str, int] = {}
+        history = []
+        cycle_period = None
+
+        for step_idx in range(steps):
+            key = "".join("".join(str(x) for x in row) for row in self.grid)
+            if key in seen:
+                cycle_period = step_idx - seen[key]
+                break
+            seen[key] = step_idx
+
+            pop = self.step()
+            history.append(pop)
+
+        final_pop = sum(sum(row) for row in self.grid)
+        return {
+            "rows": self.rows,
+            "cols": self.cols,
+            "final_population": final_pop,
+            "is_oscillating": cycle_period is not None and cycle_period > 1,
+            "is_stable": cycle_period == 1,
+            "period": cycle_period,
+            "population_history": history,
+        }
+
+
+def automata_simulate_rule(rule: int, width: int = 31, generations: int = 20) -> Any:
+    """Simulates 1D Wolfram cellular automaton."""
+    ca = CellularAutomata1D(rule, width=width)
+    return Record(ca.simulate(generations=generations))
+
+
+def automata_simulate_life(rows: int, cols: int, live_cells: List[Tuple[int, int]], steps: int = 10) -> Any:
+    """Simulates Conway's 2D Game of Life."""
+    gol = GameOfLife2D(rows, cols, live_cells=live_cells)
+    return Record(gol.simulate(steps=steps))
+
 

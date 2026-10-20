@@ -3447,6 +3447,10 @@ from doomscript.domains.compiler.runtime import (
     compiler_lalr1_parse,
     compiler_build_ssa,
     compiler_allocate_registers,
+    OptimizationPassDCEAndFold,
+    DominatorTreeBuilder,
+    compiler_optimize_dce_and_fold,
+    compiler_build_dominator_tree,
 )
 
 from doomscript.domains.robotics.runtime import (
@@ -3591,6 +3595,10 @@ from doomscript.domains.time_series.runtime import (
     ARIMASimulator,
     DynamicTimeWarping,
     CUSUMDetector,
+    HoltWintersSmoothing,
+    AutoregressiveModelAR,
+    timeseries_holt_winters,
+    timeseries_ar_forecast,
 )
 
 from doomscript.domains.symbolic.runtime import (
@@ -3617,6 +3625,11 @@ from doomscript.domains.symbolic.runtime import (
     symbolic_integrate,
     symbolic_taylor_series,
     symbolic_solve_rational_linear,
+    PolynomialGCDAndRoots,
+    BrentRootFinder,
+    symbolic_polynomial_gcd,
+    symbolic_rational_roots,
+    symbolic_brent_root,
 )
 
 from doomscript.domains.graphics.runtime import (
@@ -3704,6 +3717,10 @@ from doomscript.domains.automata.runtime import (
     automata_run_fsm,
     automata_create_buchi,
     automata_buchi_accepts_cycle,
+    CellularAutomata1D,
+    GameOfLife2D,
+    automata_simulate_rule,
+    automata_simulate_life,
 )
 
 from doomscript.domains.metrics.runtime import (

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import math
 from typing import Any, Dict, List, Optional, Tuple, Union
+from doomscript.runtime import Record
 
 
 class TimeSeriesDifferencer:
@@ -559,3 +560,171 @@ class CUSUMDetector:
             "pos_cusum": pos_cusum,
             "neg_cusum": neg_cusum,
         }
+
+
+# ==============================================================================
+# HOLT-WINTERS TRIPLE EXPONENTIAL SMOOTHING FORECASTER
+# ==============================================================================
+
+class HoltWintersSmoothing:
+    """Holt-Winters triple exponential smoothing with level, trend, and seasonal components."""
+
+    @classmethod
+    def fit_forecast(
+        cls,
+        series: List[float],
+        season_period: int = 4,
+        alpha: float = 0.2,
+        beta: float = 0.1,
+        gamma: float = 0.3,
+        forecast_steps: int = 4,
+        multiplicative: bool = False,
+    ) -> Dict[str, Any]:
+        y = [float(v) for v in series]
+        n = len(y)
+        m = max(2, int(season_period))
+        if n < 2 * m:
+            raise ValueError(f"Series length {n} is too short for seasonal period {m} (needs at least 2*m)")
+
+        # Initial level and trend from first 2 seasons
+        l_prev = sum(y[:m]) / m
+        b_prev = sum((y[m + i] - y[i]) / m for i in range(m)) / m
+
+        # Initial seasonal indices
+        if not multiplicative:
+            s = [y[i] - l_prev for i in range(m)]
+        else:
+            s = [y[i] / max(1e-6, l_prev) for i in range(m)]
+
+        fitted = []
+        residuals = []
+
+        for t in range(n):
+            yt = y[t]
+            s_idx = t % m
+            s_val = s[s_idx]
+
+            if not multiplicative:
+                y_hat = l_prev + b_prev + s_val
+                l_new = alpha * (yt - s_val) + (1.0 - alpha) * (l_prev + b_prev)
+                b_new = beta * (l_new - l_prev) + (1.0 - beta) * b_prev
+                s[s_idx] = gamma * (yt - l_new) + (1.0 - gamma) * s_val
+            else:
+                y_hat = (l_prev + b_prev) * s_val
+                l_new = alpha * (yt / max(1e-6, s_val)) + (1.0 - alpha) * (l_prev + b_prev)
+                b_new = beta * (l_new - l_prev) + (1.0 - beta) * b_prev
+                s[s_idx] = gamma * (yt / max(1e-6, l_new)) + (1.0 - gamma) * s_val
+
+            fitted.append(round(y_hat, 4))
+            residuals.append(round(yt - y_hat, 4))
+            l_prev = l_new
+            b_prev = b_new
+
+        # Compute multi-step out-of-sample forecast
+        forecasts = []
+        for h in range(1, forecast_steps + 1):
+            s_idx = (n + h - 1) % m
+            if not multiplicative:
+                fh = l_prev + h * b_prev + s[s_idx]
+            else:
+                fh = (l_prev + h * b_prev) * s[s_idx]
+            forecasts.append(round(fh, 4))
+
+        # Metrics
+        rmse = math.sqrt(sum(r * r for r in residuals) / n)
+        mae = sum(abs(r) for r in residuals) / n
+
+        return {
+            "series_length": n,
+            "season_period": m,
+            "final_level": round(l_prev, 4),
+            "final_trend": round(b_prev, 4),
+            "forecasts": forecasts,
+            "rmse": round(rmse, 4),
+            "mae": round(mae, 4),
+            "multiplicative": multiplicative,
+        }
+
+
+# ==============================================================================
+# AUTOREGRESSIVE MODEL AR(P) VIA YULE-WALKER
+# ==============================================================================
+
+class AutoregressiveModelAR:
+    """Autoregressive AR(p) model fitting using Yule-Walker and Levinson-Durbin recursion."""
+
+    @classmethod
+    def fit_and_forecast(cls, series: List[float], order_p: int = 2, forecast_steps: int = 3) -> Dict[str, Any]:
+        y = [float(v) for v in series]
+        n = len(y)
+        p = max(1, min(n - 2, int(order_p)))
+
+        mean_y = sum(y) / n
+        yc = [v - mean_y for v in y]
+
+        # Sample autocovariance gamma_k for k = 0..p
+        gamma = [0.0] * (p + 1)
+        for k in range(p + 1):
+            gamma[k] = sum(yc[t] * yc[t - k] for t in range(k, n)) / n
+
+        if gamma[0] < 1e-12:
+            return {"ar_coefficients": [0.0] * p, "forecasts": [round(mean_y, 4)] * forecast_steps}
+
+        # Levinson-Durbin algorithm to solve Toeplitz system R * phi = r
+        phi = [[0.0] * (p + 1) for _ in range(p + 1)]
+        v = gamma[0]
+
+        for k in range(1, p + 1):
+            acc = sum(phi[k - 1][j] * gamma[k - j] for j in range(1, k))
+            lambda_k = (gamma[k] - acc) / v
+            phi[k][k] = lambda_k
+            for j in range(1, k):
+                phi[k][j] = phi[k - 1][j] - lambda_k * phi[k - 1][k - j]
+            v = v * (1.0 - lambda_k * lambda_k)
+
+        ar_coeffs = [round(phi[p][j], 4) for j in range(1, p + 1)]
+        sigma_sq = max(1e-12, v)
+
+        # AIC and BIC
+        aic = round(n * math.log(sigma_sq) + 2.0 * p, 3)
+        bic = round(n * math.log(sigma_sq) + p * math.log(n), 3)
+
+        # Multi-step forecasting
+        hist = list(yc)
+        forecasts = []
+        for _ in range(forecast_steps):
+            pred_c = 0.0
+            for j in range(p):
+                pred_c += ar_coeffs[j] * hist[-1 - j]
+            hist.append(pred_c)
+            forecasts.append(round(pred_c + mean_y, 4))
+
+        return {
+            "order_p": p,
+            "mean": round(mean_y, 4),
+            "ar_coefficients": ar_coeffs,
+            "noise_variance": round(sigma_sq, 6),
+            "aic": aic,
+            "bic": bic,
+            "forecasts": forecasts,
+        }
+
+
+def timeseries_holt_winters(
+    series: List[float],
+    season_period: int = 4,
+    forecast_steps: int = 4,
+    multiplicative: bool = False,
+) -> Any:
+    """Fits Holt-Winters exponential smoothing and generates forecasts."""
+    return Record(HoltWintersSmoothing.fit_forecast(series, season_period=season_period, forecast_steps=forecast_steps, multiplicative=multiplicative))
+
+
+def timeseries_ar_forecast(
+    series: List[float],
+    order_p: int = 2,
+    forecast_steps: int = 3,
+) -> Any:
+    """Fits AR(p) autoregressive model via Yule-Walker and forecasts future steps."""
+    return Record(AutoregressiveModelAR.fit_and_forecast(series, order_p=order_p, forecast_steps=forecast_steps))
+

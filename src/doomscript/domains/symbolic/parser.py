@@ -47,6 +47,38 @@ class SymbolicDomainParser(DomainParser):
                 expr = f'"{expr}"'
             return f"set {target} to symbolic_eval({expr}, {subs})"
 
+        # calculate polynomial gcd for <p> and <q> into <target>
+        m_gcd = re.match(
+            r"^calculate\s+polynomial\s+gcd\s+for\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_gcd:
+            p, q, target = m_gcd.group(1).strip(), m_gcd.group(2).strip(), m_gcd.group(3).strip()
+            return f"set {target} to symbolic_polynomial_gcd({p}, {q})"
+
+        # find rational roots for polynomial <coeffs> into <target>
+        m_roots = re.match(
+            r"^find\s+rational\s+roots\s+for\s+polynomial\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_roots:
+            coeffs, target = m_roots.group(1).strip(), m_roots.group(2).strip()
+            return f"set {target} to symbolic_rational_roots({coeffs})"
+
+        # find root for expression <expr> bracket <a> to <b> into <target>
+        m_brent = re.match(
+            r"^find\s+root\s+for\s+expression\s+(.+?)\s+bracket\s+(.+?)\s+to\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_brent:
+            expr, a, b, target = m_brent.group(1).strip(), m_brent.group(2).strip(), m_brent.group(3).strip(), m_brent.group(4).strip()
+            if not (expr.startswith('"') or expr.startswith("'") or expr.isidentifier()):
+                expr = f'"{expr}"'
+            return f"set {target} to symbolic_brent_root({expr}, {a}, {b})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

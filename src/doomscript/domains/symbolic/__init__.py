@@ -36,6 +36,11 @@ from doomscript.domains.symbolic.runtime import (
     symbolic_integrate,
     symbolic_taylor_series,
     symbolic_solve_rational_linear,
+    PolynomialGCDAndRoots,
+    BrentRootFinder,
+    symbolic_polynomial_gcd,
+    symbolic_rational_roots,
+    symbolic_brent_root,
 )
 from doomscript.domains.symbolic.parser import SymbolicDomainParser
 from doomscript.domains.symbolic.exporter import SymbolicASTExporter
@@ -77,11 +82,16 @@ class SymbolicDomain(DomainContract):
     blocks = []
 
     def can_handle_line(self, line: str) -> bool:
+        if self.parser.parse_inspect(line, 0) is not None or self.parser.parse_operation(line, 0) is not None:
+            return True
         s = line.strip().lower()
         return (
             s.startswith("differentiate ")
             or s.startswith("simplify expression ")
             or s.startswith("evaluate expression ")
+            or s.startswith("calculate polynomial gcd ")
+            or s.startswith("find rational roots ")
+            or s.startswith("find root for expression ")
         )
 
     def can_handle_block(self, header: str) -> bool:
@@ -118,4 +128,9 @@ __all__ = [
     "symbolic_integrate",
     "symbolic_taylor_series",
     "symbolic_solve_rational_linear",
+    "PolynomialGCDAndRoots",
+    "BrentRootFinder",
+    "symbolic_polynomial_gcd",
+    "symbolic_rational_roots",
+    "symbolic_brent_root",
 ]

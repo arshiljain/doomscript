@@ -15,6 +15,7 @@ import math
 import re
 from fractions import Fraction
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
+from doomscript.runtime import Record
 
 
 class Expr:
@@ -908,4 +909,222 @@ def symbolic_taylor_series(expr: Union[str, Expr], var: str = "x", x0: float = 0
 def symbolic_solve_rational_linear(A: List[List[Any]], b: List[Any]) -> Dict[str, Any]:
     """Solves A x = b over exact rational fractions."""
     return ExactRationalLinearSolver.solve(A, b)
+
+
+# ==============================================================================
+# POLYNOMIAL GCD & RATIONAL ROOT FINDING
+# ==============================================================================
+
+class PolynomialGCDAndRoots:
+    """Polynomial greatest common divisor, rational roots, and polynomial factorization."""
+
+    @classmethod
+    def poly_div(cls, p: List[float], q: List[float]) -> Tuple[List[float], List[float]]:
+        """Divides polynomial p by q, returning quotient and remainder (highest power first)."""
+        # Strip leading zeros
+        p = list(p)
+        q = list(q)
+        while len(p) > 1 and abs(p[0]) < 1e-12:
+            p.pop(0)
+        while len(q) > 1 and abs(q[0]) < 1e-12:
+            q.pop(0)
+
+        if not q or (len(q) == 1 and abs(q[0]) < 1e-12):
+            raise ZeroDivisionError("Cannot divide polynomial by zero")
+
+        deg_p = len(p) - 1
+        deg_q = len(q) - 1
+
+        if deg_p < deg_q:
+            return [0.0], p
+
+        quotient = [0.0] * (deg_p - deg_q + 1)
+        rem = list(p)
+
+        for i in range(deg_p - deg_q + 1):
+            lead = rem[i] / q[0]
+            quotient[i] = lead
+            for j in range(len(q)):
+                rem[i + j] -= lead * q[j]
+
+        # Clean remainder
+        rem = rem[deg_p - deg_q + 1:]
+        while len(rem) > 1 and abs(rem[0]) < 1e-12:
+            rem.pop(0)
+        if not rem:
+            rem = [0.0]
+
+        return [round(x, 6) for x in quotient], [round(x, 6) for x in rem]
+
+    @classmethod
+    def poly_gcd(cls, p: List[float], q: List[float]) -> List[float]:
+        """Computes monic greatest common divisor of polynomials p and q via Euclidean algorithm."""
+        a = list(p)
+        b = list(q)
+
+        while True:
+            while len(b) > 1 and abs(b[0]) < 1e-12:
+                b.pop(0)
+            if len(b) == 1 and abs(b[0]) < 1e-12:
+                break
+            _, rem = cls.poly_div(a, b)
+            a = b
+            b = rem
+
+        # Make monic
+        lead = a[0]
+        if abs(lead) > 1e-12:
+            return [round(x / lead, 6) for x in a]
+        return [1.0]
+
+    @classmethod
+    def find_rational_roots(cls, int_coeffs: List[int]) -> List[float]:
+        """Finds all rational roots p/q of an integer coefficient polynomial."""
+        # Clean trailing zero roots
+        coeffs = list(int_coeffs)
+        roots: List[float] = []
+        while len(coeffs) > 1 and coeffs[-1] == 0:
+            roots.append(0.0)
+            coeffs.pop()
+
+        if len(coeffs) <= 1:
+            return sorted(list(set(roots)))
+
+        an = abs(coeffs[0])
+        a0 = abs(coeffs[-1])
+
+        def get_factors(n: int) -> Set[int]:
+            facts = set()
+            for i in range(1, int(math.isqrt(n)) + 1):
+                if n % i == 0:
+                    facts.add(i)
+                    facts.add(n // i)
+            return facts
+
+        p_factors = get_factors(a0) if a0 > 0 else {0}
+        q_factors = get_factors(an) if an > 0 else {1}
+
+        candidates = set()
+        for p in p_factors:
+            for q in q_factors:
+                candidates.add(p / q)
+                candidates.add(-p / q)
+
+        for cand in candidates:
+            # Horner's evaluation
+            val = 0.0
+            for c in coeffs:
+                val = val * cand + c
+            if abs(val) < 1e-9:
+                roots.append(round(cand, 6))
+
+        return sorted(list(set(roots)))
+
+
+# ==============================================================================
+# BRENT-DEKKER HYBRID NON-LINEAR ROOT FINDER
+# ==============================================================================
+
+class BrentRootFinder:
+    """Brent's method combining bisection, secant, and inverse quadratic interpolation."""
+
+    @classmethod
+    def find_root(cls, f_expr_str: str, a: float, b: float, tol: float = 1e-10, max_iter: int = 100) -> Dict[str, Any]:
+        """Finds root of f(x) = 0 on bracket [a, b] where f(a)*f(b) <= 0."""
+        # Compile expression into evaluated function
+        # Supports x, math functions
+        safe_dict = {
+            "math": math, "sin": math.sin, "cos": math.cos, "tan": math.tan,
+            "exp": math.exp, "log": math.log, "sqrt": math.sqrt, "abs": abs
+        }
+
+        def func(x_val: float) -> float:
+            safe_dict["x"] = x_val
+            return float(eval(f_expr_str, {"__builtins__": None}, safe_dict))
+
+        fa = func(a)
+        fb = func(b)
+
+        if fa * fb > 0:
+            raise ValueError(f"Root is not bracketed: f({a})={fa}, f({b})={fb} have the same sign")
+
+        if abs(fa) < abs(fb):
+            a, b = b, a
+            fa, fb = fb, fa
+
+        c = a
+        fc = fa
+        mflag = True
+        d = 0.0
+        iters = 0
+
+        for it in range(max_iter):
+            iters = it + 1
+            if abs(fb) < tol:
+                break
+            if abs(b - a) < tol:
+                break
+
+            if abs(fa - fc) > 1e-14 and abs(fb - fc) > 1e-14:
+                # Inverse Quadratic Interpolation
+                s = (a * fb * fc) / ((fa - fb) * (fa - fc)) + \
+                    (b * fa * fc) / ((fb - fa) * (fb - fc)) + \
+                    (c * fa * fb) / ((fc - fa) * (fc - fb))
+            else:
+                # Secant method
+                s = b - fb * (b - a) / (fb - fa)
+
+            # Conditions to fall back to bisection
+            cond1 = not ((3.0 * a + b) / 4.0 <= s <= b or b <= s <= (3.0 * a + b) / 4.0)
+            cond2 = mflag and abs(s - b) >= abs(b - c) / 2.0
+            cond3 = (not mflag) and abs(s - b) >= abs(c - d) / 2.0
+            cond4 = mflag and abs(b - c) < tol
+            cond5 = (not mflag) and abs(c - d) < tol
+
+            if cond1 or cond2 or cond3 or cond4 or cond5:
+                # Bisection step
+                s = (a + b) / 2.0
+                mflag = True
+            else:
+                mflag = False
+
+            fs = func(s)
+            d = c
+            c = b
+            fc = fb
+
+            if fa * fs < 0:
+                b = s
+                fb = fs
+            else:
+                a = s
+                fa = fs
+
+            if abs(fa) < abs(fb):
+                a, b = b, a
+                fa, fb = fb, fa
+
+        root = b
+        return {
+            "root": round(root, 8),
+            "f_root": round(func(root), 10),
+            "iterations": iters,
+            "converged": abs(func(root)) < tol * 10,
+        }
+
+
+def symbolic_polynomial_gcd(p: List[float], q: List[float]) -> List[float]:
+    """Calculates monic polynomial greatest common divisor."""
+    return PolynomialGCDAndRoots.poly_gcd(p, q)
+
+
+def symbolic_rational_roots(coeffs: List[int]) -> List[float]:
+    """Finds all rational roots of integer polynomial."""
+    return PolynomialGCDAndRoots.find_rational_roots(coeffs)
+
+
+def symbolic_brent_root(expr: str, a: float, b: float) -> Any:
+    """Finds non-linear root using Brent-Dekker hybrid method."""
+    return Record(BrentRootFinder.find_root(expr, a, b))
+
 

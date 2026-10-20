@@ -25,6 +25,10 @@ from doomscript.domains.time_series.runtime import (
     ARIMASimulator,
     DynamicTimeWarping,
     CUSUMDetector,
+    HoltWintersSmoothing,
+    AutoregressiveModelAR,
+    timeseries_holt_winters,
+    timeseries_ar_forecast,
 )
 from doomscript.domains.time_series.parser import TimeSeriesDomainParser
 from doomscript.domains.time_series.exporter import TimeSeriesASTExporter
@@ -66,11 +70,15 @@ class TimeSeriesDomain(DomainContract):
     blocks = []
 
     def can_handle_line(self, line: str) -> bool:
+        if self.parser.parse_inspect(line, 0) is not None or self.parser.parse_operation(line, 0) is not None:
+            return True
         s = line.strip().lower()
         return (
             s.startswith("decompose time series ")
             or s.startswith("calculate acf of ")
             or s.startswith("calculate pacf of ")
+            or s.startswith("forecast holt winters on ")
+            or s.startswith("forecast ar model on ")
         )
 
     def can_handle_block(self, header: str) -> bool:
@@ -96,4 +104,8 @@ __all__ = [
     "ARIMASimulator",
     "DynamicTimeWarping",
     "CUSUMDetector",
+    "HoltWintersSmoothing",
+    "AutoregressiveModelAR",
+    "timeseries_holt_winters",
+    "timeseries_ar_forecast",
 ]

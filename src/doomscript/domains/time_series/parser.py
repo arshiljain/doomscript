@@ -41,6 +41,32 @@ class TimeSeriesDomainParser(DomainParser):
             series, lags, target = m_pacf.group(1).strip(), m_pacf.group(2).strip(), m_pacf.group(3).strip()
             return f"set {target} to time_series_pacf({series}, nlags={lags})"
 
+        # forecast holt winters on <series> [with period <m>] [with steps <steps>] into <target>
+        m_hw = re.match(
+            r"^forecast\s+holt\s+winters\s+on\s+(.+?)(?:\s+with\s+period\s+(\d+))?(?:\s+with\s+steps\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_hw:
+            series = m_hw.group(1).strip()
+            period = m_hw.group(2) if m_hw.group(2) else "4"
+            steps = m_hw.group(3) if m_hw.group(3) else "4"
+            target = m_hw.group(4).strip()
+            return f"set {target} to timeseries_holt_winters({series}, season_period={period}, forecast_steps={steps})"
+
+        # forecast ar model on <series> [with order <p>] [with steps <steps>] into <target>
+        m_ar = re.match(
+            r"^forecast\s+ar\s+model\s+on\s+(.+?)(?:\s+with\s+order\s+(\d+))?(?:\s+with\s+steps\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_ar:
+            series = m_ar.group(1).strip()
+            order = m_ar.group(2) if m_ar.group(2) else "2"
+            steps = m_ar.group(3) if m_ar.group(3) else "3"
+            target = m_ar.group(4).strip()
+            return f"set {target} to timeseries_ar_forecast({series}, order_p={order}, forecast_steps={steps})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:
