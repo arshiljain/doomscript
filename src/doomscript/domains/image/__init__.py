@@ -66,6 +66,10 @@ from doomscript.domains.image.runtime import (
     OtsuAdaptiveThresholding,
     image_canny_edge_detection,
     image_otsu_binarize,
+    HarrisCornerDetectorPure,
+    BicubicImageResampler,
+    image_harris_corners,
+    image_resample_bicubic,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.image.exporter import ImageASTExporter
@@ -186,6 +190,8 @@ class ImageDomain(DomainContract):
             or s.startswith("blend ")
             or s.startswith("difference between ")
             or s.startswith("pixel difference between ")
+            or s.startswith("detect harris corners ")
+            or s.startswith("resample image ")
         ):
             return True
 
@@ -280,5 +286,9 @@ __all__ = [
     "OtsuAdaptiveThresholding",
     "image_canny_edge_detection",
     "image_otsu_binarize",
+    "HarrisCornerDetectorPure",
+    "BicubicImageResampler",
+    "image_harris_corners",
+    "image_resample_bicubic",
 ]
 

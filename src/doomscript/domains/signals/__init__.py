@@ -49,6 +49,10 @@ from doomscript.domains.signals.runtime import (
     LevinsonDurbinLPC,
     signals_czt,
     signals_levinson_durbin,
+    HilbertTransformAnalyticSignal,
+    PseudoWignerVilleDistribution,
+    signals_hilbert_envelope,
+    signals_pseudo_wigner_ville,
 )
 from doomscript.domains.signals.parser import SignalsDomainParser
 from doomscript.domains.signals.exporter import SignalsASTExporter
@@ -139,4 +143,8 @@ __all__ = [
     "LevinsonDurbinLPC",
     "signals_czt",
     "signals_levinson_durbin",
+    "HilbertTransformAnalyticSignal",
+    "PseudoWignerVilleDistribution",
+    "signals_hilbert_envelope",
+    "signals_pseudo_wigner_ville",
 ]

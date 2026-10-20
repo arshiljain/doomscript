@@ -2950,6 +2950,10 @@ from doomscript.domains.image.runtime import (
     OtsuAdaptiveThresholding,
     image_canny_edge_detection,
     image_otsu_binarize,
+    HarrisCornerDetectorPure,
+    BicubicImageResampler,
+    image_harris_corners,
+    image_resample_bicubic,
 )
 
 from doomscript.domains.web.runtime import (
@@ -3064,6 +3068,8 @@ from doomscript.domains.audio.runtime import (
     BiquadIIRFilterCascaded,
     audio_lpc_analyze_synthesize,
     audio_biquad_eq_filter,
+    audio_pitch_shift,
+    audio_compress_limit,
 )
 
 from doomscript.domains.finance.runtime import (
@@ -3737,6 +3743,10 @@ from doomscript.domains.signals.runtime import (
     LevinsonDurbinLPC,
     signals_czt,
     signals_levinson_durbin,
+    HilbertTransformAnalyticSignal,
+    PseudoWignerVilleDistribution,
+    signals_hilbert_envelope,
+    signals_pseudo_wigner_ville,
 )
 
 from doomscript.domains.astronomy.runtime import (
@@ -3962,6 +3972,11 @@ from doomscript.domains.telecom.runtime import (
     ViterbiConvolutionalDecoder,
     telecom_ofdm_modulate,
     telecom_ofdm_demodulate,
+    TurboCodeIterativeDecoder,
+    CostasLoopCarrierRecovery,
+    telecom_turbo_encode,
+    telecom_turbo_decode,
+    telecom_costas_loop_recovery,
 )
 
 from doomscript.domains.neuro.runtime import (
@@ -4094,6 +4109,10 @@ from doomscript.domains.spatial_audio.runtime import (
     AcousticRayTracingShoebox,
     spatial_audio_spherical_harmonics_encode,
     spatial_audio_ray_trace_room,
+    BinauralRoomImpulseResponseBRIRGenerator,
+    AmbisonicsBFormatBinauralDecoder,
+    spatial_generate_brir,
+    spatial_ambisonics_binaural_decode,
 )
 
 from doomscript.domains.dsa.runtime import (

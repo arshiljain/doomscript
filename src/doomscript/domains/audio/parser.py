@@ -491,6 +491,35 @@ class AudioDomainParser(DomainParser):
             target = m_bq.group(7).strip()
             return f'set {target} to audio_biquad_eq_filter({smps}, filter_type="{ftype}", cutoff_hz={f0}, sample_rate={fs}, q={q_val}, gain_db={g_val})'
 
+        # pitch shift audio <samples> by <semitones> [semitones] [sample rate <fs>] into <target>
+        m_ps = re.match(
+            r"^pitch\s+shift\s+audio\s+(.+?)\s+by\s+(.+?)(?:\s+semitones)?(?:\s+sample\s+rate\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_ps:
+            smps = m_ps.group(1).strip()
+            semi = m_ps.group(2).strip()
+            fs = m_ps.group(3).strip() if m_ps.group(3) else "44100"
+            target = m_ps.group(4).strip()
+            return f"set {target} to audio_pitch_shift({smps}, {semi}, sample_rate={fs})"
+
+        # apply dynamic range limiter to <samples> [threshold <th>] [ratio <rat>] [attack <att>] [release <rel>] [makeup <mk>] into <target>
+        m_lim = re.match(
+            r"^apply\s+dynamic\s+range\s+limiter\s+to\s+(.+?)(?:\s+threshold\s+(.+?))?(?:\s+ratio\s+(.+?))?(?:\s+attack\s+(.+?))?(?:\s+release\s+(.+?))?(?:\s+makeup\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_lim:
+            smps = m_lim.group(1).strip()
+            th = m_lim.group(2).strip() if m_lim.group(2) else "-12.0"
+            rat = m_lim.group(3).strip() if m_lim.group(3) else "4.0"
+            att = m_lim.group(4).strip() if m_lim.group(4) else "5.0"
+            rel = m_lim.group(5).strip() if m_lim.group(5) else "50.0"
+            mk = m_lim.group(6).strip() if m_lim.group(6) else "0.0"
+            target = m_lim.group(7).strip()
+            return f"set {target} to audio_compress_limit({smps}, threshold_db={th}, ratio={rat}, attack_ms={att}, release_ms={rel}, makeup_gain_db={mk})"
+
         return None
 
     def parse_block(

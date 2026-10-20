@@ -1633,5 +1633,266 @@ def image_otsu_binarize(
     return Record(OtsuAdaptiveThresholding.binarize(image_matrix))
 
 
+# ==============================================================================
+# HARRIS CORNER DETECTOR & BICUBIC / BILINEAR IMAGE RESAMPLER
+# ==============================================================================
+
+
+class HarrisCornerDetectorPure:
+    """Pure Python implementation of the Harris & Stephens Corner Detector.
+
+    Computes spatial gradients via Sobel operators, forms the local auto-correlation
+    structure tensor M = sum(w * [Ix^2, Ix*Iy; Ix*Iy, Iy^2]), evaluates the corner
+    response R = det(M) - k * (trace(M))^2, and isolates local maxima via Non-Maximum
+    Suppression (NMS).
+    """
+
+    SOBEL_X = [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]]
+    SOBEL_Y = [[-1, -2, -1], [0, 0, 0], [1, 2, 1]]
+    GAUSS_3X3 = [
+        [1.0 / 16.0, 2.0 / 16.0, 1.0 / 16.0],
+        [2.0 / 16.0, 4.0 / 16.0, 2.0 / 16.0],
+        [1.0 / 16.0, 2.0 / 16.0, 1.0 / 16.0],
+    ]
+
+    @classmethod
+    def _convolve2d(
+        cls,
+        matrix: List[List[float]],
+        kernel: List[List[float]],
+        rows: int,
+        cols: int,
+    ) -> List[List[float]]:
+        k_h = len(kernel)
+        k_w = len(kernel[0])
+        pad_h = k_h // 2
+        pad_w = k_w // 2
+
+        out = [[0.0] * cols for _ in range(rows)]
+        for r in range(rows):
+            for c in range(cols):
+                s = 0.0
+                for kr in range(k_h):
+                    ir = min(max(0, r + kr - pad_h), rows - 1)
+                    for kc in range(k_w):
+                        ic = min(max(0, c + kc - pad_w), cols - 1)
+                        s += matrix[ir][ic] * kernel[kr][kc]
+                out[r][c] = s
+        return out
+
+    @classmethod
+    def detect(
+        cls,
+        image_matrix: List[List[float]],
+        k: float = 0.04,
+        threshold: float = 10000.0,
+        nms_radius: int = 1,
+    ) -> Dict[str, Any]:
+        """Detects corner points using the Harris & Stephens response function."""
+        if not image_matrix or not image_matrix[0]:
+            return {"corners": [], "corner_count": 0, "rows": 0, "cols": 0}
+
+        rows = len(image_matrix)
+        cols = len(image_matrix[0])
+
+        # 1. Compute spatial gradients Ix and Iy via Sobel
+        ix = cls._convolve2d(image_matrix, cls.SOBEL_X, rows, cols)
+        iy = cls._convolve2d(image_matrix, cls.SOBEL_Y, rows, cols)
+
+        # 2. Compute tensor components Ix^2, Iy^2, Ix*Iy
+        ix2 = [[ix[r][c] * ix[r][c] for c in range(cols)] for r in range(rows)]
+        iy2 = [[iy[r][c] * iy[r][c] for c in range(cols)] for r in range(rows)]
+        ixy = [[ix[r][c] * iy[r][c] for c in range(cols)] for r in range(rows)]
+
+        # 3. Apply Gaussian blur to structure tensor components
+        sxx = cls._convolve2d(ix2, cls.GAUSS_3X3, rows, cols)
+        syy = cls._convolve2d(iy2, cls.GAUSS_3X3, rows, cols)
+        sxy = cls._convolve2d(ixy, cls.GAUSS_3X3, rows, cols)
+
+        # 4. Compute Harris Corner Response R = det(M) - k * (trace(M))^2
+        r_mat = [[0.0] * cols for _ in range(rows)]
+        for r in range(rows):
+            for c in range(cols):
+                det_m = (sxx[r][c] * syy[r][c]) - (sxy[r][c] * sxy[r][c])
+                trace_m = sxx[r][c] + syy[r][c]
+                r_mat[r][c] = det_m - k * (trace_m * trace_m)
+
+        # 5. Non-Maximum Suppression within nms_radius window and thresholding
+        corners: List[Dict[str, Any]] = []
+        for r in range(nms_radius, rows - nms_radius):
+            for c in range(nms_radius, cols - nms_radius):
+                val = r_mat[r][c]
+                if val <= threshold:
+                    continue
+
+                is_max = True
+                for dr in range(-nms_radius, nms_radius + 1):
+                    for dc in range(-nms_radius, nms_radius + 1):
+                        if dr == 0 and dc == 0:
+                            continue
+                        if r_mat[r + dr][c + dc] >= val:
+                            is_max = False
+                            break
+                    if not is_max:
+                        break
+
+                if is_max:
+                    corners.append({"r": r, "c": c, "response": round(val, 2)})
+
+        corners.sort(key=lambda item: item["response"], reverse=True)
+
+        return {
+            "corners": corners,
+            "corner_count": len(corners),
+            "k_sensitivity": k,
+            "threshold": threshold,
+            "rows": rows,
+            "cols": cols,
+        }
+
+
+class BicubicImageResampler:
+    """High-fidelity 2D image resampler supporting Bicubic (Catmull-Rom) and Bilinear methods.
+
+    Implements cubic spline convolution kernel with parameter a = -0.5,
+    symmetric boundary condition handling, and anti-aliasing clamping.
+    """
+
+    @staticmethod
+    def _cubic_weight(x: float, a: float = -0.5) -> float:
+        """Catmull-Rom cubic spline interpolation weight."""
+        abs_x = abs(x)
+        if abs_x <= 1.0:
+            return ((a + 2.0) * abs_x - (a + 3.0)) * abs_x * abs_x + 1.0
+        elif abs_x < 2.0:
+            return (((a * abs_x) - 5.0 * a) * abs_x + 8.0 * a) * abs_x - 4.0 * a
+        return 0.0
+
+    @classmethod
+    def resample(
+        cls,
+        image_matrix: List[List[float]],
+        new_rows: int,
+        new_cols: int,
+        method: str = "bicubic",
+    ) -> Dict[str, Any]:
+        """Resamples 2D image matrix to target dimensions (new_rows x new_cols)."""
+        if not image_matrix or not image_matrix[0]:
+            return {"resampled_matrix": [], "new_rows": 0, "new_cols": 0}
+
+        orig_rows = len(image_matrix)
+        orig_cols = len(image_matrix[0])
+
+        new_rows = max(1, int(new_rows))
+        new_cols = max(1, int(new_cols))
+
+        scale_r = orig_rows / float(new_rows)
+        scale_c = orig_cols / float(new_cols)
+
+        out = [[0.0] * new_cols for _ in range(new_rows)]
+
+        if method.lower() == "bilinear":
+            for r in range(new_rows):
+                src_r = (r + 0.5) * scale_r - 0.5
+                r0 = int(math.floor(src_r))
+                r1 = r0 + 1
+                dr = src_r - r0
+
+                r0_clamped = min(max(0, r0), orig_rows - 1)
+                r1_clamped = min(max(0, r1), orig_rows - 1)
+
+                for c in range(new_cols):
+                    src_c = (c + 0.5) * scale_c - 0.5
+                    c0 = int(math.floor(src_c))
+                    c1 = c0 + 1
+                    dc = src_c - c0
+
+                    c0_clamped = min(max(0, c0), orig_cols - 1)
+                    c1_clamped = min(max(0, c1), orig_cols - 1)
+
+                    v00 = image_matrix[r0_clamped][c0_clamped]
+                    v01 = image_matrix[r0_clamped][c1_clamped]
+                    v10 = image_matrix[r1_clamped][c0_clamped]
+                    v11 = image_matrix[r1_clamped][c1_clamped]
+
+                    val = (
+                        (1.0 - dr) * (1.0 - dc) * v00
+                        + (1.0 - dr) * dc * v01
+                        + dr * (1.0 - dc) * v10
+                        + dr * dc * v11
+                    )
+                    out[r][c] = round(min(max(0.0, val), 255.0), 4)
+
+        else:  # Bicubic interpolation (Catmull-Rom)
+            for r in range(new_rows):
+                src_r = (r + 0.5) * scale_r - 0.5
+                base_r = int(math.floor(src_r))
+                dr = src_r - base_r
+
+                # Row cubic weights for m in [-1, 0, 1, 2]
+                r_weights = [cls._cubic_weight(dr - m) for m in range(-1, 3)]
+                w_r_sum = sum(r_weights)
+                if abs(w_r_sum) > 1e-6:
+                    r_weights = [w / w_r_sum for w in r_weights]
+
+                for c in range(new_cols):
+                    src_c = (c + 0.5) * scale_c - 0.5
+                    base_c = int(math.floor(src_c))
+                    dc = src_c - base_c
+
+                    # Col cubic weights for n in [-1, 0, 1, 2]
+                    c_weights = [cls._cubic_weight(dc - n) for n in range(-1, 3)]
+                    w_c_sum = sum(c_weights)
+                    if abs(w_c_sum) > 1e-6:
+                        c_weights = [w / w_c_sum for w in c_weights]
+
+                    val = 0.0
+                    for mi, m in enumerate(range(-1, 3)):
+                        ir = min(max(0, base_r + m), orig_rows - 1)
+                        for ni, n in enumerate(range(-1, 3)):
+                            ic = min(max(0, base_c + n), orig_cols - 1)
+                            val += image_matrix[ir][ic] * r_weights[mi] * c_weights[ni]
+
+                    out[r][c] = round(min(max(0.0, val), 255.0), 4)
+
+        return {
+            "resampled_matrix": out,
+            "new_rows": new_rows,
+            "new_cols": new_cols,
+            "original_rows": orig_rows,
+            "original_cols": orig_cols,
+            "method": method,
+        }
+
+
+def image_harris_corners(
+    image_matrix: List[List[float]],
+    k: float = 0.04,
+    threshold: float = 10000.0,
+    nms_radius: int = 1,
+) -> Record:
+    """Detects corner points using Harris Corner Detector."""
+    return Record(
+        HarrisCornerDetectorPure.detect(
+            image_matrix, k=k, threshold=threshold, nms_radius=nms_radius
+        )
+    )
+
+
+def image_resample_bicubic(
+    image_matrix: List[List[float]],
+    new_rows: int,
+    new_cols: int,
+    method: str = "bicubic",
+) -> Record:
+    """Resamples image to target dimensions using Bicubic or Bilinear interpolation."""
+    return Record(
+        BicubicImageResampler.resample(
+            image_matrix, new_rows=new_rows, new_cols=new_cols, method=method
+        )
+    )
+
+
+
 
 

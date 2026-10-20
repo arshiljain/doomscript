@@ -1215,5 +1215,270 @@ def signals_levinson_durbin(
     return Record(LevinsonDurbinLPC.solve(autocorr, order=order))
 
 
+# ==============================================================================
+# HILBERT TRANSFORM ANALYTIC SIGNAL & PSEUDO-WIGNER-VILLE DISTRIBUTION
+# ==============================================================================
+
+
+class HilbertTransformAnalyticSignal:
+    """Computes discrete Hilbert Transform, Analytic Signal, and Instantaneous Attributes.
+
+    Constructs the analytic signal z[n] = x[n] + j*H{x[n]} via exact discrete Fourier
+    transform frequency-domain multiplier (Marple 1999):
+    H(k) = 1 for k=0, N/2; 2 for 1 <= k < N/2; 0 for N/2 < k < N.
+    Derives instantaneous envelope, phase unwrapping, and instantaneous frequency.
+    """
+
+    @staticmethod
+    def _dft(x: List[float]) -> List[complex]:
+        n = len(x)
+        out = [0.0 + 0.0j] * n
+        for k in range(n):
+            s_re = 0.0
+            s_im = 0.0
+            angle_step = -2.0 * math.pi * k / n
+            for t in range(n):
+                angle = angle_step * t
+                s_re += x[t] * math.cos(angle)
+                s_im += x[t] * math.sin(angle)
+            out[k] = complex(s_re, s_im)
+        return out
+
+    @staticmethod
+    def _idft(X: List[complex]) -> List[complex]:
+        n = len(X)
+        out = [0.0 + 0.0j] * n
+        for t in range(n):
+            s_re = 0.0
+            s_im = 0.0
+            angle_step = 2.0 * math.pi * t / n
+            for k in range(n):
+                angle = angle_step * k
+                re = X[k].real
+                im = X[k].imag
+                s_re += re * math.cos(angle) - im * math.sin(angle)
+                s_im += re * math.sin(angle) + im * math.cos(angle)
+            out[t] = complex(s_re / n, s_im / n)
+        return out
+
+    @classmethod
+    def analyze(
+        cls,
+        signal: List[float],
+        sample_rate: float = 1000.0,
+    ) -> Dict[str, Any]:
+        """Computes analytic signal, envelope, phase, and instantaneous frequency."""
+        n = len(signal)
+        if n == 0:
+            return {
+                "analytic_real": [],
+                "analytic_imag": [],
+                "instantaneous_envelope": [],
+                "instantaneous_phase": [],
+                "instantaneous_frequency_hz": [],
+                "mean_envelope": 0.0,
+                "mean_frequency_hz": 0.0,
+            }
+
+        # 1. Forward DFT
+        X = cls._dft(signal)
+
+        # 2. Apply Marple analytic signal filter H(k)
+        H = [0.0] * n
+        if n % 2 == 0:
+            H[0] = 1.0
+            H[n // 2] = 1.0
+            for k in range(1, n // 2):
+                H[k] = 2.0
+        else:
+            H[0] = 1.0
+            for k in range(1, (n + 1) // 2):
+                H[k] = 2.0
+
+        Z = [X[k] * H[k] for k in range(n)]
+
+        # 3. Inverse DFT to get analytic signal z[n]
+        z = cls._idft(Z)
+
+        analytic_real = [round(c.real, 6) for c in z]
+        analytic_imag = [round(c.imag, 6) for c in z]
+
+        # 4. Instantaneous envelope
+        envelope = [round(math.hypot(c.real, c.imag), 6) for c in z]
+
+        # 5. Instantaneous phase and phase unwrapping
+        raw_phase = [math.atan2(c.imag, c.real) for c in z]
+        unwrapped_phase = [0.0] * n
+        if n > 0:
+            unwrapped_phase[0] = raw_phase[0]
+            for i in range(1, n):
+                diff = raw_phase[i] - raw_phase[i - 1]
+                diff = (diff + math.pi) % (2.0 * math.pi) - math.pi
+                unwrapped_phase[i] = unwrapped_phase[i - 1] + diff
+
+        # 6. Instantaneous frequency (central difference)
+        dt = 1.0 / max(1e-6, sample_rate)
+        inst_freq = [0.0] * n
+        if n == 1:
+            inst_freq[0] = 0.0
+        elif n == 2:
+            f = (unwrapped_phase[1] - unwrapped_phase[0]) / (2.0 * math.pi * dt)
+            inst_freq[0] = round(max(0.0, f), 4)
+            inst_freq[1] = round(max(0.0, f), 4)
+        else:
+            inst_freq[0] = round(max(0.0, (unwrapped_phase[1] - unwrapped_phase[0]) / (2.0 * math.pi * dt)), 4)
+            for i in range(1, n - 1):
+                f = (unwrapped_phase[i + 1] - unwrapped_phase[i - 1]) / (4.0 * math.pi * dt)
+                inst_freq[i] = round(max(0.0, f), 4)
+            inst_freq[n - 1] = round(max(0.0, (unwrapped_phase[n - 1] - unwrapped_phase[n - 2]) / (2.0 * math.pi * dt)), 4)
+
+        mean_env = sum(envelope) / max(1, n)
+        mean_freq = sum(inst_freq) / max(1, n)
+
+        return {
+            "analytic_real": analytic_real,
+            "analytic_imag": analytic_imag,
+            "instantaneous_envelope": envelope,
+            "instantaneous_phase": [round(p, 4) for p in unwrapped_phase],
+            "instantaneous_frequency_hz": inst_freq,
+            "mean_envelope": round(mean_env, 6),
+            "mean_frequency_hz": round(mean_freq, 4),
+            "sample_count": n,
+        }
+
+
+class PseudoWignerVilleDistribution:
+    """Discrete Pseudo-Wigner-Ville Distribution (PWVD) Time-Frequency Analyzer.
+
+    Computes the smoothed bilinear time-frequency energy distribution:
+    PWVD(t, omega) = 2 * sum_{tau = -M}^M z[t + tau] * z*[t - tau] * |h[tau]|^2 * exp(-j * 2 * omega * tau)
+    using the analytic signal z[n] to eliminate low-frequency aliasing and negative frequency cross-terms.
+    """
+
+    @classmethod
+    def compute(
+        cls,
+        signal: List[float],
+        window_len: int = 15,
+        num_freq_bins: int = 32,
+        sample_rate: float = 1000.0,
+    ) -> Dict[str, Any]:
+        """Calculates PWVD energy matrix over time and frequency."""
+        n = len(signal)
+        if n == 0:
+            return {
+                "time_frequency_matrix": [],
+                "times": [],
+                "frequencies": [],
+                "total_energy": 0.0,
+            }
+
+        # 1. Obtain analytic signal to suppress negative frequency cross-terms
+        analytic_res = HilbertTransformAnalyticSignal.analyze(signal, sample_rate=sample_rate)
+        z = [
+            complex(r, im)
+            for r, im in zip(analytic_res["analytic_real"], analytic_res["analytic_imag"])
+        ]
+
+        # 2. Form symmetrical Hann window of odd length window_len
+        w_len = max(3, int(window_len))
+        if w_len % 2 == 0:
+            w_len += 1
+        half_w = w_len // 2
+
+        window = [
+            0.5 * (1.0 - math.cos(2.0 * math.pi * i / (w_len - 1)))
+            for i in range(w_len)
+        ]
+        w_norm = [w * w for w in window]
+
+        # 3. Frequency bins and time steps
+        num_bins = max(4, int(num_freq_bins))
+        dt = 1.0 / max(1e-6, sample_rate)
+        times = [round(t * dt, 4) for t in range(n)]
+        df = (sample_rate / 2.0) / num_bins
+        frequencies = [round(k * df, 2) for k in range(num_bins)]
+
+        tf_matrix: List[List[float]] = []
+        total_energy = 0.0
+        max_val = -1e9
+        peak_t = 0
+        peak_k = 0
+
+        for t in range(n):
+            # Compute instantaneous auto-correlation for lag tau in [-half_w, half_w]
+            row = [0.0] * num_bins
+            for k in range(num_bins):
+                omega = 2.0 * math.pi * (k / float(2 * num_bins))
+                re_sum = 0.0
+
+                for tau in range(-half_w, half_w + 1):
+                    idx_plus = t + tau
+                    idx_minus = t - tau
+
+                    if 0 <= idx_plus < n and 0 <= idx_minus < n:
+                        z_plus = z[idx_plus]
+                        z_minus = z[idx_minus]
+                        # z_plus * conj(z_minus)
+                        c_prod = complex(
+                            z_plus.real * z_minus.real + z_plus.imag * z_minus.imag,
+                            z_plus.imag * z_minus.real - z_plus.real * z_minus.imag,
+                        )
+                        w_factor = w_norm[tau + half_w]
+
+                        # Real part of c_prod * exp(-j * 2 * omega * tau)
+                        angle = -2.0 * omega * tau
+                        re_val = (c_prod.real * math.cos(angle) - c_prod.imag * math.sin(angle)) * w_factor
+                        re_sum += re_val
+
+                energy_val = round(max(0.0, 2.0 * re_sum), 5)
+                row[k] = energy_val
+                total_energy += energy_val
+                if energy_val > max_val:
+                    max_val = energy_val
+                    peak_t = t
+                    peak_k = k
+
+            tf_matrix.append(row)
+
+        return {
+            "time_frequency_matrix": tf_matrix,
+            "times": times,
+            "frequencies": frequencies,
+            "total_energy": round(total_energy, 4),
+            "peak_time_index": peak_t,
+            "peak_freq_index": peak_k,
+            "peak_frequency_hz": frequencies[peak_k] if frequencies else 0.0,
+            "num_times": n,
+            "num_freq_bins": num_bins,
+        }
+
+
+def signals_hilbert_envelope(
+    signal: List[float],
+    sample_rate: float = 1000.0,
+) -> Record:
+    """Computes discrete Hilbert analytic signal, envelope, phase, and instantaneous frequency."""
+    return Record(HilbertTransformAnalyticSignal.analyze(signal, sample_rate=sample_rate))
+
+
+def signals_pseudo_wigner_ville(
+    signal: List[float],
+    window_len: int = 15,
+    num_freq_bins: int = 32,
+    sample_rate: float = 1000.0,
+) -> Record:
+    """Computes Pseudo-Wigner-Ville joint time-frequency distribution."""
+    return Record(
+        PseudoWignerVilleDistribution.compute(
+            signal,
+            window_len=window_len,
+            num_freq_bins=num_freq_bins,
+            sample_rate=sample_rate,
+        )
+    )
+
+
+
 
 

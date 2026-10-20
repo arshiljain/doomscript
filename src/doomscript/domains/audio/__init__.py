@@ -64,6 +64,9 @@ from doomscript.domains.audio.runtime import (
     BiquadIIRFilterCascaded,
     audio_lpc_analyze_synthesize,
     audio_biquad_eq_filter,
+    PitchShiftPhaseVocoder,
+    audio_pitch_shift,
+    audio_compress_limit,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.audio.exporter import AudioASTExporter
@@ -184,6 +187,8 @@ class AudioDomain(DomainContract):
             or s.startswith("apply delay echo ")
             or s.startswith("time stretch ")
             or s.startswith("generate silence ")
+            or s.startswith("pitch shift audio ")
+            or s.startswith("apply dynamic range limiter ")
         ):
             return True
 
@@ -272,5 +277,8 @@ __all__ = [
     "BiquadIIRFilterCascaded",
     "audio_lpc_analyze_synthesize",
     "audio_biquad_eq_filter",
+    "PitchShiftPhaseVocoder",
+    "audio_pitch_shift",
+    "audio_compress_limit",
 ]
 

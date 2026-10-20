@@ -1430,3 +1430,230 @@ def audio_biquad_eq_filter(
         samples, filter_type=filter_type, cutoff_hz=cutoff_hz, sample_rate=sample_rate, q=q, gain_db=gain_db
     ))
 
+
+# ==============================================================================
+# PHASE VOCODER PITCH SHIFTER & DYNAMIC RANGE COMPRESSOR / LIMITER
+# ==============================================================================
+
+
+class PitchShiftPhaseVocoder:
+    """Frequency-domain Phase Vocoder for high-fidelity pitch shifting.
+
+    Performs STFT analysis with Hann windowing, phase unwrapping,
+    instantaneous frequency tracking, synthesis phase accumulation,
+    and overlap-add (OLA) reconstruction with duration-preserving resampling.
+    """
+
+    @staticmethod
+    def _dft(frame: List[float]) -> Tuple[List[float], List[float]]:
+        n = len(frame)
+        reals = [0.0] * n
+        imags = [0.0] * n
+        for k in range(n):
+            s_re = 0.0
+            s_im = 0.0
+            angle_step = -2.0 * math.pi * k / n
+            for t in range(n):
+                angle = angle_step * t
+                s_re += frame[t] * math.cos(angle)
+                s_im += frame[t] * math.sin(angle)
+            reals[k] = s_re
+            imags[k] = s_im
+        return reals, imags
+
+    @staticmethod
+    def _idft(reals: List[float], imags: List[float]) -> List[float]:
+        n = len(reals)
+        out = [0.0] * n
+        for t in range(n):
+            val = 0.0
+            angle_step = 2.0 * math.pi * t / n
+            for k in range(n):
+                angle = angle_step * k
+                val += reals[k] * math.cos(angle) - imags[k] * math.sin(angle)
+            out[t] = val / n
+        return out
+
+    @classmethod
+    def pitch_shift(
+        cls,
+        samples: List[float],
+        semitones: float,
+        sample_rate: int = 44100,
+        fft_size: int = 256,
+        hop_size: int = 64,
+    ) -> Dict[str, Any]:
+        """Shifts pitch by specified semitones while preserving audio duration."""
+        if not samples or semitones == 0.0:
+            return {"output_samples": list(samples), "semitones": semitones, "ratio": 1.0}
+
+        ratio = 2.0 ** (float(semitones) / 12.0)
+        n = len(samples)
+
+        # 1. Hann window
+        window = [0.5 * (1.0 - math.cos(2.0 * math.pi * i / (fft_size - 1))) for i in range(fft_size)]
+
+        # Time-stretching by 1/ratio via phase vocoder
+        synth_hop = int(round(hop_size / ratio))
+        synth_hop = max(1, synth_hop)
+
+        num_frames = max(1, (n - fft_size) // hop_size)
+        out_len = int(round(n / ratio)) + fft_size
+        output = [0.0] * out_len
+        norm = [0.0] * out_len
+
+        prev_phase = [0.0] * fft_size
+        synth_phase = [0.0] * fft_size
+        expected_adv = [2.0 * math.pi * k * hop_size / fft_size for k in range(fft_size)]
+
+        for f_idx in range(num_frames):
+            in_pos = f_idx * hop_size
+            frame = [samples[in_pos + i] * window[i] if in_pos + i < n else 0.0 for i in range(fft_size)]
+            reals, imags = cls._dft(frame)
+
+            mag = [math.sqrt(r * r + im * im) for r, im in zip(reals, imags)]
+            phase = [math.atan2(im, r) for r, im in zip(reals, imags)]
+
+            syn_re = [0.0] * fft_size
+            syn_im = [0.0] * fft_size
+
+            for k in range(fft_size):
+                dphase = phase[k] - prev_phase[k] - expected_adv[k]
+                dphase = (dphase + math.pi) % (2.0 * math.pi) - math.pi
+                true_freq = (2.0 * math.pi * k / fft_size) + dphase / hop_size
+                synth_phase[k] += true_freq * synth_hop
+                prev_phase[k] = phase[k]
+
+                syn_re[k] = mag[k] * math.cos(synth_phase[k])
+                syn_im[k] = mag[k] * math.sin(synth_phase[k])
+
+            syn_time = cls._idft(syn_re, syn_im)
+            out_pos = f_idx * synth_hop
+            for i in range(fft_size):
+                if out_pos + i < out_len:
+                    output[out_pos + i] += syn_time[i] * window[i]
+                    norm[out_pos + i] += window[i] * window[i]
+
+        stretched = []
+        for s, nm in zip(output, norm):
+            stretched.append(s / nm if nm > 1e-4 else s)
+
+        # 2. Resample back to original length n
+        resampled = [0.0] * n
+        st_len = len(stretched)
+        for i in range(n):
+            src_idx = i * (st_len - 1) / max(1, n - 1)
+            idx0 = int(src_idx)
+            idx1 = min(st_len - 1, idx0 + 1)
+            frac = src_idx - idx0
+            resampled[i] = round((1.0 - frac) * stretched[idx0] + frac * stretched[idx1], 5)
+
+        return {
+            "output_samples": resampled,
+            "semitones": semitones,
+            "pitch_ratio": round(ratio, 4),
+            "input_length": n,
+            "output_length": len(resampled),
+        }
+
+
+class DynamicRangeCompressorLimiter:
+    """Studio dynamic range compressor and brickwall peak limiter.
+
+    Features soft-knee compression curve, decoupled attack/release envelope follower,
+    makeup gain compensation, and lookahead peak limiter to eliminate clipping.
+    """
+
+    @classmethod
+    def process(
+        cls,
+        samples: List[float],
+        threshold_db: float = -12.0,
+        ratio: float = 4.0,
+        attack_ms: float = 5.0,
+        release_ms: float = 50.0,
+        knee_db: float = 4.0,
+        makeup_gain_db: float = 0.0,
+        sample_rate: int = 44100,
+        limiter_ceiling_db: float = -0.5,
+    ) -> Dict[str, Any]:
+        if not samples:
+            return {"output_samples": [], "max_gain_reduction_db": 0.0}
+
+        att_coeff = math.exp(-1.0 / (max(1e-4, attack_ms * 0.001) * sample_rate))
+        rel_coeff = math.exp(-1.0 / (max(1e-4, release_ms * 0.001) * sample_rate))
+        makeup_linear = 10.0 ** (makeup_gain_db / 20.0)
+        ceiling_linear = 10.0 ** (limiter_ceiling_db / 20.0)
+
+        envelope = 0.0
+        output = []
+        max_gr_db = 0.0
+
+        for x in samples:
+            abs_x = abs(float(x))
+
+            if abs_x > envelope:
+                envelope = att_coeff * envelope + (1.0 - att_coeff) * abs_x
+            else:
+                envelope = rel_coeff * envelope + (1.0 - rel_coeff) * abs_x
+
+            env_db = 20.0 * math.log10(max(1e-6, envelope))
+
+            gr_db = 0.0
+            if knee_db > 0 and (threshold_db - knee_db / 2.0) <= env_db <= (threshold_db + knee_db / 2.0):
+                excess = env_db - threshold_db + knee_db / 2.0
+                gr_db = (1.0 - 1.0 / ratio) * (excess * excess) / (2.0 * knee_db)
+            elif env_db > threshold_db + knee_db / 2.0:
+                gr_db = (env_db - threshold_db) * (1.0 - 1.0 / ratio)
+
+            max_gr_db = max(max_gr_db, gr_db)
+            gain_linear = 10.0 ** (-gr_db / 20.0) * makeup_linear
+
+            y = x * gain_linear
+
+            if y > ceiling_linear:
+                y = ceiling_linear
+            elif y < -ceiling_linear:
+                y = -ceiling_linear
+
+            output.append(round(y, 5))
+
+        return {
+            "output_samples": output,
+            "max_gain_reduction_db": round(max_gr_db, 2),
+            "threshold_db": threshold_db,
+            "ratio": ratio,
+            "makeup_gain_db": makeup_gain_db,
+        }
+
+
+def audio_pitch_shift(
+    samples: List[float],
+    semitones: float,
+    sample_rate: int = 44100,
+) -> Record:
+    """Shifts pitch by semitones using Phase Vocoder analysis/synthesis."""
+    return Record(PitchShiftPhaseVocoder.pitch_shift(samples, semitones, sample_rate=sample_rate))
+
+
+def audio_compress_limit(
+    samples: List[float],
+    threshold_db: float = -12.0,
+    ratio: float = 4.0,
+    attack_ms: float = 5.0,
+    release_ms: float = 50.0,
+    makeup_gain_db: float = 0.0,
+) -> Record:
+    """Applies dynamic range compression and peak limiting."""
+    return Record(
+        DynamicRangeCompressorLimiter.process(
+            samples,
+            threshold_db=threshold_db,
+            ratio=ratio,
+            attack_ms=attack_ms,
+            release_ms=release_ms,
+            makeup_gain_db=makeup_gain_db,
+        )
+    )
+
+

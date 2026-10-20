@@ -40,6 +40,10 @@ from doomscript.domains.spatial_audio.runtime import (
     AcousticRayTracingShoebox,
     spatial_audio_spherical_harmonics_encode,
     spatial_audio_ray_trace_room,
+    BinauralRoomImpulseResponseBRIRGenerator,
+    AmbisonicsBFormatBinauralDecoder,
+    spatial_generate_brir,
+    spatial_ambisonics_binaural_decode,
 )
 from doomscript.domains.spatial_audio.parser import SpatialAudioDomainParser
 from doomscript.domains.spatial_audio.exporter import SpatialAudioASTExporter
@@ -126,4 +130,8 @@ __all__ = [
     "AcousticRayTracingShoebox",
     "spatial_audio_spherical_harmonics_encode",
     "spatial_audio_ray_trace_room",
+    "BinauralRoomImpulseResponseBRIRGenerator",
+    "AmbisonicsBFormatBinauralDecoder",
+    "spatial_generate_brir",
+    "spatial_ambisonics_binaural_decode",
 ]

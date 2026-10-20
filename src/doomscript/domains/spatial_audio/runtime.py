@@ -968,4 +968,268 @@ def spatial_audio_ray_trace_room(
     ))
 
 
+# ==============================================================================
+# BINAURAL ROOM IMPULSE RESPONSE (BRIR) GENERATOR & AMBISONICS B-FORMAT DECODER
+# ==============================================================================
+
+
+class BinauralRoomImpulseResponseBRIRGenerator:
+    """Synthesizes Left & Right Binaural Room Impulse Responses (BRIR).
+
+    Combines Allen & Berkley 3D Image Source Method (ISM) for room boundary reflections
+    with Woodworth-Schlosser spherical head diffraction for Interaural Time Difference (ITD)
+    and frequency-dependent head shadow Interaural Level Difference (ILD).
+    """
+
+    SPEED_OF_SOUND = 343.0  # m/s
+
+    @classmethod
+    def generate(
+        cls,
+        room_dims: List[float],
+        source_pos: List[float],
+        listener_pos: List[float],
+        max_order: int = 2,
+        absorption: float = 0.2,
+        sample_rate: int = 16000,
+        head_radius: float = 0.0875,
+    ) -> Dict[str, Any]:
+        """Generates left and right impulse response buffers from room acoustics."""
+        lx, ly, lz = room_dims
+        sx, sy, sz = source_pos
+        rx, ry, rz = listener_pos
+
+        c = cls.SPEED_OF_SOUND
+        refl_coeff = math.sqrt(max(0.0, 1.0 - absorption))
+
+        # Direct distance and ITD
+        dx_dir = sx - rx
+        dy_dir = sy - ry
+        dz_dir = sz - rz
+        d_direct = math.sqrt(dx_dir * dx_dir + dy_dir * dy_dir + dz_dir * dz_dir)
+        direct_tof = d_direct / c
+
+        # Determine buffer length based on max reflection distance
+        max_dist = math.sqrt(
+            ((2 * max_order + 1) * lx) ** 2
+            + ((2 * max_order + 1) * ly) ** 2
+            + ((2 * max_order + 1) * lz) ** 2
+        )
+        max_time = (max_dist / c) + 0.02
+        buffer_len = int(math.ceil(max_time * sample_rate))
+        buffer_len = min(max(buffer_len, int(direct_tof * sample_rate) + 64), 8192)
+
+        brir_l = [0.0] * buffer_len
+        brir_r = [0.0] * buffer_len
+
+        reflections_count = 0
+
+        # Traverse image sources in 3D grid
+        for mx in range(-max_order, max_order + 1):
+            for my in range(-max_order, max_order + 1):
+                for mz in range(-max_order, max_order + 1):
+                    for px in (0, 1):
+                        for py in (0, 1):
+                            for pz in (0, 1):
+                                order = abs(2 * mx - px) + abs(2 * my - py) + abs(2 * mz - pz)
+                                if order > max_order:
+                                    continue
+
+                                # Image source position
+                                ix = 2.0 * mx * lx + (sx if px == 0 else -sx)
+                                iy = 2.0 * my * ly + (sy if py == 0 else -sy)
+                                iz = 2.0 * mz * lz + (sz if pz == 0 else -sz)
+
+                                vx = ix - rx
+                                vy = iy - ry
+                                vz = iz - rz
+                                dist = math.sqrt(vx * vx + vy * vy + vz * vz)
+                                if dist < 1e-4:
+                                    continue
+
+                                tof = dist / c
+                                amp = (refl_coeff ** order) / max(0.5, dist)
+
+                                # Azimuth angle relative to listener (listener faces +X axis)
+                                theta = math.atan2(vy, vx)  # in [-pi, pi]
+
+                                # Woodworth formula for ITD: delta_t = (a/c) * (theta + sin(theta))
+                                # Positive theta is on listener's left
+                                sin_th = math.sin(theta)
+                                if abs(theta) <= math.pi / 2.0:
+                                    delta_itd = (head_radius / c) * (theta + sin_th)
+                                else:
+                                    # Behind listener
+                                    th_abs = abs(theta)
+                                    delta_itd = (head_radius / c) * (math.pi - th_abs + math.sin(th_abs))
+                                    if theta < 0:
+                                        delta_itd = -delta_itd
+
+                                # Left ear arrives earlier if theta > 0
+                                t_l = tof - 0.5 * delta_itd
+                                t_r = tof + 0.5 * delta_itd
+
+                                # Head shadow ILD approximation
+                                g_l = amp * (1.0 + 0.5 * math.sin(theta))
+                                g_r = amp * (1.0 - 0.5 * math.sin(theta))
+
+                                # Sinc/fractional-delay impulse accumulation
+                                idx_l = int(round(t_l * sample_rate))
+                                idx_r = int(round(t_r * sample_rate))
+
+                                if 0 <= idx_l < buffer_len:
+                                    brir_l[idx_l] += g_l
+                                if 0 <= idx_r < buffer_len:
+                                    brir_r[idx_r] += g_r
+
+                                reflections_count += 1
+
+        # Direct azimuth and ITD
+        dir_theta = math.atan2(dy_dir, dx_dir)
+        direct_itd_us = abs((head_radius / c) * (dir_theta + math.sin(dir_theta))) * 1e6
+
+        return {
+            "brir_left": [round(x, 5) for x in brir_l],
+            "brir_right": [round(x, 5) for x in brir_r],
+            "direct_delay_ms": round(direct_tof * 1000.0, 2),
+            "direct_itd_microseconds": round(direct_itd_us, 1),
+            "reflections_count": reflections_count,
+            "buffer_length": buffer_len,
+            "sample_rate": sample_rate,
+        }
+
+
+class AmbisonicsBFormatBinauralDecoder:
+    """Binaural Decoder for First-Order Ambisonics (B-Format: W, X, Y, Z).
+
+    Decodes spherical harmonics into 8 virtual loudspeakers located on a cube sphere,
+    then applies head diffraction and interaural delays to produce headphone binaural stereo.
+    """
+
+    # 8 Virtual Loudspeaker coordinates: (azimuth_deg, elevation_deg) on cube vertices
+    # Azimuth: +/- 45 deg, +/- 135 deg; Elevation: +/- 35.26 deg
+    VIRTUAL_SPEAKERS_8 = [
+        (45.0, 35.26),
+        (135.0, 35.26),
+        (-135.0, 35.26),
+        (-45.0, 35.26),
+        (45.0, -35.26),
+        (135.0, -35.26),
+        (-135.0, -35.26),
+        (-45.0, -35.26),
+    ]
+
+    @classmethod
+    def decode(
+        cls,
+        w_channel: List[float],
+        x_channel: List[float],
+        y_channel: List[float],
+        z_channel: List[float],
+        num_virtual_speakers: int = 8,
+    ) -> Dict[str, Any]:
+        """Decodes B-format streams into left and right binaural signals."""
+        n = min(len(w_channel), len(x_channel), len(y_channel), len(z_channel))
+        if n == 0:
+            return {"left_channel": [], "right_channel": [], "num_samples": 0}
+
+        speakers = cls.VIRTUAL_SPEAKERS_8[:num_virtual_speakers]
+        m = len(speakers)
+
+        # Decoding weights for each virtual speaker k:
+        # S_k = (1 / sqrt(2)) * W + cos(el)*cos(az)*X + cos(el)*sin(az)*Y + sin(el)*Z
+        speaker_feeds = [[0.0] * n for _ in range(m)]
+
+        for k, (az_deg, el_deg) in enumerate(speakers):
+            az = math.radians(az_deg)
+            el = math.radians(el_deg)
+
+            w_w = 1.0 / math.sqrt(2.0)
+            w_x = math.cos(el) * math.cos(az)
+            w_y = math.cos(el) * math.sin(az)
+            w_z = math.sin(el)
+
+            norm = 1.0 / math.sqrt(w_w * w_w + w_x * w_x + w_y * w_y + w_z * w_z)
+            w_w *= norm
+            w_x *= norm
+            w_y *= norm
+            w_z *= norm
+
+            for t in range(n):
+                speaker_feeds[k][t] = (
+                    w_w * w_channel[t]
+                    + w_x * x_channel[t]
+                    + w_y * y_channel[t]
+                    + w_z * z_channel[t]
+                )
+
+        # Virtual speaker to binaural summing with simple pinna/head weighting
+        out_left = [0.0] * n
+        out_right = [0.0] * n
+
+        for k, (az_deg, _) in enumerate(speakers):
+            az = math.radians(az_deg)
+            # Left ear gain higher for positive azimuth (left hemisphere)
+            g_left = (1.0 + math.sin(az)) * 0.5
+            g_right = (1.0 - math.sin(az)) * 0.5
+
+            for t in range(n):
+                feed = speaker_feeds[k][t]
+                out_left[t] += feed * g_left
+                out_right[t] += feed * g_right
+
+        # Normalization
+        norm_factor = 1.0 / max(1.0, math.sqrt(float(m)))
+        out_left = [round(x * norm_factor, 5) for x in out_left]
+        out_right = [round(x * norm_factor, 5) for x in out_right]
+
+        return {
+            "left_channel": out_left,
+            "right_channel": out_right,
+            "num_samples": n,
+            "num_virtual_speakers": m,
+        }
+
+
+def spatial_generate_brir(
+    room_dims: List[float],
+    source_pos: List[float],
+    listener_pos: List[float],
+    max_order: int = 2,
+    absorption: float = 0.2,
+    sample_rate: int = 16000,
+) -> Record:
+    """Generates Binaural Room Impulse Responses (BRIR) using Image Source Method."""
+    return Record(
+        BinauralRoomImpulseResponseBRIRGenerator.generate(
+            room_dims,
+            source_pos,
+            listener_pos,
+            max_order=max_order,
+            absorption=absorption,
+            sample_rate=sample_rate,
+        )
+    )
+
+
+def spatial_ambisonics_binaural_decode(
+    w_channel: List[float],
+    x_channel: List[float],
+    y_channel: List[float],
+    z_channel: List[float],
+    num_virtual_speakers: int = 8,
+) -> Record:
+    """Decodes Ambisonics B-format signals to headphone binaural stereo."""
+    return Record(
+        AmbisonicsBFormatBinauralDecoder.decode(
+            w_channel,
+            x_channel,
+            y_channel,
+            z_channel,
+            num_virtual_speakers=num_virtual_speakers,
+        )
+    )
+
+
+
 

@@ -156,6 +156,32 @@ class SpatialAudioDomainParser(DomainParser):
             target = m_rt.group(6).strip()
             return f"set {target} to spatial_audio_ray_trace_room({dims}, {src}, {rec}, absorption={abs_val}, num_rays={rays_val})"
 
+        # generate binaural room impulse response room <dims> source <src> listener <lis> [order <ord>] [absorption <abs>] [sample rate <fs>] into <target>
+        m_brir = re.match(
+            r"^generate\s+binaural\s+room\s+impulse\s+response\s+room\s+(.+?)\s+source\s+(.+?)\s+listener\s+(.+?)(?:\s+order\s+(\d+))?(?:\s+absorption\s+(.+?))?(?:\s+sample\s+rate\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_brir:
+            dims, src, lis = m_brir.group(1).strip(), m_brir.group(2).strip(), m_brir.group(3).strip()
+            ord_val = m_brir.group(4).strip() if m_brir.group(4) else "2"
+            abs_val = m_brir.group(5).strip() if m_brir.group(5) else "0.2"
+            fs = m_brir.group(6).strip() if m_brir.group(6) else "16000"
+            target = m_brir.group(7).strip()
+            return f"set {target} to spatial_generate_brir({dims}, {src}, {lis}, max_order={ord_val}, absorption={abs_val}, sample_rate={fs})"
+
+        # decode b format ambisonics to binaural w <w> x <x> y <y> z <z> [virtual speakers <num>] into <target>
+        m_amb_dec = re.match(
+            r"^decode\s+b\s+format\s+ambisonics\s+to\s+binaural\s+w\s+(.+?)\s+x\s+(.+?)\s+y\s+(.+?)\s+z\s+(.+?)(?:\s+virtual\s+speakers\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_amb_dec:
+            w, x, y, z = m_amb_dec.group(1).strip(), m_amb_dec.group(2).strip(), m_amb_dec.group(3).strip(), m_amb_dec.group(4).strip()
+            vs = m_amb_dec.group(5).strip() if m_amb_dec.group(5) else "8"
+            target = m_amb_dec.group(6).strip()
+            return f"set {target} to spatial_ambisonics_binaural_decode({w}, {x}, {y}, {z}, num_virtual_speakers={vs})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

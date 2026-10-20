@@ -168,6 +168,33 @@ class TelecomDomainParser(DomainParser):
             target = m_vit_d.group(2).strip()
             return f"set {target} to telecom_viterbi_decode({bits})"
 
+        # decode turbo code llr sys <l_sys> par1 <l_p1> par2 <l_p2> [iterations <iter>] into <target>
+        m_turbo = re.match(
+            r"^decode\s+turbo\s+code\s+llr\s+sys\s+(.+?)\s+par1\s+(.+?)\s+par2\s+(.+?)(?:\s+iterations\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_turbo:
+            s_llr = m_turbo.group(1).strip()
+            p1_llr = m_turbo.group(2).strip()
+            p2_llr = m_turbo.group(3).strip()
+            it = m_turbo.group(4).strip() if m_turbo.group(4) else "4"
+            target = m_turbo.group(5).strip()
+            return f"set {target} to telecom_turbo_decode({s_llr}, {p1_llr}, {p2_llr}, iterations={it})"
+
+        # recover carrier with costas loop from <samples> [modulation <mod>] [loop bandwidth <bw>] into <target>
+        m_costas = re.match(
+            r"^recover\s+carrier\s+with\s+costas\s+loop\s+from\s+(.+?)(?:\s+modulation\s+([A-Za-z_]\w*))?(?:\s+loop\s+bandwidth\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_costas:
+            smps = m_costas.group(1).strip()
+            mod = m_costas.group(2).strip() if m_costas.group(2) else "bpsk"
+            bw = m_costas.group(3).strip() if m_costas.group(3) else "0.04"
+            target = m_costas.group(4).strip()
+            return f'set {target} to telecom_costas_loop_recovery({smps}, modulation="{mod}", loop_bw={bw})'
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

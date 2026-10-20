@@ -512,6 +512,34 @@ class ImageDomainParser(DomainParser):
             target = m_otsu.group(2).strip()
             return f"set {target} to image_otsu_binarize({mat})"
 
+        # detect harris corners in image <mat> [sensitivity <k>] [threshold <th>] [nms <rad>] into <target>
+        m_harris = re.match(
+            r"^detect\s+harris\s+corners\s+in\s+image\s+(.+?)(?:\s+sensitivity\s+(.+?))?(?:\s+threshold\s+(.+?))?(?:\s+nms\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_harris:
+            mat = m_harris.group(1).strip()
+            k_val = m_harris.group(2).strip() if m_harris.group(2) else "0.04"
+            th = m_harris.group(3).strip() if m_harris.group(3) else "10000.0"
+            rad = m_harris.group(4).strip() if m_harris.group(4) else "1"
+            target = m_harris.group(5).strip()
+            return f"set {target} to image_harris_corners({mat}, k={k_val}, threshold={th}, nms_radius={rad})"
+
+        # resample image <mat> to [rows] <r> [cols] <c> [using <method>] into <target>
+        m_resamp = re.match(
+            r"^resample\s+image\s+(.+?)\s+to\s+(?:rows\s+)?(\d+)\s+(?:cols\s+)?(\d+)(?:\s+using\s+([A-Za-z_]\w*))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_resamp:
+            mat = m_resamp.group(1).strip()
+            nr = m_resamp.group(2).strip()
+            nc = m_resamp.group(3).strip()
+            meth = m_resamp.group(4).strip() if m_resamp.group(4) else "bicubic"
+            target = m_resamp.group(5).strip()
+            return f'set {target} to image_resample_bicubic({mat}, new_rows={nr}, new_cols={nc}, method="{meth}")'
+
         return None
 
     def parse_block(

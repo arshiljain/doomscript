@@ -43,6 +43,11 @@ from doomscript.domains.telecom.runtime import (
     ViterbiConvolutionalDecoder,
     telecom_ofdm_modulate,
     telecom_ofdm_demodulate,
+    TurboCodeIterativeDecoder,
+    CostasLoopCarrierRecovery,
+    telecom_turbo_encode,
+    telecom_turbo_decode,
+    telecom_costas_loop_recovery,
 )
 from doomscript.domains.telecom.parser import TelecomDomainParser
 from doomscript.domains.telecom.exporter import TelecomASTExporter
@@ -140,4 +145,9 @@ __all__ = [
     "ViterbiConvolutionalDecoder",
     "telecom_ofdm_modulate",
     "telecom_ofdm_demodulate",
+    "TurboCodeIterativeDecoder",
+    "CostasLoopCarrierRecovery",
+    "telecom_turbo_encode",
+    "telecom_turbo_decode",
+    "telecom_costas_loop_recovery",
 ]

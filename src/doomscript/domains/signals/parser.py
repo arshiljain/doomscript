@@ -186,6 +186,32 @@ class SignalsDomainParser(DomainParser):
             target = m_lev.group(3).strip()
             return f"set {target} to signals_levinson_durbin({ac}, order={p})"
 
+        # compute hilbert analytic envelope of [signal] <sig> [sample rate <fs>] into <target>
+        m_hilb = re.match(
+            r"^compute\s+hilbert\s+analytic\s+envelope\s+of\s+(?:signal\s+)?(.+?)(?:\s+sample\s+rate\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_hilb:
+            sig = m_hilb.group(1).strip()
+            fs = m_hilb.group(2).strip() if m_hilb.group(2) else "1000.0"
+            target = m_hilb.group(3).strip()
+            return f"set {target} to signals_hilbert_envelope({sig}, sample_rate={fs})"
+
+        # compute pseudo wigner ville distribution of [signal] <sig> [window <w>] [freq bins <fb>] [sample rate <fs>] into <target>
+        m_pwvd = re.match(
+            r"^compute\s+pseudo\s+wigner\s+ville\s+distribution\s+of\s+(?:signal\s+)?(.+?)(?:\s+window\s+(\d+))?(?:\s+freq\s+bins\s+(\d+))?(?:\s+sample\s+rate\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_pwvd:
+            sig = m_pwvd.group(1).strip()
+            w_len = m_pwvd.group(2).strip() if m_pwvd.group(2) else "15"
+            fb = m_pwvd.group(3).strip() if m_pwvd.group(3) else "32"
+            fs = m_pwvd.group(4).strip() if m_pwvd.group(4) else "1000.0"
+            target = m_pwvd.group(5).strip()
+            return f"set {target} to signals_pseudo_wigner_ville({sig}, window_len={w_len}, num_freq_bins={fb}, sample_rate={fs})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:
