@@ -436,6 +436,31 @@ class GeoDomainParser(DomainParser):
             gh, target = m_sgd.group(1).strip(), m_sgd.group(2).strip()
             return f"set {target} to geo_geohash_decode({gh})"
 
+        # partition voronoi diagram sites <sites> into <target>
+        # compute voronoi partition [for points|sites] <sites> into <target>
+        m_vor = re.match(
+            r"^(?:partition\s+voronoi\s+diagram\s+sites|compute\s+voronoi\s+partition(?:\s+for\s+(?:points|sites))?)\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_vor:
+            sites_arg, target = m_vor.group(1).strip(), m_vor.group(2).strip()
+            return f"set {target} to geo_voronoi_partition({sites_arg})"
+
+        # interpolate kriging known/points <known> queries/targets <queries> [nugget <n>] [sill <s>] [range <r>] into <target>
+        m_krig = re.match(
+            r"^interpolate\s+kriging\s+(?:known|points)\s+(.+?)\s+(?:queries|targets)\s+(.+?)(?:\s+nugget\s+(.+?))?(?:\s+sill\s+(.+?))?(?:\s+range\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_krig:
+            known_arg, query_arg = m_krig.group(1).strip(), m_krig.group(2).strip()
+            nug = m_krig.group(3).strip() if m_krig.group(3) else "0.0"
+            sill = m_krig.group(4).strip() if m_krig.group(4) else "1.0"
+            rng = m_krig.group(5).strip() if m_krig.group(5) else "10.0"
+            target = m_krig.group(6).strip()
+            return f"set {target} to geo_kriging_interpolate({known_arg}, {query_arg}, nugget={nug}, sill={sill}, range_a={rng})"
+
         return None
 
     def parse_block(

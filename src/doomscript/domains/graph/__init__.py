@@ -71,6 +71,11 @@ from doomscript.domains.graph.runtime import (
     LengauerTarjanDominatorTree,
     graph_bron_kerbosch_degeneracy_cliques,
     graph_lengauer_tarjan_dominators,
+    EdmondsBlossomMaximumWeightMatching,
+    PageRankRandomWalkWithRestart,
+    graph_edmonds_blossom_matching,
+    graph_pagerank_calculate,
+    graph_pagerank_calculate_graph,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.graph.exporter import GraphASTExporter
@@ -277,5 +282,10 @@ __all__ = [
     "LengauerTarjanDominatorTree",
     "graph_bron_kerbosch_degeneracy_cliques",
     "graph_lengauer_tarjan_dominators",
+    "EdmondsBlossomMaximumWeightMatching",
+    "PageRankRandomWalkWithRestart",
+    "graph_edmonds_blossom_matching",
+    "graph_pagerank_calculate",
+    "graph_pagerank_calculate_graph",
 ]
 

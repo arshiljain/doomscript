@@ -1176,4 +1176,266 @@ def astronomy_calculate_sidereal_time(
     ))
 
 
+class SGP4SimplifiedPerturbationsSatellitePropagator:
+    """Simplified General Perturbations (SGP4) Orbit Propagator for Earth Satellites.
+
+    Propagates mean Keplerian elements taking into account Earth oblateness (J2 secular
+    precession of RAAN, perigee, and mean anomaly) and converts to True Equator Mean
+    Equinox (TEME) 3D inertial coordinates and geodetic sub-satellite coordinates.
+    """
+
+    WGS84_A = 6378.137  # Earth equatorial radius km
+    WGS84_F = 1.0 / 298.257223563
+    MU_EARTH = 398600.4418  # km^3/s^2
+    J2 = 1.082629989e-3  # Second zonal harmonic
+
+    @classmethod
+    def propagate(
+        cls,
+        inclination_deg_or_elements: Any,
+        raan_deg: float = 0.0,
+        eccentricity: float = 0.0,
+        arg_perigee_deg: float = 0.0,
+        mean_anomaly_deg: float = 0.0,
+        mean_motion_rev_day: float = 0.0,
+        bstar_drag: float = 0.0,
+        delta_minutes: float = 0.0,
+        time_since_epoch_min: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        """Propagates satellite state vector forward delta_minutes in time."""
+        if time_since_epoch_min is not None:
+            delta_minutes = time_since_epoch_min
+
+        if isinstance(inclination_deg_or_elements, dict):
+            el = inclination_deg_or_elements
+            sma = float(el.get("semi_major_axis_km", 7000.0))
+            eccentricity = float(el.get("eccentricity", 0.0))
+            inclination_deg = float(el.get("inclination_deg", 0.0))
+            raan_deg = float(el.get("raan_deg", 0.0))
+            arg_perigee_deg = float(el.get("arg_perigee_deg", 0.0))
+            mean_anomaly_deg = float(el.get("mean_anomaly_deg", 0.0))
+            mm = el.get("mean_motion_rev_day")
+            if mm is not None:
+                mean_motion_rev_day = float(mm)
+            else:
+                n_rad_s = math.sqrt(cls.MU_EARTH / (sma ** 3))
+                mean_motion_rev_day = n_rad_s * 86400.0 / (2.0 * math.pi)
+        else:
+            inclination_deg = float(inclination_deg_or_elements)
+
+        i0 = math.radians(inclination_deg)
+        om0 = math.radians(raan_deg)
+        w0 = math.radians(arg_perigee_deg)
+        m0 = math.radians(mean_anomaly_deg)
+        n0 = mean_motion_rev_day * (2.0 * math.pi / 86400.0)
+
+        a0 = (cls.MU_EARTH / (n0 ** 2)) ** (1.0 / 3.0)
+        p0 = a0 * max(1e-4, 1.0 - eccentricity ** 2)
+
+        # J2 secular rates (rad/s)
+        factor = 1.5 * cls.J2 * ((cls.WGS84_A / p0) ** 2) * n0
+        d_omega = -factor * math.cos(i0)
+        d_w = factor * (2.5 * (math.cos(i0) ** 2) - 0.5)
+        d_m = n0 * (1.0 + factor * math.sqrt(max(1e-4, 1.0 - eccentricity ** 2)) * (1.5 * (math.cos(i0) ** 2) - 0.5))
+
+        dt_sec = delta_minutes * 60.0
+
+        om_t = (om0 + d_omega * dt_sec) % (2.0 * math.pi)
+        w_t = (w0 + d_w * dt_sec) % (2.0 * math.pi)
+        m_t = (m0 + d_m * dt_sec) % (2.0 * math.pi)
+
+        # Solve Kepler's equation
+        E = m_t
+        for _ in range(15):
+            f_val = E - eccentricity * math.sin(E) - m_t
+            f_prime = 1.0 - eccentricity * math.cos(E)
+            delta = f_val / f_prime
+            E -= delta
+            if abs(delta) < 1e-10:
+                break
+
+        sin_nu = math.sqrt(max(0.0, 1.0 - eccentricity ** 2)) * math.sin(E) / (1.0 - eccentricity * math.cos(E))
+        cos_nu = (math.cos(E) - eccentricity) / (1.0 - eccentricity * math.cos(E))
+        nu = math.atan2(sin_nu, cos_nu)
+
+        r = a0 * (1.0 - eccentricity * math.cos(E))
+        p_val = max(1e-4, p0)
+        u = (w_t + nu) % (2.0 * math.pi)
+
+        x = r * (math.cos(om_t) * math.cos(u) - math.sin(om_t) * math.sin(u) * math.cos(i0))
+        y = r * (math.sin(om_t) * math.cos(u) + math.cos(om_t) * math.sin(u) * math.cos(i0))
+        z = r * (math.sin(u) * math.sin(i0))
+
+        r_dot = math.sqrt(cls.MU_EARTH / p_val) * eccentricity * math.sin(nu)
+        rf_dot = math.sqrt(cls.MU_EARTH * p_val) / max(1e-4, r)
+        vx = (
+            (math.cos(om_t) * math.cos(u) - math.sin(om_t) * math.sin(u) * math.cos(i0)) * r_dot
+            - (math.cos(om_t) * math.sin(u) + math.sin(om_t) * math.cos(u) * math.cos(i0)) * rf_dot
+        )
+        vy = (
+            (math.sin(om_t) * math.cos(u) + math.cos(om_t) * math.sin(u) * math.cos(i0)) * r_dot
+            - (math.sin(om_t) * math.sin(u) - math.cos(om_t) * math.cos(u) * math.cos(i0)) * rf_dot
+        )
+        vz = math.sin(i0) * (math.sin(u) * r_dot + math.cos(u) * rf_dot)
+
+        lat_rad = math.asin(max(-1.0, min(1.0, z / max(1e-4, r))))
+        we = 7.292115e-5
+        lon_rad = (math.atan2(y, x) - we * dt_sec) % (2.0 * math.pi)
+        if lon_rad > math.pi:
+            lon_rad -= 2.0 * math.pi
+
+        altitude_km = r - cls.WGS84_A
+        speed = math.sqrt(vx * vx + vy * vy + vz * vz)
+
+        return {
+            "semi_major_axis_km": round(a0, 2),
+            "radius_km": round(r, 2),
+            "altitude_km": round(altitude_km, 2),
+            "position_teme_km": [round(x, 2), round(y, 2), round(z, 2)],
+            "r_teme_km": [round(x, 2), round(y, 2), round(z, 2)],
+            "velocity_teme_kms": [round(vx, 3), round(vy, 3), round(vz, 3)],
+            "v_teme_km_s": [round(vx, 3), round(vy, 3), round(vz, 3)],
+            "velocity_km_s": round(speed, 3),
+            "sub_satellite_lat_deg": round(math.degrees(lat_rad), 3),
+            "sub_satellite_lon_deg": round(math.degrees(lon_rad), 3),
+            "orbital_period_minutes": round(86400.0 / (mean_motion_rev_day * 60.0), 2),
+            "delta_minutes": delta_minutes,
+        }
+
+
+class HohmannAndBiEllipticOrbitalManeuverPlanner:
+    """Orbital Maneuver Optimizer comparing Hohmann vs Bi-Elliptic Transfers."""
+
+    MU_EARTH = 398600.4418  # km^3 / s^2
+
+    @classmethod
+    def plan(
+        cls,
+        r1_km: float,
+        r2_km: float,
+        rb_km: float = 0.0,
+        plane_change_deg: float = 0.0,
+        mu: float = MU_EARTH,
+    ) -> Dict[str, Any]:
+        """Calculates delta-V requirements and duration for orbital transfers."""
+        v1 = math.sqrt(mu / r1_km)
+        v2 = math.sqrt(mu / r2_km)
+
+        # 1. Hohmann Transfer
+        a_h = (r1_km + r2_km) / 2.0
+        v_h1 = math.sqrt(mu * (2.0 / r1_km - 1.0 / a_h))
+        v_h2 = math.sqrt(mu * (2.0 / r2_km - 1.0 / a_h))
+        dv1_h = abs(v_h1 - v1)
+
+        d_inc_rad = math.radians(plane_change_deg)
+        if plane_change_deg != 0.0:
+            dv2_h = math.sqrt(v_h2 ** 2 + v2 ** 2 - 2.0 * v_h2 * v2 * math.cos(d_inc_rad))
+        else:
+            dv2_h = abs(v2 - v_h2)
+
+        total_dv_hohmann = dv1_h + dv2_h
+        tof_hohmann_sec = math.pi * math.sqrt((a_h ** 3) / mu)
+
+        # 2. Bi-Elliptic Transfer
+        rb = rb_km if rb_km > max(r1_km, r2_km) else max(r1_km, r2_km) * 2.0
+        a1_b = (r1_km + rb) / 2.0
+        a2_b = (r2_km + rb) / 2.0
+
+        v_b1_dep = math.sqrt(mu * (2.0 / r1_km - 1.0 / a1_b))
+        dv1_b = abs(v_b1_dep - v1)
+
+        v_b1_apo = math.sqrt(mu * (2.0 / rb - 1.0 / a1_b))
+        v_b2_apo = math.sqrt(mu * (2.0 / rb - 1.0 / a2_b))
+
+        if plane_change_deg != 0.0:
+            dv2_b = math.sqrt(v_b1_apo ** 2 + v_b2_apo ** 2 - 2.0 * v_b1_apo * v_b2_apo * math.cos(d_inc_rad))
+        else:
+            dv2_b = abs(v_b2_apo - v_b1_apo)
+
+        v_b2_arr = math.sqrt(mu * (2.0 / r2_km - 1.0 / a2_b))
+        dv3_b = abs(v2 - v_b2_arr)
+
+        total_dv_bielliptic = dv1_b + dv2_b + dv3_b
+        tof_bielliptic_sec = math.pi * math.sqrt((a1_b ** 3) / mu) + math.pi * math.sqrt((a2_b ** 3) / mu)
+
+        best = "Hohmann" if total_dv_hohmann <= total_dv_bielliptic else "Bi-Elliptic"
+
+        return {
+            "r1_km": r1_km,
+            "r2_km": r2_km,
+            "rb_km": rb,
+            "delta_v_total_km_s": round(total_dv_hohmann, 4),
+            "hohmann_delta_v_kms": round(total_dv_hohmann, 4),
+            "hohmann_tof_hours": round(tof_hohmann_sec / 3600.0, 2),
+            "bielliptic_delta_v_kms": round(total_dv_bielliptic, 4),
+            "bielliptic_tof_hours": round(tof_bielliptic_sec / 3600.0, 2),
+            "optimal_transfer": best,
+            "ratio_r2_r1": round(r2_km / r1_km, 2),
+        }
+
+    @classmethod
+    def plan_hohmann(cls, r1_km: float, r2_km: float, inc_change_deg: float = 0.0, plane_change_deg: float = 0.0) -> Dict[str, Any]:
+        pc = max(inc_change_deg, plane_change_deg)
+        res = cls.plan(r1_km, r2_km, plane_change_deg=pc)
+        return {
+            "delta_v_total_km_s": res["hohmann_delta_v_kms"],
+            "time_of_flight_s": res["hohmann_tof_hours"] * 3600.0,
+            "r1_km": r1_km,
+            "r2_km": r2_km,
+        }
+
+    @classmethod
+    def plan_bi_elliptic(cls, r1_km: float, r2_km: float, r_intermediate_km: float = 0.0, rb_km: float = 0.0) -> Dict[str, Any]:
+        rb = max(r_intermediate_km, rb_km)
+        res = cls.plan(r1_km, r2_km, rb_km=rb)
+        return {
+            "delta_v_total_km_s": res["bielliptic_delta_v_kms"],
+            "time_of_flight_s": res["bielliptic_tof_hours"] * 3600.0,
+            "burns": [1, 2, 3],
+            "rb_km": res["rb_km"],
+        }
+
+
+def astronomy_propagate_sgp4(
+    inclination_deg: float,
+    raan_deg: float,
+    eccentricity: float,
+    arg_perigee_deg: float,
+    mean_anomaly_deg: float,
+    mean_motion_rev_day: float,
+    delta_minutes: float = 0.0,
+) -> Record:
+    """Propagates satellite orbit via SGP4 perturbation model."""
+    return Record(SGP4SimplifiedPerturbationsSatellitePropagator.propagate(
+        inclination_deg,
+        raan_deg,
+        eccentricity,
+        arg_perigee_deg,
+        mean_anomaly_deg,
+        mean_motion_rev_day,
+        delta_minutes=delta_minutes,
+    ))
+
+
+def astronomy_propagate_sgp4_orbit(orbit: Any, delta_minutes: float = 0.0) -> Record:
+    """Propagates orbit dictionary via SGP4 perturbation model."""
+    return Record(SGP4SimplifiedPerturbationsSatellitePropagator.propagate(
+        orbit,
+        delta_minutes=delta_minutes,
+    ))
+
+
+def astronomy_plan_orbital_transfer(
+    r1_km: float,
+    r2_km: float,
+    rb_km: float = 0.0,
+    plane_change_deg: float = 0.0,
+) -> Record:
+    """Plans optimal Hohmann or Bi-Elliptic orbital transfer."""
+    return Record(HohmannAndBiEllipticOrbitalManeuverPlanner.plan(
+        r1_km, r2_km, rb_km=rb_km, plane_change_deg=plane_change_deg
+    ))
+
+
+
 

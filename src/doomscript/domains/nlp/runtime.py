@@ -1701,6 +1701,377 @@ def nlp_fuzzy_search_text(
     return Record(LevenshteinAutomatonFuzzyMatcher.search_in_text(query, text, max_distance=max_distance))
 
 
+class BM25OkapiInformationRetrieval:
+    """Okapi BM25 information retrieval and ranked document retrieval system.
+
+    Implements the classic Robertson-Spärck Jones probabilistic information retrieval model:
+      Score(D, Q) = sum_{t in Q} IDF(t) * [ (f(t, D) * (k1 + 1)) / (f(t, D) + k1 * (1 - b + b * (|D| / avgdl))) ]
+    where IDF is smoothed RSJ IDF:
+      IDF(t) = ln( (N - n(t) + 0.5) / (n(t) + 0.5) + 1.0 )
+    ensuring non-negative document weighting.
+    """
+
+    def __init__(
+        self,
+        corpus: List[str],
+        k1: float = 1.5,
+        b: float = 0.75,
+        epsilon: float = 0.25,
+    ) -> None:
+        self.corpus = list(corpus)
+        self.k1 = float(k1)
+        self.b = float(b)
+        self.epsilon = float(epsilon)
+        self.N = len(self.corpus)
+        self.doc_tokens: List[List[str]] = []
+        self.doc_lengths: List[int] = []
+        self.doc_frequencies: Dict[str, int] = {}
+        self.inverted_index: Dict[str, Dict[int, int]] = {}
+        self.avg_doc_len: float = 0.0
+        self.idf: Dict[str, float] = {}
+
+        self._build_index()
+
+    def _tokenize(self, text: str) -> List[str]:
+        if not isinstance(text, str):
+            text = str(text) if text is not None else ""
+        return [tok.lower() for tok in re.findall(r"\b[A-Za-z0-9_-]+\b", text)]
+
+    def _build_index(self) -> None:
+        total_len = 0
+        for doc_id, text in enumerate(self.corpus):
+            tokens = self._tokenize(text)
+            self.doc_tokens.append(tokens)
+            doc_len = len(tokens)
+            self.doc_lengths.append(doc_len)
+            total_len += doc_len
+
+            term_counts: Dict[str, int] = {}
+            for t in tokens:
+                term_counts[t] = term_counts.get(t, 0) + 1
+
+            for t, count in term_counts.items():
+                if t not in self.inverted_index:
+                    self.inverted_index[t] = {}
+                    self.doc_frequencies[t] = 0
+                self.inverted_index[t][doc_id] = count
+                self.doc_frequencies[t] += 1
+
+        self.avg_doc_len = (total_len / self.N) if self.N > 0 else 1.0
+
+        for term, df in self.doc_frequencies.items():
+            # Robertson-Spärck Jones IDF with +1 inside log to avoid negative weights
+            val = math.log((self.N - df + 0.5) / (df + 0.5) + 1.0)
+            self.idf[term] = max(val, self.epsilon)
+
+    def get_idf(self, term: str) -> float:
+        """Returns IDF weight for a term."""
+        return self.idf.get(term.lower(), 0.0)
+
+    def score(self, query: str) -> List[Tuple[int, float]]:
+        """Scores all documents in the corpus for the query."""
+        q_tokens = self._tokenize(query)
+        if not q_tokens or self.N == 0:
+            return [(i, 0.0) for i in range(self.N)]
+
+        scores = [0.0] * self.N
+        for t in q_tokens:
+            if t not in self.inverted_index:
+                continue
+            t_idf = self.idf[t]
+            postings = self.inverted_index[t]
+            for doc_id, tf in postings.items():
+                doc_len = self.doc_lengths[doc_id]
+                denom = tf + self.k1 * (1.0 - self.b + self.b * (doc_len / self.avg_doc_len))
+                scores[doc_id] += t_idf * (tf * (self.k1 + 1.0)) / denom
+
+        return [(doc_id, scores[doc_id]) for doc_id in range(self.N)]
+
+    def search(self, query: str, top_k: int = 5) -> Dict[str, Any]:
+        """Returns top-k ranked documents matching the query."""
+        scored = self.score(query)
+        scored.sort(key=lambda item: (-item[1], item[0]))
+        top_matches = scored[:top_k]
+
+        matches: List[Any] = []
+        for doc_id, sc in top_matches:
+            text = self.corpus[doc_id] if doc_id < len(self.corpus) else ""
+            matches.append(Record({
+                "doc_id": doc_id,
+                "score": round(sc, 5),
+                "text": text,
+                "snippet": (text[:80] + "...") if len(text) > 80 else text,
+            }))
+
+        best_score = matches[0]["score"] if matches else 0.0
+        best_doc_id = matches[0]["doc_id"] if matches else -1
+        best_text = matches[0]["text"] if matches else ""
+
+        return {
+            "query": query,
+            "total_documents": self.N,
+            "top_score": best_score,
+            "best_doc_id": best_doc_id,
+            "best_text": best_text,
+            "matches": matches,
+            "num_results": len(matches),
+        }
+
+
+class CYKProbabilisticContextFreeGrammarPCFG:
+    """Cocke-Younger-Kasami (CYK) probabilistic chart parser for context-free grammars.
+
+    Supports:
+    - Probabilistic Context-Free Grammar (PCFG) parsing in Chomsky Normal Form
+    - Terminal production rules: A -> 'a' [prob]
+    - Binary non-terminal production rules: A -> B C [prob]
+    - Unary non-terminal production rules: A -> B [prob] (via unary closure)
+    - Viterbi most probable parse tree reconstruction
+    - Log-probability aggregation to prevent numerical underflow
+    """
+
+    def __init__(self, grammar_rules: Any) -> None:
+        self.terminal_rules: Dict[str, List[Tuple[str, float]]] = {}
+        self.binary_rules: Dict[Tuple[str, str], List[Tuple[str, float]]] = {}
+        self.unary_rules: Dict[str, List[Tuple[str, float]]] = {}
+        self.non_terminals: Set[str] = set()
+
+        self._load_grammar(grammar_rules)
+
+    def _load_grammar(self, rules: Any) -> None:
+        rule_list: List[Dict[str, Any]] = []
+
+        if isinstance(rules, list):
+            for r in rules:
+                if isinstance(r, dict):
+                    rule_list.append(r)
+                elif isinstance(r, str):
+                    parsed = self._parse_rule_string(r)
+                    if parsed:
+                        rule_list.append(parsed)
+        elif isinstance(rules, str):
+            for line in rules.splitlines():
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    parsed = self._parse_rule_string(line)
+                    if parsed:
+                        rule_list.append(parsed)
+
+        for r in rule_list:
+            lhs = str(r.get("lhs", "")).strip()
+            rhs = r.get("rhs", [])
+            prob = float(r.get("prob", 1.0))
+            if prob <= 0.0:
+                prob = 1e-12
+            log_p = math.log(prob)
+
+            if not lhs:
+                continue
+            self.non_terminals.add(lhs)
+
+            if isinstance(rhs, str):
+                rhs = rhs.split()
+
+            if len(rhs) == 1:
+                symbol = rhs[0].strip()
+                # If quoted or lowercase, treated as terminal
+                if symbol.startswith("'") or symbol.startswith('"') or not symbol.isupper():
+                    clean_term = symbol.strip("'\"").lower()
+                    if clean_term not in self.terminal_rules:
+                        self.terminal_rules[clean_term] = []
+                    self.terminal_rules[clean_term].append((lhs, log_p))
+                else:
+                    # Unary nonterminal rule
+                    self.non_terminals.add(symbol)
+                    if symbol not in self.unary_rules:
+                        self.unary_rules[symbol] = []
+                    self.unary_rules[symbol].append((lhs, log_p))
+            elif len(rhs) == 2:
+                b, c = rhs[0].strip(), rhs[1].strip()
+                self.non_terminals.add(b)
+                self.non_terminals.add(c)
+                key = (b, c)
+                if key not in self.binary_rules:
+                    self.binary_rules[key] = []
+                self.binary_rules[key].append((lhs, log_p))
+
+    def _parse_rule_string(self, s: str) -> Optional[Dict[str, Any]]:
+        m = re.match(r"^([A-Za-z_]\w*)\s*->\s*(.+?)(?:\s*\[([0-9.]+)\]|\s*\(([0-9.]+)\)|\s+([0-9.]+))?$", s.strip())
+        if not m:
+            return None
+        lhs = m.group(1).strip()
+        rhs_str = m.group(2).strip()
+        prob_str = m.group(3) or m.group(4) or m.group(5)
+        prob = float(prob_str) if prob_str else 1.0
+        rhs = [token.strip() for token in rhs_str.split()]
+        return {"lhs": lhs, "rhs": rhs, "prob": prob}
+
+    def _apply_unary_closure(
+        self,
+        chart: List[List[Dict[str, float]]],
+        back: List[List[Dict[str, Any]]],
+        length: int,
+        start: int,
+    ) -> None:
+        changed = True
+        iterations = 0
+        max_iter = len(self.non_terminals) + 2
+        while changed and iterations < max_iter:
+            changed = False
+            iterations += 1
+            current_symbols = list(chart[length][start].items())
+            for rhs, rhs_lp in current_symbols:
+                for lhs, rule_lp in self.unary_rules.get(rhs, []):
+                    tot_lp = rhs_lp + rule_lp
+                    if tot_lp > chart[length][start].get(lhs, -float("inf")):
+                        chart[length][start][lhs] = tot_lp
+                        back[length][start][lhs] = ("unary", rhs)
+                        changed = True
+
+    def parse(self, tokens_or_sentence: Any, start_symbol: str = "S") -> Dict[str, Any]:
+        """Parses tokens using CYK dynamic programming algorithm."""
+        if isinstance(tokens_or_sentence, str):
+            tokens = [tok.lower() for tok in re.findall(r"\b[A-Za-z0-9_-]+\b", tokens_or_sentence)]
+        else:
+            tokens = [str(t).lower() for t in tokens_or_sentence]
+
+        n = len(tokens)
+        if n == 0:
+            return {
+                "is_valid": False,
+                "log_probability": -float("inf"),
+                "probability": 0.0,
+                "parse_tree": "",
+                "tree": "",
+                "tree_dict": {},
+                "start_symbol": start_symbol,
+                "token_count": 0,
+            }
+
+        # chart[l][i] stores dict: nonterminal -> log_prob
+        # back[l][i] stores dict: nonterminal -> backpointer
+        chart: List[List[Dict[str, float]]] = [
+            [{} for _ in range(n)] for _ in range(n + 1)
+        ]
+        back: List[List[Dict[str, Any]]] = [
+            [{} for _ in range(n)] for _ in range(n + 1)
+        ]
+
+        # 1. Base case: length 1 (terminals)
+        for i in range(n):
+            tok = tokens[i]
+            for lhs, log_p in self.terminal_rules.get(tok, []):
+                if log_p > chart[1][i].get(lhs, -float("inf")):
+                    chart[1][i][lhs] = log_p
+                    back[1][i][lhs] = ("terminal", tok)
+            self._apply_unary_closure(chart, back, 1, i)
+
+        # 2. Inductive case: length 2 to n
+        for length in range(2, n + 1):
+            for start in range(n - length + 1):
+                for split in range(1, length):
+                    left_chart = chart[split][start]
+                    right_chart = chart[length - split][start + split]
+                    if not left_chart or not right_chart:
+                        continue
+
+                    for b_sym, b_lp in left_chart.items():
+                        for c_sym, c_lp in right_chart.items():
+                            pair = (b_sym, c_sym)
+                            for lhs, rule_lp in self.binary_rules.get(pair, []):
+                                candidate_lp = rule_lp + b_lp + c_lp
+                                if candidate_lp > chart[length][start].get(lhs, -float("inf")):
+                                    chart[length][start][lhs] = candidate_lp
+                                    back[length][start][lhs] = ("binary", split, b_sym, c_sym)
+
+                self._apply_unary_closure(chart, back, length, start)
+
+        is_valid = start_symbol in chart[n][0]
+        if is_valid:
+            best_lp = chart[n][0][start_symbol]
+            best_prob = math.exp(best_lp)
+
+            def build_tree_str(l: int, s: int, sym: str) -> str:
+                bp = back[l][s].get(sym)
+                if not bp:
+                    return f"({sym})"
+                if bp[0] == "terminal":
+                    return f"({sym} {bp[1]})"
+                elif bp[0] == "unary":
+                    child = build_tree_str(l, s, bp[1])
+                    return f"({sym} {child})"
+                elif bp[0] == "binary":
+                    split, b, c = bp[1], bp[2], bp[3]
+                    left = build_tree_str(split, s, b)
+                    right = build_tree_str(l - split, s + split, c)
+                    return f"({sym} {left} {right})"
+                return f"({sym})"
+
+            def build_tree_dict(l: int, s: int, sym: str) -> Dict[str, Any]:
+                bp = back[l][s].get(sym)
+                if not bp:
+                    return {"symbol": sym, "children": []}
+                if bp[0] == "terminal":
+                    return {"symbol": sym, "terminal": bp[1], "children": []}
+                elif bp[0] == "unary":
+                    return {
+                        "symbol": sym,
+                        "children": [build_tree_dict(l, s, bp[1])],
+                    }
+                elif bp[0] == "binary":
+                    split, b, c = bp[1], bp[2], bp[3]
+                    return {
+                        "symbol": sym,
+                        "children": [
+                            build_tree_dict(split, s, b),
+                            build_tree_dict(l - split, s + split, c),
+                        ],
+                    }
+                return {"symbol": sym, "children": []}
+
+            tree_str = build_tree_str(n, 0, start_symbol)
+            tree_dict = build_tree_dict(n, 0, start_symbol)
+        else:
+            best_lp = -float("inf")
+            best_prob = 0.0
+            tree_str = ""
+            tree_dict = {}
+
+        return {
+            "is_valid": is_valid,
+            "log_probability": best_lp,
+            "probability": best_prob,
+            "parse_tree": tree_str,
+            "tree": tree_str,
+            "tree_dict": tree_dict,
+            "start_symbol": start_symbol,
+            "token_count": n,
+        }
+
+
+def nlp_bm25_search(
+    corpus: List[str],
+    query: str,
+    top_k: int = 5,
+    k1: float = 1.5,
+    b: float = 0.75,
+) -> Any:
+    """Searches corpus using Okapi BM25 ranked information retrieval."""
+    engine = BM25OkapiInformationRetrieval(corpus, k1=k1, b=b)
+    return Record(engine.search(query, top_k=top_k))
+
+
+def nlp_pcfg_parse(
+    grammar_rules: Any,
+    tokens: Any,
+    start_symbol: str = "S",
+) -> Any:
+    """Parses token sequence using CYK probabilistic chart parser."""
+    parser = CYKProbabilisticContextFreeGrammarPCFG(grammar_rules)
+    return Record(parser.parse(tokens, start_symbol=start_symbol))
+
+
+
 
 
 

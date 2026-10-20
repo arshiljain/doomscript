@@ -754,6 +754,59 @@ class DsaDomainParser(DomainParser):
             u, tree, val = m_hld_u.group(1).strip(), m_hld_u.group(2).strip(), m_hld_u.group(3).strip()
             return f"dsa_hld_update_node({tree}, {u}, {val})"
 
+        # create link cut tree with <n> nodes [values <vals>] into <target>
+        m_lct_c = re.match(r"^create\s+link\s*cut\s*tree\s+with\s+(.+?)\s+nodes(?:\s+values\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if m_lct_c:
+            n_val, vals, target = m_lct_c.group(1).strip(), m_lct_c.group(2), m_lct_c.group(3).strip()
+            v_arg = f", node_values={vals.strip()}" if vals else ""
+            return f"set {target} to dsa_create_link_cut_tree({n_val}{v_arg})"
+
+        # link lct nodes <u> and <v> in <lct> into <target>
+        m_lct_l = re.match(r"^link\s+lct\s+nodes\s+(.+?)\s+and\s+(.+?)\s+(?:in|is\s+inside)\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if m_lct_l:
+            u, v, tree, target = m_lct_l.group(1).strip(), m_lct_l.group(2).strip(), m_lct_l.group(3).strip(), m_lct_l.group(4).strip()
+            return f"set {target} to dsa_lct_link({tree}, {u}, {v})"
+
+        # cut lct edge between <u> and <v> in <lct> into <target>
+        m_lct_cut = re.match(r"^cut\s+lct\s+edge\s+between\s+(.+?)\s+and\s+(.+?)\s+(?:in|is\s+inside)\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if m_lct_cut:
+            u, v, tree, target = m_lct_cut.group(1).strip(), m_lct_cut.group(2).strip(), m_lct_cut.group(3).strip(), m_lct_cut.group(4).strip()
+            return f"set {target} to dsa_lct_cut({tree}, {u}, {v})"
+
+        # query lct connectivity between <u> and <v> in <lct> into <target>
+        m_lct_conn = re.match(r"^query\s+lct\s+connectivity\s+between\s+(.+?)\s+and\s+(.+?)\s+(?:in|is\s+inside)\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if m_lct_conn:
+            u, v, tree, target = m_lct_conn.group(1).strip(), m_lct_conn.group(2).strip(), m_lct_conn.group(3).strip(), m_lct_conn.group(4).strip()
+            return f"set {target} to dsa_lct_connected({tree}, {u}, {v})"
+
+        # query lct path sum between <u> and <v> in <lct> into <target>
+        m_lct_sum = re.match(r"^query\s+lct\s+path\s+sum\s+between\s+(.+?)\s+and\s+(.+?)\s+(?:in|is\s+inside)\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if m_lct_sum:
+            u, v, tree, target = m_lct_sum.group(1).strip(), m_lct_sum.group(2).strip(), m_lct_sum.group(3).strip(), m_lct_sum.group(4).strip()
+            return f"set {target} to dsa_lct_path_sum({tree}, {u}, {v})"
+
+        # build ukkonen suffix tree for <text> into <target>
+        m_st_b = re.match(r"^build\s+ukkonen\s+suffix\s+tree\s+for\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if m_st_b:
+            txt, target = m_st_b.group(1).strip(), m_st_b.group(2).strip()
+            if not (txt.startswith('"') or txt.startswith("'") or txt.isidentifier()):
+                txt = f'"{txt}"'
+            return f"set {target} to dsa_create_suffix_tree({txt})"
+
+        # search suffix tree <st> for <pattern> into <target>
+        m_st_s = re.match(r"^search\s+suffix\s+tree\s+(.+?)\s+for\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if m_st_s:
+            st, pat, target = m_st_s.group(1).strip(), m_st_s.group(2).strip(), m_st_s.group(3).strip()
+            if not (pat.startswith('"') or pat.startswith("'") or pat.isidentifier()):
+                pat = f'"{pat}"'
+            return f"set {target} to dsa_suffix_tree_search({st}, {pat})"
+
+        # find longest repeated substring in suffix tree <st> into <target>
+        m_st_l = re.match(r"^find\s+longest\s+repeated\s+substring\s+(?:in|is\s+inside)\s+suffix\s+tree\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if m_st_l:
+            st, target = m_st_l.group(1).strip(), m_st_l.group(2).strip()
+            return f"set {target} to dsa_suffix_tree_longest_repeated({st})"
+
         return None
 
     def parse_block(

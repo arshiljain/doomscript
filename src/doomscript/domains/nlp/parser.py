@@ -429,6 +429,36 @@ class NLPDomainParser(DomainParser):
             target = fuz_txt_m.group(4).strip()
             return f"set {target} to nlp_fuzzy_search_text({q}, {txt}, max_distance={max_d})"
 
+        # search bm25 corpus <corpus> query <query> [top <k>] into <target>
+        bm25_m = re.match(
+            r"^search\s+bm25\s+corpus\s+(.+?)\s+query\s+(.+?)(?:\s+top\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if bm25_m:
+            corpus = bm25_m.group(1).strip()
+            query = bm25_m.group(2).strip()
+            top_k = bm25_m.group(3) or "5"
+            target = bm25_m.group(4).strip()
+            if not (query.startswith('"') or query.startswith("'") or query.isidentifier()):
+                query = f'"{query}"'
+            return f"set {target} to nlp_bm25_search({corpus}, {query}, top_k={top_k})"
+
+        # parse pcfg grammar <grammar> tokens <tokens> [start <start>] into <target>
+        pcfg_m = re.match(
+            r"^parse\s+pcfg\s+grammar\s+(.+?)\s+tokens\s+(.+?)(?:\s+start\s+([A-Za-z_]\w*|\"[^\"]+\"))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if pcfg_m:
+            grammar = pcfg_m.group(1).strip()
+            tokens = pcfg_m.group(2).strip()
+            start_sym = pcfg_m.group(3) or '"S"'
+            if not (start_sym.startswith('"') or start_sym.startswith("'")):
+                start_sym = f'"{start_sym}"'
+            target = pcfg_m.group(4).strip()
+            return f"set {target} to nlp_pcfg_parse({grammar}, {tokens}, start_symbol={start_sym})"
+
         return None
 
     def parse_block(

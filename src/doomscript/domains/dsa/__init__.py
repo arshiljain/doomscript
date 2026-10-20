@@ -25,6 +25,16 @@ from doomscript.domains.dsa.runtime import (
     dsa_hld_tree,
     dsa_hld_query_path,
     dsa_hld_update_node,
+    LinkCutTreeDynamicGraph,
+    SuffixTreeUkkonen,
+    dsa_create_link_cut_tree,
+    dsa_lct_link,
+    dsa_lct_cut,
+    dsa_lct_connected,
+    dsa_lct_path_sum,
+    dsa_create_suffix_tree,
+    dsa_suffix_tree_search,
+    dsa_suffix_tree_longest_repeated,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.dsa.exporter import DsaASTExporter
@@ -345,4 +355,14 @@ __all__ = [
     "dsa_hld_tree",
     "dsa_hld_query_path",
     "dsa_hld_update_node",
+    "LinkCutTreeDynamicGraph",
+    "SuffixTreeUkkonen",
+    "dsa_create_link_cut_tree",
+    "dsa_lct_link",
+    "dsa_lct_cut",
+    "dsa_lct_connected",
+    "dsa_lct_path_sum",
+    "dsa_create_suffix_tree",
+    "dsa_suffix_tree_search",
+    "dsa_suffix_tree_longest_repeated",
 ]

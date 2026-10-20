@@ -4000,4 +4000,315 @@ def dsa_hld_update_node(hld_record: Any, u: int, val: float) -> None:
     inst.update_node(int(u), float(val))
 
 
+class LinkCutTreeDynamicGraph:
+    """Sleator & Tarjan's Link-Cut Tree Dynamic Forest Data Structure.
+
+    Maintains a dynamic forest of trees supporting tree linking, cutting,
+    connectivity queries, and path aggregate queries in amortized O(log N) time.
+    """
+
+    class _Node:
+        def __init__(self, key: int, val: int = 0) -> None:
+            self.key = key
+            self.val = val
+            self.sum = val
+            self.p: Optional[LinkCutTreeDynamicGraph._Node] = None
+            self.ch: List[Optional[LinkCutTreeDynamicGraph._Node]] = [None, None]
+            self.rev = False
+
+    def __init__(self, n: int, initial_values: Optional[List[int]] = None, node_values: Optional[List[int]] = None) -> None:
+        raw_vals = node_values if node_values is not None else initial_values
+        vals = raw_vals if raw_vals and len(raw_vals) >= n else [i for i in range(n)]
+        self.nodes = [self._Node(i, vals[i]) for i in range(n)]
+        self.n = n
+
+    def _is_root(self, x: _Node) -> bool:
+        return x.p is None or (x.p.ch[0] != x and x.p.ch[1] != x)
+
+    def _push(self, x: Optional[_Node]) -> None:
+        if x and x.rev:
+            x.ch[0], x.ch[1] = x.ch[1], x.ch[0]
+            if x.ch[0]:
+                x.ch[0].rev = not x.ch[0].rev
+            if x.ch[1]:
+                x.ch[1].rev = not x.ch[1].rev
+            x.rev = False
+
+    def _pull(self, x: Optional[_Node]) -> None:
+        if x:
+            x.sum = x.val
+            if x.ch[0]:
+                x.sum += x.ch[0].sum
+            if x.ch[1]:
+                x.sum += x.ch[1].sum
+
+    def _rotate(self, x: _Node) -> None:
+        y = x.p
+        if not y:
+            return
+        z = y.p
+        d = 1 if y.ch[1] == x else 0
+        if not self._is_root(y) and z:
+            z.ch[1 if z.ch[1] == y else 0] = x
+        x.p = z
+
+        y.ch[d] = x.ch[1 - d]
+        if x.ch[1 - d]:
+            x.ch[1 - d].p = y
+
+        x.ch[1 - d] = y
+        y.p = x
+
+        self._pull(y)
+        self._pull(x)
+
+    def _splay(self, x: _Node) -> None:
+        stack = []
+        cur: Optional[LinkCutTreeDynamicGraph._Node] = x
+        while cur and not self._is_root(cur):
+            stack.append(cur)
+            cur = cur.p
+        if cur:
+            stack.append(cur)
+        while stack:
+            self._push(stack.pop())
+
+        while not self._is_root(x):
+            y = x.p
+            if not y:
+                break
+            z = y.p
+            if not self._is_root(y) and z:
+                if (y.ch[1] == x) ^ (z.ch[1] == y):
+                    self._rotate(x)
+                else:
+                    self._rotate(y)
+            self._rotate(x)
+
+    def access(self, x: _Node) -> None:
+        t: Optional[LinkCutTreeDynamicGraph._Node] = None
+        cur: Optional[LinkCutTreeDynamicGraph._Node] = x
+        while cur:
+            self._splay(cur)
+            cur.ch[1] = t
+            self._pull(cur)
+            t = cur
+            cur = cur.p
+        self._splay(x)
+
+    def make_root(self, u: int) -> None:
+        x = self.nodes[u]
+        self.access(x)
+        x.rev = not x.rev
+
+    def find_root(self, u: int) -> int:
+        x = self.nodes[u]
+        self.access(x)
+        while x.ch[0]:
+            self._push(x)
+            x = x.ch[0]
+        self._splay(x)
+        return x.key
+
+    def link(self, u: int, v: int) -> bool:
+        if self.connected(u, v):
+            return False
+        self.make_root(u)
+        self.nodes[u].p = self.nodes[v]
+        return True
+
+    def cut(self, u: int, v: int) -> bool:
+        self.make_root(u)
+        self.access(self.nodes[v])
+        if self.nodes[v].ch[0] == self.nodes[u] and self.nodes[u].ch[1] is None:
+            self.nodes[v].ch[0] = None
+            self.nodes[u].p = None
+            self._pull(self.nodes[v])
+            return True
+        return False
+
+    def connected(self, u: int, v: int) -> bool:
+        return self.find_root(u) == self.find_root(v)
+
+    def path_sum(self, u: int, v: int) -> int:
+        self.make_root(u)
+        self.access(self.nodes[v])
+        return self.nodes[v].sum
+
+
+class SuffixTreeUkkonen:
+    """Esko Ukkonen's Online Linear-Time O(N) Suffix Tree Construction.
+
+    Constructs implicit and explicit suffix tree with suffix links, supporting
+    fast exact pattern searching, longest repeated substring, and suffix statistics.
+    """
+
+    class _Node:
+        def __init__(self, start: int, end: Optional[List[int]]) -> None:
+            self.start = start
+            self.end = end
+            self.children: Dict[str, SuffixTreeUkkonen._Node] = {}
+            self.suffix_link: Optional[SuffixTreeUkkonen._Node] = None
+
+    def __init__(self, text: str) -> None:
+        self.raw_text = text
+        self.text = text + "$"
+        self.root = self._Node(-1, [-1])
+        self.active_node = self.root
+        self.active_edge = -1
+        self.active_length = 0
+        self.remaining = 0
+        self.leaf_end = [-1]
+        self._build()
+
+    def _edge_length(self, node: _Node) -> int:
+        if node.end is None:
+            return 0
+        return node.end[0] - node.start + 1
+
+    def _build(self) -> None:
+        n = len(self.text)
+        for i in range(n):
+            self.leaf_end[0] = i
+            self.remaining += 1
+            last_created_internal: Optional[SuffixTreeUkkonen._Node] = None
+
+            while self.remaining > 0:
+                if self.active_length == 0:
+                    self.active_edge = i
+
+                ch = self.text[self.active_edge]
+                if ch not in self.active_node.children:
+                    self.active_node.children[ch] = self._Node(i, self.leaf_end)
+                    if last_created_internal:
+                        last_created_internal.suffix_link = self.active_node
+                        last_created_internal = None
+                else:
+                    nxt = self.active_node.children[ch]
+                    edge_len = self._edge_length(nxt)
+                    if self.active_length >= edge_len:
+                        self.active_edge += edge_len
+                        self.active_length -= edge_len
+                        self.active_node = nxt
+                        continue
+
+                    if self.text[nxt.start + self.active_length] == self.text[i]:
+                        self.active_length += 1
+                        if last_created_internal:
+                            last_created_internal.suffix_link = self.active_node
+                        break
+
+                    split_end = [nxt.start + self.active_length - 1]
+                    split = self._Node(nxt.start, split_end)
+                    self.active_node.children[ch] = split
+
+                    split.children[self.text[i]] = self._Node(i, self.leaf_end)
+                    nxt.start += self.active_length
+                    split.children[self.text[nxt.start]] = nxt
+
+                    if last_created_internal:
+                        last_created_internal.suffix_link = split
+                    last_created_internal = split
+
+                self.remaining -= 1
+                if self.active_node == self.root and self.active_length > 0:
+                    self.active_length -= 1
+                    self.active_edge = i - self.remaining + 1
+                elif self.active_node != self.root:
+                    self.active_node = self.active_node.suffix_link if self.active_node.suffix_link else self.root
+
+    def search(self, pattern: str) -> bool:
+        """Determines if pattern occurs as a substring."""
+        node = self.root
+        i = 0
+        m = len(pattern)
+        while i < m:
+            ch = pattern[i]
+            if ch not in node.children:
+                return False
+            nxt = node.children[ch]
+            edge_len = self._edge_length(nxt)
+            k = 0
+            while k < edge_len and i < m:
+                if self.text[nxt.start + k] != pattern[i]:
+                    return False
+                k += 1
+                i += 1
+            node = nxt
+        return True
+
+    def longest_repeated_substring(self) -> str:
+        """Finds the longest repeated substring in the text."""
+        best_str = ""
+
+        def dfs(node: SuffixTreeUkkonen._Node, cur_path: str) -> None:
+            nonlocal best_str
+            if len(node.children) >= 2 and len(cur_path) > len(best_str):
+                best_str = cur_path
+            for ch, nxt in node.children.items():
+                edge_len = self._edge_length(nxt)
+                seg = self.text[nxt.start : nxt.start + edge_len]
+                if "$" in seg:
+                    seg = seg[: seg.find("$")]
+                dfs(nxt, cur_path + seg)
+
+        dfs(self.root, "")
+        return best_str
+
+
+def dsa_create_link_cut_tree(n_nodes: int, node_values: Optional[List[int]] = None) -> Record:
+    """Initializes a Link-Cut Tree dynamic forest."""
+    lct = LinkCutTreeDynamicGraph(int(n_nodes), initial_values=node_values)
+    return Record({
+        "num_nodes": n_nodes,
+        "instance": lct,
+    })
+
+
+def dsa_lct_link(lct_record: Any, u: int, v: int) -> bool:
+    """Links node u to node v in Link-Cut Tree."""
+    inst = lct_record.instance if hasattr(lct_record, "instance") else lct_record
+    return inst.link(int(u), int(v))
+
+
+def dsa_lct_cut(lct_record: Any, u: int, v: int) -> bool:
+    """Cuts edge between u and v in Link-Cut Tree."""
+    inst = lct_record.instance if hasattr(lct_record, "instance") else lct_record
+    return inst.cut(int(u), int(v))
+
+
+def dsa_lct_connected(lct_record: Any, u: int, v: int) -> bool:
+    """Checks if u and v are connected in the dynamic forest."""
+    inst = lct_record.instance if hasattr(lct_record, "instance") else lct_record
+    return inst.connected(int(u), int(v))
+
+
+def dsa_lct_path_sum(lct_record: Any, u: int, v: int) -> int:
+    """Calculates sum of node values along tree path between u and v."""
+    inst = lct_record.instance if hasattr(lct_record, "instance") else lct_record
+    return inst.path_sum(int(u), int(v))
+
+
+def dsa_create_suffix_tree(text: str) -> Record:
+    """Builds Ukkonen suffix tree from input text."""
+    st = SuffixTreeUkkonen(text)
+    return Record({
+        "text": text,
+        "instance": st,
+    })
+
+
+def dsa_suffix_tree_search(st_record: Any, pattern: str) -> bool:
+    """Searches for pattern in Ukkonen suffix tree."""
+    inst = st_record.instance if hasattr(st_record, "instance") else st_record
+    return inst.search(pattern)
+
+
+def dsa_suffix_tree_longest_repeated(st_record: Any) -> str:
+    """Returns longest repeated substring using Ukkonen suffix tree."""
+    inst = st_record.instance if hasattr(st_record, "instance") else st_record
+    return inst.longest_repeated_substring()
+
+
+
 

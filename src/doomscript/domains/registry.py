@@ -90,12 +90,14 @@ class DomainRegistry:
         for name in self._active_domains:
             domain = self._domains.get(name)
             if domain and domain.can_handle_line(line):
-                return domain
+                if domain.parser.parse_inspect(line, 0) is not None or domain.parser.parse_operation(line, 0) is not None:
+                    return domain
 
         # 2. Check all registered domains (for auto-activation / fallback)
         for domain in self._domains.values():
             if domain.can_handle_line(line):
-                return domain
+                if domain.parser.parse_inspect(line, 0) is not None or domain.parser.parse_operation(line, 0) is not None:
+                    return domain
 
         return None
 

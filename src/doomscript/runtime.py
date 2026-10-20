@@ -2767,6 +2767,10 @@ from doomscript.domains.geo.runtime import (
     geo_geohash_decode,
     UniversalTransverseMercatorUTM,
     GeohashSpatialEncoder,
+    VoronoiDiagramFortuneSweepline,
+    KrigingSpatialInterpolator,
+    geo_voronoi_partition,
+    geo_kriging_interpolate,
 )
 
 def execute_geo_ir(spec):
@@ -3811,6 +3815,11 @@ from doomscript.domains.astronomy.runtime import (
     JulianDaySiderealTimeCalculator,
     astronomy_propagate_kepler_orbit,
     astronomy_calculate_sidereal_time,
+    SGP4SimplifiedPerturbationsSatellitePropagator,
+    HohmannAndBiEllipticOrbitalManeuverPlanner,
+    astronomy_propagate_sgp4,
+    astronomy_propagate_sgp4_orbit,
+    astronomy_plan_orbital_transfer,
 )
 
 from doomscript.domains.chem.runtime import (
@@ -4206,6 +4215,16 @@ from doomscript.domains.dsa.runtime import (
     dsa_hld_tree,
     dsa_hld_query_path,
     dsa_hld_update_node,
+    LinkCutTreeDynamicGraph,
+    SuffixTreeUkkonen,
+    dsa_create_link_cut_tree,
+    dsa_lct_link,
+    dsa_lct_cut,
+    dsa_lct_connected,
+    dsa_lct_path_sum,
+    dsa_create_suffix_tree,
+    dsa_suffix_tree_search,
+    dsa_suffix_tree_longest_repeated,
 )
 
 from doomscript.domains.ml.runtime import (
@@ -4268,6 +4287,11 @@ from doomscript.domains.graph.runtime import (
     LengauerTarjanDominatorTree,
     graph_bron_kerbosch_degeneracy_cliques,
     graph_lengauer_tarjan_dominators,
+    EdmondsBlossomMaximumWeightMatching,
+    PageRankRandomWalkWithRestart,
+    graph_edmonds_blossom_matching,
+    graph_pagerank_calculate,
+    graph_pagerank_calculate_graph,
 )
 
 from doomscript.domains.net.runtime import (
@@ -4338,6 +4362,10 @@ from doomscript.domains.nlp.runtime import (
     nlp_textrank_summarize,
     nlp_fuzzy_match,
     nlp_fuzzy_search_text,
+    BM25OkapiInformationRetrieval,
+    CYKProbabilisticContextFreeGrammarPCFG,
+    nlp_bm25_search,
+    nlp_pcfg_parse,
 )
 
 from doomscript.domains.opt.runtime import (

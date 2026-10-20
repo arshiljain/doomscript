@@ -32,6 +32,10 @@ from doomscript.domains.nlp.runtime import (
     nlp_textrank_summarize,
     nlp_fuzzy_match,
     nlp_fuzzy_search_text,
+    BM25OkapiInformationRetrieval,
+    CYKProbabilisticContextFreeGrammarPCFG,
+    nlp_bm25_search,
+    nlp_pcfg_parse,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.nlp.exporter import NLPASTExporter
@@ -211,5 +215,9 @@ __all__ = [
     "nlp_textrank_summarize",
     "nlp_fuzzy_match",
     "nlp_fuzzy_search_text",
+    "BM25OkapiInformationRetrieval",
+    "CYKProbabilisticContextFreeGrammarPCFG",
+    "nlp_bm25_search",
+    "nlp_pcfg_parse",
 ]
 

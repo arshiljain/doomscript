@@ -47,6 +47,11 @@ from doomscript.domains.astronomy.runtime import (
     JulianDaySiderealTimeCalculator,
     astronomy_propagate_kepler_orbit,
     astronomy_calculate_sidereal_time,
+    SGP4SimplifiedPerturbationsSatellitePropagator,
+    HohmannAndBiEllipticOrbitalManeuverPlanner,
+    astronomy_propagate_sgp4,
+    astronomy_propagate_sgp4_orbit,
+    astronomy_plan_orbital_transfer,
 )
 from doomscript.domains.astronomy.parser import AstronomyDomainParser
 from doomscript.domains.astronomy.exporter import AstronomyASTExporter
@@ -139,4 +144,9 @@ __all__ = [
     "JulianDaySiderealTimeCalculator",
     "astronomy_propagate_kepler_orbit",
     "astronomy_calculate_sidereal_time",
+    "SGP4SimplifiedPerturbationsSatellitePropagator",
+    "HohmannAndBiEllipticOrbitalManeuverPlanner",
+    "astronomy_propagate_sgp4",
+    "astronomy_propagate_sgp4_orbit",
+    "astronomy_plan_orbital_transfer",
 ]

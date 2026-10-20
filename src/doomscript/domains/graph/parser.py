@@ -467,6 +467,36 @@ class GraphDomainParser(DomainParser):
                 entry = f'"{entry}"'
             return f"set {target} to graph_lengauer_tarjan_dominators({entry}, {edges})"
 
+        # find blossom matching for nodes <nodes> edges <edges> into <target>
+        # find maximum matching blossom edges <edges> nodes <nodes> into <target>
+        m_blossom = re.match(
+            r"^find\s+(?:blossom\s+matching\s+for\s+nodes\s+(.+?)\s+edges\s+(.+?)|maximum\s+matching\s+blossom\s+edges\s+(.+?)\s+nodes\s+(.+?))\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_blossom:
+            if m_blossom.group(1):
+                nodes, edges, target = m_blossom.group(1).strip(), m_blossom.group(2).strip(), m_blossom.group(5).strip()
+            else:
+                edges, nodes, target = m_blossom.group(3).strip(), m_blossom.group(4).strip(), m_blossom.group(5).strip()
+            return f"set {target} to graph_edmonds_blossom_matching({nodes}, {edges})"
+
+        # calculate network pagerank for nodes <nodes> edges <edges> [damping <alpha>] into <target>
+        # compute pagerank graph <graph> into <target>
+        m_pr = re.match(
+            r"^(?:calculate\s+network\s+pagerank\s+for\s+nodes\s+(.+?)\s+edges\s+(.+?)(?:\s+damping\s+(.+?))?|compute\s+pagerank\s+graph\s+(.+?))\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_pr:
+            if m_pr.group(4):
+                g_arg, target = m_pr.group(4).strip(), m_pr.group(5).strip()
+                return f"set {target} to graph_pagerank_calculate_graph({g_arg})"
+            else:
+                nodes, edges, d_arg, target = m_pr.group(1).strip(), m_pr.group(2).strip(), m_pr.group(3), m_pr.group(5).strip()
+                alpha_arg = f", alpha={d_arg.strip()}" if d_arg else ""
+                return f"set {target} to graph_pagerank_calculate({nodes}, {edges}{alpha_arg})"
+
         return None
 
     def parse_block(

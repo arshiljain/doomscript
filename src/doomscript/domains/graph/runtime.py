@@ -2260,6 +2260,247 @@ def graph_lengauer_tarjan_dominators(
     return Record(LengauerTarjanDominatorTree.compute(entry, edges))
 
 
+class EdmondsBlossomMaximumWeightMatching:
+    """Jack Edmonds' Blossom Algorithm for Maximum Matching on General Undirected Graphs.
+
+    Finds maximum cardinality and maximum weight matchings on arbitrary (non-bipartite)
+    graphs by detecting odd-length alternating cycles (blossoms), contracting them to
+    pseudo-vertices, and expanding them along augmenting paths.
+    """
+
+    @classmethod
+    def maximum_matching(cls, nodes: Any = None, edges: Any = None, num_nodes: Optional[int] = None) -> Dict[str, Any]:
+        """Calculates maximum cardinality matching on general graph."""
+        if num_nodes is not None and nodes is None:
+            nodes = [str(i) for i in range(num_nodes)]
+        elif isinstance(nodes, int):
+            nodes = [str(i) for i in range(nodes)]
+        elif nodes is None and edges:
+            all_n = set()
+            for u, v in edges:
+                all_n.add(str(u))
+                all_n.add(str(v))
+            nodes = sorted(list(all_n))
+
+        nodes = [str(n) for n in nodes]
+        edges = [(str(u), str(v)) for u, v in (edges or [])]
+
+        n = len(nodes)
+        node_to_idx = {name: i for i, name in enumerate(nodes)}
+        idx_to_node = {i: name for i, name in enumerate(nodes)}
+
+        adj: List[List[int]] = [[] for _ in range(n)]
+        for u_str, v_str in edges:
+            if u_str in node_to_idx and v_str in node_to_idx:
+                u, v = node_to_idx[u_str], node_to_idx[v_str]
+                if u != v:
+                    adj[u].append(v)
+                    adj[v].append(u)
+
+        match = [-1] * n
+
+        def lca(base: List[int], p: List[int], a: int, b: int) -> int:
+            used = [False] * n
+            while True:
+                a = base[a]
+                used[a] = True
+                if match[a] == -1:
+                    break
+                a = p[match[a]]
+            while True:
+                b = base[b]
+                if used[b]:
+                    return b
+                b = p[match[b]]
+
+        def mark_path(base: List[int], p: List[int], blossom: List[bool], v: int, b: int) -> None:
+            cur = v
+            while base[cur] != b:
+                blossom[base[cur]] = True
+                blossom[base[match[cur]]] = True
+                cur = p[match[cur]]
+            blossom[b] = True
+
+        def find_augmenting_path(root: int) -> Tuple[int, List[int]]:
+            p = [-1] * n
+            base = list(range(n))
+            used = [0] * n
+            q = [root]
+            used[root] = 1
+
+            head = 0
+            while head < len(q):
+                v = q[head]
+                head += 1
+
+                for to in adj[v]:
+                    if base[v] == base[to] or match[v] == to:
+                        continue
+                    if to == root or (match[to] != -1 and p[match[to]] != -1):
+                        cur_base = lca(base, p, v, to)
+                        blossom = [False] * n
+                        mark_path(base, p, blossom, v, cur_base)
+                        mark_path(base, p, blossom, to, cur_base)
+
+                        for i in range(n):
+                            if blossom[base[i]]:
+                                base[i] = cur_base
+                                if used[i] == 2:
+                                    used[i] = 1
+                                    q.append(i)
+                    elif used[to] == 0:
+                        p[to] = v
+                        if match[to] == -1:
+                            return to, p
+                        used[to] = 2
+                        used[match[to]] = 1
+                        q.append(match[to])
+            return -1, p
+
+        for i in range(n):
+            if match[i] == -1:
+                v, p = find_augmenting_path(i)
+                while v != -1:
+                    pv = p[v]
+                    ppv = match[pv] if pv != -1 else -1
+                    match[v] = pv
+                    match[pv] = v
+                    v = ppv
+
+        matching_dict: Dict[str, str] = {}
+        matched_pairs: List[List[str]] = []
+        for i in range(n):
+            if match[i] != -1 and match[i] > i:
+                u_name = idx_to_node[i]
+                v_name = idx_to_node[match[i]]
+                matching_dict[u_name] = v_name
+                matching_dict[v_name] = u_name
+                matched_pairs.append([u_name, v_name])
+
+        return {
+            "matching": matching_dict,
+            "matched_pairs": matched_pairs,
+            "matching_cardinality": len(matched_pairs),
+            "cardinality": len(matched_pairs),
+            "total_nodes": n,
+            "is_perfect": len(matched_pairs) * 2 == n,
+        }
+
+    max_matching = maximum_matching
+
+
+class PageRankRandomWalkWithRestart:
+    """Google PageRank & Personalized Random Walk with Restart (RWR) Engine.
+
+    Calculates stationary distribution of random surfer on directed web graphs
+    with dangling node compensation and teleportation damping.
+    """
+
+    @classmethod
+    def calculate(
+        cls,
+        nodes_or_adj: Any,
+        edges: Optional[Any] = None,
+        alpha: float = 0.85,
+        damping: Optional[float] = None,
+        personalization: Optional[Dict[str, float]] = None,
+        max_iter: int = 100,
+        tol: float = 1e-6,
+    ) -> Dict[str, Any]:
+        """Calculates PageRank vector via power iteration."""
+        if damping is not None:
+            alpha = damping
+
+        if isinstance(nodes_or_adj, dict) and edges is None:
+            nodes = list(nodes_or_adj.keys())
+            edges = [(u, v) for u, targets in nodes_or_adj.items() for v in targets]
+        else:
+            nodes = list(nodes_or_adj)
+            edges = list(edges) if edges else []
+
+        n = len(nodes)
+        if n == 0:
+            return {"scores": {}, "top_ranked": [], "iterations": 0}
+
+        node_set = sorted(list(set(nodes)))
+        node_idx = {name: i for i, name in enumerate(node_set)}
+        out_edges: Dict[str, List[str]] = {name: [] for name in node_set}
+
+        for u, v in edges:
+            if u in out_edges and v in node_idx:
+                out_edges[u].append(v)
+
+        if personalization:
+            total_p = sum(personalization.get(name, 0.0) for name in node_set)
+            if total_p > 0:
+                p0 = [personalization.get(name, 0.0) / total_p for name in node_set]
+            else:
+                p0 = [1.0 / n] * n
+        else:
+            p0 = [1.0 / n] * n
+
+        rank = list(p0)
+        iterations = 0
+
+        for it in range(max_iter):
+            iterations += 1
+            next_rank = [0.0] * n
+            dangling_sum = 0.0
+
+            for i, u in enumerate(node_set):
+                succs = out_edges[u]
+                if succs:
+                    share = rank[i] / len(succs)
+                    for v in succs:
+                        next_rank[node_idx[v]] += share
+                else:
+                    dangling_sum += rank[i]
+
+            diff = 0.0
+            for i in range(n):
+                val = alpha * (next_rank[i] + dangling_sum * p0[i]) + (1.0 - alpha) * p0[i]
+                diff += abs(val - rank[i])
+                rank[i] = val
+
+            if diff < tol:
+                break
+
+        scores = {node_set[i]: round(rank[i], 6) for i in range(n)}
+        ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+
+        return {
+            "scores": scores,
+            "ranks": scores,
+            "top_ranked": [Record({"node": k, "pagerank": v}) for k, v in ranked],
+            "highest_ranked_node": ranked[0][0] if ranked else "",
+            "top_node": ranked[0][0] if ranked else "",
+            "iterations": iterations,
+            "damping_factor": alpha,
+        }
+
+    compute = calculate
+
+
+def graph_edmonds_blossom_matching(nodes: Any, edges: Any) -> Record:
+    """Computes maximum matching on general graph using Edmonds' blossom algorithm."""
+    return Record(EdmondsBlossomMaximumWeightMatching.maximum_matching(nodes, edges))
+
+
+def graph_pagerank_calculate_graph(g_adj: Any, alpha: float = 0.85) -> Record:
+    """Calculates PageRank centrality directly from adjacency dictionary."""
+    return Record(PageRankRandomWalkWithRestart.calculate(g_adj, alpha=alpha))
+
+
+def graph_pagerank_calculate(
+    nodes: List[str],
+    edges: List[Tuple[str, str]],
+    alpha: float = 0.85,
+) -> Record:
+    """Calculates PageRank centrality vector using power iteration."""
+    return Record(PageRankRandomWalkWithRestart.calculate(nodes, edges, alpha=alpha))
+
+
+
 
 
 

@@ -54,6 +54,10 @@ from doomscript.domains.geo.runtime import (
     geo_utm_inverse,
     UniversalTransverseMercatorUTM,
     GeohashSpatialEncoder,
+    VoronoiDiagramFortuneSweepline,
+    KrigingSpatialInterpolator,
+    geo_voronoi_partition,
+    geo_kriging_interpolate,
     SpatialRTree,
     DelaunayTriangulator,
     WebMercatorProjection,
@@ -253,5 +257,9 @@ __all__ = [
     "PolygonClippingSutherlandHodgman",
     "geo_douglas_peucker",
     "geo_sutherland_hodgman_clip",
+    "VoronoiDiagramFortuneSweepline",
+    "KrigingSpatialInterpolator",
+    "geo_voronoi_partition",
+    "geo_kriging_interpolate",
 ]
 

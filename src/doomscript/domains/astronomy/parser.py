@@ -136,6 +136,65 @@ class AstronomyDomainParser(DomainParser):
             )
             return f"set {target} to astronomy_calculate_sidereal_time({y}, {m}, {d}, {h}, {mn}, {sc}, {lon})"
 
+        # propagate sgp4 [satellite] orbit <orbit> [after <dt> minutes] into <target>
+        m_sgp4_orb = re.match(
+            r"^propagate\s+sgp4\s+(?:satellite\s+)?orbit\s+(.+?)(?:\s+after\s+(.+?)\s+minutes)?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_sgp4_orb:
+            orb, dt, target = m_sgp4_orb.group(1).strip(), m_sgp4_orb.group(2), m_sgp4_orb.group(3).strip()
+            dt_arg = f", delta_minutes={dt.strip()}" if dt else ""
+            return f"set {target} to astronomy_propagate_sgp4_orbit({orb}{dt_arg})"
+
+        # propagate sgp4 orbit inc <inc> raan <raan> ecc <ecc> argp <argp> ma <ma> mm <mm> [delta minutes <dt>] into <target>
+        m_sgp4 = re.match(
+            r"^propagate\s+sgp4\s+orbit\s+inc\s+(.+?)\s+raan\s+(.+?)\s+ecc\s+(.+?)\s+argp\s+(.+?)\s+ma\s+(.+?)\s+mm\s+(.+?)(?:\s+delta\s+minutes\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_sgp4:
+            inc, raan, ecc, argp, ma, mm, dt, target = (
+                m_sgp4.group(1).strip(),
+                m_sgp4.group(2).strip(),
+                m_sgp4.group(3).strip(),
+                m_sgp4.group(4).strip(),
+                m_sgp4.group(5).strip(),
+                m_sgp4.group(6).strip(),
+                m_sgp4.group(7),
+                m_sgp4.group(8).strip(),
+            )
+            dt_arg = f", delta_minutes={dt.strip()}" if dt else ""
+            return f"set {target} to astronomy_propagate_sgp4({inc}, {raan}, {ecc}, {argp}, {ma}, {mm}{dt_arg})"
+
+        # plan hohmann transfer from <r1> to <r2> into <target>
+        m_hoh = re.match(
+            r"^plan\s+hohmann\s+transfer\s+from\s+(.+?)\s+to\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_hoh:
+            r1, r2, target = m_hoh.group(1).strip(), m_hoh.group(2).strip(), m_hoh.group(3).strip()
+            return f"set {target} to astronomy_plan_orbital_transfer({r1}, {r2})"
+
+        # plan orbital transfer r1 <r1> r2 <r2> [rb <rb>] [plane change <pc>] into <target>
+        m_trans = re.match(
+            r"^plan\s+orbital\s+transfer\s+r1\s+(.+?)\s+r2\s+(.+?)(?:\s+rb\s+(.+?))?(?:\s+plane\s+change\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_trans:
+            r1, r2, rb, pc, target = (
+                m_trans.group(1).strip(),
+                m_trans.group(2).strip(),
+                m_trans.group(3),
+                m_trans.group(4),
+                m_trans.group(5).strip(),
+            )
+            rb_arg = f", rb_km={rb.strip()}" if rb else ""
+            pc_arg = f", plane_change_deg={pc.strip()}" if pc else ""
+            return f"set {target} to astronomy_plan_orbital_transfer({r1}, {r2}{rb_arg}{pc_arg})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

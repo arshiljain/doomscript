@@ -1723,3 +1723,222 @@ def geo_geohash_decode(geohash: str) -> Record:
     return Record(GeohashSpatialEncoder.decode(geohash))
 
 
+class VoronoiDiagramFortuneSweepline:
+    """Voronoi Diagram Partitioning Engine via Delaunay Dual Circumcenters.
+
+    Calculates exact polygonal Voronoi cell geometry, dual adjacency graphs,
+    cell surface areas via the shoelace algorithm, and perimeter lengths.
+    """
+
+    @staticmethod
+    def _circumcenter(
+        p1: Tuple[float, float],
+        p2: Tuple[float, float],
+        p3: Tuple[float, float],
+    ) -> Tuple[float, float]:
+        ax, ay = p1
+        bx, by = p2
+        cx, cy = p3
+        d = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by))
+        if abs(d) < 1e-12:
+            return (ax, ay)
+        ux = ((ax * ax + ay * ay) * (by - cy) + (bx * bx + by * by) * (cy - ay) + (cx * cx + cy * cy) * (ay - by)) / d
+        uy = ((ax * ax + ay * ay) * (cx - bx) + (bx * bx + by * by) * (ax - cx) + (cx * cx + cy * cy) * (bx - ax)) / d
+        return (ux, uy)
+
+    @classmethod
+    def generate(cls, sites: List[Any]) -> Dict[str, Any]:
+        """Generates Voronoi partition cells for 2D generator sites."""
+        sites = [tuple(s) for s in sites]
+        triangles = DelaunayTriangulator.triangulate(sites)
+        site_to_centers: Dict[Tuple[float, float], List[Tuple[float, float]]] = {tuple(s): [] for s in sites}
+        site_neighbors: Dict[Tuple[float, float], Set[Tuple[float, float]]] = {tuple(s): set() for s in sites}
+
+        for tri in triangles:
+            cc = cls._circumcenter(tri[0], tri[1], tri[2])
+            for s in tri:
+                s_t = tuple(s)
+                if s_t in site_to_centers:
+                    site_to_centers[s_t].append(cc)
+                    for other in tri:
+                        o_t = tuple(other)
+                        if o_t != s_t and o_t in site_neighbors:
+                            site_neighbors[s_t].add(o_t)
+
+        cells = []
+        for s in sites:
+            s_t = tuple(s)
+            centers = site_to_centers[s_t]
+            if len(centers) >= 3:
+                sx, sy = s_t
+                sorted_pts = sorted(centers, key=lambda c: math.atan2(c[1] - sy, c[0] - sx))
+                n = len(sorted_pts)
+                area = 0.5 * abs(sum(sorted_pts[i][0] * sorted_pts[(i + 1) % n][1] - sorted_pts[(i + 1) % n][0] * sorted_pts[i][1] for i in range(n)))
+                perim = sum(math.hypot(sorted_pts[(i + 1) % n][0] - sorted_pts[i][0], sorted_pts[(i + 1) % n][1] - sorted_pts[i][1]) for i in range(n))
+                cells.append({
+                    "site": list(s_t),
+                    "vertices": [[round(p[0], 3), round(p[1], 3)] for p in sorted_pts],
+                    "area": round(area, 3),
+                    "perimeter": round(perim, 3),
+                    "neighbors_count": len(site_neighbors[s_t]),
+                })
+            else:
+                cells.append({
+                    "site": list(s_t),
+                    "vertices": [[round(p[0], 3), round(p[1], 3)] for p in centers],
+                    "area": 0.0,
+                    "perimeter": 0.0,
+                    "neighbors_count": len(site_neighbors[s_t]),
+                })
+
+        return {
+            "cells": [Record(c) for c in cells],
+            "total_cells": len(cells),
+            "num_sites": len(sites),
+            "sites_count": len(sites),
+        }
+
+    @classmethod
+    def compute_cells(cls, sites: List[Tuple[float, float]], bounding_box: Optional[Tuple[float, float, float, float]] = None) -> Dict[str, Any]:
+        return cls.generate(sites)
+
+
+class KrigingSpatialInterpolator:
+    """Geostatistical Ordinary Kriging (BLUP) Spatial Interpolator.
+
+    Constructs and solves Best Linear Unbiased Prediction linear system using
+    semivariogram covariance kernels for continuous surface reconstruction.
+    """
+
+    @staticmethod
+    def _exp_variogram(h: float, nugget: float, sill: float, range_a: float) -> float:
+        if h <= 1e-9:
+            return 0.0
+        return nugget + sill * (1.0 - math.exp(-3.0 * h / max(1e-4, range_a)))
+
+    @classmethod
+    def interpolate(
+        cls,
+        known_points: Any,
+        query_points: Any,
+        nugget: float = 0.0,
+        sill: float = 1.0,
+        range_a: float = 10.0,
+        range_param: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        """Interpolates values at query coordinates and computes Kriging estimation variance."""
+        if range_param is not None:
+            range_a = range_param
+
+        normalized_known: List[Dict[str, float]] = []
+        for p in known_points:
+            if isinstance(p, dict):
+                normalized_known.append(p)
+            elif isinstance(p, (list, tuple)) and len(p) >= 3:
+                normalized_known.append({"x": float(p[0]), "y": float(p[1]), "value": float(p[2])})
+
+        n = len(normalized_known)
+        if n == 0:
+            return {"predictions": [], "kriging_variances": [], "first_prediction": Record({"estimated_value": 0.0})}
+
+        m_dim = n + 1
+        K = [[0.0] * m_dim for _ in range(m_dim)]
+        for i in range(n):
+            xi, yi = normalized_known[i]["x"], normalized_known[i]["y"]
+            for j in range(i, n):
+                xj, yj = normalized_known[j]["x"], normalized_known[j]["y"]
+                d = math.hypot(xi - xj, yi - yj)
+                val = cls._exp_variogram(d, nugget, sill, range_a)
+                K[i][j] = val
+                K[j][i] = val
+            K[i][n] = 1.0
+            K[n][i] = 1.0
+        K[n][n] = 0.0
+
+        inv_K = [[1.0 if i == j else 0.0 for j in range(m_dim)] for i in range(m_dim)]
+        aug = [row[:] for row in K]
+
+        for p in range(m_dim):
+            max_r = p
+            max_v = abs(aug[p][p])
+            for r in range(p + 1, m_dim):
+                if abs(aug[r][p]) > max_v:
+                    max_v = abs(aug[r][p])
+                    max_r = r
+            if max_v < 1e-12:
+                continue
+            aug[p], aug[max_r] = aug[max_r], aug[p]
+            inv_K[p], inv_K[max_r] = inv_K[max_r], inv_K[p]
+
+            piv = aug[p][p]
+            for c in range(m_dim):
+                aug[p][c] /= piv
+                inv_K[p][c] /= piv
+
+            for r in range(m_dim):
+                if r != p:
+                    factor = aug[r][p]
+                    for c in range(m_dim):
+                        aug[r][c] -= factor * aug[p][c]
+                        inv_K[r][c] -= factor * inv_K[p][c]
+
+        predictions = []
+        variances = []
+
+        for q in query_points:
+            qx, qy = q[0], q[1]
+            k_vec = [
+                cls._exp_variogram(math.hypot(qx - normalized_known[i]["x"], qy - normalized_known[i]["y"]), nugget, sill, range_a)
+                for i in range(n)
+            ] + [1.0]
+            weights = [sum(inv_K[i][j] * k_vec[j] for j in range(m_dim)) for i in range(m_dim)]
+            pred = sum(weights[i] * normalized_known[i]["value"] for i in range(n))
+            var_k = sum(weights[i] * k_vec[i] for i in range(m_dim))
+
+            rec = Record({
+                "estimated_value": round(pred, 4),
+                "variance": round(max(0.0, var_k), 4),
+            })
+            predictions.append(rec)
+            variances.append(round(max(0.0, var_k), 4))
+
+        return {
+            "predictions": predictions,
+            "first_prediction": predictions[0] if predictions else Record({"estimated_value": 0.0}),
+            "kriging_variances": variances,
+            "sample_count": n,
+            "query_count": len(query_points),
+        }
+
+    @classmethod
+    def fit_predict(
+        cls,
+        known_points: Any,
+        query_points: Any,
+        nugget: float = 0.0,
+        sill: float = 1.0,
+        range_a: float = 10.0,
+        range_param: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        return cls.interpolate(known_points, query_points, nugget=nugget, sill=sill, range_a=range_a, range_param=range_param)
+
+
+def geo_voronoi_partition(sites: List[Tuple[float, float]]) -> Record:
+    """Computes 2D Voronoi cell diagram from site coordinates."""
+    return Record(VoronoiDiagramFortuneSweepline.generate(sites))
+
+
+def geo_kriging_interpolate(
+    known_points: List[Dict[str, float]],
+    query_points: List[Tuple[float, float]],
+    nugget: float = 0.0,
+    sill: float = 1.0,
+    range_a: float = 10.0,
+) -> Record:
+    """Calculates Ordinary Kriging spatial predictions and estimation variances."""
+    return Record(KrigingSpatialInterpolator.interpolate(
+        known_points, query_points, nugget=nugget, sill=sill, range_a=range_a
+    ))
+
+
+
