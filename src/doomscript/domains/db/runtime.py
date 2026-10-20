@@ -1213,3 +1213,238 @@ def db_bplus_tree_range(tree: Any, min_key: Any, max_key: Any) -> List[Any]:
     pairs = idx.range_scan(min_key, max_key)
     return [Record({"key": p[0], "value": p[1]}) for p in pairs]
 
+
+class BitmapIndexCompressor:
+    """Run-Length Encoded (RLE) and Word-Aligned Hybrid Bitmap Index for ultra-fast columnar filtering."""
+
+    @classmethod
+    def compress(cls, bit_vector: List[int]) -> Dict[str, Any]:
+        if not bit_vector:
+            return {"num_bits": 0, "runs": [], "ones_count": 0}
+        runs = []
+        curr_val = 1 if bit_vector[0] else 0
+        run_len = 0
+        ones = 0
+        for b in bit_vector:
+            val = 1 if b else 0
+            if val == 1:
+                ones += 1
+            if val == curr_val:
+                run_len += 1
+            else:
+                runs.append((curr_val, run_len))
+                curr_val = val
+                run_len = 1
+        runs.append((curr_val, run_len))
+        return {
+            "num_bits": len(bit_vector),
+            "runs": runs,
+            "ones_count": ones,
+        }
+
+    @classmethod
+    def decompress(cls, compressed: Any) -> List[int]:
+        c = compressed.as_dict() if hasattr(compressed, "as_dict") else compressed
+        bits = []
+        for val, count in c.get("runs", []):
+            bits.extend([val] * count)
+        return bits
+
+    @classmethod
+    def query_indices(cls, compressed: Any) -> List[int]:
+        c = compressed.as_dict() if hasattr(compressed, "as_dict") else compressed
+        indices = []
+        pos = 0
+        for val, count in c.get("runs", []):
+            if val == 1:
+                indices.extend(range(pos, pos + count))
+            pos += count
+        return indices
+
+    @classmethod
+    def bitwise_and(cls, c1: Any, c2: Any) -> Dict[str, Any]:
+        b1 = cls.decompress(c1)
+        b2 = cls.decompress(c2)
+        n = max(len(b1), len(b2))
+        b1.extend([0] * (n - len(b1)))
+        b2.extend([0] * (n - len(b2)))
+        res = [b1[i] & b2[i] for i in range(n)]
+        return cls.compress(res)
+
+    @classmethod
+    def bitwise_or(cls, c1: Any, c2: Any) -> Dict[str, Any]:
+        b1 = cls.decompress(c1)
+        b2 = cls.decompress(c2)
+        n = max(len(b1), len(b2))
+        b1.extend([0] * (n - len(b1)))
+        b2.extend([0] * (n - len(b2)))
+        res = [b1[i] | b2[i] for i in range(n)]
+        return cls.compress(res)
+
+    @classmethod
+    def bitwise_not(cls, c1: Any, total_bits: Optional[int] = None) -> Dict[str, Any]:
+        b1 = cls.decompress(c1)
+        n = total_bits if total_bits is not None else len(b1)
+        if len(b1) < n:
+            b1.extend([0] * (n - len(b1)))
+        res = [1 - b1[i] for i in range(n)]
+        return cls.compress(res)
+
+
+class LSMTreeCompactionEngine:
+    """Log-Structured Merge Tree with MemTable, WAL log, and Level 0 to Level 1 SSTable compaction."""
+
+    TOMBSTONE = "__DELETED__"
+
+    def __init__(self, memtable_threshold: int = 4):
+        self.memtable_threshold = max(2, int(memtable_threshold))
+        self.memtable: Dict[str, Any] = {}
+        self.wal: List[Tuple[str, str, Any]] = []
+        self.level0: List[List[Tuple[str, Any]]] = []
+        self.level1: List[Tuple[str, Any]] = []
+
+    def put(self, key: str, value: Any) -> None:
+        k = str(key)
+        self.wal.append(("PUT", k, value))
+        self.memtable[k] = value
+        if len(self.memtable) >= self.memtable_threshold:
+            self.flush_memtable()
+
+    def delete(self, key: str) -> None:
+        k = str(key)
+        self.wal.append(("DELETE", k, self.TOMBSTONE))
+        self.memtable[k] = self.TOMBSTONE
+        if len(self.memtable) >= self.memtable_threshold:
+            self.flush_memtable()
+
+    def flush_memtable(self) -> None:
+        if not self.memtable:
+            return
+        sstable = sorted(self.memtable.items(), key=lambda kv: kv[0])
+        self.level0.append(sstable)
+        self.memtable = {}
+
+    def get(self, key: str) -> Any:
+        k = str(key)
+        if k in self.memtable:
+            val = self.memtable[k]
+            return None if val == self.TOMBSTONE else val
+
+        for sstable in reversed(self.level0):
+            for item_k, item_v in sstable:
+                if item_k == k:
+                    return None if item_v == self.TOMBSTONE else item_v
+
+        for item_k, item_v in self.level1:
+            if item_k == k:
+                return None if item_v == self.TOMBSTONE else item_v
+
+        return None
+
+    def compact_level0_to_level1(self) -> Dict[str, Any]:
+        if not self.level0:
+            return {"compacted_tables": 0, "level1_entries": len(self.level1)}
+
+        merged_map: Dict[str, Any] = {}
+        for k, v in self.level1:
+            merged_map[k] = v
+
+        for sstable in self.level0:
+            for k, v in sstable:
+                merged_map[k] = v
+
+        compacted = [
+            (k, v) for k, v in sorted(merged_map.items(), key=lambda kv: kv[0])
+            if v != self.TOMBSTONE
+        ]
+
+        n_compacted = len(self.level0)
+        self.level0 = []
+        self.level1 = compacted
+
+        return {
+            "compacted_tables": n_compacted,
+            "level1_entries": len(self.level1),
+        }
+
+    def get_stats(self) -> Dict[str, Any]:
+        return {
+            "memtable_entries": len(self.memtable),
+            "level0_tables": len(self.level0),
+            "level1_entries": len(self.level1),
+            "wal_records": len(self.wal),
+        }
+
+
+def db_bitmap_compress(bit_vector: List[int]) -> Any:
+    """Compresses bit vector into RLE bitmap index."""
+    return Record(BitmapIndexCompressor.compress(bit_vector))
+
+
+def db_bitmap_decompress(compressed: Any) -> List[int]:
+    """Decompresses RLE bitmap index back to bit vector."""
+    return BitmapIndexCompressor.decompress(compressed)
+
+
+def db_bitmap_and(c1: Any, c2: Any) -> Any:
+    """Performs bitwise AND on two compressed bitmap indices."""
+    return Record(BitmapIndexCompressor.bitwise_and(c1, c2))
+
+
+def db_bitmap_or(c1: Any, c2: Any) -> Any:
+    """Performs bitwise OR on two compressed bitmap indices."""
+    return Record(BitmapIndexCompressor.bitwise_or(c1, c2))
+
+
+def db_bitmap_not(c1: Any, total_bits: Optional[int] = None) -> Any:
+    """Performs bitwise NOT on compressed bitmap index."""
+    return Record(BitmapIndexCompressor.bitwise_not(c1, total_bits=total_bits))
+
+
+def db_bitmap_query_indices(compressed: Any) -> List[int]:
+    """Returns all 1-bit positions from compressed bitmap index."""
+    return BitmapIndexCompressor.query_indices(compressed)
+
+
+def db_lsm_create(memtable_threshold: int = 4) -> Any:
+    """Creates an LSM tree engine."""
+    lsm = LSMTreeCompactionEngine(memtable_threshold=memtable_threshold)
+    return Record({
+        "memtable_threshold": lsm.memtable_threshold,
+        "instance": lsm,
+    })
+
+
+def db_lsm_put(lsm: Any, key: str, value: Any) -> Any:
+    """Writes key-value pair into LSM tree."""
+    inst = lsm.instance if hasattr(lsm, "instance") else lsm
+    inst.put(key, value)
+    return Record(inst.get_stats())
+
+
+def db_lsm_get(lsm: Any, key: str) -> Any:
+    """Reads key from LSM tree across MemTable, L0, and L1."""
+    inst = lsm.instance if hasattr(lsm, "instance") else lsm
+    return inst.get(key)
+
+
+def db_lsm_delete(lsm: Any, key: str) -> Any:
+    """Writes tombstone delete for key in LSM tree."""
+    inst = lsm.instance if hasattr(lsm, "instance") else lsm
+    inst.delete(key)
+    return Record(inst.get_stats())
+
+
+def db_lsm_flush(lsm: Any) -> Any:
+    """Forces MemTable flush to Level 0 SSTable."""
+    inst = lsm.instance if hasattr(lsm, "instance") else lsm
+    inst.flush_memtable()
+    return Record(inst.get_stats())
+
+
+def db_lsm_compact(lsm: Any) -> Any:
+    """Compacts Level 0 SSTables into Level 1."""
+    inst = lsm.instance if hasattr(lsm, "instance") else lsm
+    return Record(inst.compact_level0_to_level1())
+
+

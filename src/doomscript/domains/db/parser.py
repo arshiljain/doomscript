@@ -471,6 +471,118 @@ class DBDomainParser(DomainParser):
             min_k, max_k, tree, target = m_bpt_rng.group(1).strip(), m_bpt_rng.group(2).strip(), m_bpt_rng.group(3).strip(), m_bpt_rng.group(4).strip()
             return f"set {target} to db_bplus_tree_range({tree}, {min_k}, {max_k})"
 
+        # compress bitmap <bits> into <target>
+        m_bmp_c = re.match(
+            r"^compress\s+bitmap\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_bmp_c:
+            bits, target = m_bmp_c.group(1).strip(), m_bmp_c.group(2).strip()
+            return f"set {target} to db_bitmap_compress({bits})"
+
+        # decompress bitmap <comp> into <target>
+        m_bmp_d = re.match(
+            r"^decompress\s+bitmap\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_bmp_d:
+            comp, target = m_bmp_d.group(1).strip(), m_bmp_d.group(2).strip()
+            return f"set {target} to db_bitmap_decompress({comp})"
+
+        # bitmap and <c1> and <c2> into <target>
+        m_bmp_and = re.match(
+            r"^bitmap\s+and\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_bmp_and:
+            c1, c2, target = m_bmp_and.group(1).strip(), m_bmp_and.group(2).strip(), m_bmp_and.group(3).strip()
+            return f"set {target} to db_bitmap_and({c1}, {c2})"
+
+        # bitmap or <c1> and <c2> into <target>
+        m_bmp_or = re.match(
+            r"^bitmap\s+or\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_bmp_or:
+            c1, c2, target = m_bmp_or.group(1).strip(), m_bmp_or.group(2).strip(), m_bmp_or.group(3).strip()
+            return f"set {target} to db_bitmap_or({c1}, {c2})"
+
+        # bitmap not <c1> [with <n> bits] into <target>
+        m_bmp_not = re.match(
+            r"^bitmap\s+not\s+(.+?)(?:\s+with\s+(\d+)\s+bits)?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_bmp_not:
+            c1, n_bits, target = m_bmp_not.group(1).strip(), m_bmp_not.group(2), m_bmp_not.group(3).strip()
+            nb_arg = f", total_bits={n_bits}" if n_bits else ""
+            return f"set {target} to db_bitmap_not({c1}{nb_arg})"
+
+        # query bitmap indices in <comp> into <target>
+        m_bmp_q = re.match(
+            r"^query\s+bitmap\s+indices\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_bmp_q:
+            comp, target = m_bmp_q.group(1).strip(), m_bmp_q.group(2).strip()
+            return f"set {target} to db_bitmap_query_indices({comp})"
+
+        # create lsm tree [with threshold <thresh>] into <target>
+        m_lsm_c = re.match(
+            r"^create\s+lsm\s+tree(?:\s+with\s+threshold\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_lsm_c:
+            th = m_lsm_c.group(1) or "4"
+            target = m_lsm_c.group(2).strip()
+            return f"set {target} to db_lsm_create({th})"
+
+        # lsm put <key> with value <val> into <tree>
+        m_lsm_p = re.match(
+            r"^lsm\s+put\s+(.+?)\s+with\s+value\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_lsm_p:
+            k, v, tree = m_lsm_p.group(1).strip(), m_lsm_p.group(2).strip(), m_lsm_p.group(3).strip()
+            return f"db_lsm_put({tree}, {k}, {v})"
+
+        # lsm get <key> from <tree> into <target>
+        m_lsm_g = re.match(
+            r"^lsm\s+get\s+(.+?)\s+from\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_lsm_g:
+            k, tree, target = m_lsm_g.group(1).strip(), m_lsm_g.group(2).strip(), m_lsm_g.group(3).strip()
+            return f"set {target} to db_lsm_get({tree}, {k})"
+
+        # lsm delete <key> from <tree>
+        m_lsm_d = re.match(
+            r"^lsm\s+delete\s+(.+?)\s+from\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_lsm_d:
+            k, tree = m_lsm_d.group(1).strip(), m_lsm_d.group(2).strip()
+            return f"db_lsm_delete({tree}, {k})"
+
+        # lsm compact <tree> into <target>
+        m_lsm_cmp = re.match(
+            r"^lsm\s+compact\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_lsm_cmp:
+            tree, target = m_lsm_cmp.group(1).strip(), m_lsm_cmp.group(2).strip()
+            return f"set {target} to db_lsm_compact({tree})"
+
         return None
 
     def parse_block(

@@ -62,6 +62,14 @@ from doomscript.domains.cloud.runtime import (
     cloud_circuit_breaker_create,
     cloud_raft_create,
     cloud_raft_elect,
+    DistributedConsistentHashRing,
+    LeakyBucketTrafficShaper,
+    cloud_hash_ring_create,
+    cloud_hash_ring_get,
+    cloud_hash_ring_preference_list,
+    cloud_leaky_bucket_create,
+    cloud_leaky_bucket_enqueue,
+    cloud_leaky_bucket_drain,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.cloud.exporter import CloudASTExporter
@@ -239,4 +247,12 @@ __all__ = [
     "cloud_circuit_breaker_create",
     "cloud_raft_create",
     "cloud_raft_elect",
+    "DistributedConsistentHashRing",
+    "LeakyBucketTrafficShaper",
+    "cloud_hash_ring_create",
+    "cloud_hash_ring_get",
+    "cloud_hash_ring_preference_list",
+    "cloud_leaky_bucket_create",
+    "cloud_leaky_bucket_enqueue",
+    "cloud_leaky_bucket_drain",
 ]

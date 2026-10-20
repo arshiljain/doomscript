@@ -464,6 +464,30 @@ class ImageDomainParser(DomainParser):
             i1, i2, target = m_diff.group(1).strip(), m_diff.group(2).strip(), m_diff.group(3).strip()
             return f"set {target} to image_difference({i1}, {i2})"
 
+        # detect fast corners in image <img_mat> [with threshold <th>] into <target>
+        m_fast = re.match(
+            r"^detect\s+fast\s+corners\s+in\s+image\s+(.+?)(?:\s+with\s+threshold\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_fast:
+            mat = m_fast.group(1).strip()
+            th = m_fast.group(2).strip() if m_fast.group(2) else "20.0"
+            target = m_fast.group(3).strip()
+            return f"set {target} to image_detect_fast_corners({mat}, threshold={th})"
+
+        # detect hough lines in image <img_mat> [with threshold <th>] into <target>
+        m_hough = re.match(
+            r"^detect\s+hough\s+lines\s+in\s+image\s+(.+?)(?:\s+with\s+threshold\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_hough:
+            mat = m_hough.group(1).strip()
+            th = m_hough.group(2).strip() if m_hough.group(2) else "10"
+            target = m_hough.group(3).strip()
+            return f"set {target} to image_hough_lines({mat}, threshold={th})"
+
         return None
 
     def parse_block(

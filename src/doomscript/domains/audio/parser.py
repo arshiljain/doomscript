@@ -423,6 +423,46 @@ class AudioDomainParser(DomainParser):
             d, target = m_sil.group(1).strip(), m_sil.group(2).strip()
             return f"set {target} to audio_generate_silence({d})"
 
+        # encode ambisonics / hoa 3d [samples] azimuth / with azimuth <az> elevation / and elevation <el> [with order <ord>] into <target>
+        m_enc_hoa = re.match(
+            r"^(?:encode\s+ambisonics\s+3d|encode\s+hoa\s+3d)(?:\s+([A-Za-z_]\w*))?\s+(?:with\s+azimuth\s+|azimuth\s+)(.+?)\s+(?:and\s+elevation\s+|elevation\s+)(.+?)(?:\s+with\s+order\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_enc_hoa:
+            sig = m_enc_hoa.group(1)
+            az = m_enc_hoa.group(2).strip()
+            el = m_enc_hoa.group(3).strip()
+            ord_val = m_enc_hoa.group(4) if m_enc_hoa.group(4) else "1"
+            target = m_enc_hoa.group(5).strip()
+            sig_arg = f", samples={sig.strip()}" if sig else ""
+            return f"set {target} to audio_hoa_3d_encode({az}, {el}, order={ord_val}{sig_arg})"
+
+        # decode ambisonics 3d channels <chans> [with order <ord>] into <target>
+        m_dec_hoa = re.match(
+            r"^decode\s+(?:ambisonics\s+3d|hoa\s+3d)\s+channels\s+(.+?)(?:\s+with\s+order\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_dec_hoa:
+            chans = m_dec_hoa.group(1).strip()
+            ord_val = m_dec_hoa.group(2) if m_dec_hoa.group(2) else "1"
+            target = m_dec_hoa.group(3).strip()
+            return f"set {target} to audio_hoa_binaural_decode({chans}, order={ord_val})"
+
+        # apply dynamic compressor / compress dynamic range to <samples> [with threshold <th>] [with ratio <rat>] into <target>
+        m_comp = re.match(
+            r"^(?:apply\s+dynamic\s+compressor\s+to|compress\s+dynamic\s+range)\s+(.+?)(?:\s+with\s+threshold\s+(.+?))?(?:\s+(?:with|and)\s+ratio\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_comp:
+            smps = m_comp.group(1).strip()
+            th = m_comp.group(2).strip() if m_comp.group(2) else "-12.0"
+            rat = m_comp.group(3).strip() if m_comp.group(3) else "4.0"
+            target = m_comp.group(4).strip()
+            return f"set {target} to audio_dynamic_compressor({smps}, threshold_db={th}, ratio={rat})"
+
         return None
 
     def parse_block(

@@ -2192,6 +2192,20 @@ from doomscript.domains.db.runtime import (
     db_bplus_tree_insert,
     db_bplus_tree_search,
     db_bplus_tree_range,
+    BitmapIndexCompressor,
+    LSMTreeCompactionEngine,
+    db_bitmap_compress,
+    db_bitmap_decompress,
+    db_bitmap_and,
+    db_bitmap_or,
+    db_bitmap_not,
+    db_bitmap_query_indices,
+    db_lsm_create,
+    db_lsm_put,
+    db_lsm_get,
+    db_lsm_delete,
+    db_lsm_flush,
+    db_lsm_compact,
 )
 
 def execute_db_ir(spec):
@@ -2894,6 +2908,9 @@ from doomscript.domains.image.runtime import (
     image_otsu_threshold,
     image_bilateral_filter,
     image_hough_lines,
+    FASTCornerAndHarrisDetector,
+    HoughTransformLineDetector,
+    image_detect_fast_corners,
     GeometricWarp,
     MorphologicalOps,
     ColorQuantizer,
@@ -2999,6 +3016,11 @@ from doomscript.domains.audio.runtime import (
     audio_poly_synth_render,
     audio_yin_pitch,
     audio_parametric_eq,
+    HighOrderAmbisonics3D,
+    DynamicRangeCompressorLimiter,
+    audio_hoa_3d_encode,
+    audio_hoa_binaural_decode,
+    audio_dynamic_compressor,
 )
 
 from doomscript.domains.finance.runtime import (
@@ -3184,6 +3206,14 @@ from doomscript.domains.cloud.runtime import (
     cloud_circuit_breaker_create,
     cloud_raft_create,
     cloud_raft_elect,
+    DistributedConsistentHashRing,
+    LeakyBucketTrafficShaper,
+    cloud_hash_ring_create,
+    cloud_hash_ring_get,
+    cloud_hash_ring_preference_list,
+    cloud_leaky_bucket_create,
+    cloud_leaky_bucket_enqueue,
+    cloud_leaky_bucket_drain,
 )
 
 from doomscript.domains.research.runtime import (
@@ -4046,6 +4076,10 @@ from doomscript.domains.nlp.runtime import (
     nlp_bpe_train,
     nlp_hmm_pos_tagger,
     nlp_cbow_word2vec,
+    LevenshteinAutomatonFuzzyMatcher,
+    nlp_textrank_summarize,
+    nlp_fuzzy_match,
+    nlp_fuzzy_search_text,
 )
 
 from doomscript.domains.opt.runtime import (

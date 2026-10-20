@@ -459,6 +459,46 @@ class CloudDomainParser(DomainParser):
             raft, target = m_elect.group(1).strip(), m_elect.group(2).strip()
             return f"set {target} to cloud_raft_elect({raft})"
 
+        # create hash ring with nodes <nodes> [and vnodes <vnodes>] into <target>
+        m_ring = re.match(
+            r"^create\s+hash\s+ring\s+with\s+nodes\s+(.+?)(?:\s+and\s+vnodes\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_ring:
+            nodes, vn, target = m_ring.group(1).strip(), m_ring.group(2) or "50", m_ring.group(3).strip()
+            return f"set {target} to cloud_hash_ring_create({nodes}, vnodes={vn})"
+
+        # lookup node for key <key> in hash ring <ring> into <target>
+        m_hget = re.match(
+            r"^lookup\s+node\s+for\s+key\s+(.+?)\s+in\s+hash\s+ring\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_hget:
+            key, ring, target = m_hget.group(1).strip(), m_hget.group(2).strip(), m_hget.group(3).strip()
+            return f"set {target} to cloud_hash_ring_get({ring}, {key})"
+
+        # create leaky bucket with capacity <cap> and leak rate <rate> into <target>
+        m_lb = re.match(
+            r"^create\s+leaky\s+bucket\s+with\s+capacity\s+(.+?)\s+and\s+leak\s+rate\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_lb:
+            cap, rate, target = m_lb.group(1).strip(), m_lb.group(2).strip(), m_lb.group(3).strip()
+            return f"set {target} to cloud_leaky_bucket_create({cap}, {rate})"
+
+        # enqueue packet <pkt> into leaky bucket <bucket> into <target>
+        m_lbenq = re.match(
+            r"^enqueue\s+packet\s+(.+?)\s+into\s+leaky\s+bucket\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_lbenq:
+            pkt, bucket, target = m_lbenq.group(1).strip(), m_lbenq.group(2).strip(), m_lbenq.group(3).strip()
+            return f"set {target} to cloud_leaky_bucket_enqueue({bucket}, {pkt})"
+
         return None
 
     def parse_block(

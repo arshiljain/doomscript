@@ -6,6 +6,7 @@ import hashlib
 import os
 import shutil
 import time
+import bisect
 from pathlib import Path
 from doomscript.runtime import Record
 from doomscript.domains.base import DomainRuntime, DomainIR
@@ -1120,4 +1121,183 @@ def cloud_raft_elect(raft: Any) -> Any:
     """Triggers election on Raft consensus node."""
     inst = raft.instance if hasattr(raft, "instance") else raft
     return Record(inst.start_election())
+
+
+class DistributedConsistentHashRing:
+    """Virtual node consistent hash ring for distributed caching and partition sharding."""
+
+    def __init__(self, default_vnodes: int = 100):
+        self.default_vnodes = max(1, int(default_vnodes))
+        self.ring: List[int] = []  # Sorted hash positions
+        self.ring_map: Dict[int, str] = {}  # hash -> physical node_id
+        self.nodes: Set[str] = set()
+
+    def _hash(self, key: str) -> int:
+        digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
+        return int(digest[:8], 16)
+
+    def add_node(self, node_id: str, vnodes: Optional[int] = None) -> None:
+        if node_id in self.nodes:
+            return
+        self.nodes.add(node_id)
+        count = vnodes if vnodes is not None else self.default_vnodes
+        for i in range(count):
+            vkey = f"{node_id}#vnode{i}"
+            h = self._hash(vkey)
+            self.ring.append(h)
+            self.ring_map[h] = node_id
+        self.ring.sort()
+
+    def remove_node(self, node_id: str) -> None:
+        if node_id not in self.nodes:
+            return
+        self.nodes.remove(node_id)
+        self.ring = [h for h in self.ring if self.ring_map[h] != node_id]
+        self.ring_map = {h: n for h, n in self.ring_map.items() if n != node_id}
+
+    def get_node(self, key: str) -> Optional[str]:
+        if not self.ring:
+            return None
+        h = self._hash(str(key))
+        idx = bisect.bisect_right(self.ring, h)
+        if idx == len(self.ring):
+            idx = 0
+        return self.ring_map[self.ring[idx]]
+
+    def get_preference_list(self, key: str, count: int = 3) -> List[str]:
+        """Returns Dynamo-style preference list of N distinct physical replica nodes."""
+        if not self.ring:
+            return []
+        h = self._hash(str(key))
+        idx = bisect.bisect_right(self.ring, h)
+        selected: List[str] = []
+        n_ring = len(self.ring)
+        for offset in range(n_ring):
+            pos = (idx + offset) % n_ring
+            node = self.ring_map[self.ring[pos]]
+            if node not in selected:
+                selected.append(node)
+                if len(selected) >= count or len(selected) >= len(self.nodes):
+                    break
+        return selected
+
+    def get_distribution(self, keys: List[str]) -> Dict[str, int]:
+        dist: Dict[str, int] = {node: 0 for node in self.nodes}
+        for k in keys:
+            n = self.get_node(k)
+            if n in dist:
+                dist[n] += 1
+        return dist
+
+
+class LeakyBucketTrafficShaper:
+    """Traffic shaping leaky bucket queue with constant outflow drain and burst capacity."""
+
+    def __init__(self, capacity: int = 10, leak_rate: float = 2.0):
+        self.capacity = max(1, int(capacity))
+        self.leak_rate = max(0.01, float(leak_rate))  # items leaked per second
+        self.queue: List[str] = []
+        self.last_leak_time: Optional[float] = None
+        self.dropped_count = 0
+        self.processed_count = 0
+
+    def _leak(self, current_time: Optional[float] = None) -> List[str]:
+        now = current_time if current_time is not None else time.time()
+        if self.last_leak_time is None:
+            self.last_leak_time = now
+            return []
+        elapsed = max(0.0, now - self.last_leak_time)
+        leaked_items = []
+        items_to_leak = int(elapsed * self.leak_rate)
+        if items_to_leak > 0:
+            count = min(items_to_leak, len(self.queue))
+            leaked_items = self.queue[:count]
+            self.queue = self.queue[count:]
+            self.processed_count += len(leaked_items)
+            self.last_leak_time = now
+        return leaked_items
+
+    def enqueue(self, item_id: str, current_time: Optional[float] = None) -> Dict[str, Any]:
+        self._leak(current_time)
+        if len(self.queue) < self.capacity:
+            self.queue.append(str(item_id))
+            return {
+                "accepted": True,
+                "dropped": False,
+                "queue_depth": len(self.queue),
+                "capacity": self.capacity,
+            }
+        else:
+            self.dropped_count += 1
+            return {
+                "accepted": False,
+                "dropped": True,
+                "queue_depth": len(self.queue),
+                "capacity": self.capacity,
+            }
+
+    def drain(self, current_time: Optional[float] = None) -> List[str]:
+        return self._leak(current_time)
+
+    def get_metrics(self) -> Dict[str, Any]:
+        return {
+            "queue_depth": len(self.queue),
+            "capacity": self.capacity,
+            "leak_rate": self.leak_rate,
+            "dropped_count": self.dropped_count,
+            "processed_count": self.processed_count,
+        }
+
+
+def cloud_hash_ring_create(nodes: Optional[List[str]] = None, vnodes: int = 50) -> Any:
+    """Creates a distributed consistent hash ring."""
+    ring = DistributedConsistentHashRing(default_vnodes=vnodes)
+    if nodes:
+        for n in nodes:
+            ring.add_node(str(n))
+    return Record({
+        "nodes_count": len(ring.nodes),
+        "vnodes_per_node": ring.default_vnodes,
+        "instance": ring,
+    })
+
+
+def cloud_hash_ring_get(ring: Any, key: str) -> str:
+    """Locates the primary responsible physical node for a given key."""
+    inst = ring.instance if hasattr(ring, "instance") else ring
+    return inst.get_node(key) or ""
+
+
+def cloud_hash_ring_preference_list(ring: Any, key: str, count: int = 3) -> Any:
+    """Returns replica preference list for a key."""
+    inst = ring.instance if hasattr(ring, "instance") else ring
+    prefs = inst.get_preference_list(key, count=count)
+    return Record({
+        "key": key,
+        "replicas_count": len(prefs),
+        "nodes": prefs,
+    })
+
+
+def cloud_leaky_bucket_create(capacity: int = 10, leak_rate: float = 2.0) -> Any:
+    """Creates a leaky bucket traffic shaper."""
+    bucket = LeakyBucketTrafficShaper(capacity=capacity, leak_rate=leak_rate)
+    return Record({
+        "capacity": bucket.capacity,
+        "leak_rate": bucket.leak_rate,
+        "instance": bucket,
+    })
+
+
+def cloud_leaky_bucket_enqueue(bucket: Any, item_id: str, current_time: Optional[float] = None) -> Any:
+    """Attempts to enqueue packet into leaky bucket."""
+    inst = bucket.instance if hasattr(bucket, "instance") else bucket
+    return Record(inst.enqueue(item_id, current_time=current_time))
+
+
+def cloud_leaky_bucket_drain(bucket: Any, current_time: Optional[float] = None) -> List[str]:
+    """Drains and returns processed packets from leaky bucket."""
+    inst = bucket.instance if hasattr(bucket, "instance") else bucket
+    return inst.drain(current_time=current_time)
+
 

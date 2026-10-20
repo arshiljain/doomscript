@@ -55,6 +55,11 @@ from doomscript.domains.audio.runtime import (
     audio_poly_synth_render,
     audio_yin_pitch,
     audio_parametric_eq,
+    HighOrderAmbisonics3D,
+    DynamicRangeCompressorLimiter,
+    audio_hoa_3d_encode,
+    audio_hoa_binaural_decode,
+    audio_dynamic_compressor,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.audio.exporter import AudioASTExporter
@@ -133,6 +138,8 @@ class AudioDomain(DomainContract):
     ]
 
     def can_handle_line(self, line: str) -> bool:
+        if self.parser.parse_inspect(line, 0) is not None or self.parser.parse_operation(line, 0) is not None:
+            return True
         s = line.strip().lower()
         if (
             s.startswith("load audio ")
@@ -252,5 +259,10 @@ __all__ = [
     "audio_poly_synth_render",
     "audio_yin_pitch",
     "audio_parametric_eq",
+    "HighOrderAmbisonics3D",
+    "DynamicRangeCompressorLimiter",
+    "audio_hoa_3d_encode",
+    "audio_hoa_binaural_decode",
+    "audio_dynamic_compressor",
 ]
 

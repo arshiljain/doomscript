@@ -1041,3 +1041,178 @@ def audio_yin_pitch(samples: List[float], sample_rate: int = 44100) -> Dict[str,
 def audio_parametric_eq(samples: List[float], bands: List[Dict[str, Any]], sample_rate: int = 44100) -> List[float]:
     """Applies multi-band parametric equalization."""
     return ParametricEQ.process(samples, bands, sample_rate)
+
+
+from doomscript.runtime import Record
+
+
+class HighOrderAmbisonics3D:
+    """High-Order 3D Ambisonics (HOA) spherical harmonics encoder and decoder."""
+
+    @classmethod
+    def encode_point(cls, azimuth_deg: float, elevation_deg: float, order: int = 1) -> List[float]:
+        az = math.radians(azimuth_deg)
+        el = math.radians(elevation_deg)
+        cos_el = math.cos(el)
+        sin_el = math.sin(el)
+        cos_az = math.cos(az)
+        sin_az = math.sin(az)
+
+        harmonics = [1.0]
+
+        if order >= 1:
+            harmonics.extend([
+                math.sqrt(3.0) * sin_az * cos_el,
+                math.sqrt(3.0) * sin_el,
+                math.sqrt(3.0) * cos_az * cos_el,
+            ])
+
+        if order >= 2:
+            harmonics.extend([
+                math.sqrt(3.75) * math.sin(2.0 * az) * (cos_el ** 2),
+                math.sqrt(15.0) * sin_az * sin_el * cos_el,
+                math.sqrt(1.25) * (3.0 * (sin_el ** 2) - 1.0),
+                math.sqrt(15.0) * cos_az * sin_el * cos_el,
+                math.sqrt(3.75) * math.cos(2.0 * az) * (cos_el ** 2),
+            ])
+
+        return [round(h, 5) for h in harmonics]
+
+    @classmethod
+    def encode_signal(
+        cls,
+        samples: List[float],
+        azimuth_deg: float,
+        elevation_deg: float,
+        order: int = 1,
+    ) -> Dict[str, Any]:
+        weights = cls.encode_point(azimuth_deg, elevation_deg, order=order)
+        channels = []
+        for w in weights:
+            ch_samples = [round(s * w, 5) for s in samples]
+            channels.append(ch_samples)
+
+        channel_names = ["W", "Y", "Z", "X", "V", "T", "R", "S", "U"][:len(weights)]
+        return {
+            "order": order,
+            "num_channels": len(weights),
+            "azimuth_deg": azimuth_deg,
+            "elevation_deg": elevation_deg,
+            "channel_names": channel_names,
+            "weights": weights,
+            "channels": channels,
+        }
+
+    @classmethod
+    def decode_binaural(cls, hoa_channels: List[List[float]], order: int = 1) -> Dict[str, Any]:
+        w_left = cls.encode_point(45.0, 0.0, order=order)
+        w_right = cls.encode_point(-45.0, 0.0, order=order)
+
+        num_ch = min(len(hoa_channels), len(w_left))
+        if num_ch == 0:
+            return {"left": [], "right": [], "num_channels": 0}
+
+        sample_len = len(hoa_channels[0])
+        left_out = [0.0] * sample_len
+        right_out = [0.0] * sample_len
+
+        for c in range(num_ch):
+            wl = w_left[c] / num_ch
+            wr = w_right[c] / num_ch
+            ch = hoa_channels[c]
+            for i in range(min(sample_len, len(ch))):
+                left_out[i] += ch[i] * wl
+                right_out[i] += ch[i] * wr
+
+        return {
+            "num_channels": num_ch,
+            "sample_length": sample_len,
+            "left": [round(max(-1.0, min(1.0, s)), 5) for s in left_out],
+            "right": [round(max(-1.0, min(1.0, s)), 5) for s in right_out],
+        }
+
+
+class DynamicRangeCompressorLimiter:
+    """Studio dynamic range compressor and limiter with soft-knee smoothing."""
+
+    @classmethod
+    def process(
+        cls,
+        samples: List[float],
+        threshold_db: float = -12.0,
+        ratio: float = 4.0,
+        attack_ms: float = 10.0,
+        release_ms: float = 100.0,
+        makeup_gain_db: float = 0.0,
+        sample_rate: int = 44100,
+    ) -> Dict[str, Any]:
+        dt = 1.0 / sample_rate
+        alpha_att = math.exp(-dt / (max(attack_ms, 0.1) * 0.001))
+        alpha_rel = math.exp(-dt / (max(release_ms, 0.1) * 0.001))
+        makeup_linear = 10.0 ** (makeup_gain_db / 20.0)
+
+        output = []
+        gain_reductions = []
+        env = 0.0
+
+        for s in samples:
+            x_abs = abs(s)
+            if x_abs > env:
+                env = alpha_att * env + (1.0 - alpha_att) * x_abs
+            else:
+                env = alpha_rel * env + (1.0 - alpha_rel) * x_abs
+
+            env_db = 20.0 * math.log10(max(env, 1e-6))
+
+            if env_db <= threshold_db:
+                gain_db = 0.0
+            else:
+                gain_db = (threshold_db + (env_db - threshold_db) / max(ratio, 1.0)) - env_db
+
+            gain_lin = 10.0 ** (gain_db / 20.0)
+            y = s * gain_lin * makeup_linear
+            output.append(round(max(-1.0, min(1.0, y)), 5))
+            gain_reductions.append(round(gain_db, 2))
+
+        min_gr = min(gain_reductions) if gain_reductions else 0.0
+
+        return {
+            "threshold_db": threshold_db,
+            "ratio": ratio,
+            "max_gain_reduction_db": round(min_gr, 2),
+            "makeup_gain_db": makeup_gain_db,
+            "samples_count": len(output),
+            "output_samples": output,
+        }
+
+
+def audio_hoa_3d_encode(
+    azimuth_deg: float,
+    elevation_deg: float,
+    order: int = 1,
+    samples: Optional[List[float]] = None,
+) -> Any:
+    """Encodes spatial audio direction into 3D High-Order Ambisonics."""
+    s = samples or [1.0]
+    return Record(HighOrderAmbisonics3D.encode_signal(s, azimuth_deg, elevation_deg, order=order))
+
+
+def audio_hoa_binaural_decode(hoa_channels: List[List[float]], order: int = 1) -> Any:
+    """Decodes High-Order Ambisonics channels into binaural stereo."""
+    return Record(HighOrderAmbisonics3D.decode_binaural(hoa_channels, order=order))
+
+
+def audio_dynamic_compressor(
+    samples: List[float],
+    threshold_db: float = -12.0,
+    ratio: float = 4.0,
+    attack_ms: float = 10.0,
+    release_ms: float = 100.0,
+    makeup_gain_db: float = 0.0,
+    sample_rate: int = 44100,
+) -> Any:
+    """Applies dynamic range compression and limiting to audio samples."""
+    return Record(DynamicRangeCompressorLimiter.process(
+        samples, threshold_db=threshold_db, ratio=ratio, attack_ms=attack_ms,
+        release_ms=release_ms, makeup_gain_db=makeup_gain_db, sample_rate=sample_rate,
+    ))

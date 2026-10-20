@@ -1485,5 +1485,222 @@ def nlp_cbow_word2vec(texts: List[str], embedding_dim: int = 16, epochs: int = 1
     return w2v
 
 
+from doomscript.runtime import Record
+
+
+class TextRankSummarizer:
+    """Graph-based ranking model for unsupervised extractive document summarization."""
+
+    @classmethod
+    def segment_sentences(cls, text: str) -> List[str]:
+        # Split on sentence boundaries (. ! ?) while handling whitespace
+        raw = re.split(r"(?<=[.!?])\s+", text.strip())
+        return [s.strip() for s in raw if s.strip()]
+
+    @classmethod
+    def sentence_tokens(cls, sentence: str) -> List[str]:
+        words = re.findall(r"\b[a-zA-Z0-9_]+\b", sentence.lower())
+        return [w for w in words if w not in ENGLISH_STOPWORDS and len(w) > 1]
+
+    @classmethod
+    def sentence_similarity(cls, s1_tokens: List[str], s2_tokens: List[str]) -> float:
+        if not s1_tokens or not s2_tokens:
+            return 0.0
+        set1 = set(s1_tokens)
+        set2 = set(s2_tokens)
+        common = set1.intersection(set2)
+        if not common:
+            return 0.0
+        denom = math.log(len(s1_tokens) + 1.0) + math.log(len(s2_tokens) + 1.0)
+        if denom <= 0:
+            return 0.0
+        return float(len(common)) / denom
+
+    @classmethod
+    def summarize(
+        cls,
+        text: str,
+        num_sentences: int = 3,
+        damping: float = 0.85,
+        max_iter: int = 100,
+        tol: float = 1e-4,
+    ) -> Dict[str, Any]:
+        sentences = cls.segment_sentences(text)
+        n = len(sentences)
+        if n == 0:
+            return {
+                "num_sentences": 0,
+                "total_sentences": 0,
+                "summary": "",
+                "ranked_sentences": [],
+            }
+        if n <= num_sentences:
+            return {
+                "num_sentences": n,
+                "total_sentences": n,
+                "summary": " ".join(sentences),
+                "ranked_sentences": [
+                    Record({"index": i, "sentence": s, "score": 1.0})
+                    for i, s in enumerate(sentences)
+                ],
+            }
+
+        # Tokenize sentences
+        tokenized = [cls.sentence_tokens(s) for s in sentences]
+
+        # Build similarity adjacency matrix
+        weights = [[0.0] * n for _ in range(n)]
+        row_sums = [0.0] * n
+        for i in range(n):
+            for j in range(i + 1, n):
+                sim = cls.sentence_similarity(tokenized[i], tokenized[j])
+                weights[i][j] = sim
+                weights[j][i] = sim
+                row_sums[i] += sim
+                row_sums[j] += sim
+
+        # PageRank power iteration
+        scores = [1.0 / n] * n
+        for _ in range(max_iter):
+            prev_scores = list(scores)
+            max_diff = 0.0
+            for i in range(n):
+                rank_sum = 0.0
+                for j in range(n):
+                    if i != j and row_sums[j] > 1e-12:
+                        rank_sum += weights[j][i] * prev_scores[j] / row_sums[j]
+                new_score = (1.0 - damping) / n + damping * rank_sum
+                diff = abs(new_score - prev_scores[i])
+                if diff > max_diff:
+                    max_diff = diff
+                scores[i] = new_score
+            if max_diff < tol:
+                break
+
+        ranked_indices = sorted(range(n), key=lambda idx: scores[idx], reverse=True)
+        top_indices = sorted(ranked_indices[:num_sentences])
+        top_sentences = [sentences[idx] for idx in top_indices]
+
+        ranked_list = [
+            Record({
+                "index": idx,
+                "sentence": sentences[idx],
+                "score": round(scores[idx], 5),
+            })
+            for idx in ranked_indices
+        ]
+
+        return {
+            "num_sentences": len(top_sentences),
+            "total_sentences": n,
+            "summary": " ".join(top_sentences),
+            "ranked_sentences": ranked_list,
+        }
+
+
+class LevenshteinAutomatonFuzzyMatcher:
+    """Non-deterministic and deterministic Levenshtein automaton for fast bounded edit distance lookup."""
+
+    @classmethod
+    def compute_edit_distance(cls, s1: str, s2: str, max_dist: int = 2) -> int:
+        """Wagner-Fischer DP with early termination if row exceeds max_dist."""
+        l1, l2 = len(s1), len(s2)
+        if abs(l1 - l2) > max_dist:
+            return max_dist + 1
+        if l1 == 0:
+            return l2
+        if l2 == 0:
+            return l1
+
+        prev = list(range(l2 + 1))
+        curr = [0] * (l2 + 1)
+
+        for i in range(1, l1 + 1):
+            curr[0] = i
+            c1 = s1[i - 1]
+            min_val = curr[0]
+            for j in range(1, l2 + 1):
+                cost = 0 if c1 == s2[j - 1] else 1
+                curr[j] = min(
+                    prev[j] + 1,       # deletion
+                    curr[j - 1] + 1,   # insertion
+                    prev[j - 1] + cost # substitution
+                )
+                if curr[j] < min_val:
+                    min_val = curr[j]
+            if min_val > max_dist:
+                return max_dist + 1
+            prev, curr = curr, prev
+
+        return prev[l2]
+
+    @classmethod
+    def match(
+        cls,
+        query: str,
+        vocabulary: List[str],
+        max_distance: int = 2,
+    ) -> Dict[str, Any]:
+        """Finds all words in vocabulary within max edit distance, sorted by distance."""
+        q_norm = str(query).lower().strip()
+        matched = []
+        for word in vocabulary:
+            w_norm = str(word).lower().strip()
+            dist = cls.compute_edit_distance(q_norm, w_norm, max_dist=max_distance)
+            if dist <= max_distance:
+                matched.append({
+                    "word": str(word),
+                    "distance": dist,
+                })
+
+        matched.sort(key=lambda m: (m["distance"], m["word"]))
+
+        return {
+            "query": query,
+            "matches_count": len(matched),
+            "max_distance": max_distance,
+            "matches": [Record(m) for m in matched],
+        }
+
+    @classmethod
+    def search_in_text(
+        cls,
+        query: str,
+        text: str,
+        max_distance: int = 2,
+    ) -> Dict[str, Any]:
+        """Finds tokens in text that match query within max edit distance."""
+        tokens = list(set(re.findall(r"\b[a-zA-Z0-9_-]+\b", text)))
+        return cls.match(query, tokens, max_distance=max_distance)
+
+
+def nlp_textrank_summarize(
+    text: str,
+    num_sentences: int = 3,
+    damping: float = 0.85,
+) -> Any:
+    """Summarizes text using TextRank sentence graph centrality."""
+    return Record(TextRankSummarizer.summarize(text, num_sentences=num_sentences, damping=damping))
+
+
+def nlp_fuzzy_match(
+    query: str,
+    vocabulary: List[str],
+    max_distance: int = 2,
+) -> Any:
+    """Matches query in dictionary vocabulary within max edit distance."""
+    return Record(LevenshteinAutomatonFuzzyMatcher.match(query, vocabulary, max_distance=max_distance))
+
+
+def nlp_fuzzy_search_text(
+    query: str,
+    text: str,
+    max_distance: int = 2,
+) -> Any:
+    """Matches query against words in text within max edit distance."""
+    return Record(LevenshteinAutomatonFuzzyMatcher.search_in_text(query, text, max_distance=max_distance))
+
+
+
 
 

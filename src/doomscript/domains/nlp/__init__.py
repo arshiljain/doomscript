@@ -28,6 +28,10 @@ from doomscript.domains.nlp.runtime import (
     nlp_bpe_train,
     nlp_hmm_pos_tagger,
     nlp_cbow_word2vec,
+    LevenshteinAutomatonFuzzyMatcher,
+    nlp_textrank_summarize,
+    nlp_fuzzy_match,
+    nlp_fuzzy_search_text,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.nlp.exporter import NLPASTExporter
@@ -92,6 +96,8 @@ class NLPDomain(DomainContract):
     ]
 
     def can_handle_line(self, line: str) -> bool:
+        if self.parser.parse_inspect(line, 0) is not None or self.parser.parse_operation(line, 0) is not None:
+            return True
         s = line.strip().lower()
         return (
             s.startswith("clean ")
@@ -201,5 +207,9 @@ __all__ = [
     "nlp_bpe_train",
     "nlp_hmm_pos_tagger",
     "nlp_cbow_word2vec",
+    "LevenshteinAutomatonFuzzyMatcher",
+    "nlp_textrank_summarize",
+    "nlp_fuzzy_match",
+    "nlp_fuzzy_search_text",
 ]
 

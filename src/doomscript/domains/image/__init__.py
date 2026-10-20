@@ -53,6 +53,9 @@ from doomscript.domains.image.runtime import (
     image_otsu_threshold,
     image_bilateral_filter,
     image_hough_lines,
+    FASTCornerAndHarrisDetector,
+    HoughTransformLineDetector,
+    image_detect_fast_corners,
     GeometricWarp,
     MorphologicalOps,
     ColorQuantizer,
@@ -130,6 +133,8 @@ class ImageDomain(DomainContract):
     ]
 
     def can_handle_line(self, line: str) -> bool:
+        if self.parser.parse_inspect(line, 0) is not None or self.parser.parse_operation(line, 0) is not None:
+            return True
         s = line.strip().lower()
         if (
             s.startswith("open image ")
@@ -258,6 +263,9 @@ __all__ = [
     "image_otsu_threshold",
     "image_bilateral_filter",
     "image_hough_lines",
+    "FASTCornerAndHarrisDetector",
+    "HoughTransformLineDetector",
+    "image_detect_fast_corners",
     "GeometricWarp",
     "MorphologicalOps",
     "ColorQuantizer",

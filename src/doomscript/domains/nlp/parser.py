@@ -391,6 +391,44 @@ class NLPDomainParser(DomainParser):
             text, w, target = wrap_m.group(1).strip(), wrap_m.group(2).strip(), wrap_m.group(3).strip()
             return f"set {target} to nlp_word_wrap({text}, width={w})"
 
+        # summarize text <text> [with <n> sentences] into <target>
+        summ_m = re.match(
+            r"^summarize\s+text\s+(.+?)(?:\s+with\s+(\d+)\s+sentences)?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if summ_m:
+            text = summ_m.group(1).strip()
+            n_sent = summ_m.group(2) or "3"
+            target = summ_m.group(3).strip()
+            return f"set {target} to nlp_textrank_summarize({text}, num_sentences={n_sent})"
+
+        # fuzzy match <query> in dictionary <vocab> [with max distance <k>] into <target>
+        fuz_dict_m = re.match(
+            r"^fuzzy\s+match\s+(.+?)\s+in\s+dictionary\s+(.+?)(?:\s+with\s+max\s+distance\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if fuz_dict_m:
+            q = fuz_dict_m.group(1).strip()
+            vocab = fuz_dict_m.group(2).strip()
+            max_d = fuz_dict_m.group(3) or "2"
+            target = fuz_dict_m.group(4).strip()
+            return f"set {target} to nlp_fuzzy_match({q}, {vocab}, max_distance={max_d})"
+
+        # fuzzy search <query> in text <text> [with max distance <k>] into <target>
+        fuz_txt_m = re.match(
+            r"^fuzzy\s+search\s+(.+?)\s+in\s+text\s+(.+?)(?:\s+with\s+max\s+distance\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if fuz_txt_m:
+            q = fuz_txt_m.group(1).strip()
+            txt = fuz_txt_m.group(2).strip()
+            max_d = fuz_txt_m.group(3) or "2"
+            target = fuz_txt_m.group(4).strip()
+            return f"set {target} to nlp_fuzzy_search_text({q}, {txt}, max_distance={max_d})"
+
         return None
 
     def parse_block(

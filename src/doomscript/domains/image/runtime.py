@@ -1250,4 +1250,172 @@ def image_quantize_palette(pixels_rgb: List[Tuple[int, int, int]], num_colors: i
     return ColorQuantizer.median_cut(pixels_rgb, num_colors)
 
 
+from doomscript.runtime import Record
+
+
+class FASTCornerAndHarrisDetector:
+    """FAST-9 feature corner detector combined with Harris corner response scoring."""
+
+    CIRCLE_OFFSETS = [
+        (0, -3), (1, -3), (2, -2), (3, -1),
+        (3, 0), (3, 1), (2, 2), (1, 3),
+        (0, 3), (-1, 3), (-2, 2), (-3, 1),
+        (-3, 0), (-3, -1), (-2, -2), (-1, -3),
+    ]
+
+    @classmethod
+    def detect(
+        cls,
+        image_matrix: List[List[float]],
+        threshold: float = 20.0,
+        min_contiguous: int = 9,
+        k_harris: float = 0.04,
+    ) -> Dict[str, Any]:
+        rows = len(image_matrix)
+        if rows < 7:
+            return {"num_corners": 0, "keypoints": []}
+        cols = len(image_matrix[0])
+        if cols < 7:
+            return {"num_corners": 0, "keypoints": []}
+
+        grid = [[float(val) for val in row] for row in image_matrix]
+        corners = []
+
+        for r in range(3, rows - 3):
+            for c in range(3, cols - 3):
+                p_val = grid[r][c]
+                cardinal_indices = [0, 4, 8, 12]
+                brighter_count = sum(1 for idx in cardinal_indices if grid[r + cls.CIRCLE_OFFSETS[idx][1]][c + cls.CIRCLE_OFFSETS[idx][0]] > p_val + threshold)
+                darker_count = sum(1 for idx in cardinal_indices if grid[r + cls.CIRCLE_OFFSETS[idx][1]][c + cls.CIRCLE_OFFSETS[idx][0]] < p_val - threshold)
+                if brighter_count < 3 and darker_count < 3:
+                    continue
+
+                circle_vals = [grid[r + dy][c + dx] for dx, dy in cls.CIRCLE_OFFSETS]
+                circle_double = circle_vals + circle_vals[:min_contiguous - 1]
+
+                max_bright = 0
+                curr_b = 0
+                for v in circle_double:
+                    if v > p_val + threshold:
+                        curr_b += 1
+                        max_bright = max(max_bright, curr_b)
+                    else:
+                        curr_b = 0
+
+                max_dark = 0
+                curr_d = 0
+                for v in circle_double:
+                    if v < p_val - threshold:
+                        curr_d += 1
+                        max_dark = max(max_dark, curr_d)
+                    else:
+                        curr_d = 0
+
+                if max_bright >= min_contiguous or max_dark >= min_contiguous:
+                    ixx = 0.0
+                    iyy = 0.0
+                    ixy = 0.0
+                    for dr in (-1, 0, 1):
+                        for dc in (-1, 0, 1):
+                            dx = (grid[r + dr][c + dc + 1] - grid[r + dr][c + dc - 1]) * 0.5
+                            dy = (grid[r + dr + 1][c + dc] - grid[r + dr - 1][c + dc]) * 0.5
+                            ixx += dx * dx
+                            iyy += dy * dy
+                            ixy += dx * dy
+                    det = ixx * iyy - ixy * ixy
+                    trace = ixx + iyy
+                    harris_resp = det - k_harris * (trace ** 2)
+
+                    corners.append({
+                        "x": c,
+                        "y": r,
+                        "intensity": round(p_val, 2),
+                        "response": round(harris_resp, 2),
+                    })
+
+        corners.sort(key=lambda item: item["response"], reverse=True)
+
+        return {
+            "num_corners": len(corners),
+            "image_width": cols,
+            "image_height": rows,
+            "keypoints": [Record(pt) for pt in corners],
+        }
+
+
+class HoughTransformLineDetector:
+    """Detects geometric lines using polar coordinate Hough Transform."""
+
+    @classmethod
+    def detect(
+        cls,
+        edge_matrix: List[List[float]],
+        threshold: int = 10,
+        num_rho: int = 50,
+        num_theta: int = 60,
+    ) -> Dict[str, Any]:
+        rows = len(edge_matrix)
+        if rows == 0:
+            return {"lines_count": 0, "detected_lines": []}
+        cols = len(edge_matrix[0])
+
+        diag_len = math.sqrt(rows * rows + cols * cols)
+        d_theta = math.pi / num_theta
+        thetas = [i * d_theta for i in range(num_theta)]
+        cos_thetas = [math.cos(th) for th in thetas]
+        sin_thetas = [math.sin(th) for th in thetas]
+
+        d_rho = (2.0 * diag_len) / num_rho
+        accumulator = [[0] * num_theta for _ in range(num_rho)]
+
+        for r in range(rows):
+            for c in range(cols):
+                if edge_matrix[r][c] > 0.5:
+                    for t_idx in range(num_theta):
+                        rho = c * cos_thetas[t_idx] + r * sin_thetas[t_idx]
+                        rho_idx = int((rho + diag_len) / d_rho)
+                        if 0 <= rho_idx < num_rho:
+                            accumulator[rho_idx][t_idx] += 1
+
+        lines = []
+        for rho_idx in range(num_rho):
+            for t_idx in range(num_theta):
+                votes = accumulator[rho_idx][t_idx]
+                if votes >= threshold:
+                    rho_val = (rho_idx * d_rho) - diag_len
+                    theta_deg = math.degrees(thetas[t_idx])
+                    lines.append({
+                        "rho": round(rho_val, 2),
+                        "theta_deg": round(theta_deg, 2),
+                        "votes": votes,
+                    })
+
+        lines.sort(key=lambda item: item["votes"], reverse=True)
+
+        return {
+            "lines_count": len(lines),
+            "max_votes": lines[0]["votes"] if lines else 0,
+            "detected_lines": [Record(l) for l in lines],
+        }
+
+
+def image_detect_fast_corners(
+    image_matrix: List[List[float]],
+    threshold: float = 20.0,
+    min_contiguous: int = 9,
+) -> Any:
+    """Detects corner keypoints using FAST-9 and Harris response."""
+    return Record(FASTCornerAndHarrisDetector.detect(image_matrix, threshold=threshold, min_contiguous=min_contiguous))
+
+
+def image_hough_lines(
+    edge_matrix: List[List[float]],
+    threshold: int = 10,
+    num_rho: int = 50,
+    num_theta: int = 60,
+) -> Any:
+    """Detects geometric lines using polar accumulator Hough Transform."""
+    return Record(HoughTransformLineDetector.detect(edge_matrix, threshold=threshold, num_rho=num_rho, num_theta=num_theta))
+
+
 
