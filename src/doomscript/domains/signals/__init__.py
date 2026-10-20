@@ -45,6 +45,10 @@ from doomscript.domains.signals.runtime import (
     signals_kalman_filter,
     signals_butterworth_lowpass,
     signals_emd_decompose,
+    ChirpZTransformCZT,
+    LevinsonDurbinLPC,
+    signals_czt,
+    signals_levinson_durbin,
 )
 from doomscript.domains.signals.parser import SignalsDomainParser
 from doomscript.domains.signals.exporter import SignalsASTExporter
@@ -131,4 +135,8 @@ __all__ = [
     "signals_kalman_filter",
     "signals_butterworth_lowpass",
     "signals_emd_decompose",
+    "ChirpZTransformCZT",
+    "LevinsonDurbinLPC",
+    "signals_czt",
+    "signals_levinson_durbin",
 ]

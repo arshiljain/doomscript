@@ -182,6 +182,30 @@ class QuantumDomainParser(DomainParser):
             target = m_vqe.group(3).strip()
             return f"set {target} to quantum_vqe_ground_state({h_terms}, iterations={iters})"
 
+        # estimate quantum phase for theta <theta> [with <t> qubits] into <target>
+        m_qpe = re.match(
+            r"^estimate\s+quantum\s+phase\s+for\s+theta\s+(.+?)(?:\s+with\s+(\d+)\s+qubits?)?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_qpe:
+            th = m_qpe.group(1).strip()
+            t_qubits = m_qpe.group(2) or "4"
+            target = m_qpe.group(3).strip()
+            return f"set {target} to quantum_qpe_estimate({th}, counting_qubits={t_qubits})"
+
+        # simulate bb84 protocol [with <n> bits] [with eve <eve>] into <target>
+        m_bb84 = re.match(
+            r"^simulate\s+bb84\s+protocol(?:\s+with\s+(\d+)\s+bits?)?(?:\s+with\s+eve\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_bb84:
+            n_bits = m_bb84.group(1) or "64"
+            eve = m_bb84.group(2) or "False"
+            target = m_bb84.group(3).strip()
+            return f"set {target} to quantum_bb84_simulate(num_bits={n_bits}, eve_present={eve})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

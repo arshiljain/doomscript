@@ -1,6 +1,7 @@
 """Robotics Forward/Inverse Kinematics, Trajectory Planning, and Kalman Filter for DoomScript."""
 
 import math
+import random
 from typing import List, Dict, Any, Tuple, Optional
 from doomscript.runtime import Record
 
@@ -1058,5 +1059,258 @@ def robotics_occupancy_grid_update(
     """Updates 2D log-odds occupancy grid map from lidar sensor ranges."""
     grid_map = OccupancyGridMap2D(width=width, height=height, resolution=resolution)
     return grid_map.update_scan(robot_pose, scan_ranges)
+
+
+class RRTStarNode3D:
+    def __init__(self, x: float, y: float, z: float, cost: float = 0.0, parent: Optional['RRTStarNode3D'] = None):
+        self.x = float(x)
+        self.y = float(y)
+        self.z = float(z)
+        self.cost = float(cost)
+        self.parent = parent
+
+
+class RapidlyExploringRandomTreeStar3D:
+    """Asymptotically optimal RRT* motion planner in 3D workspace with obstacle avoidance."""
+
+    @classmethod
+    def plan(
+        cls,
+        start: Tuple[float, float, float],
+        goal: Tuple[float, float, float],
+        obstacles: Optional[List[Dict[str, Any]]] = None,
+        bounds: Tuple[Tuple[float, float], Tuple[float, float], Tuple[float, float]] = ((-10, 10), (-10, 10), (0, 10)),
+        max_iter: int = 200,
+        step_size: float = 1.0,
+        goal_threshold: float = 1.5,
+        rewire_radius: float = 2.5,
+        seed: Optional[int] = 42,
+    ) -> Dict[str, Any]:
+        rng = random.Random(seed)
+        obs_list = obstacles or []
+
+        root = RRTStarNode3D(start[0], start[1], start[2], cost=0.0)
+        tree: List[RRTStarNode3D] = [root]
+
+        def dist(n1: RRTStarNode3D, p2: Tuple[float, float, float]) -> float:
+            return math.sqrt((n1.x - p2[0]) ** 2 + (n1.y - p2[1]) ** 2 + (n1.z - p2[2]) ** 2)
+
+        def is_collision_free(p: Tuple[float, float, float]) -> bool:
+            for obs in obs_list:
+                c = obs.get("center", (0, 0, 0))
+                r = obs.get("radius", 1.0)
+                d = math.sqrt((p[0] - c[0]) ** 2 + (p[1] - c[1]) ** 2 + (p[2] - c[2]) ** 2)
+                if d <= r:
+                    return False
+            return True
+
+        best_goal_node: Optional[RRTStarNode3D] = None
+
+        for _ in range(max_iter):
+            # Goal biasing 15%
+            if rng.random() < 0.15:
+                rand_pt = goal
+            else:
+                rand_pt = (
+                    rng.uniform(bounds[0][0], bounds[0][1]),
+                    rng.uniform(bounds[1][0], bounds[1][1]),
+                    rng.uniform(bounds[2][0], bounds[2][1]),
+                )
+
+            # Nearest neighbor
+            nearest = min(tree, key=lambda n: dist(n, rand_pt))
+            d_near = dist(nearest, rand_pt)
+            if d_near <= 1e-6:
+                continue
+
+            scale = min(step_size, d_near) / d_near
+            new_x = nearest.x + (rand_pt[0] - nearest.x) * scale
+            new_y = nearest.y + (rand_pt[1] - nearest.y) * scale
+            new_z = nearest.z + (rand_pt[2] - nearest.z) * scale
+            new_pt = (new_x, new_y, new_z)
+
+            if not is_collision_free(new_pt):
+                continue
+
+            # Near nodes within rewire_radius
+            near_nodes = [n for n in tree if dist(n, new_pt) <= rewire_radius]
+            min_parent = nearest
+            min_cost = nearest.cost + dist(nearest, new_pt)
+
+            for near_n in near_nodes:
+                c = near_n.cost + dist(near_n, new_pt)
+                if c < min_cost:
+                    min_cost = c
+                    min_parent = near_n
+
+            new_node = RRTStarNode3D(new_x, new_y, new_z, cost=min_cost, parent=min_parent)
+            tree.append(new_node)
+
+            # Rewire near neighbors
+            for near_n in near_nodes:
+                d_edge = dist(new_node, (near_n.x, near_n.y, near_n.z))
+                if new_node.cost + d_edge < near_n.cost:
+                    near_n.parent = new_node
+                    near_n.cost = new_node.cost + d_edge
+
+            # Check goal reach
+            if dist(new_node, goal) <= goal_threshold:
+                if best_goal_node is None or new_node.cost < best_goal_node.cost:
+                    best_goal_node = new_node
+
+        path: List[Tuple[float, float, float]] = []
+        if best_goal_node is not None:
+            curr: Optional[RRTStarNode3D] = best_goal_node
+            while curr is not None:
+                path.append((round(curr.x, 3), round(curr.y, 3), round(curr.z, 3)))
+                curr = curr.parent
+            path.reverse()
+            # Append exact goal if not reached exactly
+            if path[-1] != (round(goal[0], 3), round(goal[1], 3), round(goal[2], 3)):
+                path.append((round(goal[0], 3), round(goal[1], 3), round(goal[2], 3)))
+            return {
+                "success": True,
+                "path": path,
+                "total_cost": round(best_goal_node.cost, 3),
+                "nodes_count": len(tree),
+            }
+        else:
+            # Fallback path directly to closest node
+            closest = min(tree, key=lambda n: dist(n, goal))
+            curr = closest
+            while curr is not None:
+                path.append((round(curr.x, 3), round(curr.y, 3), round(curr.z, 3)))
+                curr = curr.parent
+            path.reverse()
+            return {
+                "success": False,
+                "path": path,
+                "total_cost": round(closest.cost, 3),
+                "nodes_count": len(tree),
+            }
+
+
+class DynamicWindowApproachDWA:
+    """Dynamic Window Approach (DWA) for local obstacle avoidance and robot motion control."""
+
+    @classmethod
+    def calculate_velocity(
+        cls,
+        current_state: Tuple[float, float, float, float, float],  # x, y, theta, v, omega
+        goal: Tuple[float, float],
+        obstacles: Optional[List[Tuple[float, float]]] = None,
+        max_speed: float = 1.0,
+        max_yaw_rate: float = 1.0,
+        max_accel: float = 0.5,
+        max_delta_yaw_rate: float = 0.8,
+        dt: float = 0.1,
+        predict_time: float = 1.5,
+    ) -> Dict[str, Any]:
+        x, y, theta, v, omega = current_state
+        gx, gy = goal
+        obs_list = obstacles or []
+
+        # Dynamic Window
+        vs = [0.0, max_speed, -max_yaw_rate, max_yaw_rate]
+        vd = [v - max_accel * dt, v + max_accel * dt, omega - max_delta_yaw_rate * dt, omega + max_delta_yaw_rate * dt]
+        dw = [max(vs[0], vd[0]), min(vs[1], vd[1]), max(vs[2], vd[2]), min(vs[3], vd[3])]
+
+        v_steps = 5
+        omega_steps = 7
+        dv = (dw[1] - dw[0]) / max(1, v_steps - 1) if dw[1] > dw[0] else 0.0
+        domega = (dw[3] - dw[2]) / max(1, omega_steps - 1) if dw[3] > dw[2] else 0.0
+
+        best_cost = -float("inf")
+        best_v = 0.0
+        best_omega = 0.0
+        best_traj: List[Tuple[float, float]] = []
+
+        for iv in range(v_steps):
+            cv = dw[0] + iv * dv
+            for iw in range(omega_steps):
+                cw = dw[2] + iw * domega
+
+                # Simulate trajectory
+                traj: List[Tuple[float, float]] = []
+                px, py, pth = x, y, theta
+                t = 0.0
+                min_obs_dist = float("inf")
+                collision = False
+
+                while t <= predict_time:
+                    px += cv * math.cos(pth) * dt
+                    py += cv * math.sin(pth) * dt
+                    pth += cw * dt
+                    traj.append((round(px, 3), round(py, 3)))
+
+                    for ox, oy in obs_list:
+                        d_o = math.hypot(px - ox, py - oy)
+                        if d_o < min_obs_dist:
+                            min_obs_dist = d_o
+                        if d_o < 0.3:  # Robot radius collision
+                            collision = True
+                            break
+                    if collision:
+                        break
+                    t += dt
+
+                if collision:
+                    continue
+
+                # Heading score
+                dx_g = gx - px
+                dy_g = gy - py
+                goal_angle = math.atan2(dy_g, dx_g)
+                heading_err = abs(goal_angle - pth)
+                while heading_err > math.pi:
+                    heading_err -= 2.0 * math.pi
+                heading_score = math.pi - abs(heading_err)
+
+                # Distance to goal
+                dist_to_goal = math.hypot(dx_g, dy_g)
+
+                # Clearance score
+                clearance_score = min(min_obs_dist, 2.0)
+
+                # Cost function
+                cost = 0.3 * heading_score + 0.4 * clearance_score + 0.3 * cv - 0.2 * dist_to_goal
+                if cost > best_cost:
+                    best_cost = cost
+                    best_v = cv
+                    best_omega = cw
+                    best_traj = traj
+
+        return {
+            "best_linear_velocity": round(best_v, 3),
+            "best_angular_velocity": round(best_omega, 3),
+            "trajectory_points": best_traj,
+            "cost": round(best_cost, 3),
+        }
+
+
+def robotics_rrt_star_3d(
+    start: Tuple[float, float, float],
+    goal: Tuple[float, float, float],
+    obstacles: Optional[List[Dict[str, Any]]] = None,
+    max_iter: int = 150,
+    step_size: float = 1.0,
+) -> Record:
+    """Plans asymptotically optimal 3D path using RRT*."""
+    return Record(RapidlyExploringRandomTreeStar3D.plan(
+        start, goal, obstacles=obstacles, max_iter=max_iter, step_size=step_size
+    ))
+
+
+def robotics_dwa_velocity(
+    current_state: Tuple[float, float, float, float, float],
+    goal: Tuple[float, float],
+    obstacles: Optional[List[Tuple[float, float]]] = None,
+    max_speed: float = 1.0,
+) -> Record:
+    """Computes optimal collision-avoiding velocities using Dynamic Window Approach."""
+    return Record(DynamicWindowApproachDWA.calculate_velocity(
+        current_state, goal, obstacles=obstacles, max_speed=max_speed
+    ))
+
 
 

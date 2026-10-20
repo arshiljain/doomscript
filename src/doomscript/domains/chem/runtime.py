@@ -985,3 +985,157 @@ def chem_enzyme_kinetics(
     """Estimates Michaelis-Menten V_max and K_m from substrate velocity data."""
     return MichaelisMentenEnzymeKinetics.fit(substrates, velocities)
 
+
+class AutocatalyticOregonatorSimulator:
+    """Field-Körös-Noyes (FKN) Oregonator model simulating Belousov-Zhabotinsky oscillatory chemical dynamics."""
+
+    @classmethod
+    def simulate(
+        cls,
+        initial_state: Optional[List[float]] = None,
+        duration: float = 30.0,
+        dt: float = 0.002,
+        epsilon: float = 0.04,
+        q: float = 0.0008,
+        f: float = 1.0,
+    ) -> Dict[str, Any]:
+        # Dimensionless variables: x = [HBrO2], y = [Br-], z = [Ce4+]
+        # In the Tyson two-variable / quasi-steady-state or three-variable model:
+        # y_ss = f*z / (q + x)
+        # dx/dt = (1/eps) * (x*(1 - x) - f*z * (x - q)/(x + q))
+        # dz/dt = x - z
+        # This standard stiff-reduced Oregonator integrates stably without blowup.
+        init = initial_state or [0.1, 0.1]
+        x = float(init[0])
+        z = float(init[1])
+
+        t = 0.0
+        steps = int(duration / dt)
+
+        x_series = []
+        z_series = []
+        peaks = []
+
+        prev_dx = 0.0
+        for step in range(steps):
+            denom = max(1e-9, x + q)
+            # Tyson 2-variable Oregonator
+            dx_dt = (x * (1.0 - x) - f * z * (x - q) / denom) / max(1e-4, epsilon)
+            dz_dt = x - z
+
+            # Midpoint / RK2 integration
+            x_half = max(0.0, x + 0.5 * dt * dx_dt)
+            z_half = max(0.0, z + 0.5 * dt * dz_dt)
+            denom_half = max(1e-9, x_half + q)
+            dx_dt2 = (x_half * (1.0 - x_half) - f * z_half * (x_half - q) / denom_half) / max(1e-4, epsilon)
+            dz_dt2 = x_half - z_half
+
+            x_next = max(0.0, x + dt * dx_dt2)
+            z_next = max(0.0, z + dt * dz_dt2)
+
+            # Detect peak in x
+            if step > 10 and dx_dt > 0.0 and dx_dt2 <= 0.0:
+                peaks.append(round(t, 3))
+
+            x = x_next
+            z = z_next
+            t += dt
+
+            if step % 50 == 0:
+                x_series.append(round(x, 4))
+                z_series.append(round(z, 4))
+
+        # Calculate period if at least 2 peaks
+        period = 0.0
+        if len(peaks) >= 2:
+            intervals = [peaks[i] - peaks[i - 1] for i in range(1, len(peaks))]
+            period = sum(intervals) / len(intervals)
+
+        return {
+            "duration": duration,
+            "period": round(period, 3),
+            "cycles_detected": len(peaks),
+            "final_x": round(x, 4),
+            "final_z": round(z, 4),
+            "max_x": round(max(x_series) if x_series else x, 4),
+            "min_x": round(min(x_series) if x_series else x, 4),
+        }
+
+
+class ArrheniusEyringTransitionState:
+    """Calculates activation enthalpy, entropy, and Gibbs free energy from temperature-rate constant kinetics."""
+
+    R = 8.314462618  # J / (mol * K)
+    KB_OVER_H = 2.083661912e10  # k_B / h (Hz / K)
+    LN_KB_OVER_H = 23.7599026
+
+    @classmethod
+    def fit(cls, temperatures_k: List[float], rate_constants: List[float]) -> Dict[str, Any]:
+        n = min(len(temperatures_k), len(rate_constants))
+        if n < 2:
+            return {
+                "delta_h_activation_kj": 0.0,
+                "delta_s_activation_j_k": 0.0,
+                "delta_g_activation_kj": 0.0,
+                "activation_energy_kj": 0.0,
+                "r_squared": 0.0,
+            }
+
+        # Eyring coordinates: x = 1 / T, y = ln(k / T)
+        x_vals = [1.0 / float(t) for t in temperatures_k[:n]]
+        y_vals = [math.log(max(1e-20, float(k)) / float(t)) for t, k in zip(temperatures_k[:n], rate_constants[:n])]
+
+        mean_x = sum(x_vals) / n
+        mean_y = sum(y_vals) / n
+
+        ss_xx = sum((x - mean_x) ** 2 for x in x_vals)
+        ss_yy = sum((y - mean_y) ** 2 for y in y_vals)
+        ss_xy = sum((x - mean_x) * (y - mean_y) for x, y in zip(x_vals, y_vals))
+
+        slope = ss_xy / max(1e-12, ss_xx)
+        intercept = mean_y - slope * mean_x
+
+        r2 = (ss_xy ** 2) / max(1e-12, ss_xx * ss_yy)
+
+        # Delta H^ddagger = -slope * R
+        delta_h_j = -slope * cls.R
+        delta_h_kj = delta_h_j / 1000.0
+
+        # Delta S^ddagger = R * (intercept - ln(k_B / h))
+        delta_s_j_k = cls.R * (intercept - cls.LN_KB_OVER_H)
+
+        # Delta G^ddagger at 298.15 K
+        t_ref = 298.15
+        delta_g_kj = delta_h_kj - (t_ref * delta_s_j_k) / 1000.0
+
+        # Arrhenius Ea = Delta H^ddagger + R * T_mean
+        t_mean = sum(temperatures_k[:n]) / n
+        ea_kj = (delta_h_j + cls.R * t_mean) / 1000.0
+
+        return {
+            "delta_h_activation_kj": round(delta_h_kj, 3),
+            "delta_s_activation_j_k": round(delta_s_j_k, 3),
+            "delta_g_activation_kj": round(delta_g_kj, 3),
+            "activation_energy_kj": round(ea_kj, 3),
+            "r_squared": round(r2, 4),
+            "temperatures_count": n,
+        }
+
+
+def chem_oregonator_simulate(
+    initial_state: Optional[List[float]] = None,
+    duration: float = 30.0,
+    dt: float = 0.002,
+) -> Record:
+    """Simulates Belousov-Zhabotinsky oscillatory chemical reaction via Oregonator model."""
+    return Record(AutocatalyticOregonatorSimulator.simulate(initial_state=initial_state, duration=duration, dt=dt))
+
+
+def chem_eyring_transition_state(
+    temperatures_k: List[float],
+    rate_constants: List[float],
+) -> Record:
+    """Computes activation thermodynamic parameters (Delta H#, Delta S#, Delta G#) using Eyring transition-state theory."""
+    return Record(ArrheniusEyringTransitionState.fit(temperatures_k, rate_constants))
+
+

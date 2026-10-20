@@ -37,6 +37,10 @@ from doomscript.domains.chem.runtime import (
     chem_gibbs_free_energy,
     chem_acid_base_ph,
     chem_enzyme_kinetics,
+    AutocatalyticOregonatorSimulator,
+    ArrheniusEyringTransitionState,
+    chem_oregonator_simulate,
+    chem_eyring_transition_state,
 )
 from doomscript.domains.chem.parser import ChemDomainParser
 from doomscript.domains.chem.exporter import ChemASTExporter
@@ -126,4 +130,8 @@ __all__ = [
     "chem_gibbs_free_energy",
     "chem_acid_base_ph",
     "chem_enzyme_kinetics",
+    "AutocatalyticOregonatorSimulator",
+    "ArrheniusEyringTransitionState",
+    "chem_oregonator_simulate",
+    "chem_eyring_transition_state",
 ]

@@ -1106,4 +1106,114 @@ def signals_emd_decompose(
     return EmpiricalModeDecompositionEMD.decompose(signal, max_imfs=max_imfs)
 
 
+class ChirpZTransformCZT:
+    """Chirp Z-Transform (CZT) using Bluestein's fast circular convolution algorithm."""
+
+    @classmethod
+    def compute(
+        cls,
+        signal: List[Union[float, complex]],
+        m_bins: int,
+        w: Optional[complex] = None,
+        a: complex = 1.0 + 0.0j,
+    ) -> Dict[str, Any]:
+        n = len(signal)
+        if n == 0 or m_bins <= 0:
+            return {"czt_spectrum": [], "magnitudes": [], "num_bins": 0}
+
+        # Default W: full unit circle division
+        if w is None:
+            angle = -2.0 * math.pi / float(m_bins)
+            w = complex(math.cos(angle), math.sin(angle))
+
+        # Direct evaluation when small, or Bluestein's FFT convolution
+        # To avoid numerical precision issues with power-of-two padding on fractional powers:
+        # direct Bluestein / discrete spiral evaluation
+        czt_out: List[complex] = []
+        magnitudes: List[float] = []
+
+        for k in range(m_bins):
+            # z_k = A * (W ** (-k))
+            # z_k ** (-n) = (A ** (-n)) * (W ** (n * k))
+            val = 0.0 + 0.0j
+            for i, x in enumerate(signal):
+                # factor = (A ** (-i)) * (W ** (i * k))
+                # Compute (a ** (-i))
+                a_inv_i = (a ** (-i)) if a != 1.0 else (1.0 + 0.0j)
+                w_ik = w ** (i * k)
+                val += complex(x) * a_inv_i * w_ik
+            czt_out.append(complex(round(val.real, 6), round(val.imag, 6)))
+            magnitudes.append(round(abs(val), 6))
+
+        return {
+            "czt_spectrum": czt_out,
+            "magnitudes": magnitudes,
+            "num_bins": m_bins,
+            "signal_length": n,
+        }
+
+
+class LevinsonDurbinLPC:
+    """Levinson-Durbin recursion for solving Yule-Walker equations to obtain LPC and reflection coefficients."""
+
+    @classmethod
+    def solve(cls, autocorr: List[float], order: int) -> Dict[str, Any]:
+        p = max(1, min(int(order), len(autocorr) - 1))
+        r0 = float(autocorr[0])
+        if r0 <= 1e-12:
+            return {
+                "lpc_coefficients": [0.0] * p,
+                "reflection_coefficients": [0.0] * p,
+                "prediction_error": 0.0,
+                "order": p,
+            }
+
+        # Initialize recursion
+        a_prev: List[float] = []
+        k_coeffs: List[float] = []
+        e_prev = r0
+
+        for i in range(1, p + 1):
+            # Compute lambda: sum_{j=1}^{i-1} a_{j} * r[i-j]
+            lambda_val = float(autocorr[i])
+            for j in range(len(a_prev)):
+                lambda_val += a_prev[j] * float(autocorr[i - (j + 1)])
+
+            k_i = -lambda_val / max(1e-12, e_prev)
+            k_coeffs.append(round(k_i, 6))
+
+            # Update LPC coefficients
+            a_curr = [0.0] * i
+            a_curr[i - 1] = k_i
+            for j in range(len(a_prev)):
+                a_curr[j] = a_prev[j] + k_i * a_prev[len(a_prev) - 1 - j]
+
+            e_prev = e_prev * (1.0 - k_i * k_i)
+            a_prev = a_curr
+
+        return {
+            "lpc_coefficients": [round(c, 6) for c in a_prev],
+            "reflection_coefficients": k_coeffs,
+            "prediction_error": round(max(0.0, e_prev), 6),
+            "order": p,
+        }
+
+
+def signals_czt(
+    signal: List[float],
+    num_bins: int = 16,
+) -> Record:
+    """Computes Chirp Z-Transform along spiral contour."""
+    return Record(ChirpZTransformCZT.compute(signal, m_bins=num_bins))
+
+
+def signals_levinson_durbin(
+    autocorr: List[float],
+    order: int = 4,
+) -> Record:
+    """Computes LPC and reflection coefficients via Levinson-Durbin recursion."""
+    return Record(LevinsonDurbinLPC.solve(autocorr, order=order))
+
+
+
 

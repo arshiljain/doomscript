@@ -781,3 +781,118 @@ def quantum_vqe_ground_state(hamiltonian_terms: Dict[str, float], iterations: in
     vqe = VariationalQuantumEigensolver(hamiltonian_terms)
     return Record(vqe.optimize(iterations=iterations))
 
+
+class QuantumPhaseEstimationQPE:
+    """Quantum Phase Estimation algorithm estimating eigenphase theta for U|psi> = exp(2*pi*i*theta)|psi>."""
+
+    @classmethod
+    def estimate_phase(cls, true_theta: float, counting_qubits: int = 4) -> Dict[str, Any]:
+        t = max(2, min(int(counting_qubits), 8))
+        dim = 1 << t
+        # Counting register state vector in superposition
+        state = []
+        scale = 1.0 / math.sqrt(dim)
+        for k in range(dim):
+            angle = 2.0 * math.pi * k * float(true_theta)
+            state.append(complex(scale * math.cos(angle), scale * math.sin(angle)))
+
+        # Apply Inverse QFT
+        iqft_state = []
+        for j in range(dim):
+            s = 0.0 + 0.0j
+            for k in range(dim):
+                angle = -2.0 * math.pi * j * k / float(dim)
+                w = complex(math.cos(angle), math.sin(angle))
+                s += state[k] * w
+            iqft_state.append(s * scale)
+
+        probs = [abs(z) ** 2 for z in iqft_state]
+        best_idx = max(range(dim), key=lambda idx: probs[idx])
+        estimated_theta = round(best_idx / float(dim), 4)
+
+        return {
+            "true_theta": float(true_theta),
+            "estimated_theta": estimated_theta,
+            "measured_index": best_idx,
+            "probability": round(probs[best_idx], 4),
+            "counting_qubits": t,
+        }
+
+
+class QuantumKeyDistributionBB84:
+    """Bennett-Brassard 1984 (BB84) protocol simulator with sifting and eavesdropping detection."""
+
+    @classmethod
+    def simulate(
+        cls,
+        num_bits: int = 64,
+        eve_present: bool = False,
+        seed: Optional[int] = 42,
+    ) -> Dict[str, Any]:
+        rng = random.Random(seed)
+        n = max(8, int(num_bits))
+
+        alice_bits = [rng.randint(0, 1) for _ in range(n)]
+        alice_bases = [rng.randint(0, 1) for _ in range(n)]
+
+        transmitted_bits = list(alice_bits)
+
+        if eve_present:
+            for i in range(n):
+                eve_basis = rng.randint(0, 1)
+                if eve_basis != alice_bases[i]:
+                    transmitted_bits[i] = rng.randint(0, 1)
+
+        bob_bases = [rng.randint(0, 1) for _ in range(n)]
+        bob_bits = []
+        for i in range(n):
+            if bob_bases[i] == alice_bases[i]:
+                bob_bits.append(transmitted_bits[i])
+            else:
+                bob_bits.append(rng.randint(0, 1))
+
+        sifted_alice = []
+        sifted_bob = []
+        for i in range(n):
+            if alice_bases[i] == bob_bases[i]:
+                sifted_alice.append(alice_bits[i])
+                sifted_bob.append(bob_bits[i])
+
+        m = len(sifted_alice)
+        if m == 0:
+            return {
+                "raw_bits_count": n,
+                "sifted_bits_count": 0,
+                "qber": 0.0,
+                "key_accepted": False,
+                "shared_key": [],
+                "shared_key_length": 0,
+            }
+
+        test_sample_size = max(1, m // 3)
+        test_errors = sum(1 for i in range(test_sample_size) if sifted_alice[i] != sifted_bob[i])
+        qber = test_errors / float(test_sample_size)
+
+        key = sifted_alice[test_sample_size:]
+        key_accepted = (qber < 0.11)
+
+        return {
+            "raw_bits_count": n,
+            "sifted_bits_count": m,
+            "qber": round(qber, 4),
+            "key_accepted": key_accepted,
+            "shared_key": key if key_accepted else [],
+            "shared_key_length": len(key) if key_accepted else 0,
+        }
+
+
+def quantum_qpe_estimate(theta: float, counting_qubits: int = 4) -> Record:
+    """Estimates unitary eigenphase using Quantum Phase Estimation."""
+    return Record(QuantumPhaseEstimationQPE.estimate_phase(theta, counting_qubits=counting_qubits))
+
+
+def quantum_bb84_simulate(num_bits: int = 64, eve_present: bool = False, seed: Optional[int] = 42) -> Record:
+    """Simulates BB84 quantum key distribution and eavesdropping detection."""
+    return Record(QuantumKeyDistributionBB84.simulate(num_bits=num_bits, eve_present=eve_present, seed=seed))
+
+

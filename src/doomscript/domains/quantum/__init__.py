@@ -36,6 +36,10 @@ from doomscript.domains.quantum.runtime import (
     quantum_density_matrix_analyze,
     quantum_apply_qft,
     quantum_vqe_ground_state,
+    QuantumPhaseEstimationQPE,
+    QuantumKeyDistributionBB84,
+    quantum_qpe_estimate,
+    quantum_bb84_simulate,
 )
 from doomscript.domains.quantum.parser import QuantumDomainParser
 from doomscript.domains.quantum.exporter import QuantumASTExporter
@@ -74,6 +78,8 @@ class QuantumDomain(DomainContract):
     blocks = []
 
     def can_handle_line(self, line: str) -> bool:
+        if self.parser.parse_inspect(line, 0) is not None or self.parser.parse_operation(line, 0) is not None:
+            return True
         s = line.strip().lower()
         return (
             s.startswith("create quantum register with ")
@@ -125,4 +131,8 @@ __all__ = [
     "quantum_density_matrix_analyze",
     "quantum_apply_qft",
     "quantum_vqe_ground_state",
+    "QuantumPhaseEstimationQPE",
+    "QuantumKeyDistributionBB84",
+    "quantum_qpe_estimate",
+    "quantum_bb84_simulate",
 ]

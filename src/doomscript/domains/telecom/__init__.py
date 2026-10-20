@@ -39,6 +39,10 @@ from doomscript.domains.telecom.runtime import (
     telecom_secded_decode,
     telecom_custom_crc,
     telecom_awgn_simulate,
+    OFDMModulationEngine,
+    ViterbiConvolutionalDecoder,
+    telecom_ofdm_modulate,
+    telecom_ofdm_demodulate,
 )
 from doomscript.domains.telecom.parser import TelecomDomainParser
 from doomscript.domains.telecom.exporter import TelecomASTExporter
@@ -132,4 +136,8 @@ __all__ = [
     "telecom_secded_decode",
     "telecom_custom_crc",
     "telecom_awgn_simulate",
+    "OFDMModulationEngine",
+    "ViterbiConvolutionalDecoder",
+    "telecom_ofdm_modulate",
+    "telecom_ofdm_demodulate",
 ]

@@ -96,6 +96,29 @@ class ChemDomainParser(DomainParser):
             target = m_enz.group(3).strip()
             return f"set {target} to chem_enzyme_kinetics({s_conc}, {v_rates})"
 
+        # simulate oregonator reaction [for duration <t>] into <target>
+        m_oreg = re.match(
+            r"^simulate\s+oregonator\s+reaction(?:\s+for\s+duration\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_oreg:
+            dur = m_oreg.group(1).strip() if m_oreg.group(1) else "30.0"
+            target = m_oreg.group(2).strip()
+            return f"set {target} to chem_oregonator_simulate(duration={dur})"
+
+        # fit eyring kinetics for temperatures <temps> and rates <rates> into <target>
+        m_eyr = re.match(
+            r"^fit\s+eyring\s+kinetics\s+for\s+temperatures\s+(.+?)\s+and\s+rates\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_eyr:
+            temps = m_eyr.group(1).strip()
+            rates = m_eyr.group(2).strip()
+            target = m_eyr.group(3).strip()
+            return f"set {target} to chem_eyring_transition_state({temps}, {rates})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

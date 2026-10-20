@@ -3416,6 +3416,10 @@ from doomscript.domains.quantum.runtime import (
     quantum_density_matrix_analyze,
     quantum_apply_qft,
     quantum_vqe_ground_state,
+    QuantumPhaseEstimationQPE,
+    QuantumKeyDistributionBB84,
+    quantum_qpe_estimate,
+    quantum_bb84_simulate,
 )
 quantum_register_create = quantum_create_register
 quantum_apply_hadamard = quantum_apply_h
@@ -3600,6 +3604,10 @@ from doomscript.domains.robotics.runtime import (
     OccupancyGridMap2D,
     robotics_dubins_path,
     robotics_occupancy_grid_update,
+    RapidlyExploringRandomTreeStar3D,
+    DynamicWindowApproachDWA,
+    robotics_rrt_star_3d,
+    robotics_dwa_velocity,
 )
 
 from doomscript.domains.signals.runtime import (
@@ -3633,6 +3641,10 @@ from doomscript.domains.signals.runtime import (
     signals_kalman_filter,
     signals_butterworth_lowpass,
     signals_emd_decompose,
+    ChirpZTransformCZT,
+    LevinsonDurbinLPC,
+    signals_czt,
+    signals_levinson_durbin,
 )
 
 from doomscript.domains.astronomy.runtime import (
@@ -3691,6 +3703,10 @@ from doomscript.domains.chem.runtime import (
     chem_gibbs_free_energy,
     chem_acid_base_ph,
     chem_enzyme_kinetics,
+    AutocatalyticOregonatorSimulator,
+    ArrheniusEyringTransitionState,
+    chem_oregonator_simulate,
+    chem_eyring_transition_state,
 )
 
 from doomscript.domains.compression.runtime import (
@@ -3828,6 +3844,10 @@ from doomscript.domains.telecom.runtime import (
     telecom_secded_decode,
     telecom_custom_crc,
     telecom_awgn_simulate,
+    OFDMModulationEngine,
+    ViterbiConvolutionalDecoder,
+    telecom_ofdm_modulate,
+    telecom_ofdm_demodulate,
 )
 
 from doomscript.domains.neuro.runtime import (

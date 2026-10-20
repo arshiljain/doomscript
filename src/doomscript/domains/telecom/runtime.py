@@ -935,3 +935,196 @@ def telecom_awgn_simulate(
     """Simulates wireless link over AWGN channel and measures BER and EVM."""
     return AWGNChannelSimulator.simulate_transmission(bits, scheme=scheme, snr_db=snr_db)
 
+
+class OFDMModulationEngine:
+    """Orthogonal Frequency Division Multiplexing (OFDM) baseband modulator/demodulator."""
+
+    @staticmethod
+    def _dft(x: List[complex], inverse: bool = False) -> List[complex]:
+        n = len(x)
+        if n == 0:
+            return []
+        out = []
+        sign = 1.0 if inverse else -1.0
+        scale = 1.0 / n if inverse else 1.0
+        for k in range(n):
+            s = 0.0 + 0.0j
+            for t in range(n):
+                angle = sign * 2.0 * math.pi * k * t / n
+                w = complex(math.cos(angle), math.sin(angle))
+                s += x[t] * w
+            out.append(s * scale)
+        return out
+
+    @classmethod
+    def modulate(
+        cls,
+        symbols: List[complex],
+        n_fft: int = 16,
+        n_cp: int = 4,
+    ) -> Dict[str, Any]:
+        n = len(symbols)
+        # Pad to multiple of n_fft
+        pad_len = (n_fft - (n % n_fft)) % n_fft
+        padded = list(symbols) + [0.0 + 0.0j] * pad_len
+
+        num_frames = len(padded) // n_fft
+        tx_stream: List[complex] = []
+
+        for f in range(num_frames):
+            block = padded[f * n_fft : (f + 1) * n_fft]
+            time_domain = cls._dft(block, inverse=True)
+            # Cyclic prefix: last n_cp samples
+            cp = time_domain[-n_cp:]
+            frame = cp + time_domain
+            tx_stream.extend(frame)
+
+        return {
+            "time_samples": tx_stream,
+            "num_frames": num_frames,
+            "samples_count": len(tx_stream),
+            "n_fft": n_fft,
+            "n_cp": n_cp,
+        }
+
+    @classmethod
+    def demodulate(
+        cls,
+        time_samples: List[complex],
+        n_fft: int = 16,
+        n_cp: int = 4,
+    ) -> Dict[str, Any]:
+        frame_len = n_fft + n_cp
+        num_frames = len(time_samples) // frame_len
+        rx_symbols: List[complex] = []
+
+        for f in range(num_frames):
+            frame = time_samples[f * frame_len : (f + 1) * frame_len]
+            # Strip cyclic prefix
+            block_time = frame[n_cp : n_cp + n_fft]
+            freq_domain = cls._dft(block_time, inverse=False)
+            rx_symbols.extend([complex(round(z.real, 5), round(z.imag, 5)) for z in freq_domain])
+
+        return {
+            "recovered_symbols": rx_symbols,
+            "num_frames": num_frames,
+            "symbols_count": len(rx_symbols),
+        }
+
+
+class ViterbiConvolutionalDecoder:
+    """Rate 1/2 constraint length K=3 convolutional encoder and Viterbi maximum-likelihood trellis decoder."""
+
+    # Polynomials g0 = 111_2 (7), g1 = 101_2 (5)
+    @classmethod
+    def encode(cls, bits: List[int]) -> List[int]:
+        s1 = 0
+        s0 = 0
+        encoded = []
+        for bit in bits:
+            b = 1 if bit else 0
+            y0 = b ^ s1 ^ s0
+            y1 = b ^ s0
+            encoded.extend([y0, y1])
+            s0 = s1
+            s1 = b
+        return encoded
+
+    @classmethod
+    def decode(cls, encoded_bits: List[int], original_bits: Optional[List[int]] = None) -> Dict[str, Any]:
+        n_pairs = len(encoded_bits) // 2
+        if n_pairs == 0:
+            return {"decoded_bits": [], "bit_errors": 0, "pairs_count": 0}
+
+        # States: 0 (00), 1 (01), 2 (10), 3 (11)
+        # Trellis transitions: from state (s1, s0) on input bit b:
+        # next_state = (b << 1) | s1
+        # out0 = b ^ s1 ^ s0, out1 = b ^ s0
+        num_states = 4
+        # path_metrics: current cost to reach each state
+        path_metrics = [float("inf")] * num_states
+        path_metrics[0] = 0.0  # Start at state 0
+
+        # Trellis history for traceback: list of dict {state: (prev_state, input_bit)}
+        trellis: List[Dict[int, Tuple[int, int]]] = []
+
+        for t in range(n_pairs):
+            r0 = encoded_bits[2 * t]
+            r1 = encoded_bits[2 * t + 1]
+
+            new_metrics = [float("inf")] * num_states
+            new_history: Dict[int, Tuple[int, int]] = {}
+
+            for curr_st in range(num_states):
+                if path_metrics[curr_st] == float("inf"):
+                    continue
+                s1 = (curr_st >> 1) & 1
+                s0 = curr_st & 1
+
+                for b in (0, 1):
+                    y0 = b ^ s1 ^ s0
+                    y1 = b ^ s0
+                    # Hamming branch metric
+                    bm = (r0 ^ y0) + (r1 ^ y1)
+                    cost = path_metrics[curr_st] + bm
+
+                    next_st = ((b << 1) | s1) & 3
+                    if cost < new_metrics[next_st]:
+                        new_metrics[next_st] = cost
+                        new_history[next_st] = (curr_st, b)
+
+            path_metrics = new_metrics
+            trellis.append(new_history)
+
+        # Traceback from state with minimum path metric
+        best_state = min(range(num_states), key=lambda st: path_metrics[st])
+        decoded = []
+        curr = best_state
+
+        for t in reversed(range(n_pairs)):
+            prev_st, b = trellis[t][curr]
+            decoded.append(b)
+            curr = prev_st
+
+        decoded.reverse()
+
+        bit_errors = 0
+        if original_bits is not None:
+            bit_errors = sum(1 for d, o in zip(decoded, original_bits) if d != o)
+
+        return {
+            "decoded_bits": decoded,
+            "bit_errors": bit_errors,
+            "pairs_count": n_pairs,
+            "final_metric": path_metrics[best_state],
+        }
+
+
+def telecom_ofdm_modulate(
+    symbols: List[complex],
+    n_fft: int = 16,
+    n_cp: int = 4,
+) -> Record:
+    """Modulates frequency-domain symbols into time-domain OFDM frames."""
+    return Record(OFDMModulationEngine.modulate(symbols, n_fft=n_fft, n_cp=n_cp))
+
+
+def telecom_ofdm_demodulate(
+    time_samples: List[complex],
+    n_fft: int = 16,
+    n_cp: int = 4,
+) -> Record:
+    """Demodulates time-domain OFDM frames back to frequency constellation symbols."""
+    return Record(OFDMModulationEngine.demodulate(time_samples, n_fft=n_fft, n_cp=n_cp))
+
+
+def telecom_viterbi_encode(bits: List[int]) -> List[int]:
+    """Encodes bitstream using rate 1/2 K=3 convolutional code."""
+    return ViterbiConvolutionalDecoder.encode(bits)
+
+
+def telecom_viterbi_decode(encoded_bits: List[int], original_bits: Optional[List[int]] = None) -> Record:
+    """Decodes convolutional code via Viterbi trellis dynamic programming."""
+    return Record(ViterbiConvolutionalDecoder.decode(encoded_bits, original_bits=original_bits))
+
+

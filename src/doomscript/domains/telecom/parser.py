@@ -120,6 +120,54 @@ class TelecomDomainParser(DomainParser):
                 data = f'"{data}"'
             return f"set {target} to telecom_custom_crc({data}, poly={poly})"
 
+        # modulate ofdm symbols <syms> [with fft <n>] [and cp <k>] into <target>
+        m_ofdm_m = re.match(
+            r"^modulate\s+ofdm\s+symbols\s+(.+?)(?:\s+with\s+fft\s+(\d+))?(?:\s+(?:and|with)\s+cp\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_ofdm_m:
+            syms = m_ofdm_m.group(1).strip()
+            n_fft = m_ofdm_m.group(2) or "16"
+            n_cp = m_ofdm_m.group(3) or "4"
+            target = m_ofdm_m.group(4).strip()
+            return f"set {target} to telecom_ofdm_modulate({syms}, n_fft={n_fft}, n_cp={n_cp})"
+
+        # demodulate ofdm signal <sig> [with fft <n>] [and cp <k>] into <target>
+        m_ofdm_d = re.match(
+            r"^demodulate\s+ofdm\s+signal\s+(.+?)(?:\s+with\s+fft\s+(\d+))?(?:\s+(?:and|with)\s+cp\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_ofdm_d:
+            sig = m_ofdm_d.group(1).strip()
+            n_fft = m_ofdm_d.group(2) or "16"
+            n_cp = m_ofdm_d.group(3) or "4"
+            target = m_ofdm_d.group(4).strip()
+            return f"set {target} to telecom_ofdm_demodulate({sig}, n_fft={n_fft}, n_cp={n_cp})"
+
+        # encode convolutional bits <bits> into <target>
+        m_vit_e = re.match(
+            r"^encode\s+convolutional\s+bits\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_vit_e:
+            bits = m_vit_e.group(1).strip()
+            target = m_vit_e.group(2).strip()
+            return f"set {target} to telecom_viterbi_encode({bits})"
+
+        # decode viterbi bits <bits> into <target>
+        m_vit_d = re.match(
+            r"^decode\s+viterbi\s+bits\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_vit_d:
+            bits = m_vit_d.group(1).strip()
+            target = m_vit_d.group(2).strip()
+            return f"set {target} to telecom_viterbi_decode({bits})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

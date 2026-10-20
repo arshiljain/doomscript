@@ -154,6 +154,30 @@ class RoboticsDomainParser(DomainParser):
             pose, rngs, target = m_occ.group(1).strip(), m_occ.group(2).strip(), m_occ.group(3).strip()
             return f"set {target} to robotics_occupancy_grid_update({pose}, {rngs})"
 
+        # plan rrt star 3d path from <start> to <goal> [with step <step>] into <target>
+        m_rrt3 = re.match(
+            r"^plan\s+rrt\s*star\s*3d\s+path\s+from\s+(.+?)\s+to\s+(.+?)(?:\s+with\s+step\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_rrt3:
+            st, gl = m_rrt3.group(1).strip(), m_rrt3.group(2).strip()
+            step = m_rrt3.group(3).strip() if m_rrt3.group(3) else "1.0"
+            target = m_rrt3.group(4).strip()
+            return f"set {target} to robotics_rrt_star_3d({st}, {gl}, step_size={step})"
+
+        # compute dwa velocity for state <state> and goal <goal> [with speed <v>] into <target>
+        m_dwa = re.match(
+            r"^compute\s+dwa\s+velocity\s+for\s+state\s+(.+?)\s+and\s+goal\s+(.+?)(?:\s+with\s+speed\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_dwa:
+            st, gl = m_dwa.group(1).strip(), m_dwa.group(2).strip()
+            spd = m_dwa.group(3).strip() if m_dwa.group(3) else "1.0"
+            target = m_dwa.group(4).strip()
+            return f"set {target} to robotics_dwa_velocity({st}, {gl}, max_speed={spd})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

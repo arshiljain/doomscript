@@ -162,6 +162,30 @@ class SignalsDomainParser(DomainParser):
             target = m_emd.group(3).strip()
             return f"set {target} to signals_emd_decompose({sig}, max_imfs={max_imfs})"
 
+        # compute chirp z-transform / czt of <sig> [with <n> bins] into <target>
+        m_czt = re.match(
+            r"^(?:compute\s+chirp\s+z-transform\s+of|compute\s+czt\s+of|czt\s+of)\s+(.+?)(?:\s+with\s+(\d+)\s+bins)?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_czt:
+            sig = m_czt.group(1).strip()
+            bins = m_czt.group(2) or "16"
+            target = m_czt.group(3).strip()
+            return f"set {target} to signals_czt({sig}, num_bins={bins})"
+
+        # solve levinson durbin for <autocorr> [with order <p>] into <target>
+        m_lev = re.match(
+            r"^(?:solve\s+levinson\s+durbin\s+for|levinson\s+durbin\s+for)\s+(.+?)(?:\s+with\s+order\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_lev:
+            ac = m_lev.group(1).strip()
+            p = m_lev.group(2) or "4"
+            target = m_lev.group(3).strip()
+            return f"set {target} to signals_levinson_durbin({ac}, order={p})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

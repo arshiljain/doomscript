@@ -43,6 +43,10 @@ from doomscript.domains.robotics.runtime import (
     OccupancyGridMap2D,
     robotics_dubins_path,
     robotics_occupancy_grid_update,
+    RapidlyExploringRandomTreeStar3D,
+    DynamicWindowApproachDWA,
+    robotics_rrt_star_3d,
+    robotics_dwa_velocity,
 )
 from doomscript.domains.robotics.parser import RoboticsDomainParser
 from doomscript.domains.robotics.exporter import RoboticsASTExporter
@@ -117,4 +121,8 @@ __all__ = [
     "OccupancyGridMap2D",
     "robotics_dubins_path",
     "robotics_occupancy_grid_update",
+    "RapidlyExploringRandomTreeStar3D",
+    "DynamicWindowApproachDWA",
+    "robotics_rrt_star_3d",
+    "robotics_dwa_velocity",
 ]
