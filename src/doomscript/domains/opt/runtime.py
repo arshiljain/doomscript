@@ -2674,6 +2674,328 @@ def opt_cma_es_optimize(
     ))
 
 
+class NelderMeadSimplexOptimizer:
+    """Direct search Nelder-Mead Downhill Simplex Optimization Algorithm.
+
+    Solves unconstrained continuous non-linear minimization problems without requiring
+    derivatives using geometric simplex reflection, expansion, contraction, and shrink operations.
+    """
+
+    @classmethod
+    def _eval(cls, func: Any, x: List[float]) -> float:
+        if callable(func):
+            return float(func(x))
+        if isinstance(func, str):
+            env = {"math": math}
+            for i, val in enumerate(x):
+                env[f"x{i}"] = val
+            env["x"] = list(x)
+            expr = func.replace("^", "**")
+            return float(eval(expr, env))
+        return 0.0
+
+    @classmethod
+    def minimize(
+        cls,
+        objective: Any,
+        initial_point: List[float],
+        step_size: float = 1.0,
+        tol: float = 1e-6,
+        max_iter: int = 250,
+        alpha: float = 1.0,   # Reflection
+        gamma: float = 2.0,   # Expansion
+        rho: float = 0.5,     # Contraction
+        sigma: float = 0.5,   # Shrink
+    ) -> Dict[str, Any]:
+        """Minimizes objective starting from initial_point."""
+        n = len(initial_point)
+        # 1. Initialize simplex with n+1 vertices
+        simplex: List[List[float]] = [list(initial_point)]
+        for i in range(n):
+            vertex = list(initial_point)
+            vertex[i] += step_size if vertex[i] == 0.0 else vertex[i] * 0.05 + step_size * 0.1
+            simplex.append(vertex)
+
+        values = [cls._eval(objective, v) for v in simplex]
+        iterations = 0
+
+        for it in range(max_iter):
+            iterations += 1
+            # Sort simplex vertices by objective value ascending
+            order = sorted(range(n + 1), key=lambda idx: values[idx])
+            simplex = [simplex[idx] for idx in order]
+            values = [values[idx] for idx in order]
+
+            f_best = values[0]
+            f_worst = values[-1]
+            f_second_worst = values[-2]
+
+            # Check convergence: simplex standard deviation
+            mean_f = sum(values) / (n + 1)
+            std_f = math.sqrt(sum((v - mean_f) ** 2 for v in values) / (n + 1))
+            if std_f < tol:
+                break
+
+            # Centroid of best n vertices (excluding worst)
+            x0 = [sum(simplex[i][d] for i in range(n)) / n for d in range(n)]
+
+            # 2. Reflection
+            xr = [x0[d] + alpha * (x0[d] - simplex[-1][d]) for d in range(n)]
+            fr = cls._eval(objective, xr)
+
+            if f_best <= fr < f_second_worst:
+                simplex[-1] = xr
+                values[-1] = fr
+                continue
+
+            # 3. Expansion
+            if fr < f_best:
+                xe = [x0[d] + gamma * (xr[d] - x0[d]) for d in range(n)]
+                fe = cls._eval(objective, xe)
+                if fe < fr:
+                    simplex[-1] = xe
+                    values[-1] = fe
+                else:
+                    simplex[-1] = xr
+                    values[-1] = fr
+                continue
+
+            # 4. Contraction
+            if fr < f_worst:
+                # Outside contraction
+                xc = [x0[d] + rho * (xr[d] - x0[d]) for d in range(n)]
+                fc = cls._eval(objective, xc)
+                if fc <= fr:
+                    simplex[-1] = xc
+                    values[-1] = fc
+                    continue
+            else:
+                # Inside contraction
+                xc = [x0[d] - rho * (x0[d] - simplex[-1][d]) for d in range(n)]
+                fc = cls._eval(objective, xc)
+                if fc < f_worst:
+                    simplex[-1] = xc
+                    values[-1] = fc
+                    continue
+
+            # 5. Shrink towards best vertex
+            for i in range(1, n + 1):
+                simplex[i] = [simplex[0][d] + sigma * (simplex[i][d] - simplex[0][d]) for d in range(n)]
+                values[i] = cls._eval(objective, simplex[i])
+
+        best_x = simplex[0]
+        best_val = values[0]
+        radius = max(math.hypot(*(simplex[i][d] - simplex[0][d] for d in range(n))) for i in range(1, n + 1))
+
+        return {
+            "optimal_x": [round(coord, 6) for coord in best_x],
+            "optimal_value": round(best_val, 6),
+            "iterations": iterations,
+            "converged": iterations < max_iter,
+            "simplex_radius": round(radius, 6),
+        }
+
+
+class SequentialQuadraticProgrammingSQP:
+    """Sequential Quadratic Programming (SQP) Non-Linear Constrained Optimizer.
+
+    Solves non-linear optimization problems with general non-linear equality and
+    inequality constraints using iterative quadratic subproblems and BFGS Hessian updates.
+    """
+
+    @classmethod
+    def _eval(cls, func: Any, x: List[float]) -> float:
+        if callable(func):
+            return float(func(x))
+        if isinstance(func, str):
+            env = {"math": math}
+            for i, val in enumerate(x):
+                env[f"x{i}"] = val
+            env["x"] = list(x)
+            expr = func.replace("^", "**")
+            return float(eval(expr, env))
+        return 0.0
+
+    @classmethod
+    def _gradient(cls, func: Any, x: List[float], h: float = 1e-6) -> List[float]:
+        n = len(x)
+        grad = [0.0] * n
+        for i in range(n):
+            xp = list(x)
+            xm = list(x)
+            xp[i] += h
+            xm[i] -= h
+            grad[i] = (cls._eval(func, xp) - cls._eval(func, xm)) / (2.0 * h)
+        return grad
+
+    @classmethod
+    def optimize(
+        cls,
+        objective: Any,
+        initial_point: List[float],
+        eq_constraints: Optional[List[Any]] = None,
+        ineq_constraints: Optional[List[Any]] = None,
+        max_iter: int = 50,
+        tol: float = 1e-5,
+    ) -> Dict[str, Any]:
+        """Performs SQP constrained optimization."""
+        x = [float(v) for v in initial_point]
+        n = len(x)
+        eqs = eq_constraints or []
+        ineqs = ineq_constraints or []
+
+        # Initialize Hessian approximation B as identity matrix
+        B = [[1.0 if i == j else 0.0 for j in range(n)] for i in range(n)]
+
+        converged = False
+        iterations = 0
+
+        for it in range(max_iter):
+            iterations += 1
+            f_val = cls._eval(objective, x)
+            grad_f = cls._gradient(objective, x)
+
+            # Evaluate constraints
+            h_vals = [cls._eval(c, x) for c in eqs]
+            g_vals = [cls._eval(c, x) for c in ineqs]
+
+            max_violation = max(
+                ([abs(v) for v in h_vals] + [max(0.0, v) for v in g_vals]) if (h_vals or g_vals) else [0.0]
+            )
+
+            grad_norm = math.sqrt(sum(g ** 2 for g in grad_f))
+            if grad_norm < tol and max_violation < tol:
+                converged = True
+                break
+
+            # Compute constraint gradients (Jacobian)
+            A_eq = [cls._gradient(c, x) for c in eqs]
+            A_ineq = [cls._gradient(c, x) for c in ineqs]
+
+            # Solve QP direction via active set penalty formulation
+            # Minimize 0.5 * d^T B d + grad_f^T d + penalty * (eq_viol^2 + ineq_viol^2)
+            # Analytic regularized least-squares direction d
+            penalty = 100.0
+            M = [[B[i][j] for j in range(n)] for i in range(n)]
+            rhs = [-grad_f[i] for i in range(n)]
+
+            # Add equality constraint linearization penalty: penalty * (A_eq^T A_eq) d = -penalty * A_eq^T h
+            for k in range(len(eqs)):
+                ak = A_eq[k]
+                hk = h_vals[k]
+                for i in range(n):
+                    rhs[i] -= penalty * ak[i] * hk
+                    for j in range(n):
+                        M[i][j] += penalty * ak[i] * ak[j]
+
+            # Add active inequality constraint linearization penalty
+            for k in range(len(ineqs)):
+                gk = g_vals[k]
+                ak = A_ineq[k]
+                if gk > -1e-4:  # Active or violated
+                    for i in range(n):
+                        rhs[i] -= penalty * ak[i] * max(0.0, gk)
+                        for j in range(n):
+                            M[i][j] += penalty * ak[i] * ak[j]
+
+            # Add Tikhonov regularization
+            for i in range(n):
+                M[i][i] += 1e-4
+
+            # Solve M * d = rhs via Gaussian elimination
+            aug = [M[i] + [rhs[i]] for i in range(n)]
+            d = [0.0] * n
+            for i in range(n):
+                piv = aug[i][i]
+                if abs(piv) < 1e-9:
+                    piv = 1e-4
+                for c in range(i, n + 1):
+                    aug[i][c] /= piv
+                for r in range(n):
+                    if r != i:
+                        fact = aug[r][i]
+                        for c in range(i, n + 1):
+                            aug[r][c] -= fact * aug[i][c]
+            d = [aug[i][n] for i in range(n)]
+
+            # Backtracking line search with L1 merit function
+            alpha_step = 1.0
+            merit_penalty = 10.0 + max_violation * 5.0
+            merit_x = f_val + merit_penalty * (sum(abs(v) for v in h_vals) + sum(max(0.0, v) for v in g_vals))
+
+            best_x_trial = list(x)
+            for _ in range(12):
+                x_trial = [x[i] + alpha_step * d[i] for i in range(n)]
+                f_trial = cls._eval(objective, x_trial)
+                h_trial = [cls._eval(c, x_trial) for c in eqs]
+                g_trial = [cls._eval(c, x_trial) for c in ineqs]
+                merit_trial = f_trial + merit_penalty * (
+                    sum(abs(v) for v in h_trial) + sum(max(0.0, v) for v in g_trial)
+                )
+                if merit_trial < merit_x or alpha_step < 1e-4:
+                    best_x_trial = x_trial
+                    break
+                alpha_step *= 0.5
+
+            s = [best_x_trial[i] - x[i] for i in range(n)]
+            x = best_x_trial
+
+            # BFGS update of Hessian B
+            grad_new = cls._gradient(objective, x)
+            y = [grad_new[i] - grad_f[i] for i in range(n)]
+
+            Bs = [sum(B[i][j] * s[j] for j in range(n)) for i in range(n)]
+            sBs = sum(s[i] * Bs[i] for i in range(n))
+            sy = sum(s[i] * y[i] for i in range(n))
+
+            if sy > 1e-6 and sBs > 1e-6:
+                for i in range(n):
+                    for j in range(n):
+                        B[i][j] += (y[i] * y[j]) / sy - (Bs[i] * Bs[j]) / sBs
+
+        final_f = cls._eval(objective, x)
+        final_h = [round(cls._eval(c, x), 5) for c in eqs]
+        final_g = [round(cls._eval(c, x), 5) for c in ineqs]
+        max_viol = max(([abs(v) for v in final_h] + [max(0.0, v) for v in final_g]) if (final_h or final_g) else [0.0])
+
+        return {
+            "optimal_x": [round(val, 6) for val in x],
+            "optimal_value": round(final_f, 6),
+            "equality_violations": final_h,
+            "inequality_violations": final_g,
+            "max_constraint_violation": round(max_viol, 6),
+            "iterations": iterations,
+            "converged": max_viol < 0.05 and iterations < max_iter,
+        }
+
+
+def opt_nelder_mead_minimize(
+    objective: Any,
+    initial_point: List[float],
+    step_size: float = 1.0,
+    tol: float = 1e-6,
+    max_iter: int = 250,
+) -> Record:
+    """Minimizes continuous objective via Nelder-Mead simplex algorithm."""
+    return Record(NelderMeadSimplexOptimizer.minimize(
+        objective, initial_point, step_size=step_size, tol=tol, max_iter=max_iter
+    ))
+
+
+def opt_sqp_optimize(
+    objective: Any,
+    initial_point: List[float],
+    eq_constraints: Optional[List[Any]] = None,
+    ineq_constraints: Optional[List[Any]] = None,
+    max_iter: int = 50,
+    tol: float = 1e-5,
+) -> Record:
+    """Solves non-linear constrained optimization via Sequential Quadratic Programming (SQP)."""
+    return Record(SequentialQuadraticProgrammingSQP.optimize(
+        objective, initial_point, eq_constraints=eq_constraints, ineq_constraints=ineq_constraints, max_iter=max_iter, tol=tol
+    ))
+
+
 
 
 

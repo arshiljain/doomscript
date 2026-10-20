@@ -359,6 +359,34 @@ class OptDomainParser(DomainParser):
             g_val = gen.strip() if gen else "40"
             return f"set {target} to opt_cma_es_optimize({obj}, {pt}, initial_sigma={s_val}, max_generations={g_val})"
 
+        # minimize nelder mead <objective> from <initial_point> [step <step>] [tol <tol>] into <target>
+        m_nm = re.match(
+            r"^minimize\s+nelder\s+mead\s+(.+?)\s+from\s+(.+?)(?:\s+step\s+(.+?))?(?:\s+tol\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_nm:
+            obj, pt, step, tol, target = m_nm.group(1).strip(), m_nm.group(2).strip(), m_nm.group(3), m_nm.group(4), m_nm.group(5).strip()
+            if not (obj.startswith('"') or obj.startswith("'") or obj.isidentifier()):
+                obj = f'"{obj}"'
+            step_arg = f", step_size={step.strip()}" if step else ""
+            tol_arg = f", tol={tol.strip()}" if tol else ""
+            return f"set {target} to opt_nelder_mead_minimize({obj}, {pt}{step_arg}{tol_arg})"
+
+        # optimize sqp <objective> from <initial_point> [eq <eq>] [ineq <ineq>] into <target>
+        m_sqp = re.match(
+            r"^optimize\s+sqp\s+(.+?)\s+from\s+(.+?)(?:\s+eq\s+(.+?))?(?:\s+ineq\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_sqp:
+            obj, pt, eq, ineq, target = m_sqp.group(1).strip(), m_sqp.group(2).strip(), m_sqp.group(3), m_sqp.group(4), m_sqp.group(5).strip()
+            if not (obj.startswith('"') or obj.startswith("'") or obj.isidentifier()):
+                obj = f'"{obj}"'
+            eq_arg = f", eq_constraints={eq.strip()}" if eq else ""
+            ineq_arg = f", ineq_constraints={ineq.strip()}" if ineq else ""
+            return f"set {target} to opt_sqp_optimize({obj}, {pt}{eq_arg}{ineq_arg})"
+
         return None
 
     def parse_block(

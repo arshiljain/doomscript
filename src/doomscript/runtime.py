@@ -4386,6 +4386,9 @@ from doomscript.domains.opt.runtime import (
     opt_nelder_mead_minimize,
     opt_interior_point_solve_lp,
     opt_cma_es_optimize,
+    NelderMeadSimplexOptimizer,
+    SequentialQuadraticProgrammingSQP,
+    opt_sqp_optimize,
 )
 
 
