@@ -87,6 +87,26 @@ class MetricsDomainParser(DomainParser):
             kde, pts, target = m_kde_ev.group(1).strip(), m_kde_ev.group(2).strip(), m_kde_ev.group(3).strip()
             return f"set {target} to metrics_kde_evaluate({kde}, {pts})"
 
+        # calculate wasserstein distance between <u> and <v> into <target>
+        m_w1 = re.match(
+            r"^calculate\s+wasserstein\s+distance\s+between\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_w1:
+            u, v, target = m_w1.group(1).strip(), m_w1.group(2).strip(), m_w1.group(3).strip()
+            return f"set {target} to metrics_wasserstein_distance_1d({u}, {v})"
+
+        # calculate multiclass roc auc true <y_true> probs <y_probs> classes <k> into <target>
+        m_auc = re.match(
+            r"^calculate\s+multiclass\s+roc\s+auc\s+true\s+(.+?)\s+probs\s+(.+?)\s+classes\s+(\d+)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_auc:
+            y_t, probs, k, target = m_auc.group(1).strip(), m_auc.group(2).strip(), m_auc.group(3).strip(), m_auc.group(4).strip()
+            return f"set {target} to metrics_multiclass_roc_auc({y_t}, {probs}, {k})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

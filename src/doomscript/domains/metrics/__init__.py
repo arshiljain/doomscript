@@ -37,6 +37,10 @@ from doomscript.domains.metrics.runtime import (
     metrics_kolmogorov_smirnov_2samp,
     metrics_kde_create,
     metrics_kde_evaluate,
+    WassersteinDistance1D,
+    MulticlassROCAUCIntegrator,
+    metrics_wasserstein_distance_1d,
+    metrics_multiclass_roc_auc,
 )
 from doomscript.domains.metrics.parser import MetricsDomainParser
 from doomscript.domains.metrics.exporter import MetricsASTExporter
@@ -124,4 +128,8 @@ __all__ = [
     "metrics_kolmogorov_smirnov_2samp",
     "metrics_kde_create",
     "metrics_kde_evaluate",
+    "WassersteinDistance1D",
+    "MulticlassROCAUCIntegrator",
+    "metrics_wasserstein_distance_1d",
+    "metrics_multiclass_roc_auc",
 ]

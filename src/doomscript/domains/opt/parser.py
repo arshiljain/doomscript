@@ -293,6 +293,34 @@ class OptDomainParser(DomainParser):
             arr, target = m_pk.group(1).strip(), m_pk.group(2).strip()
             return f"set {target} to opt_binary_search_peak_1d({arr})"
 
+        # optimize particle swarm objective <obj> bounds <bounds> [with particles <n>] [with iterations <max_it>] into <target>
+        m_pso = re.match(
+            r"^optimize\s+particle\s+swarm\s+objective\s+(.+?)\s+bounds\s+(.+?)(?:\s+with\s+particles\s+(\d+))?(?:\s+with\s+iterations\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_pso:
+            obj, bnds = m_pso.group(1).strip(), m_pso.group(2).strip()
+            if not (obj.startswith('"') or obj.startswith("'")):
+                obj = f'"{obj}"'
+            n_part = m_pso.group(3) if m_pso.group(3) else "30"
+            max_it = m_pso.group(4) if m_pso.group(4) else "50"
+            target = m_pso.group(5).strip()
+            return f"set {target} to opt_particle_swarm_optimize({obj}, {bnds}, num_particles={n_part}, max_iterations={max_it})"
+
+        # solve quadratic program active set q <q> c <c> [with ineq_matrix <a>] [with ineq_vec <b>] into <target>
+        m_qp = re.match(
+            r"^solve\s+quadratic\s+program\s+active\s+set\s+q\s+(.+?)\s+c\s+(.+?)(?:\s+with\s+ineq_matrix\s+(.+?))?(?:\s+with\s+ineq_vec\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_qp:
+            q, c = m_qp.group(1).strip(), m_qp.group(2).strip()
+            a_ineq = m_qp.group(3).strip() if m_qp.group(3) else "None"
+            b_ineq = m_qp.group(4).strip() if m_qp.group(4) else "None"
+            target = m_qp.group(5).strip()
+            return f"set {target} to opt_solve_quadratic_program_active_set({q}, {c}, ineq_matrix={a_ineq}, ineq_vec={b_ineq})"
+
         return None
 
     def parse_block(

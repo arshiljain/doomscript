@@ -671,3 +671,160 @@ def metrics_kde_evaluate(kde: Any, points: List[float]) -> List[float]:
     inst = kde.instance if hasattr(kde, "instance") else kde
     return inst.evaluate_grid(points)
 
+
+class WassersteinDistance1D:
+    """Computes first Wasserstein distance (Earth Mover's Distance) between 1D empirical distributions."""
+
+    @classmethod
+    def compute(
+        cls,
+        u_samples: List[float],
+        v_samples: List[float],
+        u_weights: Optional[List[float]] = None,
+        v_weights: Optional[List[float]] = None,
+    ) -> Dict[str, Any]:
+        u = [float(x) for x in u_samples]
+        v = [float(x) for x in v_samples]
+        n_u = len(u)
+        n_v = len(v)
+        if n_u == 0 or n_v == 0:
+            return {"wasserstein_distance": 0.0, "samples_u_count": n_u, "samples_v_count": n_v}
+
+        u_sorted = sorted(u)
+        v_sorted = sorted(v)
+
+        if n_u == n_v and (u_weights is None and v_weights is None):
+            dist = sum(abs(u_sorted[i] - v_sorted[i]) for i in range(n_u)) / n_u
+        else:
+            all_vals = sorted(list(set(u + v)))
+            w_u = [1.0 / n_u] * n_u if u_weights is None else [float(w) / sum(u_weights) for w in u_weights]
+            w_v = [1.0 / n_v] * n_v if v_weights is None else [float(w) / sum(v_weights) for w in v_weights]
+
+            u_pairs = sorted(zip(u, w_u), key=lambda item: item[0])
+            v_pairs = sorted(zip(v, w_v), key=lambda item: item[0])
+
+            dist = 0.0
+            idx_u = 0
+            idx_v = 0
+            cum_u = 0.0
+            cum_v = 0.0
+
+            for i in range(len(all_vals) - 1):
+                x_curr = all_vals[i]
+                x_next = all_vals[i + 1]
+                dx = x_next - x_curr
+
+                while idx_u < n_u and u_pairs[idx_u][0] <= x_curr:
+                    cum_u += u_pairs[idx_u][1]
+                    idx_u += 1
+                while idx_v < n_v and v_pairs[idx_v][0] <= x_curr:
+                    cum_v += v_pairs[idx_v][1]
+                    idx_v += 1
+
+                dist += abs(cum_u - cum_v) * dx
+
+        return {
+            "wasserstein_distance": round(dist, 6),
+            "samples_u_count": n_u,
+            "samples_v_count": n_v,
+        }
+
+
+class MulticlassROCAUCIntegrator:
+    """Computes One-vs-Rest ROC curves, trapezoidal AUC integration, and macro/micro averages."""
+
+    @classmethod
+    def compute(
+        cls,
+        y_true: List[int],
+        y_prob_matrix: List[List[float]],
+        num_classes: int,
+    ) -> Dict[str, Any]:
+        k = int(num_classes)
+        n = len(y_true)
+        if n == 0 or k <= 1:
+            return {"macro_auc": 0.0, "micro_auc": 0.0, "classes_count": k, "per_class_auc": []}
+
+        y_t = [int(y) for y in y_true]
+        probs = [[float(p) for p in row] for row in y_prob_matrix]
+
+        def binary_roc_auc(binary_labels: List[int], scores: List[float]) -> Tuple[float, List[Dict[str, float]]]:
+            paired = sorted(zip(scores, binary_labels), key=lambda item: item[0], reverse=True)
+            pos_count = sum(binary_labels)
+            neg_count = len(binary_labels) - pos_count
+            if pos_count == 0 or neg_count == 0:
+                return 0.5, []
+
+            tp = 0
+            fp = 0
+            roc_points = [{"fpr": 0.0, "tpr": 0.0}]
+            auc = 0.0
+            prev_fpr = 0.0
+            prev_tpr = 0.0
+
+            for s, label in paired:
+                if label == 1:
+                    tp += 1
+                else:
+                    fp += 1
+                fpr = fp / neg_count
+                tpr = tp / pos_count
+                auc += (fpr - prev_fpr) * (tpr + prev_tpr) / 2.0
+                prev_fpr = fpr
+                prev_tpr = tpr
+                roc_points.append({"fpr": round(fpr, 4), "tpr": round(tpr, 4)})
+
+            return max(0.0, min(1.0, auc)), roc_points
+
+        per_class_results = []
+        class_aucs = []
+
+        for c in range(k):
+            bin_labels = [1 if y == c else 0 for y in y_t]
+            c_scores = [probs[i][c] if c < len(probs[i]) else 0.0 for i in range(n)]
+            c_auc, pts = binary_roc_auc(bin_labels, c_scores)
+            class_aucs.append(c_auc)
+            per_class_results.append({
+                "class_index": c,
+                "auc": round(c_auc, 4),
+                "num_positive": sum(bin_labels),
+            })
+
+        macro_auc = sum(class_aucs) / k if k > 0 else 0.0
+
+        all_labels = []
+        all_scores = []
+        for c in range(k):
+            for i in range(n):
+                all_labels.append(1 if y_t[i] == c else 0)
+                all_scores.append(probs[i][c] if c < len(probs[i]) else 0.0)
+
+        micro_auc, _ = binary_roc_auc(all_labels, all_scores)
+
+        return {
+            "classes_count": k,
+            "samples_count": n,
+            "macro_auc": round(macro_auc, 4),
+            "micro_auc": round(micro_auc, 4),
+            "per_class_auc": [Record(r) for r in per_class_results],
+        }
+
+
+def metrics_wasserstein_distance_1d(
+    u_samples: List[float],
+    v_samples: List[float],
+    u_weights: Optional[List[float]] = None,
+    v_weights: Optional[List[float]] = None,
+) -> Any:
+    """Computes first Wasserstein distance (Earth Mover's Distance) between 1D distributions."""
+    return Record(WassersteinDistance1D.compute(u_samples, v_samples, u_weights=u_weights, v_weights=v_weights))
+
+
+def metrics_multiclass_roc_auc(
+    y_true: List[int],
+    y_prob_matrix: List[List[float]],
+    num_classes: int,
+) -> Any:
+    """Computes multi-class One-vs-Rest ROC curve and macro/micro AUC scores."""
+    return Record(MulticlassROCAUCIntegrator.compute(y_true, y_prob_matrix, num_classes))
+

@@ -44,6 +44,10 @@ from doomscript.domains.math3d.runtime import (
     math3d_frustum_cull_scene,
     math3d_bvh_build,
     math3d_bvh_raycast,
+    DualQuaternionTransform,
+    DualQuaternionScLERP,
+    math3d_dual_quaternion_transform,
+    math3d_dual_quaternion_sclerp,
 )
 from doomscript.domains.math3d.parser import Math3DDomainParser
 from doomscript.domains.math3d.exporter import Math3DASTExporter
@@ -194,4 +198,8 @@ __all__ = [
     "math3d_frustum_cull_scene",
     "math3d_bvh_build",
     "math3d_bvh_raycast",
+    "DualQuaternionTransform",
+    "DualQuaternionScLERP",
+    "math3d_dual_quaternion_transform",
+    "math3d_dual_quaternion_sclerp",
 ]

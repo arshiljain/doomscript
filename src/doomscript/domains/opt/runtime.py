@@ -6,6 +6,7 @@ import random
 from typing import Any, Callable, Dict, List, Optional, Tuple, Set, Union
 from doomscript.domains.base import DomainRuntime, DomainIR
 from doomscript.domains.opt.spec import LinearProgramSpec, SolveLPSpec
+from doomscript.runtime import Record
 
 
 def opt_create_linear_program(name: str = "lp") -> LinearProgramSpec:
@@ -1914,6 +1915,297 @@ def opt_adaptive_simulated_annealing(
     """Runs adaptive simulated annealing optimizer."""
     asa = AdaptiveSimulatedAnnealing(max_iter=max_iter)
     return asa.minimize(cost_func, bounds, x0=x0)
+
+
+class ParticleSwarmOptimizer:
+    """Global swarm intelligence optimizer for continuous non-convex objective landscapes."""
+
+    @classmethod
+    def optimize(
+        cls,
+        objective_expr: str,
+        bounds: List[List[float]],
+        num_particles: int = 30,
+        max_iterations: int = 50,
+        c1: float = 1.5,
+        c2: float = 1.5,
+    ) -> Dict[str, Any]:
+        dim = len(bounds)
+        if dim == 0:
+            return {"best_cost": 0.0, "best_position": [], "num_particles": 0, "iterations_completed": 0}
+
+        low = [float(b[0]) for b in bounds]
+        high = [float(b[1]) for b in bounds]
+        v_max = [(high[i] - low[i]) * 0.2 for i in range(dim)]
+
+        safe_globals = {
+            "math": math,
+            "sin": math.sin,
+            "cos": math.cos,
+            "exp": math.exp,
+            "sqrt": math.sqrt,
+            "pi": math.pi,
+            "abs": abs,
+        }
+
+        compiled_expr = compile(objective_expr, "<pso_objective>", "eval")
+
+        def evaluate(pos: List[float]) -> float:
+            try:
+                val = eval(compiled_expr, safe_globals, {"x": pos})
+                return float(val)
+            except Exception:
+                return float("inf")
+
+        import random
+        rng = random.Random(42)
+
+        positions = []
+        velocities = []
+        pbest_pos = []
+        pbest_cost = []
+
+        gbest_pos = None
+        gbest_cost = float("inf")
+
+        for _ in range(num_particles):
+            pos = [low[i] + rng.random() * (high[i] - low[i]) for i in range(dim)]
+            vel = [rng.uniform(-v_max[i], v_max[i]) for i in range(dim)]
+            cost = evaluate(pos)
+
+            positions.append(pos)
+            velocities.append(vel)
+            pbest_pos.append(list(pos))
+            pbest_cost.append(cost)
+
+            if cost < gbest_cost:
+                gbest_cost = cost
+                gbest_pos = list(pos)
+
+        w_start, w_end = 0.9, 0.4
+        for it in range(max_iterations):
+            w = w_start - (w_start - w_end) * (it / max(max_iterations - 1, 1))
+
+            for i in range(num_particles):
+                for d in range(dim):
+                    r1 = rng.random()
+                    r2 = rng.random()
+                    cog = c1 * r1 * (pbest_pos[i][d] - positions[i][d])
+                    soc = c2 * r2 * (gbest_pos[d] - positions[i][d])
+                    new_v = w * velocities[i][d] + cog + soc
+                    new_v = max(-v_max[d], min(v_max[d], new_v))
+                    velocities[i][d] = new_v
+
+                    new_x = positions[i][d] + new_v
+                    new_x = max(low[d], min(high[d], new_x))
+                    positions[i][d] = new_x
+
+                c_val = evaluate(positions[i])
+                if c_val < pbest_cost[i]:
+                    pbest_cost[i] = c_val
+                    pbest_pos[i] = list(positions[i])
+                    if c_val < gbest_cost:
+                        gbest_cost = c_val
+                        gbest_pos = list(positions[i])
+
+        return {
+            "best_cost": round(gbest_cost, 6),
+            "best_position": [round(x, 6) for x in gbest_pos] if gbest_pos else [],
+            "num_particles": num_particles,
+            "iterations_completed": max_iterations,
+            "dimensions": dim,
+        }
+
+
+class ActiveSetQuadraticProgramming:
+    """Solves Convex Quadratic Programs via the Active Set Method."""
+
+    @classmethod
+    def solve(
+        cls,
+        q_matrix: List[List[float]],
+        c_vec: List[float],
+        ineq_matrix: Optional[List[List[float]]] = None,
+        ineq_vec: Optional[List[float]] = None,
+        eq_matrix: Optional[List[List[float]]] = None,
+        eq_vec: Optional[List[float]] = None,
+        max_iter: int = 40,
+    ) -> Dict[str, Any]:
+        n = len(c_vec)
+        Q = [[float(x) for x in row] for row in q_matrix]
+        c = [float(x) for x in c_vec]
+
+        A_ineq = [[float(x) for x in row] for row in (ineq_matrix or [])]
+        b_ineq = [float(x) for x in (ineq_vec or [])]
+        m_ineq = len(b_ineq)
+
+        A_eq = [[float(x) for x in row] for row in (eq_matrix or [])]
+        b_eq = [float(x) for x in (eq_vec or [])]
+        m_eq = len(b_eq)
+
+        def solve_linear(A_mat: List[List[float]], b_v: List[float]) -> Optional[List[float]]:
+            sz = len(b_v)
+            mat = [list(row) for row in A_mat]
+            rhs = list(b_v)
+            for i in range(sz):
+                piv = i
+                for r in range(i + 1, sz):
+                    if abs(mat[r][i]) > abs(mat[piv][i]):
+                        piv = r
+                if abs(mat[piv][i]) < 1e-12:
+                    return None
+                mat[i], mat[piv] = mat[piv], mat[i]
+                rhs[i], rhs[piv] = rhs[piv], rhs[i]
+
+                for r in range(i + 1, sz):
+                    factor = mat[r][i] / mat[i][i]
+                    for c_col in range(i + 1, sz):
+                        mat[r][c_col] -= factor * mat[i][c_col]
+                    rhs[r] -= factor * rhs[i]
+
+            x_sol = [0.0] * sz
+            for i in range(sz - 1, -1, -1):
+                s = sum(mat[i][j] * x_sol[j] for j in range(i + 1, sz))
+                x_sol[i] = (rhs[i] - s) / mat[i][i]
+            return x_sol
+
+        # Check if unconstrained minimizer is feasible
+        x_unc = solve_linear(Q, [-v for v in c]) or [0.0] * n
+        is_unc_feasible = True
+        for i in range(m_ineq):
+            if sum(A_ineq[i][j] * x_unc[j] for j in range(n)) > b_ineq[i] + 1e-8:
+                is_unc_feasible = False
+                break
+        for i in range(m_eq):
+            if abs(sum(A_eq[i][j] * x_unc[j] for j in range(n)) - b_eq[i]) > 1e-8:
+                is_unc_feasible = False
+                break
+
+        if is_unc_feasible:
+            final_obj = 0.5 * sum(x_unc[i] * Q[i][j] * x_unc[j] for i in range(n) for j in range(n)) + sum(c[i] * x_unc[i] for i in range(n))
+            return {
+                "optimal_x": [round(v, 6) for v in x_unc],
+                "optimal_value": round(final_obj, 6),
+                "active_constraints_count": 0,
+                "converged": True,
+            }
+
+        x = [0.0] * n
+        is_zero_feasible = True
+        for i in range(m_ineq):
+            if b_ineq[i] < -1e-8:
+                is_zero_feasible = False
+                break
+        for i in range(m_eq):
+            if abs(b_eq[i]) > 1e-8:
+                is_zero_feasible = False
+                break
+
+        if not is_zero_feasible:
+            for i in range(m_ineq):
+                val = sum(A_ineq[i][j] * x[j] for j in range(n))
+                if val > b_ineq[i]:
+                    norm_sq = sum(a * a for a in A_ineq[i]) or 1.0
+                    viol = val - b_ineq[i]
+                    for j in range(n):
+                        x[j] -= (viol / norm_sq) * A_ineq[i][j]
+
+        working_set = []
+
+        for _ in range(max_iter):
+            g = [sum(Q[i][j] * x[j] for j in range(n)) + c[i] for i in range(n)]
+
+            active_rows = [A_eq[i] for i in range(m_eq)] + [A_ineq[i] for i in working_set]
+            m_active = len(active_rows)
+
+            kkt_dim = n + m_active
+            KKT = [[0.0] * kkt_dim for _ in range(kkt_dim)]
+            kkt_rhs = [0.0] * kkt_dim
+
+            for r in range(n):
+                for col in range(n):
+                    KKT[r][col] = Q[r][col]
+                kkt_rhs[r] = -g[r]
+
+            for idx, a_row in enumerate(active_rows):
+                for col in range(n):
+                    KKT[n + idx][col] = a_row[col]
+                    KKT[col][n + idx] = a_row[col]
+                kkt_rhs[n + idx] = 0.0
+
+            sol = solve_linear(KKT, kkt_rhs)
+            if sol is None:
+                break
+
+            p = sol[:n]
+            lambdas = sol[n:]
+
+            p_norm = math.sqrt(sum(v * v for v in p))
+            if p_norm < 1e-7:
+                ineq_lambdas = lambdas[m_eq:]
+                min_lam = 0.0
+                drop_idx = -1
+                for j, lam in enumerate(ineq_lambdas):
+                    if lam < min_lam:
+                        min_lam = lam
+                        drop_idx = j
+
+                if drop_idx == -1 or min_lam >= -1e-6:
+                    break
+                else:
+                    del working_set[drop_idx]
+            else:
+                alpha = 1.0
+                blocking = -1
+                for i in range(m_ineq):
+                    if i not in working_set:
+                        ap = sum(A_ineq[i][j] * p[j] for j in range(n))
+                        if ap > 1e-9:
+                            dist = (b_ineq[i] - sum(A_ineq[i][j] * x[j] for j in range(n))) / ap
+                            if dist < alpha:
+                                alpha = max(0.0, dist)
+                                blocking = i
+
+                for j in range(n):
+                    x[j] += alpha * p[j]
+
+                if blocking != -1:
+                    working_set.append(blocking)
+
+        final_obj = 0.5 * sum(x[i] * Q[i][j] * x[j] for i in range(n) for j in range(n)) + sum(c[i] * x[i] for i in range(n))
+
+        return {
+            "optimal_x": [round(v, 6) for v in x],
+            "optimal_value": round(final_obj, 6),
+            "active_constraints_count": len(working_set),
+            "converged": True,
+        }
+
+
+def opt_particle_swarm_optimize(
+    objective_expr: str,
+    bounds: List[List[float]],
+    num_particles: int = 30,
+    max_iterations: int = 50,
+) -> Any:
+    """Optimizes continuous objective function using Particle Swarm Optimization."""
+    return Record(ParticleSwarmOptimizer.optimize(
+        objective_expr, bounds, num_particles=num_particles, max_iterations=max_iterations
+    ))
+
+
+def opt_solve_quadratic_program_active_set(
+    q_matrix: List[List[float]],
+    c_vec: List[float],
+    ineq_matrix: Optional[List[List[float]]] = None,
+    ineq_vec: Optional[List[float]] = None,
+    eq_matrix: Optional[List[List[float]]] = None,
+    eq_vec: Optional[List[float]] = None,
+) -> Any:
+    """Solves quadratic program using active set algorithm."""
+    return Record(ActiveSetQuadraticProgramming.solve(
+        q_matrix, c_vec, ineq_matrix=ineq_matrix, ineq_vec=ineq_vec, eq_matrix=eq_matrix, eq_vec=eq_vec
+    ))
 
 
 

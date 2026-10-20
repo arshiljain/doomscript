@@ -44,6 +44,10 @@ from doomscript.domains.opt.runtime import (
     opt_solve_interior_point,
     opt_branch_and_bound_milp,
     opt_adaptive_simulated_annealing,
+    ParticleSwarmOptimizer,
+    ActiveSetQuadraticProgramming,
+    opt_particle_swarm_optimize,
+    opt_solve_quadratic_program_active_set,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.opt.exporter import OptASTExporter
@@ -73,6 +77,8 @@ class OptDomain(DomainContract):
     ]
 
     def can_handle_line(self, line: str) -> bool:
+        if self.parser.parse_inspect(line, 0) is not None or self.parser.parse_operation(line, 0) is not None:
+            return True
         s = line.strip().lower()
         return (
             s.startswith("create linear program ")
@@ -168,4 +174,8 @@ __all__ = [
     "opt_solve_interior_point",
     "opt_branch_and_bound_milp",
     "opt_adaptive_simulated_annealing",
+    "ParticleSwarmOptimizer",
+    "ActiveSetQuadraticProgramming",
+    "opt_particle_swarm_optimize",
+    "opt_solve_quadratic_program_active_set",
 ]

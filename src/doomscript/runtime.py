@@ -3488,6 +3488,10 @@ from doomscript.domains.math3d.runtime import (
     math3d_frustum_cull_scene,
     math3d_bvh_build,
     math3d_bvh_raycast,
+    DualQuaternionTransform,
+    DualQuaternionScLERP,
+    math3d_dual_quaternion_transform,
+    math3d_dual_quaternion_sclerp,
 )
 math3d_create_vec3 = Vec3
 from doomscript.domains.math3d import (
@@ -3880,6 +3884,10 @@ from doomscript.domains.metrics.runtime import (
     metrics_kolmogorov_smirnov_2samp,
     metrics_kde_create,
     metrics_kde_evaluate,
+    WassersteinDistance1D,
+    MulticlassROCAUCIntegrator,
+    metrics_wasserstein_distance_1d,
+    metrics_multiclass_roc_auc,
 )
 
 from doomscript.domains.spatial_audio.runtime import (
@@ -3934,6 +3942,10 @@ from doomscript.domains.dsa.runtime import (
     dsa_fenwick_tree_2d,
     dsa_bloom_filter,
     dsa_counting_bloom_filter,
+    FibonacciHeapTree,
+    SplayTreeSelfBalancing,
+    dsa_fibonacci_heap_ops,
+    dsa_splay_tree_ops,
 )
 
 from doomscript.domains.ml.runtime import (
@@ -3980,6 +3992,10 @@ from doomscript.domains.graph.runtime import (
     graph_bipartite_matching,
     graph_find_bridges_and_cuts,
     graph_eulerian_trail,
+    PushRelabelMaxFlow,
+    JohnsonsAllPairsShortestPaths,
+    graph_push_relabel_max_flow,
+    graph_johnson_all_pairs_paths,
 )
 
 from doomscript.domains.net.runtime import (
@@ -4040,6 +4056,10 @@ from doomscript.domains.opt.runtime import (
     opt_solve_interior_point,
     opt_branch_and_bound_milp,
     opt_adaptive_simulated_annealing,
+    ParticleSwarmOptimizer,
+    ActiveSetQuadraticProgramming,
+    opt_particle_swarm_optimize,
+    opt_solve_quadratic_program_active_set,
 )
 
 

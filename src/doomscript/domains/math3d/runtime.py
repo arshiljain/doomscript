@@ -1283,3 +1283,163 @@ def math3d_bvh_raycast(bvh: Any, origin: List[float], direction: List[float]) ->
     return Record(tree.intersect_ray(origin, direction))
 
 
+class DualQuaternionTransform:
+    """Rigid 3D SE(3) transformation representation using unit dual quaternions."""
+
+    @staticmethod
+    def _quat_mul(q1: Tuple[float, float, float, float], q2: Tuple[float, float, float, float]) -> Tuple[float, float, float, float]:
+        w1, x1, y1, z1 = q1
+        w2, x2, y2, z2 = q2
+        return (
+            w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
+            w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
+            w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
+            w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
+        )
+
+    @staticmethod
+    def _quat_conj(q: Tuple[float, float, float, float]) -> Tuple[float, float, float, float]:
+        w, x, y, z = q
+        return (w, -x, -y, -z)
+
+    @staticmethod
+    def _quat_norm(q: Tuple[float, float, float, float]) -> float:
+        w, x, y, z = q
+        return math.sqrt(w * w + x * x + y * y + z * z)
+
+    @classmethod
+    def create(cls, translation: List[float], rotation_quat: List[float]) -> Dict[str, Any]:
+        rw, rx, ry, rz = [float(x) for x in rotation_quat]
+        r_norm = math.sqrt(rw * rw + rx * rx + ry * ry + rz * rz) or 1.0
+        qr = (rw / r_norm, rx / r_norm, ry / r_norm, rz / r_norm)
+
+        tx, ty, tz = [float(x) for x in translation[:3]]
+        t_quat = (0.0, tx, ty, tz)
+
+        t_mul_qr = cls._quat_mul(t_quat, qr)
+        qd = tuple(0.5 * c for c in t_mul_qr)
+
+        return {
+            "qr": [round(c, 6) for c in qr],
+            "qd": [round(c, 6) for c in qd],
+            "translation": [round(tx, 6), round(ty, 6), round(tz, 6)],
+        }
+
+    @classmethod
+    def transform_points(
+        cls,
+        translation: List[float],
+        rotation_quat: List[float],
+        points: List[List[float]],
+    ) -> Dict[str, Any]:
+        dq = cls.create(translation, rotation_quat)
+        qr = tuple(dq["qr"])
+        tx, ty, tz = dq["translation"]
+        qr_conj = cls._quat_conj(qr)
+
+        transformed = []
+        for pt in points:
+            px, py, pz = [float(x) for x in pt[:3]]
+            p_quat = (0.0, px, py, pz)
+            rotated = cls._quat_mul(cls._quat_mul(qr, p_quat), qr_conj)
+            p_prime = [
+                round(rotated[1] + tx, 6),
+                round(rotated[2] + ty, 6),
+                round(rotated[3] + tz, 6),
+            ]
+            transformed.append(p_prime)
+
+        angle = 2.0 * math.acos(max(-1.0, min(1.0, qr[0])))
+        sin_half = math.sin(angle / 2.0)
+        if abs(sin_half) > 1e-6:
+            axis = [round(qr[1] / sin_half, 4), round(qr[2] / sin_half, 4), round(qr[3] / sin_half, 4)]
+            pitch = round(tx * axis[0] + ty * axis[1] + tz * axis[2], 4)
+        else:
+            axis = [1.0, 0.0, 0.0]
+            pitch = round(math.sqrt(tx * tx + ty * ty + tz * tz), 4)
+
+        return {
+            "dual_quaternion": dq,
+            "screw_angle_rad": round(angle, 4),
+            "screw_axis": axis,
+            "screw_pitch": pitch,
+            "points_count": len(transformed),
+            "transformed_points": transformed,
+        }
+
+
+class DualQuaternionScLERP:
+    """Dual Quaternion Spherical Linear Interpolation (ScLERP) for smooth SE(3) transforms."""
+
+    @classmethod
+    def interpolate(
+        cls,
+        trans1: List[float],
+        rot1: List[float],
+        trans2: List[float],
+        rot2: List[float],
+        t: float,
+    ) -> Dict[str, Any]:
+        t_param = max(0.0, min(1.0, float(t)))
+        w1, x1, y1, z1 = [float(x) for x in rot1]
+        w2, x2, y2, z2 = [float(x) for x in rot2]
+
+        dot = w1 * w2 + x1 * x2 + y1 * y2 + z1 * z2
+        if dot < 0.0:
+            w2, x2, y2, z2 = -w2, -x2, -y2, -z2
+            dot = -dot
+
+        if dot > 0.9995:
+            w = w1 + t_param * (w2 - w1)
+            x = x1 + t_param * (x2 - x1)
+            y = y1 + t_param * (y2 - y1)
+            z = z1 + t_param * (z2 - z1)
+        else:
+            theta_0 = math.acos(dot)
+            theta = theta_0 * t_param
+            sin_theta = math.sin(theta)
+            sin_theta_0 = math.sin(theta_0)
+            s0 = math.cos(theta) - dot * sin_theta / sin_theta_0
+            s1 = sin_theta / sin_theta_0
+            w = s0 * w1 + s1 * w2
+            x = s0 * x1 + s1 * x2
+            y = s0 * y1 + s1 * y2
+            z = s0 * z1 + s1 * z2
+
+        r_norm = math.sqrt(w * w + x * x + y * y + z * z) or 1.0
+        interp_rot = [round(w / r_norm, 6), round(x / r_norm, 6), round(y / r_norm, 6), round(z / r_norm, 6)]
+
+        interp_trans = [
+            round(trans1[i] + t_param * (trans2[i] - trans1[i]), 6)
+            for i in range(3)
+        ]
+
+        dq = DualQuaternionTransform.create(interp_trans, interp_rot)
+        return {
+            "t_parameter": t_param,
+            "interpolated_translation": interp_trans,
+            "interpolated_rotation": interp_rot,
+            "dual_quaternion": dq,
+        }
+
+
+def math3d_dual_quaternion_transform(
+    translation: List[float],
+    rotation_quat: List[float],
+    points: List[List[float]],
+) -> Any:
+    """Transforms 3D points using unit dual quaternion."""
+    return Record(DualQuaternionTransform.transform_points(translation, rotation_quat, points))
+
+
+def math3d_dual_quaternion_sclerp(
+    trans1: List[float],
+    rot1: List[float],
+    trans2: List[float],
+    rot2: List[float],
+    t: float,
+) -> Any:
+    """Interpolates between two rigid transforms via Dual Quaternion ScLERP."""
+    return Record(DualQuaternionScLERP.interpolate(trans1, rot1, trans2, rot2, t))
+
+

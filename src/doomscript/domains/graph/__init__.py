@@ -63,6 +63,10 @@ from doomscript.domains.graph.runtime import (
     graph_bipartite_matching,
     graph_find_bridges_and_cuts,
     graph_eulerian_trail,
+    PushRelabelMaxFlow,
+    JohnsonsAllPairsShortestPaths,
+    graph_push_relabel_max_flow,
+    graph_johnson_all_pairs_paths,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.graph.exporter import GraphASTExporter
@@ -261,5 +265,9 @@ __all__ = [
     "graph_bipartite_matching",
     "graph_find_bridges_and_cuts",
     "graph_eulerian_trail",
+    "PushRelabelMaxFlow",
+    "JohnsonsAllPairsShortestPaths",
+    "graph_push_relabel_max_flow",
+    "graph_johnson_all_pairs_paths",
 ]
 

@@ -15,6 +15,10 @@ from doomscript.domains.dsa.runtime import (
     SkipListNode,
     dsa_red_black_tree,
     dsa_skip_list,
+    FibonacciHeapTree,
+    SplayTreeSelfBalancing,
+    dsa_fibonacci_heap_ops,
+    dsa_splay_tree_ops,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.dsa.exporter import DsaASTExporter
@@ -132,6 +136,8 @@ class DsaDomain(DomainContract):
     ]
 
     def can_handle_line(self, line: str) -> bool:
+        if self.parser.parse_inspect(line, 0) is not None or self.parser.parse_operation(line, 0) is not None:
+            return True
         s = line.strip().lower()
         return (
             s.startswith("complexity of ")
@@ -323,4 +329,8 @@ __all__ = [
     "CountingBloomFilter",
     "dsa_bloom_filter",
     "dsa_counting_bloom_filter",
+    "FibonacciHeapTree",
+    "SplayTreeSelfBalancing",
+    "dsa_fibonacci_heap_ops",
+    "dsa_splay_tree_ops",
 ]

@@ -151,6 +151,26 @@ class Math3DDomainParser(DomainParser):
             origin, direction, bvh, target = m_ray_bvh.group(1).strip(), m_ray_bvh.group(2).strip(), m_ray_bvh.group(3).strip(), m_ray_bvh.group(4).strip()
             return f"set {target} to math3d_bvh_raycast({bvh}, {origin}, {direction})"
 
+        # transform points with dual quaternion translation <trans> rotation <rot> points <pts> into <target>
+        m_dq_tr = re.match(
+            r"^transform\s+points\s+with\s+dual\s+quaternion\s+translation\s+(.+?)\s+rotation\s+(.+?)\s+points\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_dq_tr:
+            trans, rot, pts, target = m_dq_tr.group(1).strip(), m_dq_tr.group(2).strip(), m_dq_tr.group(3).strip(), m_dq_tr.group(4).strip()
+            return f"set {target} to math3d_dual_quaternion_transform({trans}, {rot}, {pts})"
+
+        # interpolate dual quaternions trans1 <t1> rot1 <r1> trans2 <t2> rot2 <r2> at <t> into <target>
+        m_sclerp = re.match(
+            r"^interpolate\s+dual\s+quaternions\s+trans1\s+(.+?)\s+rot1\s+(.+?)\s+trans2\s+(.+?)\s+rot2\s+(.+?)\s+at\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_sclerp:
+            t1, r1, t2, r2, t, target = m_sclerp.group(1).strip(), m_sclerp.group(2).strip(), m_sclerp.group(3).strip(), m_sclerp.group(4).strip(), m_sclerp.group(5).strip(), m_sclerp.group(6).strip()
+            return f"set {target} to math3d_dual_quaternion_sclerp({t1}, {r1}, {t2}, {r2}, {t})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

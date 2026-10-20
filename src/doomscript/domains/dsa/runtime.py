@@ -3363,3 +3363,366 @@ def dsa_counting_bloom_filter(expected_items: int = 1000, fp_rate: float = 0.01)
     return CountingBloomFilter(expected_items=expected_items, fp_rate=fp_rate)
 
 
+from doomscript.runtime import Record
+
+
+class FibNode:
+    def __init__(self, key: float, val: Any = None, node_id: Optional[str] = None):
+        self.key = float(key)
+        self.val = val if val is not None else key
+        self.node_id = str(node_id) if node_id is not None else str(id(self))
+        self.degree = 0
+        self.marked = False
+        self.parent: Optional["FibNode"] = None
+        self.child: Optional["FibNode"] = None
+        self.left = self
+        self.right = self
+
+
+class FibonacciHeapTree:
+    """Fibonacci Heap implementation with O(1) amortized insert and O(log n) extract-min."""
+
+    def __init__(self):
+        self.min_node: Optional[FibNode] = None
+        self.num_nodes = 0
+        self.node_registry: Dict[str, FibNode] = {}
+
+    def insert(self, key: float, val: Any = None, node_id: Optional[str] = None) -> str:
+        node = FibNode(key, val, node_id)
+        self.node_registry[node.node_id] = node
+        if self.min_node is None:
+            self.min_node = node
+        else:
+            node.left = self.min_node
+            node.right = self.min_node.right
+            self.min_node.right.left = node
+            self.min_node.right = node
+            if node.key < self.min_node.key:
+                self.min_node = node
+        self.num_nodes += 1
+        return node.node_id
+
+    def get_min(self) -> Optional[Dict[str, Any]]:
+        if self.min_node is None:
+            return None
+        return {"node_id": self.min_node.node_id, "key": self.min_node.key, "val": self.min_node.val}
+
+    def extract_min(self) -> Optional[Dict[str, Any]]:
+        z = self.min_node
+        if z is None:
+            return None
+
+        if z.child is not None:
+            children = []
+            curr = z.child
+            while True:
+                children.append(curr)
+                curr = curr.right
+                if curr == z.child:
+                    break
+            for ch in children:
+                ch.parent = None
+                ch.left = self.min_node
+                ch.right = self.min_node.right
+                self.min_node.right.left = ch
+                self.min_node.right = ch
+
+        z.left.right = z.right
+        z.right.left = z.left
+
+        if z == z.right:
+            self.min_node = None
+        else:
+            self.min_node = z.right
+            self._consolidate()
+
+        self.num_nodes -= 1
+        if z.node_id in self.node_registry:
+            del self.node_registry[z.node_id]
+        return {"node_id": z.node_id, "key": z.key, "val": z.val}
+
+    def _consolidate(self):
+        max_deg = int(math.log2(max(self.num_nodes, 1)) * 2) + 5
+        A: List[Optional[FibNode]] = [None] * max_deg
+
+        root_list = []
+        if self.min_node is not None:
+            curr = self.min_node
+            while True:
+                root_list.append(curr)
+                curr = curr.right
+                if curr == self.min_node:
+                    break
+
+        for w in root_list:
+            x = w
+            d = x.degree
+            while d < len(A) and A[d] is not None:
+                y = A[d]
+                if y == x:
+                    break
+                if x.key > y.key:
+                    x, y = y, x
+                self._fib_heap_link(y, x)
+                A[d] = None
+                d += 1
+            if d < len(A):
+                A[d] = x
+
+        self.min_node = None
+        for i in range(len(A)):
+            if A[i] is not None:
+                if self.min_node is None:
+                    self.min_node = A[i]
+                    self.min_node.left = self.min_node
+                    self.min_node.right = self.min_node
+                else:
+                    node = A[i]
+                    node.left = self.min_node
+                    node.right = self.min_node.right
+                    self.min_node.right.left = node
+                    self.min_node.right = node
+                    if node.key < self.min_node.key:
+                        self.min_node = node
+
+    def _fib_heap_link(self, y: FibNode, x: FibNode):
+        y.left.right = y.right
+        y.right.left = y.left
+        y.parent = x
+        if x.child is None:
+            x.child = y
+            y.left = y
+            y.right = y
+        else:
+            y.left = x.child
+            y.right = x.child.right
+            x.child.right.left = y
+            x.child.right = y
+        x.degree += 1
+        y.marked = False
+
+    def decrease_key(self, node_id: str, new_key: float):
+        if node_id not in self.node_registry:
+            raise KeyError(f"Node id {node_id} not found in Fibonacci heap")
+        x = self.node_registry[node_id]
+        if new_key > x.key:
+            raise ValueError("New key is greater than current key")
+        x.key = float(new_key)
+        y = x.parent
+        if y is not None and x.key < y.key:
+            self._cut(x, y)
+            self._cascading_cut(y)
+        if self.min_node is None or x.key < self.min_node.key:
+            self.min_node = x
+
+    def _cut(self, x: FibNode, y: FibNode):
+        if x.right == x:
+            y.child = None
+        else:
+            x.left.right = x.right
+            x.right.left = x.left
+            if y.child == x:
+                y.child = x.right
+        y.degree -= 1
+        x.left = self.min_node
+        x.right = self.min_node.right
+        self.min_node.right.left = x
+        self.min_node.right = x
+        x.parent = None
+        x.marked = False
+
+    def _cascading_cut(self, y: FibNode):
+        z = y.parent
+        if z is not None:
+            if not y.marked:
+                y.marked = True
+            else:
+                self._cut(y, z)
+                self._cascading_cut(z)
+
+
+class SplayTreeNode:
+    def __init__(self, key: float, val: Any = None):
+        self.key = float(key)
+        self.val = val if val is not None else key
+        self.left: Optional["SplayTreeNode"] = None
+        self.right: Optional["SplayTreeNode"] = None
+        self.parent: Optional["SplayTreeNode"] = None
+
+
+class SplayTreeSelfBalancing:
+    """Self-balancing binary search tree using Zig/Zig-Zig/Zig-Zag splay rotations."""
+
+    def __init__(self):
+        self.root: Optional[SplayTreeNode] = None
+        self.total_rotations = 0
+        self.size = 0
+
+    def _rotate_right(self, x: SplayTreeNode):
+        y = x.left
+        if y is None:
+            return
+        x.left = y.right
+        if y.right:
+            y.right.parent = x
+        y.parent = x.parent
+        if x.parent is None:
+            self.root = y
+        elif x == x.parent.right:
+            x.parent.right = y
+        else:
+            x.parent.left = y
+        y.right = x
+        x.parent = y
+        self.total_rotations += 1
+
+    def _rotate_left(self, x: SplayTreeNode):
+        y = x.right
+        if y is None:
+            return
+        x.right = y.left
+        if y.left:
+            y.left.parent = x
+        y.parent = x.parent
+        if x.parent is None:
+            self.root = y
+        elif x == x.parent.left:
+            x.parent.left = y
+        else:
+            x.parent.right = y
+        y.left = x
+        x.parent = y
+        self.total_rotations += 1
+
+    def splay(self, x: SplayTreeNode):
+        while x.parent is not None:
+            p = x.parent
+            g = p.parent
+            if g is None:
+                if x == p.left:
+                    self._rotate_right(p)
+                else:
+                    self._rotate_left(p)
+            elif x == p.left and p == g.left:
+                self._rotate_right(g)
+                self._rotate_right(p)
+            elif x == p.right and p == g.right:
+                self._rotate_left(g)
+                self._rotate_left(p)
+            elif x == p.right and p == g.left:
+                self._rotate_left(p)
+                self._rotate_right(g)
+            else:
+                self._rotate_right(p)
+                self._rotate_left(g)
+
+    def insert(self, key: float, val: Any = None):
+        node = SplayTreeNode(key, val)
+        y = None
+        x = self.root
+        while x is not None:
+            y = x
+            if node.key < x.key:
+                x = x.left
+            elif node.key > x.key:
+                x = x.right
+            else:
+                x.val = node.val
+                self.splay(x)
+                return
+        node.parent = y
+        if y is None:
+            self.root = node
+        elif node.key < y.key:
+            y.left = node
+        else:
+            y.right = node
+        self.splay(node)
+        self.size += 1
+
+    def find(self, key: float) -> Optional[Any]:
+        curr = self.root
+        last = None
+        while curr is not None:
+            last = curr
+            if key < curr.key:
+                curr = curr.left
+            elif key > curr.key:
+                curr = curr.right
+            else:
+                self.splay(curr)
+                return curr.val
+        if last is not None:
+            self.splay(last)
+        return None
+
+    def inorder(self) -> List[float]:
+        res = []
+        def _in(n):
+            if n:
+                _in(n.left)
+                res.append(n.key)
+                _in(n.right)
+        _in(self.root)
+        return res
+
+    def height(self) -> int:
+        def _h(n):
+            return 0 if n is None else 1 + max(_h(n.left), _h(n.right))
+        return _h(self.root)
+
+
+def dsa_fibonacci_heap_ops(operations: List[Dict[str, Any]]) -> Any:
+    """Executes a sequence of operations on a Fibonacci Heap."""
+    heap = FibonacciHeapTree()
+    extracted = []
+    min_history = []
+    for op in operations:
+        action = str(op.get("op", op.get("action", ""))).lower()
+        if action == "insert":
+            k = op.get("key", 0.0)
+            v = op.get("val", k)
+            nid = op.get("id")
+            heap.insert(k, v, node_id=nid)
+        elif action == "extract_min":
+            ext = heap.extract_min()
+            if ext:
+                extracted.append(ext)
+        elif action == "decrease_key":
+            nid = str(op.get("id"))
+            nk = op.get("new_key", 0.0)
+            heap.decrease_key(nid, nk)
+        min_history.append(heap.get_min())
+
+    final_min = heap.get_min()
+    return Record({
+        "num_nodes": heap.num_nodes,
+        "final_min_key": final_min["key"] if final_min else None,
+        "extracted_nodes": [Record(e) for e in extracted],
+        "extracted_count": len(extracted),
+    })
+
+
+def dsa_splay_tree_ops(operations: List[Dict[str, Any]]) -> Any:
+    """Executes a sequence of operations on a Splay Tree."""
+    tree = SplayTreeSelfBalancing()
+    find_results = []
+    for op in operations:
+        action = str(op.get("op", op.get("action", ""))).lower()
+        if action == "insert":
+            tree.insert(op.get("key", 0.0), op.get("val"))
+        elif action == "find":
+            val = tree.find(op.get("key", 0.0))
+            find_results.append(val)
+
+    return Record({
+        "size": tree.size,
+        "tree_size": tree.size,
+        "root_key": tree.root.key if tree.root else None,
+        "total_rotations": tree.total_rotations,
+        "tree_height": tree.height(),
+        "inorder_keys": tree.inorder(),
+        "find_results": find_results,
+    })
+
+

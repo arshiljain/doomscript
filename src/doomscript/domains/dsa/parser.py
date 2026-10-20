@@ -719,6 +719,16 @@ class DsaDomainParser(DomainParser):
         if brg_m:
             return f"set {brg_m.group(2).strip()} to dsa_tarjan_bridges({brg_m.group(1).strip()})"
 
+        # Fibonacci Heap operations
+        m_fib = re.match(r"^execute\s+fibonacci\s+heap\s+operations\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if m_fib:
+            return f"set {m_fib.group(2).strip()} to dsa_fibonacci_heap_ops({m_fib.group(1).strip()})"
+
+        # Splay Tree operations
+        m_splay = re.match(r"^execute\s+splay\s+tree\s+operations\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if m_splay:
+            return f"set {m_splay.group(2).strip()} to dsa_splay_tree_ops({m_splay.group(1).strip()})"
+
         return None
 
     def parse_block(

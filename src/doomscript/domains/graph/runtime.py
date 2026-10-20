@@ -1812,6 +1812,204 @@ def graph_eulerian_trail(edges: List[Tuple[Any, Any]]) -> Any:
     return Record(HierholzerEulerianCircuit.find_eulerian_trail(edges))
 
 
+class PushRelabelMaxFlow:
+    """Goldberg-Tarjan push-relabel maximum flow algorithm with FIFO vertex discharge."""
+
+    @classmethod
+    def compute(
+        cls,
+        nodes: List[str],
+        edges: List[Dict[str, Any]],
+        source: str,
+        sink: str,
+    ) -> Dict[str, Any]:
+        node_list = [str(n) for n in nodes]
+        n = len(node_list)
+        idx_map = {node_list[i]: i for i in range(n)}
+        if source not in idx_map or sink not in idx_map:
+            raise ValueError("Source or sink not in node list")
+        s = idx_map[source]
+        t = idx_map[sink]
+
+        capacity = [[0.0] * n for _ in range(n)]
+        flow = [[0.0] * n for _ in range(n)]
+
+        for e in edges:
+            u_name = str(e.get("from", e.get("u", "")))
+            v_name = str(e.get("to", e.get("v", "")))
+            cap = float(e.get("capacity", e.get("cap", 1.0)))
+            if u_name in idx_map and v_name in idx_map:
+                capacity[idx_map[u_name]][idx_map[v_name]] += cap
+
+        height = [0] * n
+        height[s] = n
+        excess = [0.0] * n
+
+        for v in range(n):
+            if capacity[s][v] > 0:
+                c = capacity[s][v]
+                flow[s][v] = c
+                flow[v][s] = -c
+                excess[v] = c
+                excess[s] -= c
+
+        pushes = 0
+        relabels = 0
+
+        active_nodes = [i for i in range(n) if i != s and i != t and excess[i] > 1e-9]
+
+        while active_nodes:
+            u = active_nodes.pop(0)
+
+            while excess[u] > 1e-9:
+                pushed = False
+                for v in range(n):
+                    res_cap = capacity[u][v] - flow[u][v]
+                    if res_cap > 1e-9 and height[u] == height[v] + 1:
+                        send = min(excess[u], res_cap)
+                        flow[u][v] += send
+                        flow[v][u] -= send
+                        excess[u] -= send
+                        excess[v] += send
+                        pushes += 1
+                        pushed = True
+                        if v != s and v != t and v not in active_nodes and excess[v] > 1e-9:
+                            active_nodes.append(v)
+                        if excess[u] <= 1e-9:
+                            break
+
+                if not pushed:
+                    min_h = float("inf")
+                    for v in range(n):
+                        if capacity[u][v] - flow[u][v] > 1e-9:
+                            min_h = min(min_h, height[v])
+                    if min_h < float("inf"):
+                        height[u] = int(min_h) + 1
+                        relabels += 1
+                    else:
+                        break
+
+        total_flow = sum(flow[s][v] for v in range(n) if flow[s][v] > 0)
+        flow_edge_records = []
+        for u in range(n):
+            for v in range(n):
+                if flow[u][v] > 1e-9:
+                    flow_edge_records.append({
+                        "from": node_list[u],
+                        "to": node_list[v],
+                        "flow": round(flow[u][v], 4),
+                        "capacity": capacity[u][v],
+                    })
+
+        return {
+            "source": source,
+            "sink": sink,
+            "max_flow": round(total_flow, 4),
+            "flow_edges_count": len(flow_edge_records),
+            "flow_edges": [Record(f) for f in flow_edge_records],
+            "pushes_count": pushes,
+            "relabels_count": relabels,
+        }
+
+
+class JohnsonsAllPairsShortestPaths:
+    """Johnson's algorithm for all-pairs shortest paths with negative weights and cycle detection."""
+
+    @classmethod
+    def compute(
+        cls,
+        nodes: List[str],
+        edges: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        import heapq
+        node_list = [str(n) for n in nodes]
+        n = len(node_list)
+        idx_map = {node_list[i]: i for i in range(n)}
+
+        adj: Dict[int, List[Tuple[int, float]]] = {i: [] for i in range(n)}
+        for e in edges:
+            u_name = str(e.get("from", e.get("u", "")))
+            v_name = str(e.get("to", e.get("v", "")))
+            w = float(e.get("weight", e.get("w", 1.0)))
+            if u_name in idx_map and v_name in idx_map:
+                adj[idx_map[u_name]].append((idx_map[v_name], w))
+
+        h = [0.0] * n
+        has_negative_cycle = False
+        for it in range(n):
+            for u in range(n):
+                for v, w in adj[u]:
+                    if h[u] + w < h[v]:
+                        h[v] = h[u] + w
+
+        for u in range(n):
+            for v, w in adj[u]:
+                if h[u] + w < h[v] - 1e-9:
+                    has_negative_cycle = True
+                    break
+            if has_negative_cycle:
+                break
+
+        if has_negative_cycle:
+            return {
+                "has_negative_cycle": True,
+                "nodes_count": n,
+                "distances": {},
+            }
+
+        INF = float("inf")
+        dist_matrix: Dict[str, Dict[str, float]] = {}
+
+        for src_idx in range(n):
+            d_hat = [INF] * n
+            d_hat[src_idx] = 0.0
+            pq = [(0.0, src_idx)]
+
+            while pq:
+                d_curr, u = heapq.heappop(pq)
+                if d_curr > d_hat[u]:
+                    continue
+                for v, w in adj[u]:
+                    w_hat = w + h[u] - h[v]
+                    if d_hat[u] + w_hat < d_hat[v]:
+                        d_hat[v] = d_hat[u] + w_hat
+                        heapq.heappush(pq, (d_hat[v], v))
+
+            src_name = node_list[src_idx]
+            dist_matrix[src_name] = {}
+            for target_idx in range(n):
+                tgt_name = node_list[target_idx]
+                if d_hat[target_idx] < INF:
+                    orig_dist = d_hat[target_idx] - h[src_idx] + h[target_idx]
+                    dist_matrix[src_name][tgt_name] = round(orig_dist, 4)
+                else:
+                    dist_matrix[src_name][tgt_name] = None
+
+        return {
+            "has_negative_cycle": False,
+            "nodes_count": n,
+            "distances": {k: Record(v) for k, v in dist_matrix.items()},
+        }
+
+
+def graph_push_relabel_max_flow(
+    nodes: List[str],
+    edges: List[Dict[str, Any]],
+    source: str,
+    sink: str,
+) -> Any:
+    """Computes maximum network flow using Goldberg-Tarjan push-relabel algorithm."""
+    return Record(PushRelabelMaxFlow.compute(nodes, edges, source, sink))
+
+
+def graph_johnson_all_pairs_paths(
+    nodes: List[str],
+    edges: List[Dict[str, Any]],
+) -> Any:
+    """Computes all-pairs shortest paths using Johnson's algorithm with potential reweighting."""
+    return Record(JohnsonsAllPairsShortestPaths.compute(nodes, edges))
+
+
 
 
 

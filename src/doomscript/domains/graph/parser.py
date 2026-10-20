@@ -417,6 +417,30 @@ class GraphDomainParser(DomainParser):
             edges, target = m_eul.group(1).strip(), m_eul.group(2).strip()
             return f"set {target} to graph_eulerian_trail({edges})"
 
+        # calculate max flow push relabel nodes <nodes> edges <edges> source <source> sink <sink> into <target>
+        m_pr = re.match(
+            r"^calculate\s+max\s+flow\s+push\s+relabel\s+nodes\s+(.+?)\s+edges\s+(.+?)\s+source\s+(.+?)\s+sink\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_pr:
+            nodes, edges, src, snk, target = m_pr.group(1).strip(), m_pr.group(2).strip(), m_pr.group(3).strip(), m_pr.group(4).strip(), m_pr.group(5).strip()
+            if not (src.startswith('"') or src.startswith("'")):
+                src = f'"{src}"'
+            if not (snk.startswith('"') or snk.startswith("'")):
+                snk = f'"{snk}"'
+            return f"set {target} to graph_push_relabel_max_flow({nodes}, {edges}, {src}, {snk})"
+
+        # calculate johnson all pairs shortest paths nodes <nodes> edges <edges> into <target>
+        m_jh = re.match(
+            r"^calculate\s+johnson\s+all\s+pairs\s+shortest\s+paths\s+nodes\s+(.+?)\s+edges\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_jh:
+            nodes, edges, target = m_jh.group(1).strip(), m_jh.group(2).strip(), m_jh.group(3).strip()
+            return f"set {target} to graph_johnson_all_pairs_paths({nodes}, {edges})"
+
         return None
 
     def parse_block(
