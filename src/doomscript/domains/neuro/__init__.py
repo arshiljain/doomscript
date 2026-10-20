@@ -23,6 +23,9 @@ from doomscript.domains.neuro.runtime import (
     neuro_stdp_update,
     neuro_poisson_spikes,
     neuro_simulate_lif,
+    TsodyksMarkramSynapse,
+    FitzHughNagumoNeuron,
+    WinnerTakeAllNetwork,
 )
 from doomscript.domains.neuro.parser import NeuroDomainParser
 from doomscript.domains.neuro.exporter import NeuroASTExporter
@@ -92,4 +95,7 @@ __all__ = [
     "neuro_stdp_update",
     "neuro_poisson_spikes",
     "neuro_simulate_lif",
+    "TsodyksMarkramSynapse",
+    "FitzHughNagumoNeuron",
+    "WinnerTakeAllNetwork",
 ]

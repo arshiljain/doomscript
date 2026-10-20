@@ -225,3 +225,188 @@ def neuro_simulate_lif(neuron: LIFNeuron, current_trace: List[float], dt_ms: flo
         "isi": SpikeAnalytics.inter_spike_intervals(spikes, dt_ms),
         "cv": SpikeAnalytics.coefficient_of_variation(spikes, dt_ms),
     }
+
+
+# --- Deepened Computational Neuroscience: Tsodyks-Markram Synapse, FitzHugh-Nagumo & WTA Network ---
+
+class TsodyksMarkramSynapse:
+    """Dynamic short-term synaptic plasticity model exhibiting depression (STD) and facilitation (STF)."""
+
+    def __init__(
+        self,
+        U: float = 0.2,
+        tau_rec: float = 800.0,
+        tau_fac: float = 50.0,
+        A: float = 1.0,
+    ):
+        self.U = float(U)              # baseline release probability
+        self.tau_rec = float(tau_rec)  # recovery from depression (ms)
+        self.tau_fac = float(tau_fac)  # decay of facilitation (ms)
+        self.A = float(A)              # absolute synaptic weight
+
+        # Initial resting state
+        self.R = 1.0                   # fraction of available neurotransmitter resources
+        self.u = self.U                # initial utilization
+
+    def reset(self) -> None:
+        self.R = 1.0
+        self.u = self.U
+
+    def step(self, is_spike: bool, dt_ms: float = 1.0) -> float:
+        """Advances synapse by dt_ms and returns postsynaptic current (PSC)."""
+        # Continuous relaxation between spikes
+        if self.tau_fac > 0:
+            self.u += - (self.u - self.U) * (dt_ms / self.tau_fac)
+        if self.tau_rec > 0:
+            self.R += (1.0 - self.R) * (dt_ms / self.tau_rec)
+
+        psc = 0.0
+        if is_spike:
+            # Facilitation update: u increases toward 1.0
+            u_plus = self.u + self.U * (1.0 - self.u)
+            # Postsynaptic response
+            psc = self.A * u_plus * self.R
+            # Depression update: resources depleted by release
+            self.R = max(0.0, self.R - u_plus * self.R)
+            self.u = min(1.0, u_plus)
+
+        return psc
+
+    def simulate_train(self, spike_train: List[int], dt_ms: float = 1.0) -> Dict[str, Any]:
+        """Simulates response across binary spike train."""
+        self.reset()
+        psc_trace: List[float] = []
+        r_trace: List[float] = []
+        u_trace: List[float] = []
+
+        for spike in spike_train:
+            psc = self.step(bool(spike), dt_ms=dt_ms)
+            psc_trace.append(round(psc, 4))
+            r_trace.append(round(self.R, 4))
+            u_trace.append(round(self.u, 4))
+
+        return {
+            "psc_trace": psc_trace,
+            "resource_r": r_trace,
+            "utilization_u": u_trace,
+            "total_charge": round(sum(psc_trace) * dt_ms, 4),
+            "peak_psc": round(max(psc_trace) if psc_trace else 0.0, 4),
+        }
+
+
+class FitzHughNagumoNeuron:
+    """Two-variable phase-plane biological excitable membrane model (v: membrane potential, w: recovery variable)."""
+
+    def __init__(self, a: float = 0.7, b: float = 0.8, tau: float = 12.5):
+        self.a = float(a)
+        self.b = float(b)
+        self.tau = float(tau)
+
+        self.v = -1.2  # resting voltage
+        self.w = -0.6  # resting recovery
+        self._prev_v = self.v
+
+    def reset(self) -> None:
+        self.v = -1.2
+        self.w = -0.6
+        self._prev_v = self.v
+
+    def step(self, I: float, dt: float = 0.1) -> Tuple[float, float, bool]:
+        """Advances ODE using Runge-Kutta 2nd order (Midpoint method)."""
+        def dv(v_val: float, w_val: float, current: float) -> float:
+            return v_val - (v_val ** 3) / 3.0 - w_val + current
+
+        def dw(v_val: float, w_val: float) -> float:
+            return (v_val + self.a - self.b * w_val) / self.tau
+
+        # Midpoint step
+        k1_v = dv(self.v, self.w, I)
+        k1_w = dw(self.v, self.w)
+
+        mid_v = self.v + 0.5 * dt * k1_v
+        mid_w = self.w + 0.5 * dt * k1_w
+
+        k2_v = dv(mid_v, mid_w, I)
+        k2_w = dw(mid_v, mid_w)
+
+        old_v = self.v
+        self.v += dt * k2_v
+        self.w += dt * k2_w
+
+        # Spike detection: upward zero crossing with high voltage
+        spike = (old_v < 1.0 <= self.v)
+        self._prev_v = self.v
+        return self.v, self.w, spike
+
+    def simulate(self, current_trace: List[float], dt: float = 0.1) -> Dict[str, Any]:
+        self.reset()
+        voltages: List[float] = []
+        recoveries: List[float] = []
+        spikes: List[int] = []
+
+        for I in current_trace:
+            v, w, is_spike = self.step(I, dt=dt)
+            voltages.append(round(v, 4))
+            recoveries.append(round(w, 4))
+            spikes.append(1 if is_spike else 0)
+
+        return {
+            "voltages": voltages,
+            "recoveries": recoveries,
+            "spikes": spikes,
+            "total_spikes": sum(spikes),
+        }
+
+
+class WinnerTakeAllNetwork:
+    """Competitive lateral inhibitory neuronal population model."""
+
+    def __init__(self, num_neurons: int, beta: float = 0.5, tau: float = 10.0, threshold: float = 0.0):
+        self.N = max(2, int(num_neurons))
+        self.beta = float(beta)        # lateral inhibition coefficient
+        self.tau = float(tau)          # membrane integration time constant
+        self.threshold = float(threshold)
+        self.activities: List[float] = [0.0] * self.N
+
+    def reset(self) -> None:
+        self.activities = [0.0] * self.N
+
+    def step(self, inputs: List[float], dt: float = 0.5) -> List[float]:
+        """Performs one integration step under mutual recurrent inhibition."""
+        if len(inputs) != self.N:
+            raise ValueError(f"Expected {self.N} inputs, got {len(inputs)}")
+
+        total_activity = sum(self.activities)
+        new_acts = [0.0] * self.N
+
+        for i in range(self.N):
+            # Mutual inhibition is sum of other units: (total - self)
+            inhibition = self.beta * (total_activity - self.activities[i])
+            net_drive = max(0.0, inputs[i] - inhibition - self.threshold)
+            # Leaky integration: dy/dt = (-y + net_drive) / tau
+            dy = (-self.activities[i] + net_drive) / self.tau
+            new_acts[i] = max(0.0, self.activities[i] + dt * dy)
+
+        self.activities = new_acts
+        return [round(x, 4) for x in self.activities]
+
+    def run_until_convergence(
+        self, inputs: List[float], max_steps: int = 100, tol: float = 1e-4, dt: float = 0.5
+    ) -> Dict[str, Any]:
+        """Runs dynamics until steady state is reached."""
+        self.reset()
+        for step_idx in range(max_steps):
+            prev = list(self.activities)
+            curr = self.step(inputs, dt=dt)
+            diff = max(abs(c - p) for c, p in zip(curr, prev))
+            if diff < tol:
+                break
+
+        winner_idx = max(range(self.N), key=lambda i: self.activities[i])
+        return {
+            "winner_index": winner_idx,
+            "winner_activity": round(self.activities[winner_idx], 4),
+            "final_activities": [round(x, 4) for x in self.activities],
+            "converged": True,
+            "steps_taken": step_idx + 1,
+        }

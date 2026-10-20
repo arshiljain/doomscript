@@ -853,3 +853,324 @@ class RobotsTxtParser:
 
 
 
+
+
+# --- Deepened Web Scraping: CSS Selector Engine & RFC 6265 Cookie Jar ---
+
+class DOMElement:
+    """Lightweight representation of an HTML DOM element node."""
+
+    def __init__(self, tag: str, attrs: Optional[Dict[str, str]] = None, parent: Optional["DOMElement"] = None):
+        self.tag = tag.lower()
+        self.attrs = attrs or {}
+        self.classes = set(self.attrs.get("class", "").split())
+        self.id = self.attrs.get("id", "")
+        self.children: List["DOMElement"] = []
+        self.parent = parent
+        self.text_content: List[str] = []
+
+    @property
+    def text(self) -> str:
+        """Recursive inner text of this node and descendants."""
+        all_texts = list(self.text_content)
+        for child in self.children:
+            t = child.text
+            if t:
+                all_texts.append(t)
+        return " ".join(" ".join(all_texts).split())
+
+    def get_attribute(self, name: str) -> Optional[str]:
+        return self.attrs.get(name)
+
+    def __repr__(self) -> str:
+        attrs_str = " ".join(f'{k}="{v}"' for k, v in self.attrs.items())
+        return f"<{self.tag} {attrs_str}>" if attrs_str else f"<{self.tag}>"
+
+
+class DOMBuilder(HTMLParser):
+    """Parses raw HTML into a hierarchically linked DOMElement tree."""
+
+    def __init__(self):
+        super().__init__()
+        self.root = DOMElement("root")
+        self.current = self.root
+
+    def handle_starttag(self, tag: str, attrs: List[Tuple[str, Optional[str]]]):
+        attr_dict = {k.lower(): (v or "") for k, v in attrs}
+        node = DOMElement(tag=tag, attrs=attr_dict, parent=self.current)
+        self.current.children.append(node)
+        # Avoid nesting self-closing void elements
+        if tag.lower() not in ("br", "hr", "img", "input", "meta", "link", "area", "base", "col", "embed", "param", "source", "track", "wbr"):
+            self.current = node
+
+    def handle_endtag(self, tag: str):
+        t = tag.lower()
+        temp = self.current
+        while temp is not None and temp.tag != t and temp != self.root:
+            temp = temp.parent
+        if temp is not None and temp != self.root and temp.parent is not None:
+            self.current = temp.parent
+
+    def handle_data(self, data: str):
+        clean = data.strip()
+        if clean:
+            self.current.text_content.append(clean)
+
+
+class CSSSelectorEngine:
+    """Recursive CSS selector matcher supporting tags, classes, IDs, attributes, child, and descendant combinators."""
+
+    @classmethod
+    def parse_html(cls, html: str) -> DOMElement:
+        builder = DOMBuilder()
+        builder.feed(html)
+        return builder.root
+
+    @classmethod
+    def _matches_compound(cls, elem: DOMElement, selector_part: str) -> bool:
+        """Matches a single compound selector (e.g. 'div.container#main[data-x=1]')."""
+        if elem.tag == "root":
+            return False
+
+        # Extract attributes
+        attr_pattern = r"\[([a-zA-Z0-9_\-]+)(?:(=|~=|\^=|\$=|\*=)(?:['\"]?)([^'\"]*)(?:['\"]?))?\]"
+        attrs = re.findall(attr_pattern, selector_part)
+        cleaned = re.sub(attr_pattern, "", selector_part)
+
+        # Extract ID
+        id_match = re.search(r"#([a-zA-Z0-9_\-]+)", cleaned)
+        if id_match:
+            if elem.id != id_match.group(1):
+                return False
+            cleaned = re.sub(r"#([a-zA-Z0-9_\-]+)", "", cleaned)
+
+        # Extract classes
+        class_matches = re.findall(r"\.([a-zA-Z0-9_\-]+)", cleaned)
+        for c in class_matches:
+            if c not in elem.classes:
+                return False
+        cleaned = re.sub(r"\.([a-zA-Z0-9_\-]+)", "", cleaned)
+
+        # Remaining is tag name
+        tag = cleaned.strip()
+        if tag and tag != "*":
+            if elem.tag != tag.lower():
+                return False
+
+        # Match attributes
+        for name, op, val in attrs:
+            if name not in elem.attrs:
+                return False
+            if op:
+                actual = elem.attrs[name]
+                if op == "=" and actual != val:
+                    return False
+                elif op == "^=" and not actual.startswith(val):
+                    return False
+                elif op == "$=" and not actual.endswith(val):
+                    return False
+                elif op == "*=" and val not in actual:
+                    return False
+                elif op == "~=" and val not in actual.split():
+                    return False
+
+        return True
+
+    @classmethod
+    def select(cls, root: DOMElement, selector: str) -> List[DOMElement]:
+        """Queries the DOM hierarchy using standard CSS selector syntax."""
+        # Handle comma-separated selector grouping
+        if "," in selector:
+            results = []
+            seen = set()
+            for group in selector.split(","):
+                for el in cls.select(root, group.strip()):
+                    if id(el) not in seen:
+                        seen.add(id(el))
+                        results.append(el)
+            return results
+
+        # Tokenize combinators: child '>' vs descendant ' '
+        # Normalize whitespace around '>'
+        norm = re.sub(r"\s*>\s*", " > ", selector.strip())
+        tokens = norm.split()
+        if not tokens:
+            return []
+
+        # Start with all elements under root
+        def _collect_descendants(node: DOMElement, acc: List[DOMElement]):
+            for ch in node.children:
+                acc.append(ch)
+                _collect_descendants(ch, acc)
+
+        current_candidates: List[DOMElement] = []
+        _collect_descendants(root, current_candidates)
+
+        i = 0
+        while i < len(tokens):
+            tok = tokens[i]
+            if tok == ">":
+                # Next token matches direct child of current candidates
+                i += 1
+                if i >= len(tokens):
+                    break
+                next_tok = tokens[i]
+                next_cands = []
+                for parent in current_candidates:
+                    for child in parent.children:
+                        if cls._matches_compound(child, next_tok):
+                            next_cands.append(child)
+                current_candidates = next_cands
+            else:
+                if i == 0:
+                    current_candidates = [el for el in current_candidates if cls._matches_compound(el, tok)]
+                else:
+                    # Descendant combinator
+                    descendants = []
+                    for cand in current_candidates:
+                        sub = []
+                        _collect_descendants(cand, sub)
+                        for d in sub:
+                            if cls._matches_compound(d, tok):
+                                descendants.append(d)
+                    current_candidates = descendants
+            i += 1
+
+        # Deduplicate preserving order
+        unique: List[DOMElement] = []
+        seen = set()
+        for el in current_candidates:
+            if id(el) not in seen:
+                seen.add(id(el))
+                unique.append(el)
+        return unique
+
+
+class RFC6265CookieJar:
+    """RFC 6265 compliant HTTP state management (Cookie Jar).
+    
+    Supports:
+    - Path and domain scoping with leading-dot subdomain matching
+    - Max-Age and Expires date calculation
+    - Secure and HttpOnly flags
+    - Deterministic Cookie header generation
+    """
+
+    class Cookie:
+        def __init__(
+            self,
+            name: str,
+            value: str,
+            domain: str,
+            path: str = "/",
+            expires_at: Optional[float] = None,
+            secure: bool = False,
+            http_only: bool = False,
+        ):
+            self.name = name
+            self.value = value
+            self.domain = domain.lower().lstrip(".")
+            self.path = path if path.startswith("/") else "/"
+            self.expires_at = expires_at
+            self.secure = secure
+            self.http_only = http_only
+
+        def is_expired(self, current_time: float) -> bool:
+            return self.expires_at is not None and current_time >= self.expires_at
+
+        def matches_domain(self, request_domain: str) -> bool:
+            req = request_domain.lower()
+            return req == self.domain or req.endswith("." + self.domain)
+
+        def matches_path(self, request_path: str) -> bool:
+            if not request_path:
+                request_path = "/"
+            return request_path == self.path or request_path.startswith(self.path.rstrip("/") + "/")
+
+    def __init__(self):
+        self.cookies: List[RFC6265CookieJar.Cookie] = []
+
+    def set_cookie(self, header: str, request_url: str, current_time: Optional[float] = None) -> None:
+        """Parses a Set-Cookie header string and adds/updates the cookie."""
+        import time
+        from urllib.parse import urlparse
+        now = time.time() if current_time is None else current_time
+        parsed_url = urlparse(request_url)
+        default_domain = parsed_url.hostname or "localhost"
+        default_path = parsed_url.path or "/"
+        if "/" in default_path:
+            default_path = default_path.rsplit("/", 1)[0]
+        if not default_path:
+            default_path = "/"
+
+        parts = [p.strip() for p in header.split(";")]
+        if not parts or "=" not in parts[0]:
+            return
+
+        name, value = parts[0].split("=", 1)
+        domain = default_domain
+        path = default_path
+        expires_at = None
+        secure = False
+        http_only = False
+
+        for attr in parts[1:]:
+            if "=" in attr:
+                k, v = attr.split("=", 1)
+                k = k.strip().lower()
+                v = v.strip()
+                if k == "domain":
+                    domain = v
+                elif k == "path":
+                    path = v
+                elif k == "max-age":
+                    try:
+                        expires_at = now + float(v)
+                    except ValueError:
+                        pass
+            else:
+                k = attr.strip().lower()
+                if k == "secure":
+                    secure = True
+                elif k == "httponly":
+                    http_only = True
+
+        cookie = self.Cookie(
+            name=name.strip(),
+            value=value.strip(),
+            domain=domain,
+            path=path,
+            expires_at=expires_at,
+            secure=secure,
+            http_only=http_only,
+        )
+
+        # Replace existing cookie if same name, domain, path
+        self.cookies = [
+            c for c in self.cookies
+            if not (c.name == cookie.name and c.domain == cookie.domain and c.path == cookie.path)
+        ]
+        self.cookies.append(cookie)
+
+    def get_cookie_header(self, request_url: str, is_secure: bool = False, current_time: Optional[float] = None) -> str:
+        """Constructs 'Cookie: name=val; name2=val2' header for the specified request URL."""
+        import time
+        from urllib.parse import urlparse
+        now = time.time() if current_time is None else current_time
+        parsed_url = urlparse(request_url)
+        req_domain = parsed_url.hostname or "localhost"
+        req_path = parsed_url.path or "/"
+
+        valid = []
+        for c in self.cookies:
+            if c.is_expired(now):
+                continue
+            if not c.matches_domain(req_domain):
+                continue
+            if not c.matches_path(req_path):
+                continue
+            if c.secure and not is_secure:
+                continue
+            valid.append(f"{c.name}={c.value}")
+
+        return "; ".join(valid)

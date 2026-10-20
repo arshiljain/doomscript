@@ -1018,3 +1018,258 @@ def geo_quadtree(min_x: float = -180.0, min_y: float = -90.0, max_x: float = 180
 
 
 
+
+
+# --- Deepened Geospatial Systems: Delaunay Triangulation, Web Mercator & Isochrone Contours ---
+
+class DelaunayTriangulator:
+    """Bowyer-Watson incremental Delaunay Triangulation and Voronoi diagram generator in 2D."""
+
+    class Triangle:
+        def __init__(self, p1: Tuple[float, float], p2: Tuple[float, float], p3: Tuple[float, float]):
+            self.p1 = p1
+            self.p2 = p2
+            self.p3 = p3
+            self.vertices = (p1, p2, p3)
+            self.edges = (
+                tuple(sorted((p1, p2))),
+                tuple(sorted((p2, p3))),
+                tuple(sorted((p3, p1))),
+            )
+            self._compute_circumcircle()
+
+        def _compute_circumcircle(self) -> None:
+            ax, ay = self.p1
+            bx, by = self.p2
+            cx, cy = self.p3
+            d = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by))
+            if abs(d) < 1e-12:
+                self.center = (ax, ay)
+                self.radius_sq = float("inf")
+                return
+
+            ux = ((ax * ax + ay * ay) * (by - cy) + (bx * bx + by * by) * (cy - ay) + (cx * cx + cy * cy) * (ay - by)) / d
+            uy = ((ax * ax + ay * ay) * (cx - bx) + (bx * bx + by * by) * (ax - cx) + (cx * cx + cy * cy) * (bx - ax)) / d
+            self.center = (ux, uy)
+            self.radius_sq = (ax - ux) ** 2 + (ay - uy) ** 2
+
+        def contains_in_circumcircle(self, pt: Tuple[float, float]) -> bool:
+            px, py = pt
+            cx, cy = self.center
+            dist_sq = (px - cx) ** 2 + (py - cy) ** 2
+            return dist_sq <= (self.radius_sq + 1e-9)
+
+    @classmethod
+    def triangulate(cls, points: List[Tuple[float, float]]) -> List[Tuple[Tuple[float, float], Tuple[float, float], Tuple[float, float]]]:
+        """Triangulates 2D point cloud into non-overlapping Delaunay triangles."""
+        if len(points) < 3:
+            return []
+
+        # Find bounding box
+        xs = [p[0] for p in points]
+        ys = [p[1] for p in points]
+        min_x, max_x = min(xs), max(xs)
+        min_y, max_y = min(ys), max(ys)
+        dx = max(1.0, max_x - min_x)
+        dy = max(1.0, max_y - min_y)
+        delta_max = max(dx, dy)
+        mid_x = (min_x + max_x) / 2.0
+        mid_y = (min_y + max_y) / 2.0
+
+        # Construct super-triangle enclosing all points
+        st_p1 = (mid_x - 20.0 * delta_max, mid_y - delta_max)
+        st_p2 = (mid_x, mid_y + 20.0 * delta_max)
+        st_p3 = (mid_x + 20.0 * delta_max, mid_y - delta_max)
+        super_verts = {st_p1, st_p2, st_p3}
+
+        triangles: List[DelaunayTriangulator.Triangle] = [cls.Triangle(st_p1, st_p2, st_p3)]
+
+        # Incrementally add each point
+        for pt in points:
+            bad_triangles = []
+            for tri in triangles:
+                if tri.contains_in_circumcircle(pt):
+                    bad_triangles.append(tri)
+
+            # Find boundary edges of polygonal hole
+            polygon = []
+            for tri in bad_triangles:
+                for edge in tri.edges:
+                    # Edge is boundary if not shared by another bad triangle
+                    shared = sum(1 for other in bad_triangles if edge in other.edges)
+                    if shared == 1:
+                        polygon.append(edge)
+
+            # Remove bad triangles
+            triangles = [tri for tri in triangles if tri not in bad_triangles]
+
+            # Re-triangulate cavity with new point
+            for e_p1, e_p2 in polygon:
+                triangles.append(cls.Triangle(e_p1, e_p2, pt))
+
+        # Remove triangles that share vertices with super-triangle
+        result = []
+        for tri in triangles:
+            if not any(v in super_verts for v in tri.vertices):
+                result.append(tri.vertices)
+
+        return result
+
+    @classmethod
+    def voronoi_diagram(cls, points: List[Tuple[float, float]]) -> List[Tuple[Tuple[float, float], Tuple[float, float]]]:
+        """Generates Voronoi dual edges connecting circumcenters of adjacent Delaunay triangles."""
+        if len(points) < 3:
+            return []
+
+        triangles = [cls.Triangle(*v) for v in cls.triangulate(points)]
+        edges = []
+        n = len(triangles)
+        for i in range(n):
+            for j in range(i + 1, n):
+                # If they share an edge, connect their circumcenters
+                common_edges = set(triangles[i].edges).intersection(set(triangles[j].edges))
+                if common_edges:
+                    edges.append((triangles[i].center, triangles[j].center))
+        return edges
+
+
+class WebMercatorProjection:
+    """EPSG:3857 (Spherical Mercator) <-> EPSG:4326 (WGS84) transforms & Slippy Map tile arithmetic."""
+
+    A = 6378137.0  # WGS84 semi-major axis in meters
+    MAX_LAT = 85.0511287798066
+
+    @classmethod
+    def lat_lon_to_xy(cls, lat: float, lon: float) -> Tuple[float, float]:
+        """Projects (lat, lon) in degrees to EPSG:3857 (meters x, y)."""
+        clamped_lat = max(-cls.MAX_LAT, min(cls.MAX_LAT, float(lat)))
+        x = cls.A * math.radians(float(lon))
+        lat_rad = math.radians(clamped_lat)
+        y = cls.A * math.log(math.tan(math.pi / 4.0 + lat_rad / 2.0))
+        return round(x, 2), round(y, 2)
+
+    @classmethod
+    def xy_to_lat_lon(cls, x: float, y: float) -> Tuple[float, float]:
+        """Inverts EPSG:3857 (meters x, y) back to WGS84 (lat, lon) in degrees."""
+        lon = math.degrees(float(x) / cls.A)
+        lat = math.degrees(2.0 * math.atan(math.exp(float(y) / cls.A)) - math.pi / 2.0)
+        return round(lat, 6), round(lon, 6)
+
+    @classmethod
+    def lat_lon_to_tile(cls, lat: float, lon: float, zoom: int) -> Tuple[int, int]:
+        """Converts (lat, lon) to integer Slippy map tile coordinate (x, y) at given zoom level."""
+        clamped_lat = max(-cls.MAX_LAT, min(cls.MAX_LAT, float(lat)))
+        lat_rad = math.radians(clamped_lat)
+        n = 1 << zoom
+        xtile = int((float(lon) + 180.0) / 360.0 * n)
+        ytile = int((1.0 - math.asinh(math.tan(lat_rad)) / math.pi) / 2.0 * n)
+        return max(0, min(n - 1, xtile)), max(0, min(n - 1, ytile))
+
+    @classmethod
+    def tile_to_bbox(cls, tile_x: int, tile_y: int, zoom: int) -> Dict[str, float]:
+        """Computes bounding box (min_lat, min_lon, max_lat, max_lon) of a Slippy tile."""
+        n = 1 << zoom
+        min_lon = (tile_x / n) * 360.0 - 180.0
+        max_lon = ((tile_x + 1) / n) * 360.0 - 180.0
+
+        lat_rad_top = math.atan(math.sinh(math.pi * (1.0 - 2.0 * tile_y / n)))
+        lat_rad_bottom = math.atan(math.sinh(math.pi * (1.0 - 2.0 * (tile_y + 1) / n)))
+
+        max_lat = math.degrees(lat_rad_top)
+        min_lat = math.degrees(lat_rad_bottom)
+
+        return {
+            "min_lat": round(min_lat, 6),
+            "min_lon": round(min_lon, 6),
+            "max_lat": round(max_lat, 6),
+            "max_lon": round(max_lon, 6),
+        }
+
+    @classmethod
+    def tile_to_quadkey(cls, tile_x: int, tile_y: int, zoom: int) -> str:
+        """Encodes tile coordinate into Bing Maps quadkey string."""
+        quadkey = []
+        for i in range(zoom, 0, -1):
+            digit = 0
+            mask = 1 << (i - 1)
+            if (tile_x & mask) != 0:
+                digit += 1
+            if (tile_y & mask) != 0:
+                digit += 2
+            quadkey.append(str(digit))
+        return "".join(quadkey)
+
+
+class IsochroneContour:
+    """Computes travel-time reachability isochrone contours over road network graph."""
+
+    @classmethod
+    def compute_isochrone(
+        cls,
+        origin_node: str,
+        nodes: Dict[str, Tuple[float, float]],  # node_id -> (lat, lon)
+        edges: List[Dict[str, Any]],           # [{u, v, distance_km, speed_kmh}]
+        max_time_minutes: float,
+    ) -> Dict[str, Any]:
+        """Computes all reachable nodes and the convex hull boundary polygon within travel time."""
+        import heapq
+
+        # Build adjacency graph: u -> [(v, travel_time_min)]
+        adj: Dict[str, List[Tuple[str, float]]] = {nid: [] for nid in nodes}
+        for e in edges:
+            u, v = e["u"], e["v"]
+            dist = float(e.get("distance_km", 1.0))
+            speed = max(1.0, float(e.get("speed_kmh", 50.0)))
+            time_min = (dist / speed) * 60.0
+
+            if u in adj:
+                adj[u].append((v, time_min))
+            if v in adj and not e.get("one_way", False):
+                adj[v].append((u, time_min))
+
+        # Dijkstra shortest travel times
+        dist_map: Dict[str, float] = {nid: float("inf") for nid in nodes}
+        dist_map[origin_node] = 0.0
+        pq: List[Tuple[float, str]] = [(0.0, origin_node)]
+
+        while pq:
+            d, u = heapq.heappop(pq)
+            if d > dist_map[u]:
+                continue
+            for v, weight in adj.get(u, []):
+                new_d = d + weight
+                if new_d < dist_map[v] and new_d <= max_time_minutes:
+                    dist_map[v] = new_d
+                    heapq.heappush(pq, (new_d, v))
+
+        reachable_nodes = [nid for nid, t in dist_map.items() if t <= max_time_minutes]
+        reachable_pts = [nodes[nid] for nid in reachable_nodes]
+
+        # Compute 2D convex hull of reachable points (monotone chain)
+        def _cross(o: Tuple[float, float], a: Tuple[float, float], b: Tuple[float, float]) -> float:
+            return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+
+        hull_pts: List[Tuple[float, float]] = []
+        if len(reachable_pts) >= 3:
+            sorted_pts = sorted(set(reachable_pts))
+            lower = []
+            for p in sorted_pts:
+                while len(lower) >= 2 and _cross(lower[-2], lower[-1], p) <= 0:
+                    lower.pop()
+                lower.append(p)
+            upper = []
+            for p in reversed(sorted_pts):
+                while len(upper) >= 2 and _cross(upper[-2], upper[-1], p) <= 0:
+                    upper.pop()
+                upper.append(p)
+            hull_pts = lower[:-1] + upper[:-1]
+        elif reachable_pts:
+            hull_pts = list(reachable_pts)
+
+        return {
+            "origin": origin_node,
+            "max_time_minutes": max_time_minutes,
+            "reachable_nodes_count": len(reachable_nodes),
+            "reachable_nodes": reachable_nodes,
+            "contour_polygon": hull_pts,
+        }

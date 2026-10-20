@@ -45,6 +45,9 @@ from doomscript.domains.web.runtime import (
     HTMLDOMSelector,
     web_extract_metadata,
     RobotsTxtParser,
+    DOMElement,
+    CSSSelectorEngine,
+    RFC6265CookieJar,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.web.exporter import WebASTExporter
@@ -227,4 +230,7 @@ __all__ = [
     "HTMLDOMSelector",
     "web_extract_metadata",
     "RobotsTxtParser",
+    "DOMElement",
+    "CSSSelectorEngine",
+    "RFC6265CookieJar",
 ]

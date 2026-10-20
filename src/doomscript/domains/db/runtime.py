@@ -2,7 +2,7 @@
 
 import contextlib
 import sqlite3
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 from doomscript.domains.base import DomainRuntime, DomainIR
 from doomscript.domains.db.spec import QuerySpec, WhereClause
 from doomscript.domains.data.runtime import _to_record_list
@@ -737,3 +737,262 @@ class MigrationManager:
 
 
 
+
+
+# --- Deepened Database Systems: WAL Crash Recovery, Cost-Based Optimizer & MVCC ---
+
+class WALCrashRecovery:
+    """ARIES-style Write-Ahead Logging (WAL) engine with Analysis, Redo, and Undo crash recovery passes."""
+
+    class LogRecord:
+        def __init__(self, lsn: int, tx_id: int, op: str, page_id: Optional[int] = None, old_val: Any = None, new_val: Any = None, prev_lsn: int = 0):
+            self.lsn = lsn
+            self.tx_id = tx_id
+            self.op = op  # BEGIN, UPDATE, COMMIT, ABORT, CHECKPOINT
+            self.page_id = page_id
+            self.old_val = old_val
+            self.new_val = new_val
+            self.prev_lsn = prev_lsn
+
+        def to_dict(self) -> Dict[str, Any]:
+            return {
+                "lsn": self.lsn,
+                "tx_id": self.tx_id,
+                "op": self.op,
+                "page_id": self.page_id,
+                "old_val": self.old_val,
+                "new_val": self.new_val,
+                "prev_lsn": self.prev_lsn,
+            }
+
+    def __init__(self):
+        self.log: List[WALCrashRecovery.LogRecord] = []
+        self.current_lsn = 0
+        self.tx_prev_lsn: Dict[int, int] = {}
+        # In-memory database buffer pool: page_id -> (page_lsn, data)
+        self.pages: Dict[int, Dict[str, Any]] = {}
+        # Flushed disk state
+        self.flushed_pages: Dict[int, Dict[str, Any]] = {}
+
+    def begin_tx(self, tx_id: int) -> int:
+        self.current_lsn += 1
+        rec = self.LogRecord(self.current_lsn, tx_id, "BEGIN", prev_lsn=0)
+        self.log.append(rec)
+        self.tx_prev_lsn[tx_id] = self.current_lsn
+        return self.current_lsn
+
+    def write_update(self, tx_id: int, page_id: int, old_val: Any, new_val: Any) -> int:
+        self.current_lsn += 1
+        prev = self.tx_prev_lsn.get(tx_id, 0)
+        rec = self.LogRecord(self.current_lsn, tx_id, "UPDATE", page_id=page_id, old_val=old_val, new_val=new_val, prev_lsn=prev)
+        self.log.append(rec)
+        self.tx_prev_lsn[tx_id] = self.current_lsn
+
+        # Update in-memory buffer page
+        self.pages[page_id] = {"page_lsn": self.current_lsn, "data": new_val}
+        return self.current_lsn
+
+    def commit_tx(self, tx_id: int) -> int:
+        self.current_lsn += 1
+        prev = self.tx_prev_lsn.get(tx_id, 0)
+        rec = self.LogRecord(self.current_lsn, tx_id, "COMMIT", prev_lsn=prev)
+        self.log.append(rec)
+        self.tx_prev_lsn[tx_id] = self.current_lsn
+        return self.current_lsn
+
+    def flush_page_to_disk(self, page_id: int) -> None:
+        """Simulates flushing dirty page to persistent disk storage."""
+        if page_id in self.pages:
+            self.flushed_pages[page_id] = dict(self.pages[page_id])
+
+    def simulate_crash(self) -> None:
+        """Simulates power outage: volatile in-memory buffer pool is lost, only disk persists."""
+        self.pages = {pid: dict(v) for pid, v in self.flushed_pages.items()}
+
+    def recover(self) -> Dict[str, Any]:
+        """Executes full ARIES 3-pass recovery: Analysis, Redo, and Undo."""
+        # Pass 1: Analysis
+        active_txs: Set[int] = set()
+        redo_lsn = 1
+
+        for rec in self.log:
+            if rec.op == "BEGIN":
+                active_txs.add(rec.tx_id)
+            elif rec.op in ("COMMIT", "ABORT"):
+                active_txs.discard(rec.tx_id)
+
+        # Pass 2: Redo (repeating history from start)
+        redone_count = 0
+        for rec in self.log:
+            if rec.op == "UPDATE" and rec.page_id is not None:
+                disk_page = self.pages.get(rec.page_id, {"page_lsn": 0, "data": None})
+                if disk_page["page_lsn"] < rec.lsn:
+                    self.pages[rec.page_id] = {"page_lsn": rec.lsn, "data": rec.new_val}
+                    redone_count += 1
+
+        # Pass 3: Undo (roll back uncommitted active transactions in reverse order)
+        undone_count = 0
+        for rec in reversed(self.log):
+            if rec.tx_id in active_txs and rec.op == "UPDATE" and rec.page_id is not None:
+                self.pages[rec.page_id] = {"page_lsn": self.current_lsn + 1, "data": rec.old_val}
+                undone_count += 1
+
+        # Mark all uncommitted transactions aborted
+        for tx in active_txs:
+            self.current_lsn += 1
+            self.log.append(self.LogRecord(self.current_lsn, tx, "ABORT"))
+
+        return {
+            "uncommitted_txs": list(active_txs),
+            "redone_operations": redone_count,
+            "undone_operations": undone_count,
+            "recovered_pages": {pid: v["data"] for pid, v in self.pages.items()},
+        }
+
+
+class CostBasedQueryOptimizer:
+    """Cost-Based Query Optimizer (CBO) choosing optimal physical scan and join plans using selectivity estimates."""
+
+    PAGE_IO_COST = 1.0
+    RANDOM_IO_COST = 4.0
+    CPU_TUPLE_COST = 0.01
+
+    def __init__(self):
+        # Table metadata: table_name -> {rows, pages, indexes: {col -> {distinct_vals, idx_pages}}}
+        self.catalog: Dict[str, Dict[str, Any]] = {}
+
+    def register_table(self, table_name: str, num_rows: int, num_pages: int, indexes: Optional[Dict[str, Dict[str, Any]]] = None) -> None:
+        self.catalog[table_name] = {
+            "num_rows": int(num_rows),
+            "num_pages": int(num_pages),
+            "indexes": indexes or {},
+        }
+
+    def estimate_selectivity(self, table_name: str, col: str, op: str, val: Any) -> float:
+        """Estimates predicate selectivity factor in [0.0, 1.0]."""
+        meta = self.catalog.get(table_name)
+        if not meta:
+            return 0.1
+
+        idx_info = meta["indexes"].get(col)
+        distinct = idx_info.get("distinct_vals", meta["num_rows"]) if idx_info else max(1, meta["num_rows"] // 10)
+
+        if op == "=":
+            return 1.0 / max(1, distinct)
+        elif op in ("<", "<=", ">", ">="):
+            return 0.33  # standard standard-deviation default range selectivity
+        elif op in ("like", "contains"):
+            return 0.05
+        return 0.1
+
+    def optimize_scan(self, table_name: str, predicate_col: str, op: str, val: Any) -> Dict[str, Any]:
+        """Calculates costs of Sequential Scan vs Index Scan and chooses the cheapest execution plan."""
+        meta = self.catalog[table_name]
+        num_rows = meta["num_rows"]
+        num_pages = meta["num_pages"]
+
+        # Cost of SeqScan: read all pages sequentially + cpu cost per tuple
+        seq_cost = (num_pages * self.PAGE_IO_COST) + (num_rows * self.CPU_TUPLE_COST)
+
+        sel = self.estimate_selectivity(table_name, predicate_col, op, val)
+        est_rows = max(1, int(round(sel * num_rows)))
+
+        has_index = predicate_col in meta["indexes"]
+        if has_index:
+            idx_info = meta["indexes"][predicate_col]
+            idx_pages = idx_info.get("idx_pages", 2)
+            # Index scan cost = traverse index + random page fetches for matched rows
+            idx_cost = (idx_pages * self.PAGE_IO_COST) + (est_rows * self.RANDOM_IO_COST) + (est_rows * self.CPU_TUPLE_COST)
+        else:
+            idx_cost = float("inf")
+
+        if idx_cost < seq_cost:
+            chosen = "INDEX_SCAN"
+            cost = idx_cost
+        else:
+            chosen = "SEQ_SCAN"
+            cost = seq_cost
+
+        return {
+            "table": table_name,
+            "chosen_plan": chosen,
+            "estimated_cost": round(cost, 2),
+            "seq_scan_cost": round(seq_cost, 2),
+            "index_scan_cost": round(idx_cost, 2) if has_index else None,
+            "selectivity": round(sel, 4),
+            "estimated_rows": est_rows,
+        }
+
+
+class SnapshotIsolationMVCC:
+    """Multi-Version Concurrency Control (MVCC) supporting Snapshot Isolation and First-Committer-Wins conflict resolution."""
+
+    class Version:
+        def __init__(self, val: Any, created_tx: int, deleted_tx: Optional[int] = None):
+            self.val = val
+            self.created_tx = created_tx
+            self.deleted_tx = deleted_tx
+
+    def __init__(self):
+        self.global_tx_counter = 0
+        # key -> List[Version]
+        self.store: Dict[str, List[SnapshotIsolationMVCC.Version]] = {}
+        # active_txs: tx_id -> {read_ts: int, writes: Dict[key, val]}
+        self.active_txs: Dict[int, Dict[str, Any]] = {}
+        self.committed_txs: Set[int] = set()
+
+    def begin(self) -> int:
+        """Starts a transaction with Snapshot Isolation read timestamp."""
+        self.global_tx_counter += 1
+        tx_id = self.global_tx_counter
+        self.active_txs[tx_id] = {
+            "read_ts": self.global_tx_counter,
+            "writes": {},
+        }
+        return tx_id
+
+    def read(self, tx_id: int, key: str) -> Optional[Any]:
+        """Reads snapshot-visible version of key."""
+        tx_info = self.active_txs[tx_id]
+        # First check local write-set
+        if key in tx_info["writes"]:
+            return tx_info["writes"][key]
+
+        read_ts = tx_info["read_ts"]
+        versions = self.store.get(key, [])
+        for v in reversed(versions):
+            # Version visible if created <= read_ts and (not deleted or deleted > read_ts)
+            if v.created_tx <= read_ts and (v.deleted_tx is None or v.deleted_tx > read_ts):
+                return v.val
+        return None
+
+    def write(self, tx_id: int, key: str, val: Any) -> None:
+        """Buffers write in transaction private workspace."""
+        self.active_txs[tx_id]["writes"][key] = val
+
+    def commit(self, tx_id: int) -> bool:
+        """Validates first-committer-wins rule and applies updates or aborts on write-write conflict."""
+        tx_info = self.active_txs[tx_id]
+        read_ts = tx_info["read_ts"]
+        writes = tx_info["writes"]
+
+        # Conflict check: did any key in writes get modified after this transaction's read_ts?
+        for key in writes:
+            for v in self.store.get(key, []):
+                if v.created_tx > read_ts and v.created_tx in self.committed_txs:
+                    # Write conflict: transaction committed concurrently on same key
+                    del self.active_txs[tx_id]
+                    return False
+
+        # Apply writes
+        for key, val in writes.items():
+            if key not in self.store:
+                self.store[key] = []
+            # Mark previous active version as deleted by this tx
+            if self.store[key]:
+                self.store[key][-1].deleted_tx = tx_id
+            self.store[key].append(self.Version(val, created_tx=tx_id))
+
+        self.committed_txs.add(tx_id)
+        del self.active_txs[tx_id]
+        return True

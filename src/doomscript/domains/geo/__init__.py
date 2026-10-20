@@ -51,6 +51,9 @@ from doomscript.domains.geo.runtime import (
     geo_geohash_encode,
     geo_geohash_decode,
     SpatialRTree,
+    DelaunayTriangulator,
+    WebMercatorProjection,
+    IsochroneContour,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.geo.exporter import GeoASTExporter
@@ -227,5 +230,8 @@ __all__ = [
     "QuadTree",
     "QuadTreeNode",
     "geo_quadtree",
+    "DelaunayTriangulator",
+    "WebMercatorProjection",
+    "IsochroneContour",
 ]
 

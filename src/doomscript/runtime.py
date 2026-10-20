@@ -2163,6 +2163,9 @@ from doomscript.domains.db.runtime import (
     db_truncate_table,
     db_count_rows_where,
     db_create_index,
+    WALCrashRecovery,
+    CostBasedQueryOptimizer,
+    SnapshotIsolationMVCC,
     db_drop_index,
     db_add_column,
     db_drop_column_sqlite,
@@ -2892,6 +2895,9 @@ from doomscript.domains.web.runtime import (
     extract_web_table,
     download_web_media,
     execute_web_ir,
+    DOMElement,
+    CSSSelectorEngine,
+    RFC6265CookieJar,
     web_select_all,
     web_extract_tables,
     web_parse_query_params,
@@ -3543,6 +3549,9 @@ from doomscript.domains.neuro.runtime import (
     neuro_stdp_update,
     neuro_poisson_spikes,
     neuro_simulate_lif,
+    TsodyksMarkramSynapse,
+    FitzHughNagumoNeuron,
+    WinnerTakeAllNetwork,
 )
 
 from doomscript.domains.automata.runtime import (
@@ -3689,6 +3698,9 @@ from doomscript.domains.geo.runtime import (
     QuadTree,
     QuadTreeNode,
     geo_quadtree,
+    DelaunayTriangulator,
+    WebMercatorProjection,
+    IsochroneContour,
 )
 
 from doomscript.domains.nlp.runtime import (
@@ -4048,3 +4060,82 @@ def sec_secp256k1_public_key(priv_key: int) -> Tuple[int, int]:
 def sec_secp256k1_ecdh(priv_key: int, peer_pub_key: Tuple[int, int]) -> str:
     """Derives SHA-256 Elliptic Curve Diffie-Hellman (ECDH) shared secret."""
     return Secp256k1Curve.ecdh_shared_secret(priv_key, peer_pub_key)
+
+
+# --- Cluster H: Web, Database, Neuroscience & Geospatial Wrappers ---
+
+def web_css_select(html: str, selector: str) -> List[DOMElement]:
+    """Parses HTML into DOM and executes CSS selector query."""
+    root = CSSSelectorEngine.parse_html(html)
+    return CSSSelectorEngine.select(root, selector)
+
+
+def web_cookie_jar() -> RFC6265CookieJar:
+    """Instantiates a new RFC 6265 compliant HTTP cookie jar."""
+    return RFC6265CookieJar()
+
+
+def db_wal_create() -> WALCrashRecovery:
+    """Instantiates an ARIES write-ahead logger with recovery support."""
+    return WALCrashRecovery()
+
+
+def db_query_optimizer() -> CostBasedQueryOptimizer:
+    """Instantiates a cost-based query optimizer for table scan planning."""
+    return CostBasedQueryOptimizer()
+
+
+def db_mvcc_create() -> SnapshotIsolationMVCC:
+    """Instantiates a Snapshot Isolation Multi-Version Concurrency Control engine."""
+    return SnapshotIsolationMVCC()
+
+
+def neuro_tsodyks_markram(
+    U: float = 0.2, tau_rec: float = 800.0, tau_fac: float = 50.0, A: float = 1.0
+) -> TsodyksMarkramSynapse:
+    """Instantiates a Tsodyks-Markram short-term depressing and facilitating synapse."""
+    return TsodyksMarkramSynapse(U=U, tau_rec=tau_rec, tau_fac=tau_fac, A=A)
+
+
+def neuro_fitzhugh_nagumo(a: float = 0.7, b: float = 0.8, tau: float = 12.5) -> FitzHughNagumoNeuron:
+    """Instantiates a FitzHugh-Nagumo biological excitable membrane model."""
+    return FitzHughNagumoNeuron(a=a, b=b, tau=tau)
+
+
+def neuro_wta_network(
+    num_neurons: int, beta: float = 0.5, tau: float = 10.0, threshold: float = 0.0
+) -> WinnerTakeAllNetwork:
+    """Instantiates a competitive lateral inhibitory Winner-Take-All neural circuit."""
+    return WinnerTakeAllNetwork(num_neurons=num_neurons, beta=beta, tau=tau, threshold=threshold)
+
+
+def geo_delaunay_triangulate(
+    points: List[Tuple[float, float]]
+) -> List[Tuple[Tuple[float, float], Tuple[float, float], Tuple[float, float]]]:
+    """Computes 2D Delaunay Triangulation using Bowyer-Watson incremental algorithm."""
+    return DelaunayTriangulator.triangulate(points)
+
+
+def geo_voronoi_diagram(points: List[Tuple[float, float]]) -> List[Tuple[Tuple[float, float], Tuple[float, float]]]:
+    """Computes 2D Voronoi diagram dual edges."""
+    return DelaunayTriangulator.voronoi_diagram(points)
+
+
+def geo_web_mercator_forward(lat: float, lon: float) -> Tuple[float, float]:
+    """Transforms WGS84 (lat, lon) in degrees to EPSG:3857 (meters x, y)."""
+    return WebMercatorProjection.lat_lon_to_xy(lat, lon)
+
+
+def geo_web_mercator_inverse(x: float, y: float) -> Tuple[float, float]:
+    """Transforms EPSG:3857 (meters x, y) back to WGS84 (lat, lon) in degrees."""
+    return WebMercatorProjection.xy_to_lat_lon(x, y)
+
+
+def geo_compute_isochrone(
+    origin_node: str,
+    nodes: Dict[str, Tuple[float, float]],
+    edges: List[Dict[str, Any]],
+    max_time_minutes: float,
+) -> Dict[str, Any]:
+    """Computes reachable road nodes and convex hull isochrone polygon."""
+    return IsochroneContour.compute_isochrone(origin_node, nodes, edges, max_time_minutes)

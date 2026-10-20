@@ -41,6 +41,9 @@ from doomscript.domains.db.runtime import (
     SQLQueryBuilder,
     InMemoryRelationalDB,
     MigrationManager,
+    WALCrashRecovery,
+    CostBasedQueryOptimizer,
+    SnapshotIsolationMVCC,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.db.exporter import DBASTExporter
@@ -194,4 +197,7 @@ __all__ = [
     "SQLQueryBuilder",
     "InMemoryRelationalDB",
     "MigrationManager",
+    "WALCrashRecovery",
+    "CostBasedQueryOptimizer",
+    "SnapshotIsolationMVCC",
 ]
