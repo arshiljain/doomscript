@@ -36,6 +36,12 @@ from doomscript.domains.chain.runtime import (
     chain_pos_create,
     chain_pos_proposer,
     chain_pos_vote,
+    EVMBytecodeInterpreterStackMachine,
+    ThresholdSignatureSchemeShamir,
+    chain_evm_execute,
+    chain_threshold_split,
+    chain_threshold_reconstruct,
+    chain_threshold_aggregate_sign,
 )
 from doomscript.domains.chain.parser import ChainDomainParser
 from doomscript.domains.chain.exporter import ChainASTExporter
@@ -78,6 +84,8 @@ class ChainDomain(DomainContract):
     blocks = []
 
     def can_handle_line(self, line: str) -> bool:
+        if self.parser.parse_operation(line, 0) is not None:
+            return True
         s = line.strip().lower()
         return (
             s.startswith("create merkle tree from ")
@@ -93,6 +101,10 @@ class ChainDomain(DomainContract):
             or s.startswith("prove schnorr secret ")
             or s.startswith("verify proof ")
             or s.startswith("verify schnorr proof ")
+            or s.startswith("execute evm bytecode ")
+            or s.startswith("split secret ")
+            or s.startswith("reconstruct secret from shares ")
+            or s.startswith("threshold sign message ")
             or super().can_handle_line(line)
         )
 
@@ -130,4 +142,10 @@ __all__ = [
     "chain_pos_create",
     "chain_pos_proposer",
     "chain_pos_vote",
+    "EVMBytecodeInterpreterStackMachine",
+    "ThresholdSignatureSchemeShamir",
+    "chain_evm_execute",
+    "chain_threshold_split",
+    "chain_threshold_reconstruct",
+    "chain_threshold_aggregate_sign",
 ]

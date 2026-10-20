@@ -85,6 +85,33 @@ class CompilerDomainParser(DomainParser):
                 header = f'"{header}"'
             return f"set {target} to compiler_optimize_licm({blocks}, {header}, {body_blocks})"
 
+        # optimize ssa ir <ir_expr> with sccp into <target>
+        m_sccp = re.match(
+            r"^optimize\s+ssa\s+ir\s+(.+?)\s+with\s+sccp\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_sccp:
+            ir_expr, target = m_sccp.group(1).strip(), m_sccp.group(2).strip()
+            return f"set {target} to compiler_sccp_optimize({ir_expr})"
+
+        # earley parse <tokens_expr> with grammar <grammar_expr> starting at <start_expr> into <target>
+        m_earley = re.match(
+            r"^earley\s+parse\s+(.+?)\s+with\s+grammar\s+(.+?)\s+starting\s+at\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_earley:
+            tokens, grammar, start, target = (
+                m_earley.group(1).strip(),
+                m_earley.group(2).strip(),
+                m_earley.group(3).strip(),
+                m_earley.group(4).strip(),
+            )
+            if not (start.startswith('"') or start.startswith("'")):
+                start = f'"{start}"'
+            return f"set {target} to compiler_earley_parse({grammar}, {start}, {tokens})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

@@ -185,6 +185,57 @@ class ChainDomainParser(DomainParser):
             b_hash, voters, pos, target = m_pos_vote.group(1).strip(), m_pos_vote.group(2).strip(), m_pos_vote.group(3).strip(), m_pos_vote.group(4).strip()
             return f"set {target} to chain_pos_vote({pos}, {b_hash}, {voters})"
 
+        # execute evm bytecode <code_expr> [with calldata <data_expr>] [with gas <gas_expr>] into <target>
+        m_evm = re.match(
+            r"^execute\s+evm\s+bytecode\s+(.+?)(?:\s+with\s+calldata\s+(.+?))?(?:\s+with\s+gas\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_evm:
+            code = m_evm.group(1).strip()
+            calldata = m_evm.group(2).strip() if m_evm.group(2) else '""'
+            gas = m_evm.group(3).strip() if m_evm.group(3) else "1000000"
+            target = m_evm.group(4).strip()
+            return f"set {target} to chain_evm_execute({code}, calldata_hex={calldata}, gas_limit={gas})"
+
+        # split secret <secret_expr> into <n_expr> shares with threshold <t_expr> into <target>
+        m_split = re.match(
+            r"^split\s+secret\s+(.+?)\s+into\s+(.+?)\s+shares\s+with\s+threshold\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_split:
+            sec = m_split.group(1).strip()
+            n = m_split.group(2).strip()
+            t = m_split.group(3).strip()
+            target = m_split.group(4).strip()
+            return f"set {target} to chain_threshold_split({sec}, {t}, {n})"
+
+        # reconstruct secret from shares <shares_expr> with threshold <t_expr> into <target>
+        m_rec = re.match(
+            r"^reconstruct\s+secret\s+from\s+shares\s+(.+?)\s+with\s+threshold\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_rec:
+            shares = m_rec.group(1).strip()
+            t = m_rec.group(2).strip()
+            target = m_rec.group(3).strip()
+            return f"set {target} to chain_threshold_reconstruct({shares}, {t})"
+
+        # threshold sign message <msg_expr> with shares <shares_expr> and threshold <t_expr> into <target>
+        m_tsign = re.match(
+            r"^threshold\s+sign\s+message\s+(.+?)\s+with\s+shares\s+(.+?)\s+and\s+threshold\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_tsign:
+            msg = m_tsign.group(1).strip()
+            shares = m_tsign.group(2).strip()
+            t = m_tsign.group(3).strip()
+            target = m_tsign.group(4).strip()
+            return f"set {target} to chain_threshold_aggregate_sign({msg}, {shares}, {t})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

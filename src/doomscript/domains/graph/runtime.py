@@ -2010,6 +2010,257 @@ def graph_johnson_all_pairs_paths(
     return Record(JohnsonsAllPairsShortestPaths.compute(nodes, edges))
 
 
+# ==============================================================================
+# BRON-KERBOSCH MAXIMAL CLIQUES & LENGAUER-TARJAN FAST DOMINATOR ENGINES
+# ==============================================================================
+
+
+class BronKerboschMaximalCliques:
+    """Bron-Kerbosch maximal clique enumeration with Tomita pivoting and degeneracy ordering.
+
+    Enumerates all maximal cliques in an undirected graph in optimal O(d * n * 3^(d/3)) time,
+    where d is the graph degeneracy, and computes maximum clique and k-core metrics.
+    """
+
+    @classmethod
+    def compute(
+        cls,
+        edges: List[Tuple[Any, Any]],
+        weighted_nodes: Optional[Dict[Any, float]] = None,
+    ) -> Dict[str, Any]:
+        """Finds all maximal cliques and the maximum-weight clique."""
+        adj: Dict[str, Set[str]] = {}
+        for edge in edges:
+            if isinstance(edge, (list, tuple)) and len(edge) >= 2:
+                u, v = str(edge[0]), str(edge[1])
+                if u == v:
+                    continue
+                adj.setdefault(u, set()).add(v)
+                adj.setdefault(v, set()).add(u)
+            elif isinstance(edge, dict):
+                u = str(edge.get("u") or edge.get("from") or edge.get("source"))
+                v = str(edge.get("v") or edge.get("to") or edge.get("target"))
+                if u == v or u is None or v is None:
+                    continue
+                adj.setdefault(u, set()).add(v)
+                adj.setdefault(v, set()).add(u)
+
+        nodes = sorted(list(adj.keys()))
+        weights = {n: float(weighted_nodes.get(n, 1.0)) for n in nodes} if weighted_nodes else {n: 1.0 for n in nodes}
+
+        # 1. Compute degeneracy ordering and k-core numbers
+        degrees = {n: len(adj[n]) for n in nodes}
+        core_numbers: Dict[str, int] = {}
+        degeneracy_order: List[str] = []
+        rem_nodes = set(nodes)
+
+        while rem_nodes:
+            min_node = min(rem_nodes, key=lambda n: degrees[n])
+            core_numbers[min_node] = degrees[min_node]
+            degeneracy_order.append(min_node)
+            rem_nodes.remove(min_node)
+            for neighbor in adj[min_node]:
+                if neighbor in rem_nodes:
+                    degrees[neighbor] -= 1
+
+        degeneracy = max(core_numbers.values()) if core_numbers else 0
+
+        # 2. Bron-Kerbosch with Tomita pivot
+        all_cliques: List[List[str]] = []
+
+        def bron_kerbosch_pivot(R: Set[str], P: Set[str], X: Set[str]) -> None:
+            if not P and not X:
+                all_cliques.append(sorted(list(R)))
+                return
+
+            # Tomita pivot selection: maximize |P ∩ N(u)|
+            u = max(P | X, key=lambda n: len(P & adj.get(n, set())))
+            candidates = list(P - adj.get(u, set()))
+
+            for v in candidates:
+                neighbors = adj.get(v, set())
+                bron_kerbosch_pivot(R | {v}, P & neighbors, X & neighbors)
+                P.remove(v)
+                X.add(v)
+
+        # Outer degeneracy loop
+        for i, v in enumerate(degeneracy_order):
+            future_neighbors = adj[v] & set(degeneracy_order[i + 1 :])
+            past_neighbors = adj[v] & set(degeneracy_order[:i])
+            bron_kerbosch_pivot({v}, future_neighbors, past_neighbors)
+
+        # Sort cliques by size descending, then lexicographically
+        all_cliques.sort(key=lambda c: (-len(c), c))
+        max_clique = all_cliques[0] if all_cliques else []
+
+        # Find maximum weight clique
+        max_weight = -1.0
+        max_weight_clique = []
+        for c in all_cliques:
+            w_sum = sum(weights.get(n, 1.0) for n in c)
+            if w_sum > max_weight:
+                max_weight = w_sum
+                max_weight_clique = c
+
+        return {
+            "cliques": all_cliques,
+            "clique_count": len(all_cliques),
+            "maximum_clique": max_clique,
+            "maximum_clique_size": len(max_clique),
+            "maximum_weight_clique": max_weight_clique,
+            "maximum_clique_weight": max_weight if max_weight >= 0 else 0.0,
+            "degeneracy": degeneracy,
+            "k_core_numbers": core_numbers,
+        }
+
+
+class LengauerTarjanDominatorTree:
+    """Thomas Lengauer & Robert Endre Tarjan's algorithm for immediate dominators in directed flowgraphs.
+
+    Computes immediate dominators (idom), dominator tree hierarchy, and dominance frontiers (DF)
+    for control flow analysis, compiler SSA construction, and graph centrality in O(M log N) time.
+    """
+
+    @classmethod
+    def compute(
+        cls,
+        entry: Any,
+        edges: List[Tuple[Any, Any]],
+    ) -> Dict[str, Any]:
+        """Computes dominator tree and dominance frontiers from entry node."""
+        entry_s = str(entry)
+        succ: Dict[str, List[str]] = {}
+        pred: Dict[str, List[str]] = {}
+
+        for edge in edges:
+            if isinstance(edge, (list, tuple)) and len(edge) >= 2:
+                u, v = str(edge[0]), str(edge[1])
+            elif isinstance(edge, dict):
+                u = str(edge.get("u") or edge.get("from") or edge.get("source"))
+                v = str(edge.get("v") or edge.get("to") or edge.get("target"))
+            else:
+                continue
+            succ.setdefault(u, []).append(v)
+            pred.setdefault(v, []).append(u)
+
+        semi: Dict[str, int] = {}
+        parent: Dict[str, str] = {}
+        vertex: List[str] = []
+        dfnum: Dict[str, int] = {}
+        ancestor: Dict[str, Optional[str]] = {}
+        label: Dict[str, str] = {}
+
+        # 1. Depth-first search spanning tree
+        def dfs(v: str) -> None:
+            dfnum[v] = len(vertex)
+            semi[v] = len(vertex)
+            vertex.append(v)
+            label[v] = v
+            ancestor[v] = None
+            for w in succ.get(v, []):
+                if w not in dfnum:
+                    parent[w] = v
+                    dfs(w)
+
+        dfs(entry_s)
+
+        # DSU with path compression
+        def compress(v: str) -> None:
+            a = ancestor.get(v)
+            if a is not None and ancestor.get(a) is not None:
+                compress(a)
+                if semi[label[ancestor[v]]] < semi[label[v]]:
+                    label[v] = label[ancestor[v]]
+                ancestor[v] = ancestor[a]
+
+        def eval_node(v: str) -> str:
+            if ancestor.get(v) is None:
+                return v
+            compress(v)
+            return label[v]
+
+        def link(v: str, w: str) -> None:
+            ancestor[w] = v
+
+        bucket: Dict[str, List[str]] = {v: [] for v in vertex}
+        idom: Dict[str, Optional[str]] = {}
+
+        # 2. Compute semidominators & preliminary idom
+        for i in range(len(vertex) - 1, 0, -1):
+            w = vertex[i]
+            for v in pred.get(w, []):
+                if v in dfnum:
+                    u = eval_node(v)
+                    if semi[u] < semi[w]:
+                        semi[w] = semi[u]
+            bucket[vertex[semi[w]]].append(w)
+            link(parent[w], w)
+            for v in bucket[parent[w]]:
+                u = eval_node(v)
+                idom[v] = parent[w] if semi[u] == semi[v] else u
+            bucket[parent[w]] = []
+
+        # 3. Finalize immediate dominators
+        for i in range(1, len(vertex)):
+            w = vertex[i]
+            if idom[w] != vertex[semi[w]]:
+                idom[w] = idom[idom[w]]
+
+        idom[entry_s] = None
+
+        # 4. Construct tree children
+        tree_children: Dict[str, List[str]] = {v: [] for v in vertex}
+        for v in vertex:
+            parent_dom = idom.get(v)
+            if parent_dom is not None and parent_dom in tree_children:
+                tree_children[parent_dom].append(v)
+
+        # 5. Compute dominance frontiers (DF)
+        df: Dict[str, Set[str]] = {v: set() for v in vertex}
+        for w in vertex:
+            predecessors = [p for p in pred.get(w, []) if p in dfnum]
+            if len(predecessors) >= 2:
+                for p in predecessors:
+                    runner: Optional[str] = p
+                    while runner is not None and runner != idom.get(w):
+                        df[runner].add(w)
+                        runner = idom.get(runner)
+
+        # 6. Compute strict dominators
+        strict_dom: Dict[str, List[str]] = {v: [] for v in vertex}
+        for v in vertex:
+            curr = idom.get(v)
+            while curr is not None:
+                strict_dom[v].append(curr)
+                curr = idom.get(curr)
+
+        return {
+            "entry": entry_s,
+            "reachable_nodes_count": len(vertex),
+            "idom": idom,
+            "tree_children": tree_children,
+            "dominance_frontiers": {k: sorted(list(v)) for k, v in df.items()},
+            "strict_dominators": strict_dom,
+        }
+
+
+def graph_bron_kerbosch_degeneracy_cliques(
+    edges: List[Tuple[Any, Any]],
+    weighted_nodes: Optional[Dict[Any, float]] = None,
+) -> Any:
+    """Finds all maximal cliques using Bron-Kerbosch algorithm with Tomita pivot and degeneracy ordering."""
+    return Record(BronKerboschMaximalCliques.compute(edges, weighted_nodes))
+
+
+def graph_lengauer_tarjan_dominators(
+    entry: Any,
+    edges: List[Tuple[Any, Any]],
+) -> Any:
+    """Computes immediate dominators and dominance frontiers using Lengauer-Tarjan algorithm."""
+    return Record(LengauerTarjanDominatorTree.compute(entry, edges))
+
+
+
 
 
 

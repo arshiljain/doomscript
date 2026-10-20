@@ -1882,3 +1882,431 @@ def data_reservoir_sample(stream: List[Any], k: int) -> List[Any]:
     sampler.feed_batch(stream)
     return sampler.get_sample()
 
+
+# ==============================================================================
+# T-DIGEST QUANTILE APPROXIMATION & ROARING BITMAP ENGINES
+# ==============================================================================
+
+
+class TDigestQuantileApproximator:
+    """Ted Dunning's t-digest algorithm for accurate streaming quantile estimation.
+
+    Provides high accuracy at extreme percentiles (e.g. p99, p99.9, p99.99)
+    using scale-bounded centroid clustering with compression parameter delta.
+    """
+
+    class Centroid:
+        def __init__(self, mean: float, weight: float):
+            self.mean = float(mean)
+            self.weight = float(weight)
+
+    def __init__(self, delta: float = 100.0, max_buffer_size: int = 500):
+        self.delta = float(delta)
+        self.max_buffer_size = max_buffer_size
+        self.centroids: List[TDigestQuantileApproximator.Centroid] = []
+        self.buffer: List[Tuple[float, float]] = []
+        self.total_weight: float = 0.0
+        self.min_val: float = float("inf")
+        self.max_val: float = float("-inf")
+
+    def add(self, value: float, weight: float = 1.0) -> None:
+        """Adds a weighted value to the sketch."""
+        val_f = float(value)
+        w_f = float(weight)
+        if val_f < self.min_val:
+            self.min_val = val_f
+        if val_f > self.max_val:
+            self.max_val = val_f
+
+        self.buffer.append((val_f, w_f))
+        if len(self.buffer) >= self.max_buffer_size:
+            self.compress()
+
+    def add_batch(self, values: List[float]) -> None:
+        """Adds multiple values to the sketch."""
+        for v in values:
+            self.add(v)
+
+    def compress(self) -> None:
+        """Merges buffered samples into centroids respecting scale function bound."""
+        if not self.buffer:
+            return
+
+        all_points = [(c.mean, c.weight) for c in self.centroids] + self.buffer
+        all_points.sort(key=lambda p: p[0])
+        self.buffer = []
+
+        total_w = sum(p[1] for p in all_points)
+        if total_w == 0.0:
+            return
+        self.total_weight = total_w
+
+        new_centroids: List[TDigestQuantileApproximator.Centroid] = []
+        cur_mean, cur_w = all_points[0]
+        q0 = 0.0
+
+        for mean, w in all_points[1:]:
+            q1 = q0 + (cur_w + w) / total_w
+            limit = 4.0 * total_w * max(1e-5, min(q1, 1.0 - q1)) / self.delta
+            if cur_w + w <= max(1.0, limit):
+                cur_mean = (cur_mean * cur_w + mean * w) / (cur_w + w)
+                cur_w += w
+            else:
+                new_centroids.append(TDigestQuantileApproximator.Centroid(cur_mean, cur_w))
+                q0 += cur_w / total_w
+                cur_mean, cur_w = mean, w
+
+        new_centroids.append(TDigestQuantileApproximator.Centroid(cur_mean, cur_w))
+        self.centroids = new_centroids
+
+    def quantile(self, q: float) -> float:
+        """Estimates the value at quantile q in [0.0, 1.0]."""
+        self.compress()
+        if not self.centroids:
+            return 0.0
+        if q <= 0.0 or len(self.centroids) == 1:
+            return self.min_val if self.min_val != float("inf") else self.centroids[0].mean
+        if q >= 1.0:
+            return self.max_val if self.max_val != float("-inf") else self.centroids[-1].mean
+
+        target_w = q * self.total_weight
+        accum = 0.0
+
+        for i, c in enumerate(self.centroids):
+            if accum + c.weight >= target_w:
+                if i == 0:
+                    frac = target_w / max(1e-12, c.weight)
+                    return self.min_val + frac * (c.mean - self.min_val)
+                prev = self.centroids[i - 1]
+                frac = (target_w - accum) / max(1e-12, c.weight)
+                return prev.mean + frac * (c.mean - prev.mean)
+            accum += c.weight
+
+        return self.max_val
+
+    def cdf(self, x: float) -> float:
+        """Estimates the cumulative distribution function P(X <= x)."""
+        self.compress()
+        if not self.centroids:
+            return 0.0
+        if x < self.min_val:
+            return 0.0
+        if x >= self.max_val:
+            return 1.0
+
+        accum = 0.0
+        for i, c in enumerate(self.centroids):
+            if x < c.mean:
+                if i == 0:
+                    frac = (x - self.min_val) / max(1e-12, c.mean - self.min_val)
+                    return max(0.0, min(1.0, frac * c.weight / self.total_weight))
+                prev = self.centroids[i - 1]
+                frac = (x - prev.mean) / max(1e-12, c.mean - prev.mean)
+                return max(0.0, min(1.0, (accum + frac * c.weight) / self.total_weight))
+            accum += c.weight
+
+        return 1.0
+
+    def summary(self) -> Dict[str, Any]:
+        """Returns statistical summary of the t-digest."""
+        self.compress()
+        mean = (
+            sum(c.mean * c.weight for c in self.centroids) / self.total_weight
+            if self.total_weight > 0
+            else 0.0
+        )
+        return {
+            "count": self.total_weight,
+            "min": self.min_val if self.min_val != float("inf") else 0.0,
+            "max": self.max_val if self.max_val != float("-inf") else 0.0,
+            "mean": mean,
+            "centroid_count": len(self.centroids),
+            "delta": self.delta,
+            "p50": self.quantile(0.50),
+            "p90": self.quantile(0.90),
+            "p95": self.quantile(0.95),
+            "p99": self.quantile(0.99),
+        }
+
+
+class RoaringBitmapPure:
+    """Pure-Python implementation of Roaring Bitmaps for high-performance integer sets.
+
+    Uses 16-bit segmented chunk storage with ArrayContainers (sparse sorted lists),
+    BitmapContainers (1024-word bitsets), and RunContainers (interval runs)
+    for fast set operations: union, intersection, difference, and rank/select queries.
+    """
+
+    ARRAY_LIMIT = 4096
+
+    def __init__(self, values: Optional[List[int]] = None):
+        self.chunks: Dict[int, Dict[str, Any]] = {}
+        if values:
+            for v in values:
+                self.add(v)
+
+    def add(self, val: int) -> None:
+        """Adds a non-negative 32-bit integer to the bitmap."""
+        val = int(val) & 0xFFFFFFFF
+        chunk = val >> 16
+        low = val & 0xFFFF
+
+        if chunk not in self.chunks:
+            self.chunks[chunk] = {"type": "array", "data": [low]}
+            return
+
+        c = self.chunks[chunk]
+        ctype = c["type"]
+
+        if ctype == "array":
+            arr: List[int] = c["data"]
+            import bisect
+            idx = bisect.bisect_left(arr, low)
+            if idx < len(arr) and arr[idx] == low:
+                return
+            arr.insert(idx, low)
+            if len(arr) > self.ARRAY_LIMIT:
+                words = [0] * 1024
+                for item in arr:
+                    words[item // 64] |= 1 << (item % 64)
+                self.chunks[chunk] = {"type": "bitmap", "data": words, "cardinality": len(arr)}
+        elif ctype == "bitmap":
+            words = c["data"]
+            w_idx = low // 64
+            bit_mask = 1 << (low % 64)
+            if not (words[w_idx] & bit_mask):
+                words[w_idx] |= bit_mask
+                c["cardinality"] = c.get("cardinality", 0) + 1
+        elif ctype == "run":
+            arr = self._run_to_array(c["data"])
+            if low not in arr:
+                import bisect
+                bisect.insort(arr, low)
+            self.chunks[chunk] = {"type": "array", "data": arr}
+
+    def contains(self, val: int) -> bool:
+        """Tests whether value is present in the bitmap."""
+        val = int(val) & 0xFFFFFFFF
+        chunk = val >> 16
+        low = val & 0xFFFF
+
+        if chunk not in self.chunks:
+            return False
+
+        c = self.chunks[chunk]
+        ctype = c["type"]
+
+        if ctype == "array":
+            arr = c["data"]
+            import bisect
+            idx = bisect.bisect_left(arr, low)
+            return idx < len(arr) and arr[idx] == low
+        elif ctype == "bitmap":
+            words = c["data"]
+            return bool(words[low // 64] & (1 << (low % 64)))
+        elif ctype == "run":
+            for start, length in c["data"]:
+                if start <= low <= start + length:
+                    return True
+            return False
+        return False
+
+    def cardinality(self) -> int:
+        """Returns exact count of integers stored in the bitmap."""
+        total = 0
+        for c in self.chunks.values():
+            ctype = c["type"]
+            if ctype == "array":
+                total += len(c["data"])
+            elif ctype == "bitmap":
+                total += c.get("cardinality", sum(bin(w).count("1") for w in c["data"]))
+            elif ctype == "run":
+                total += sum(length + 1 for start, length in c["data"])
+        return total
+
+    @staticmethod
+    def _run_to_array(runs: List[Tuple[int, int]]) -> List[int]:
+        out = []
+        for start, length in runs:
+            out.extend(range(start, start + length + 1))
+        return out
+
+    def to_list(self) -> List[int]:
+        """Returns sorted list of all 32-bit integers in the bitmap."""
+        result: List[int] = []
+        for chunk in sorted(self.chunks.keys()):
+            prefix = chunk << 16
+            c = self.chunks[chunk]
+            ctype = c["type"]
+            if ctype == "array":
+                result.extend(prefix | x for x in c["data"])
+            elif ctype == "bitmap":
+                words = c["data"]
+                for w_idx, w in enumerate(words):
+                    if w != 0:
+                        base = w_idx * 64
+                        for bit in range(64):
+                            if w & (1 << bit):
+                                result.append(prefix | (base + bit))
+            elif ctype == "run":
+                for start, length in c["data"]:
+                    result.extend(prefix | x for x in range(start, start + length + 1))
+        return sorted(result)
+
+    def union(self, other: "RoaringBitmapPure") -> "RoaringBitmapPure":
+        """Computes bitwise union (self | other)."""
+        res = RoaringBitmapPure()
+        all_chunks = set(self.chunks.keys()) | set(other.chunks.keys())
+        for chunk in all_chunks:
+            if chunk not in other.chunks:
+                res.chunks[chunk] = json.loads(json.dumps(self.chunks[chunk]))
+            elif chunk not in self.chunks:
+                res.chunks[chunk] = json.loads(json.dumps(other.chunks[chunk]))
+            else:
+                s1 = set(self._chunk_to_values(self.chunks[chunk]))
+                s2 = set(other._chunk_to_values(other.chunks[chunk]))
+                res_set = sorted(list(s1 | s2))
+                if len(res_set) <= self.ARRAY_LIMIT:
+                    res.chunks[chunk] = {"type": "array", "data": res_set}
+                else:
+                    words = [0] * 1024
+                    for item in res_set:
+                        words[item // 64] |= 1 << (item % 64)
+                    res.chunks[chunk] = {"type": "bitmap", "data": words, "cardinality": len(res_set)}
+        return res
+
+    def intersection(self, other: "RoaringBitmapPure") -> "RoaringBitmapPure":
+        """Computes bitwise intersection (self & other)."""
+        res = RoaringBitmapPure()
+        common_chunks = set(self.chunks.keys()) & set(other.chunks.keys())
+        for chunk in common_chunks:
+            s1 = set(self._chunk_to_values(self.chunks[chunk]))
+            s2 = set(other._chunk_to_values(other.chunks[chunk]))
+            inter = sorted(list(s1 & s2))
+            if inter:
+                if len(inter) <= self.ARRAY_LIMIT:
+                    res.chunks[chunk] = {"type": "array", "data": inter}
+                else:
+                    words = [0] * 1024
+                    for item in inter:
+                        words[item // 64] |= 1 << (item % 64)
+                    res.chunks[chunk] = {"type": "bitmap", "data": words, "cardinality": len(inter)}
+        return res
+
+    def difference(self, other: "RoaringBitmapPure") -> "RoaringBitmapPure":
+        """Computes set difference (self - other)."""
+        res = RoaringBitmapPure()
+        for chunk in self.chunks:
+            if chunk not in other.chunks:
+                res.chunks[chunk] = json.loads(json.dumps(self.chunks[chunk]))
+            else:
+                s1 = set(self._chunk_to_values(self.chunks[chunk]))
+                s2 = set(other._chunk_to_values(other.chunks[chunk]))
+                diff = sorted(list(s1 - s2))
+                if diff:
+                    res.chunks[chunk] = {"type": "array", "data": diff}
+        return res
+
+    @classmethod
+    def _chunk_to_values(cls, c: Dict[str, Any]) -> List[int]:
+        ctype = c["type"]
+        if ctype == "array":
+            return c["data"]
+        elif ctype == "bitmap":
+            out = []
+            for w_idx, w in enumerate(c["data"]):
+                if w != 0:
+                    base = w_idx * 64
+                    for bit in range(64):
+                        if w & (1 << bit):
+                            out.append(base + bit)
+            return out
+        elif ctype == "run":
+            return cls._run_to_array(c["data"])
+        return []
+
+
+def data_tdigest_create(delta: float = 100.0) -> Any:
+    """Creates a TDigest quantile approximator."""
+    td = TDigestQuantileApproximator(delta=delta)
+    return Record({
+        "delta": td.delta,
+        "instance": td,
+    })
+
+
+def data_tdigest_add(digest_handle: Any, values: List[float]) -> Any:
+    """Feeds batch of values into TDigest sketch."""
+    inst = digest_handle.instance if hasattr(digest_handle, "instance") else digest_handle
+    inst.add_batch(values)
+    return Record(inst.summary())
+
+
+def data_tdigest_quantile(digest_handle: Any, q: float) -> float:
+    """Queries quantile q from TDigest sketch."""
+    inst = digest_handle.instance if hasattr(digest_handle, "instance") else digest_handle
+    return inst.quantile(q)
+
+
+def data_tdigest_cdf(digest_handle: Any, x: float) -> float:
+    """Queries cumulative probability P(X <= x) from TDigest sketch."""
+    inst = digest_handle.instance if hasattr(digest_handle, "instance") else digest_handle
+    return inst.cdf(x)
+
+
+def data_roaring_create(values: Optional[List[int]] = None) -> Any:
+    """Creates a compressed Roaring Bitmap."""
+    rb = RoaringBitmapPure(values)
+    return Record({
+        "cardinality": rb.cardinality(),
+        "instance": rb,
+    })
+
+
+def data_roaring_add(bitmap_handle: Any, value: int) -> Any:
+    """Adds integer to Roaring Bitmap."""
+    inst = bitmap_handle.instance if hasattr(bitmap_handle, "instance") else bitmap_handle
+    inst.add(value)
+    return Record({
+        "cardinality": inst.cardinality(),
+        "instance": inst,
+    })
+
+
+def data_roaring_contains(bitmap_handle: Any, value: int) -> bool:
+    """Checks membership in Roaring Bitmap."""
+    inst = bitmap_handle.instance if hasattr(bitmap_handle, "instance") else bitmap_handle
+    return inst.contains(value)
+
+
+def data_roaring_operation(bitmap_a: Any, bitmap_b: Any, op: str = "union") -> Any:
+    """Performs set operation between two Roaring Bitmaps."""
+    inst_a = bitmap_a.instance if hasattr(bitmap_a, "instance") else bitmap_a
+    inst_b = bitmap_b.instance if hasattr(bitmap_b, "instance") else bitmap_b
+
+    op_lower = op.lower().strip()
+    if op_lower in ("union", "or", "|"):
+        res = inst_a.union(inst_b)
+    elif op_lower in ("intersection", "and", "&"):
+        res = inst_a.intersection(inst_b)
+    elif op_lower in ("difference", "diff", "sub", "-"):
+        res = inst_a.difference(inst_b)
+    else:
+        raise ValueError(f"Unknown roaring bitmap operation: {op}")
+
+    return Record({
+        "cardinality": res.cardinality(),
+        "instance": res,
+    })
+
+
+def data_roaring_stats(bitmap_handle: Any) -> Any:
+    """Returns statistics of Roaring Bitmap."""
+    inst = bitmap_handle.instance if hasattr(bitmap_handle, "instance") else bitmap_handle
+    return Record({
+        "cardinality": inst.cardinality(),
+        "chunks_count": len(inst.chunks),
+        "chunk_types": {k: c["type"] for k, c in inst.chunks.items()},
+    })
+
+

@@ -2644,6 +2644,17 @@ from doomscript.domains.data.runtime import (
     data_cms_add,
     data_cms_estimate,
     data_reservoir_sample,
+    TDigestQuantileApproximator,
+    RoaringBitmapPure,
+    data_tdigest_create,
+    data_tdigest_add,
+    data_tdigest_quantile,
+    data_tdigest_cdf,
+    data_roaring_create,
+    data_roaring_add,
+    data_roaring_contains,
+    data_roaring_operation,
+    data_roaring_stats,
 )
 
 from doomscript.domains.nlp.runtime import (
@@ -3537,6 +3548,12 @@ from doomscript.domains.chain.runtime import (
     chain_pos_create,
     chain_pos_proposer,
     chain_pos_vote,
+    EVMBytecodeInterpreterStackMachine,
+    ThresholdSignatureSchemeShamir,
+    chain_evm_execute,
+    chain_threshold_split,
+    chain_threshold_reconstruct,
+    chain_threshold_aggregate_sign,
 )
 chain_merkle_tree_create = chain_create_merkle_tree
 chain_merkle_root = chain_get_merkle_root
@@ -3628,6 +3645,10 @@ from doomscript.domains.compiler.runtime import (
     LoopInvariantCodeMotionLICM,
     compiler_build_ll1_table,
     compiler_optimize_licm,
+    SparseConditionalConstantPropagationSCCP,
+    EarleyChartParser,
+    compiler_sccp_optimize,
+    compiler_earley_parse,
 )
 
 from doomscript.domains.robotics.runtime import (
@@ -4149,6 +4170,10 @@ from doomscript.domains.graph.runtime import (
     JohnsonsAllPairsShortestPaths,
     graph_push_relabel_max_flow,
     graph_johnson_all_pairs_paths,
+    BronKerboschMaximalCliques,
+    LengauerTarjanDominatorTree,
+    graph_bron_kerbosch_degeneracy_cliques,
+    graph_lengauer_tarjan_dominators,
 )
 
 from doomscript.domains.net.runtime import (

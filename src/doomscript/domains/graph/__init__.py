@@ -67,6 +67,10 @@ from doomscript.domains.graph.runtime import (
     JohnsonsAllPairsShortestPaths,
     graph_push_relabel_max_flow,
     graph_johnson_all_pairs_paths,
+    BronKerboschMaximalCliques,
+    LengauerTarjanDominatorTree,
+    graph_bron_kerbosch_degeneracy_cliques,
+    graph_lengauer_tarjan_dominators,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.graph.exporter import GraphASTExporter
@@ -269,5 +273,9 @@ __all__ = [
     "JohnsonsAllPairsShortestPaths",
     "graph_push_relabel_max_flow",
     "graph_johnson_all_pairs_paths",
+    "BronKerboschMaximalCliques",
+    "LengauerTarjanDominatorTree",
+    "graph_bron_kerbosch_degeneracy_cliques",
+    "graph_lengauer_tarjan_dominators",
 ]
 

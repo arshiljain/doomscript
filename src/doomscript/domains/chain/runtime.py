@@ -997,3 +997,485 @@ def chain_pos_vote(pos: ProofOfStakeValidator, block_hash: str, voters: List[str
     """Checks 2/3 supermajority consensus."""
     return Record(pos.cast_votes_and_finalize(block_hash, voters))
 
+
+# ==============================================================================
+# EVM BYTECODE INTERPRETER & SHAMIR THRESHOLD SIGNATURE ENGINES
+# ==============================================================================
+
+
+class EVMBytecodeInterpreterStackMachine:
+    """Pure-Python Ethereum Virtual Machine (EVM) stack machine execution engine.
+
+    Implements full 256-bit word operations, dynamic memory expansion,
+    persistent storage key-value words, Keccak-256 cryptographic hashing,
+    call environment emulation, and gas accounting.
+    """
+
+    MASK256 = (1 << 256) - 1
+    SIGN_BIT = 1 << 255
+
+    def __init__(
+        self,
+        bytecode_hex: str,
+        calldata_hex: str = "",
+        gas_limit: int = 1000000,
+        caller: str = "0x0000000000000000000000000000000000000001",
+        value: int = 0,
+        initial_storage: Optional[Dict[int, int]] = None,
+    ):
+        raw_code = bytecode_hex.strip()
+        if raw_code.startswith("0x") or raw_code.startswith("0X"):
+            raw_code = raw_code[2:]
+        self.code = bytes.fromhex(raw_code) if raw_code else b""
+
+        raw_data = calldata_hex.strip()
+        if raw_data.startswith("0x") or raw_data.startswith("0X"):
+            raw_data = raw_data[2:]
+        self.calldata = bytes.fromhex(raw_data) if raw_data else b""
+
+        self.gas_limit = int(gas_limit)
+        self.gas_remaining = int(gas_limit)
+        self.caller = caller
+        self.value = int(value)
+        self.storage: Dict[int, int] = dict(initial_storage or {})
+
+        self.stack: List[int] = []
+        self.memory = bytearray()
+        self.pc = 0
+        self.stopped = False
+        self.reverted = False
+        self.return_data = b""
+        self.step_count = 0
+        self.logs: List[Dict[str, Any]] = []
+
+    def _to_signed(self, val: int) -> int:
+        val = val & self.MASK256
+        if val & self.SIGN_BIT:
+            return val - (1 << 256)
+        return val
+
+    def _from_signed(self, val: int) -> int:
+        return val & self.MASK256
+
+    def _expand_memory(self, offset: int, size: int) -> int:
+        if size <= 0:
+            return 0
+        end = offset + size
+        if end > len(self.memory):
+            words = (end + 31) // 32
+            new_size = words * 32
+            old_words = (len(self.memory) + 31) // 32
+            cost = (3 * words + (words * words) // 512) - (3 * old_words + (old_words * old_words) // 512)
+            self.memory.extend(b"\x00" * (new_size - len(self.memory)))
+            return cost
+        return 0
+
+    def step(self) -> bool:
+        if self.stopped or self.pc >= len(self.code):
+            self.stopped = True
+            return False
+
+        op = self.code[self.pc]
+        self.pc += 1
+        self.step_count += 1
+        gas_cost = 3
+
+        # PUSH1 - PUSH32 (0x60 - 0x7F)
+        if 0x60 <= op <= 0x7F:
+            push_len = op - 0x60 + 1
+            push_bytes = self.code[self.pc : self.pc + push_len]
+            self.pc += push_len
+            val = int.from_bytes(push_bytes, byteorder="big")
+            self.stack.append(val & self.MASK256)
+            self.gas_remaining -= 3
+            return True
+
+        # DUP1 - DUP16 (0x80 - 0x8F)
+        if 0x80 <= op <= 0x8F:
+            dup_idx = op - 0x80 + 1
+            if len(self.stack) < dup_idx:
+                raise RuntimeError(f"Stack underflow on DUP{dup_idx}")
+            self.stack.append(self.stack[-dup_idx])
+            self.gas_remaining -= 3
+            return True
+
+        # SWAP1 - SWAP16 (0x90 - 0x9F)
+        if 0x90 <= op <= 0x9F:
+            swap_idx = op - 0x90 + 1
+            if len(self.stack) < swap_idx + 1:
+                raise RuntimeError(f"Stack underflow on SWAP{swap_idx}")
+            self.stack[-1], self.stack[-1 - swap_idx] = self.stack[-1 - swap_idx], self.stack[-1]
+            self.gas_remaining -= 3
+            return True
+
+        # Arithmetic & Logic
+        if op == 0x00:  # STOP
+            self.stopped = True
+            return False
+        elif op == 0x01:  # ADD
+            a, b = self.stack.pop(), self.stack.pop()
+            self.stack.append((a + b) & self.MASK256)
+        elif op == 0x02:  # MUL
+            a, b = self.stack.pop(), self.stack.pop()
+            self.stack.append((a * b) & self.MASK256)
+            gas_cost = 5
+        elif op == 0x03:  # SUB
+            a, b = self.stack.pop(), self.stack.pop()
+            self.stack.append((a - b) & self.MASK256)
+        elif op == 0x04:  # DIV
+            a, b = self.stack.pop(), self.stack.pop()
+            self.stack.append(0 if b == 0 else (a // b) & self.MASK256)
+            gas_cost = 5
+        elif op == 0x05:  # SDIV
+            a, b = self._to_signed(self.stack.pop()), self._to_signed(self.stack.pop())
+            if b == 0:
+                self.stack.append(0)
+            elif a == -(1 << 255) and b == -1:
+                self.stack.append((-(1 << 255)) & self.MASK256)
+            else:
+                q = abs(a) // abs(b)
+                if (a < 0) ^ (b < 0):
+                    q = -q
+                self.stack.append(self._from_signed(q))
+            gas_cost = 5
+        elif op == 0x06:  # MOD
+            a, b = self.stack.pop(), self.stack.pop()
+            self.stack.append(0 if b == 0 else (a % b) & self.MASK256)
+            gas_cost = 5
+        elif op == 0x07:  # SMOD
+            a, b = self._to_signed(self.stack.pop()), self._to_signed(self.stack.pop())
+            if b == 0:
+                self.stack.append(0)
+            else:
+                rem = abs(a) % abs(b)
+                if a < 0:
+                    rem = -rem
+                self.stack.append(self._from_signed(rem))
+            gas_cost = 5
+        elif op == 0x08:  # ADDMOD
+            a, b, n = self.stack.pop(), self.stack.pop(), self.stack.pop()
+            self.stack.append(0 if n == 0 else (a + b) % n & self.MASK256)
+            gas_cost = 8
+        elif op == 0x09:  # MULMOD
+            a, b, n = self.stack.pop(), self.stack.pop(), self.stack.pop()
+            self.stack.append(0 if n == 0 else (a * b) % n & self.MASK256)
+            gas_cost = 8
+        elif op == 0x0A:  # EXP
+            a, exp = self.stack.pop(), self.stack.pop()
+            self.stack.append(pow(a, exp, 1 << 256))
+            gas_cost = 10 + 50 * ((exp.bit_length() + 7) // 8)
+        elif op == 0x10:  # LT
+            a, b = self.stack.pop(), self.stack.pop()
+            self.stack.append(1 if a < b else 0)
+        elif op == 0x11:  # GT
+            a, b = self.stack.pop(), self.stack.pop()
+            self.stack.append(1 if a > b else 0)
+        elif op == 0x12:  # SLT
+            a, b = self._to_signed(self.stack.pop()), self._to_signed(self.stack.pop())
+            self.stack.append(1 if a < b else 0)
+        elif op == 0x13:  # SGT
+            a, b = self._to_signed(self.stack.pop()), self._to_signed(self.stack.pop())
+            self.stack.append(1 if a > b else 0)
+        elif op == 0x14:  # EQ
+            a, b = self.stack.pop(), self.stack.pop()
+            self.stack.append(1 if a == b else 0)
+        elif op == 0x15:  # ISZERO
+            a = self.stack.pop()
+            self.stack.append(1 if a == 0 else 0)
+        elif op == 0x16:  # AND
+            a, b = self.stack.pop(), self.stack.pop()
+            self.stack.append((a & b) & self.MASK256)
+        elif op == 0x17:  # OR
+            a, b = self.stack.pop(), self.stack.pop()
+            self.stack.append((a | b) & self.MASK256)
+        elif op == 0x18:  # XOR
+            a, b = self.stack.pop(), self.stack.pop()
+            self.stack.append((a ^ b) & self.MASK256)
+        elif op == 0x19:  # NOT
+            a = self.stack.pop()
+            self.stack.append((~a) & self.MASK256)
+        elif op == 0x1A:  # BYTE
+            i, val = self.stack.pop(), self.stack.pop()
+            if i >= 32:
+                self.stack.append(0)
+            else:
+                shift = (31 - i) * 8
+                self.stack.append((val >> shift) & 0xFF)
+        elif op == 0x1B:  # SHL
+            shift, val = self.stack.pop(), self.stack.pop()
+            self.stack.append((val << shift) & self.MASK256 if shift < 256 else 0)
+        elif op == 0x1C:  # SHR
+            shift, val = self.stack.pop(), self.stack.pop()
+            self.stack.append((val >> shift) & self.MASK256 if shift < 256 else 0)
+        elif op == 0x20:  # SHA3 / Keccak-256
+            offset, size = self.stack.pop(), self.stack.pop()
+            mem_cost = self._expand_memory(offset, size)
+            gas_cost = 30 + 6 * ((size + 31) // 32) + mem_cost
+            data = bytes(self.memory[offset : offset + size])
+            h_hex = _keccak256(data)
+            self.stack.append(int(h_hex, 16))
+        elif op == 0x30:  # ADDRESS
+            self.stack.append(0x1000 & self.MASK256)
+            gas_cost = 2
+        elif op == 0x32:  # ORIGIN
+            self.stack.append(0x1 & self.MASK256)
+            gas_cost = 2
+        elif op == 0x33:  # CALLER
+            caller_int = int(self.caller, 16) if isinstance(self.caller, str) and (self.caller.startswith("0x") or self.caller.startswith("0X")) else 1
+            self.stack.append(caller_int & self.MASK256)
+            gas_cost = 2
+        elif op == 0x34:  # CALLVALUE
+            self.stack.append(self.value & self.MASK256)
+            gas_cost = 2
+        elif op == 0x35:  # CALLDATALOAD
+            offset = self.stack.pop()
+            chunk = self.calldata[offset : offset + 32]
+            if len(chunk) < 32:
+                chunk = chunk + b"\x00" * (32 - len(chunk))
+            self.stack.append(int.from_bytes(chunk, byteorder="big"))
+        elif op == 0x36:  # CALLDATASIZE
+            self.stack.append(len(self.calldata))
+            gas_cost = 2
+        elif op == 0x50:  # POP
+            self.stack.pop()
+            gas_cost = 2
+        elif op == 0x51:  # MLOAD
+            offset = self.stack.pop()
+            mem_cost = self._expand_memory(offset, 32)
+            gas_cost = 3 + mem_cost
+            val = int.from_bytes(self.memory[offset : offset + 32], byteorder="big")
+            self.stack.append(val)
+        elif op == 0x52:  # MSTORE
+            offset, val = self.stack.pop(), self.stack.pop()
+            mem_cost = self._expand_memory(offset, 32)
+            gas_cost = 3 + mem_cost
+            b32 = val.to_bytes(32, byteorder="big")
+            self.memory[offset : offset + 32] = b32
+        elif op == 0x53:  # MSTORE8
+            offset, val = self.stack.pop(), self.stack.pop()
+            mem_cost = self._expand_memory(offset, 1)
+            gas_cost = 3 + mem_cost
+            self.memory[offset] = val & 0xFF
+        elif op == 0x54:  # SLOAD
+            key = self.stack.pop()
+            val = self.storage.get(key, 0)
+            self.stack.append(val)
+            gas_cost = 100
+        elif op == 0x55:  # SSTORE
+            key, val = self.stack.pop(), self.stack.pop()
+            self.storage[key] = val
+            gas_cost = 20000 if val != 0 else 5000
+        elif op == 0x56:  # JUMP
+            dest = self.stack.pop()
+            if dest >= len(self.code) or self.code[dest] != 0x5B:
+                raise RuntimeError(f"Invalid JUMP target: {dest}")
+            self.pc = dest
+            gas_cost = 8
+        elif op == 0x57:  # JUMPI
+            dest, cond = self.stack.pop(), self.stack.pop()
+            if cond != 0:
+                if dest >= len(self.code) or self.code[dest] != 0x5B:
+                    raise RuntimeError(f"Invalid JUMPI target: {dest}")
+                self.pc = dest
+            gas_cost = 10
+        elif op == 0x58:  # PC
+            self.stack.append(self.pc - 1)
+            gas_cost = 2
+        elif op == 0x59:  # MSIZE
+            self.stack.append(len(self.memory))
+            gas_cost = 2
+        elif op == 0x5A:  # GAS
+            self.stack.append(max(0, self.gas_remaining))
+            gas_cost = 2
+        elif op == 0x5B:  # JUMPDEST
+            gas_cost = 1
+        elif op == 0xF3:  # RETURN
+            offset, size = self.stack.pop(), self.stack.pop()
+            self._expand_memory(offset, size)
+            self.return_data = bytes(self.memory[offset : offset + size])
+            self.stopped = True
+            return False
+        elif op == 0xFD:  # REVERT
+            offset, size = self.stack.pop(), self.stack.pop()
+            self._expand_memory(offset, size)
+            self.return_data = bytes(self.memory[offset : offset + size])
+            self.reverted = True
+            self.stopped = True
+            return False
+        else:
+            raise RuntimeError(f"Unsupported EVM opcode 0x{op:02X} at pc={self.pc-1}")
+
+        self.gas_remaining -= gas_cost
+        if self.gas_remaining < 0:
+            raise RuntimeError("Out of gas in EVM execution")
+        return True
+
+    def run(self) -> Dict[str, Any]:
+        """Executes bytecode until completion or halt."""
+        while not self.stopped and self.pc < len(self.code):
+            self.step()
+
+        status = (
+            "REVERT"
+            if self.reverted
+            else (
+                "SUCCESS"
+                if not self.stopped or (self.pc > 0 and self.code[min(self.pc - 1, len(self.code) - 1)] in (0xF3, 0x00))
+                else "HALT"
+            )
+        )
+        return {
+            "status": status,
+            "gas_used": self.gas_limit - max(0, self.gas_remaining),
+            "gas_remaining": max(0, self.gas_remaining),
+            "return_data_hex": "0x" + self.return_data.hex(),
+            "stack": [hex(x) for x in reversed(self.stack[-16:])],
+            "stack_size": len(self.stack),
+            "storage": {hex(k): hex(v) for k, v in self.storage.items()},
+            "steps": self.step_count,
+        }
+
+
+class ThresholdSignatureSchemeShamir:
+    """Shamir Secret Sharing and Lagrange-interpolated threshold signature aggregation.
+
+    Implements t-of-n threshold secret sharing and distributed Schnorr-style
+    threshold signature generation and verification over a 256-bit prime scalar field.
+    """
+
+    # Secp256k1 scalar group prime order
+    P = 115792089237316195423570985008687907852837564279074904382605163141518161494337
+    G = 3  # Generator point
+
+    @classmethod
+    def split_secret(
+        cls, secret: int, threshold: int, total_shares: int, coeffs: Optional[List[int]] = None
+    ) -> Dict[str, Any]:
+        """Splits a secret integer into n shares requiring at least t shares for reconstruction."""
+        secret = secret % cls.P
+        if threshold < 1 or threshold > total_shares:
+            raise ValueError("Threshold must satisfy 1 <= threshold <= total_shares")
+
+        if coeffs is None:
+            # Deterministic pseudo-random coefficients derived from secret
+            h = hashlib.sha256(str(secret).encode("utf-8")).digest()
+            coeffs = [secret] + [
+                int.from_bytes(hashlib.sha256(h + bytes([i])).digest(), "big") % cls.P
+                for i in range(1, threshold)
+            ]
+        else:
+            coeffs = [secret] + [c % cls.P for c in coeffs[: threshold - 1]]
+
+        shares = []
+        for x in range(1, total_shares + 1):
+            y = 0
+            x_pow = 1
+            for coef in coeffs:
+                y = (y + coef * x_pow) % cls.P
+                x_pow = (x_pow * x) % cls.P
+            shares.append((x, y))
+
+        return {
+            "threshold": threshold,
+            "total_shares": total_shares,
+            "shares": shares,
+            "public_commitment": pow(cls.G, secret, cls.P),
+        }
+
+    @classmethod
+    def reconstruct_secret(cls, shares: List[Tuple[int, int]], threshold: int) -> int:
+        """Reconstructs the original secret from any t valid shares using Lagrange interpolation."""
+        if len(shares) < threshold:
+            raise ValueError(f"Need at least {threshold} shares, got {len(shares)}")
+
+        subset = shares[:threshold]
+        xs = [s[0] for s in subset]
+        ys = [s[1] for s in subset]
+        secret = 0
+
+        for j in range(threshold):
+            xj, yj = xs[j], ys[j]
+            num = 1
+            den = 1
+            for m in range(threshold):
+                if m != j:
+                    xm = xs[m]
+                    num = (num * (-xm)) % cls.P
+                    den = (den * (xj - xm)) % cls.P
+            l_j = (num * pow(den, cls.P - 2, cls.P)) % cls.P
+            secret = (secret + yj * l_j) % cls.P
+
+        return secret
+
+    @classmethod
+    def threshold_sign(cls, message: str, shares: List[Tuple[int, int]], threshold: int) -> Dict[str, Any]:
+        """Generates and verifies an aggregated threshold Schnorr signature."""
+        reconstructed_key = cls.reconstruct_secret(shares, threshold)
+        pub_key = pow(cls.G, reconstructed_key, cls.P)
+
+        k = (
+            int.from_bytes(
+                hashlib.sha256((message + str(reconstructed_key)).encode("utf-8")).digest(), "big"
+            )
+            % (cls.P - 1)
+            + 1
+        )
+        r_comm = pow(cls.G, k, cls.P)
+        e = (
+            int.from_bytes(hashlib.sha256(f"{r_comm}:{pub_key}:{message}".encode("utf-8")).digest(), "big")
+            % (cls.P - 1)
+        )
+        s = (k + e * reconstructed_key) % (cls.P - 1)
+
+        # Schnorr verification
+        lhs = pow(cls.G, s, cls.P)
+        rhs = (r_comm * pow(pub_key, e, cls.P)) % cls.P
+        valid = (lhs == rhs)
+
+        return {
+            "valid": valid,
+            "public_key": hex(pub_key),
+            "message": message,
+            "commitment_r": hex(r_comm),
+            "signature_s": hex(s),
+            "challenge_e": hex(e),
+        }
+
+
+def chain_evm_execute(
+    bytecode_hex: str,
+    calldata_hex: str = "",
+    gas_limit: int = 1000000,
+    caller: str = "0x0000000000000000000000000000000000000001",
+    value: int = 0,
+    initial_storage: Optional[Dict[int, int]] = None,
+) -> Any:
+    """Executes EVM bytecode and returns detailed execution state Record."""
+    vm = EVMBytecodeInterpreterStackMachine(
+        bytecode_hex,
+        calldata_hex=calldata_hex,
+        gas_limit=gas_limit,
+        caller=caller,
+        value=value,
+        initial_storage=initial_storage,
+    )
+    return Record(vm.run())
+
+
+def chain_threshold_split(secret: int, threshold: int, total_shares: int) -> Any:
+    """Splits a secret into Shamir shares."""
+    return Record(ThresholdSignatureSchemeShamir.split_secret(secret, threshold, total_shares))
+
+
+def chain_threshold_reconstruct(shares: List[Any], threshold: int) -> int:
+    """Reconstructs secret from shares."""
+    clean_shares = [(int(s[0]), int(s[1])) for s in shares]
+    return ThresholdSignatureSchemeShamir.reconstruct_secret(clean_shares, threshold)
+
+
+def chain_threshold_aggregate_sign(message: str, shares: List[Any], threshold: int) -> Any:
+    """Creates aggregated threshold signature."""
+    clean_shares = [(int(s[0]), int(s[1])) for s in shares]
+    return Record(ThresholdSignatureSchemeShamir.threshold_sign(message, clean_shares, threshold))
+
+

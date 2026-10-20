@@ -1392,4 +1392,336 @@ def compiler_optimize_licm(
     return Record(LoopInvariantCodeMotionLICM.optimize(blocks, loop_header, loop_body_labels))
 
 
+# ==============================================================================
+# SPARSE CONDITIONAL CONSTANT PROPAGATION (SCCP) & EARLEY CHART PARSER
+# ==============================================================================
+
+
+class SparseConditionalConstantPropagationSCCP:
+    """Wegman-Zadeck Sparse Conditional Constant Propagation (SCCP) optimizer.
+
+    Simultaneously propagates constants through SSA dataflow and evaluates
+    control flow reachability, discovering constants that become known only
+    because branches are proven unexecutable.
+    """
+
+    TOP = ("TOP",)
+    BOT = ("BOT",)
+
+    @classmethod
+    def _meet(cls, v1: Any, v2: Any) -> Any:
+        if v1 == cls.TOP:
+            return v2
+        if v2 == cls.TOP:
+            return v1
+        if v1 == cls.BOT or v2 == cls.BOT:
+            return cls.BOT
+        return v1 if v1 == v2 else cls.BOT
+
+    @classmethod
+    def _eval_op(cls, op: str, operands: List[Any]) -> Any:
+        if any(v == cls.BOT for v in operands):
+            return cls.BOT
+        if any(v == cls.TOP for v in operands):
+            return cls.TOP
+
+        op_lower = op.lower()
+        try:
+            if op_lower in ("add", "+"):
+                return operands[0] + operands[1]
+            elif op_lower in ("sub", "-"):
+                return operands[0] - operands[1]
+            elif op_lower in ("mul", "*"):
+                return operands[0] * operands[1]
+            elif op_lower in ("div", "/"):
+                return operands[0] // operands[1] if operands[1] != 0 else cls.BOT
+            elif op_lower in ("eq", "=="):
+                return operands[0] == operands[1]
+            elif op_lower in ("ne", "!="):
+                return operands[0] != operands[1]
+            elif op_lower in ("lt", "<"):
+                return operands[0] < operands[1]
+            elif op_lower in ("le", "<="):
+                return operands[0] <= operands[1]
+            elif op_lower in ("gt", ">"):
+                return operands[0] > operands[1]
+            elif op_lower in ("ge", ">="):
+                return operands[0] >= operands[1]
+            elif op_lower in ("and", "&&"):
+                return bool(operands[0] and operands[1])
+            elif op_lower in ("or", "||"):
+                return bool(operands[0] or operands[1])
+            elif op_lower in ("not", "!"):
+                return not operands[0]
+            elif op_lower in ("neg",):
+                return -operands[0]
+        except Exception:
+            return cls.BOT
+        return cls.BOT
+
+    @classmethod
+    def optimize(cls, cfg_ir: Dict[str, Any]) -> Dict[str, Any]:
+        """Runs SCCP on basic block SSA IR."""
+        entry = cfg_ir.get("entry", "B0")
+        raw_blocks = cfg_ir.get("blocks", {})
+        if not raw_blocks:
+            return {
+                "constants": {},
+                "executable_blocks": [],
+                "executable_edges": [],
+                "optimized_blocks": {},
+            }
+
+        lat_val: Dict[str, Any] = {}
+        def_to_inst: Dict[str, Tuple[str, Dict[str, Any]]] = {}
+        var_uses: Dict[str, List[Tuple[str, int, Dict[str, Any]]]] = {}
+
+        for b_lbl, b_data in raw_blocks.items():
+            for idx, inst in enumerate(b_data.get("instructions", [])):
+                dest = inst.get("dest")
+                if dest:
+                    lat_val[dest] = cls.TOP
+                    def_to_inst[dest] = (b_lbl, inst)
+                for a in inst.get("args", []):
+                    if isinstance(a, str) and not a.lstrip("-").replace(".", "", 1).isdigit():
+                        var_uses.setdefault(a, []).append((b_lbl, idx, inst))
+                if "cond" in inst:
+                    cond_var = inst["cond"]
+                    if isinstance(cond_var, str):
+                        var_uses.setdefault(cond_var, []).append((b_lbl, idx, inst))
+                if inst.get("op") == "phi":
+                    for inc_b, inc_v in inst.get("incoming", {}).items():
+                        if isinstance(inc_v, str) and not inc_v.lstrip("-").isdigit():
+                            var_uses.setdefault(inc_v, []).append((b_lbl, idx, inst))
+
+        cfg_worklist: List[Tuple[Optional[str], str]] = [(None, entry)]
+        ssa_worklist: List[str] = []
+        executed_edges: Set[Tuple[Optional[str], str]] = set()
+        executed_blocks: Set[str] = set()
+
+        def resolve_val(operand: Any) -> Any:
+            if isinstance(operand, (int, float, bool)):
+                return operand
+            if isinstance(operand, str):
+                if operand.lstrip("-").isdigit():
+                    return int(operand)
+                if operand in lat_val:
+                    return lat_val[operand]
+            return cls.BOT
+
+        while cfg_worklist or ssa_worklist:
+            while cfg_worklist:
+                edge = cfg_worklist.pop(0)
+                if edge in executed_edges:
+                    continue
+                executed_edges.add(edge)
+                src, dest_b = edge
+                is_first_visit = dest_b not in executed_blocks
+                executed_blocks.add(dest_b)
+
+                b_data = raw_blocks.get(dest_b, {})
+                insts = b_data.get("instructions", [])
+
+                for inst in insts:
+                    if inst.get("op") == "phi":
+                        dest_var = inst["dest"]
+                        incoming = inst.get("incoming", {})
+                        res = cls.TOP
+                        for pred, in_var in incoming.items():
+                            if (pred, dest_b) in executed_edges:
+                                in_val = resolve_val(in_var)
+                                res = cls._meet(res, in_val)
+                        if res != lat_val[dest_var]:
+                            lat_val[dest_var] = res
+                            ssa_worklist.append(dest_var)
+
+                if is_first_visit:
+                    for inst in insts:
+                        op = inst.get("op")
+                        if op == "phi":
+                            continue
+                        dest_var = inst.get("dest")
+                        if op == "const":
+                            val = inst.get("value")
+                            if dest_var and lat_val[dest_var] != val:
+                                lat_val[dest_var] = val
+                                ssa_worklist.append(dest_var)
+                        elif dest_var:
+                            args = [resolve_val(a) for a in inst.get("args", [])]
+                            out_v = cls._eval_op(op, args)
+                            if lat_val[dest_var] != out_v:
+                                lat_val[dest_var] = out_v
+                                ssa_worklist.append(dest_var)
+                        elif op == "br_cond":
+                            cond_v = resolve_val(inst.get("cond"))
+                            t_target = inst.get("true_target")
+                            f_target = inst.get("false_target")
+                            if cond_v is True or cond_v == 1:
+                                cfg_worklist.append((dest_b, t_target))
+                            elif cond_v is False or cond_v == 0:
+                                cfg_worklist.append((dest_b, f_target))
+                            elif cond_v == cls.BOT:
+                                cfg_worklist.append((dest_b, t_target))
+                                cfg_worklist.append((dest_b, f_target))
+                        elif op in ("jump", "goto"):
+                            cfg_worklist.append((dest_b, inst.get("target")))
+
+            while ssa_worklist:
+                var = ssa_worklist.pop(0)
+                for u_block, u_idx, u_inst in var_uses.get(var, []):
+                    if u_block not in executed_blocks:
+                        continue
+                    op = u_inst.get("op")
+                    dest_var = u_inst.get("dest")
+                    if op == "phi":
+                        incoming = u_inst.get("incoming", {})
+                        res = cls.TOP
+                        for pred, in_var in incoming.items():
+                            if (pred, u_block) in executed_edges:
+                                in_val = resolve_val(in_var)
+                                res = cls._meet(res, in_val)
+                        if res != lat_val[dest_var]:
+                            lat_val[dest_var] = res
+                            ssa_worklist.append(dest_var)
+                    elif dest_var:
+                        args = [resolve_val(a) for a in u_inst.get("args", [])]
+                        out_v = cls._eval_op(op, args)
+                        if lat_val[dest_var] != out_v:
+                            lat_val[dest_var] = out_v
+                            ssa_worklist.append(dest_var)
+                    elif op == "br_cond":
+                        cond_v = resolve_val(u_inst.get("cond"))
+                        t_target = u_inst.get("true_target")
+                        f_target = u_inst.get("false_target")
+                        if cond_v is True or cond_v == 1:
+                            cfg_worklist.append((u_block, t_target))
+                        elif cond_v is False or cond_v == 0:
+                            cfg_worklist.append((u_block, f_target))
+                        elif cond_v == cls.BOT:
+                            cfg_worklist.append((u_block, t_target))
+                            cfg_worklist.append((u_block, f_target))
+
+        known_constants: Dict[str, Any] = {}
+        for var, val in lat_val.items():
+            if val not in (cls.TOP, cls.BOT):
+                known_constants[var] = val
+
+        optimized_blocks: Dict[str, Any] = {}
+        for b_lbl in sorted(list(executed_blocks)):
+            b_data = raw_blocks[b_lbl]
+            new_insts = []
+            for inst in b_data.get("instructions", []):
+                new_inst = dict(inst)
+                if "args" in new_inst:
+                    new_inst["args"] = [known_constants.get(a, a) for a in new_inst["args"]]
+                if new_inst.get("op") == "br_cond":
+                    cond_val = known_constants.get(new_inst.get("cond"), new_inst.get("cond"))
+                    if cond_val is True or cond_val == 1:
+                        new_inst = {"op": "jump", "target": new_inst["true_target"]}
+                    elif cond_val is False or cond_val == 0:
+                        new_inst = {"op": "jump", "target": new_inst["false_target"]}
+                new_insts.append(new_inst)
+            optimized_blocks[b_lbl] = {
+                "instructions": new_insts,
+                "successors": [tgt for (src, tgt) in executed_edges if src == b_lbl],
+            }
+
+        return {
+            "constants": known_constants,
+            "executable_blocks": sorted(list(executed_blocks)),
+            "dead_blocks": sorted([b for b in raw_blocks if b not in executed_blocks]),
+            "executable_edges": [f"{s}->{t}" for (s, t) in executed_edges if s is not None],
+            "optimized_blocks": optimized_blocks,
+        }
+
+
+class EarleyChartParser:
+    """Earley's general context-free grammar chart parsing algorithm.
+
+    Parses any context-free grammar in O(n^3) time worst case, O(n^2) for
+    unambiguous grammars, and O(n) for deterministic grammars. Correctly handles
+    direct and indirect left recursion, epsilon (empty) rules, and ambiguous derivations.
+    """
+
+    @classmethod
+    def parse(
+        cls,
+        grammar: Dict[str, Any],
+        start_symbol: str,
+        tokens: List[str],
+    ) -> Dict[str, Any]:
+        """Parses a token sequence using an Earley chart."""
+        # Normalize grammar productions to List[Tuple[str, ...]]
+        clean_grammar: Dict[str, List[Tuple[str, ...]]] = {}
+        for nt, prods in grammar.items():
+            clean_grammar[nt] = []
+            for p in prods:
+                if isinstance(p, (list, tuple)):
+                    clean_grammar[nt].append(tuple(str(x) for x in p))
+                elif isinstance(p, str):
+                    clean_grammar[nt].append(tuple(p.split()))
+
+        n = len(tokens)
+        chart: List[List[Tuple[str, Tuple[str, ...], int, int]]] = [[] for _ in range(n + 1)]
+        seen: List[Set[Tuple[str, Tuple[str, ...], int, int]]] = [set() for _ in range(n + 1)]
+
+        def add_state(k: int, state: Tuple[str, Tuple[str, ...], int, int]) -> None:
+            if state not in seen[k]:
+                seen[k].add(state)
+                chart[k].append(state)
+
+        for prod in clean_grammar.get(start_symbol, []):
+            add_state(0, (start_symbol, prod, 0, 0))
+
+        for k in range(n + 1):
+            i = 0
+            while i < len(chart[k]):
+                lhs, rhs, dot, origin = chart[k][i]
+                i += 1
+                if dot < len(rhs):
+                    next_sym = rhs[dot]
+                    if next_sym in clean_grammar:
+                        # PREDICTOR
+                        for prod in clean_grammar[next_sym]:
+                            add_state(k, (next_sym, prod, 0, k))
+                    elif k < n and next_sym == tokens[k]:
+                        # SCANNER
+                        add_state(k + 1, (lhs, rhs, dot + 1, origin))
+                else:
+                    # COMPLETER
+                    for p_lhs, p_rhs, p_dot, p_origin in list(chart[origin]):
+                        if p_dot < len(p_rhs) and p_rhs[p_dot] == lhs:
+                            add_state(k, (p_lhs, p_rhs, p_dot + 1, p_origin))
+
+        accepted_states = [
+            (lhs, list(rhs), dot, origin)
+            for (lhs, rhs, dot, origin) in chart[n]
+            if lhs == start_symbol and dot == len(rhs) and origin == 0
+        ]
+        is_accepted = len(accepted_states) > 0
+
+        chart_sizes = [len(c) for c in chart]
+        total_states = sum(chart_sizes)
+
+        return {
+            "accepted": is_accepted,
+            "tokens_length": n,
+            "total_chart_states": total_states,
+            "chart_sizes_by_column": chart_sizes,
+            "accepted_derivation_count": len(accepted_states),
+            "start_symbol": start_symbol,
+        }
+
+
+def compiler_sccp_optimize(cfg_ir: Dict[str, Any]) -> Any:
+    """Executes Wegman-Zadeck SCCP optimization pass."""
+    return Record(SparseConditionalConstantPropagationSCCP.optimize(cfg_ir))
+
+
+def compiler_earley_parse(grammar: Dict[str, Any], start_symbol: str, tokens: List[str]) -> Any:
+    """Executes Earley general CFG parsing."""
+    return Record(EarleyChartParser.parse(grammar, start_symbol, tokens))
+
+
+
 

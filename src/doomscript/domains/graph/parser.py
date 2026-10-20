@@ -441,6 +441,32 @@ class GraphDomainParser(DomainParser):
             nodes, edges, target = m_jh.group(1).strip(), m_jh.group(2).strip(), m_jh.group(3).strip()
             return f"set {target} to graph_johnson_all_pairs_paths({nodes}, {edges})"
 
+        # find maximal cliques in graph <edges> [with weights <weights>] into <target>
+        m_clq = re.match(
+            r"^find\s+maximal\s+cliques\s+in\s+graph\s+(.+?)(?:\s+with\s+weights\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_clq:
+            edges = m_clq.group(1).strip()
+            weights = m_clq.group(2).strip() if m_clq.group(2) else "None"
+            target = m_clq.group(3).strip()
+            return f"set {target} to graph_bron_kerbosch_degeneracy_cliques({edges}, weighted_nodes={weights})"
+
+        # compute dominator tree for entry <entry> with edges <edges> into <target>
+        m_dom_lt = re.match(
+            r"^compute\s+dominator\s+tree\s+for\s+entry\s+(.+?)\s+with\s+edges\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_dom_lt:
+            entry = m_dom_lt.group(1).strip()
+            edges = m_dom_lt.group(2).strip()
+            target = m_dom_lt.group(3).strip()
+            if not (entry.startswith('"') or entry.startswith("'")):
+                entry = f'"{entry}"'
+            return f"set {target} to graph_lengauer_tarjan_dominators({entry}, {edges})"
+
         return None
 
     def parse_block(

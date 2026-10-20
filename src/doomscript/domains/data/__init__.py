@@ -45,6 +45,17 @@ from doomscript.domains.data.runtime import (
     data_cms_add,
     data_cms_estimate,
     data_reservoir_sample,
+    TDigestQuantileApproximator,
+    RoaringBitmapPure,
+    data_tdigest_create,
+    data_tdigest_add,
+    data_tdigest_quantile,
+    data_tdigest_cdf,
+    data_roaring_create,
+    data_roaring_add,
+    data_roaring_contains,
+    data_roaring_operation,
+    data_roaring_stats,
 )
 from doomscript.domains.data.exporter import DataASTExporter
 from doomscript.domains.matcher import VerbSpec
@@ -239,4 +250,15 @@ __all__ = [
     "data_cms_add",
     "data_cms_estimate",
     "data_reservoir_sample",
+    "TDigestQuantileApproximator",
+    "RoaringBitmapPure",
+    "data_tdigest_create",
+    "data_tdigest_add",
+    "data_tdigest_quantile",
+    "data_tdigest_cdf",
+    "data_roaring_create",
+    "data_roaring_add",
+    "data_roaring_contains",
+    "data_roaring_operation",
+    "data_roaring_stats",
 ]

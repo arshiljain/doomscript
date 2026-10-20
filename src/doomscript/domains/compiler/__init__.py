@@ -38,6 +38,10 @@ from doomscript.domains.compiler.runtime import (
     LoopInvariantCodeMotionLICM,
     compiler_build_ll1_table,
     compiler_optimize_licm,
+    SparseConditionalConstantPropagationSCCP,
+    EarleyChartParser,
+    compiler_sccp_optimize,
+    compiler_earley_parse,
 )
 from doomscript.domains.compiler.parser import CompilerDomainParser
 from doomscript.domains.compiler.exporter import CompilerASTExporter
@@ -132,4 +136,8 @@ __all__ = [
     "LoopInvariantCodeMotionLICM",
     "compiler_build_ll1_table",
     "compiler_optimize_licm",
+    "SparseConditionalConstantPropagationSCCP",
+    "EarleyChartParser",
+    "compiler_sccp_optimize",
+    "compiler_earley_parse",
 ]

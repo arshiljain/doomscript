@@ -533,6 +533,88 @@ class DataDomainParser(DomainParser):
             k, stream, target = m_res.group(1).strip(), m_res.group(2).strip(), m_res.group(3).strip()
             return f"set {target} to data_reservoir_sample({stream}, {k})"
 
+        # create tdigest [with compression <delta>] into <target>
+        m_td_create = re.match(
+            r"^create\s+tdigest(?:\s+with\s+compression\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_td_create:
+            delta = m_td_create.group(1).strip() if m_td_create.group(1) else "100.0"
+            target = m_td_create.group(2).strip()
+            return f"set {target} to data_tdigest_create(delta={delta})"
+
+        # add values <values> to tdigest <tdigest> into <target>
+        m_td_add = re.match(
+            r"^add\s+values\s+(.+?)\s+to\s+tdigest\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_td_add:
+            vals, td, target = m_td_add.group(1).strip(), m_td_add.group(2).strip(), m_td_add.group(3).strip()
+            return f"set {target} to data_tdigest_add({td}, {vals})"
+
+        # estimate quantile <q> of tdigest <tdigest> into <target>
+        m_td_q = re.match(
+            r"^estimate\s+quantile\s+(.+?)\s+of\s+tdigest\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_td_q:
+            q, td, target = m_td_q.group(1).strip(), m_td_q.group(2).strip(), m_td_q.group(3).strip()
+            return f"set {target} to data_tdigest_quantile({td}, {q})"
+
+        # estimate cdf <x> of tdigest <tdigest> into <target>
+        m_td_cdf = re.match(
+            r"^estimate\s+cdf\s+(.+?)\s+of\s+tdigest\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_td_cdf:
+            x, td, target = m_td_cdf.group(1).strip(), m_td_cdf.group(2).strip(), m_td_cdf.group(3).strip()
+            return f"set {target} to data_tdigest_cdf({td}, {x})"
+
+        # create roaring bitmap [from <values>] into <target>
+        m_rb_create = re.match(
+            r"^create\s+roaring\s+bitmap(?:\s+from\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_rb_create:
+            vals = m_rb_create.group(1).strip() if m_rb_create.group(1) else "None"
+            target = m_rb_create.group(2).strip()
+            return f"set {target} to data_roaring_create({vals})"
+
+        # add <val> to roaring bitmap <bitmap> into <target>
+        m_rb_add = re.match(
+            r"^add\s+(.+?)\s+to\s+roaring\s+bitmap\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_rb_add:
+            val, rb, target = m_rb_add.group(1).strip(), m_rb_add.group(2).strip(), m_rb_add.group(3).strip()
+            return f"set {target} to data_roaring_add({rb}, {val})"
+
+        # check if roaring bitmap <bitmap> contains <val> into <target>
+        m_rb_cont = re.match(
+            r"^check\s+if\s+roaring\s+bitmap\s+(.+?)\s+contains\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_rb_cont:
+            rb, val, target = m_rb_cont.group(1).strip(), m_rb_cont.group(2).strip(), m_rb_cont.group(3).strip()
+            return f"set {target} to data_roaring_contains({rb}, {val})"
+
+        # roaring <op> between <a_bitmap> and <b_bitmap> into <target>
+        m_rb_op = re.match(
+            r"^roaring\s+(union|intersection|difference)\s+between\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_rb_op:
+            op, a, b, target = m_rb_op.group(1).strip(), m_rb_op.group(2).strip(), m_rb_op.group(3).strip(), m_rb_op.group(4).strip()
+            return f'set {target} to data_roaring_operation({a}, {b}, op="{op}")'
+
         return None
 
 
