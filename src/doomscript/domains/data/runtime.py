@@ -1,11 +1,13 @@
 """Runtime execution engine for Data Engineering pipelines and operations."""
 
 import csv
+import hashlib
 import json
 import math
 import os
 import re
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
+from doomscript.runtime import Record
 from doomscript.domains.base import DomainRuntime, DomainIR
 from doomscript.domains.data.expr_eval import SafeASTEvaluator, SafeEvalError, SafeEvalSecurityError
 from doomscript.domains.data.spec import (
@@ -1696,3 +1698,187 @@ def data_relational_join(
 def data_rolling_aggregate(series: List[float], window: int, stat: str = "mean") -> List[Optional[float]]:
     """Computes rolling window aggregate series."""
     return RollingAggregator.rolling_series(series, window, stat)
+
+
+# ==============================================================================
+# STREAMING & PROBABILISTIC SKETCHES (HYPERLOGLOG, COUNT-MIN, RESERVOIR)
+# ==============================================================================
+
+class HyperLogLogSketch:
+    """HyperLogLog cardinality estimator with 64-bit hashing and small-range linear bias correction."""
+
+    def __init__(self, precision: int = 10):
+        self.p = max(4, min(16, int(precision)))
+        self.m = 1 << self.p
+        self.registers = [0] * self.m
+
+        # Alpha bias correction constant
+        if self.m == 16:
+            self.alpha = 0.673
+        elif self.m == 32:
+            self.alpha = 0.697
+        elif self.m == 64:
+            self.alpha = 0.709
+        else:
+            self.alpha = 0.7213 / (1.0 + 1.079 / self.m)
+
+    def _hash64(self, val: Any) -> int:
+        s = str(val).encode("utf-8")
+        h = hashlib.sha256(s).digest()
+        # Extract 64 bits from sha256 digest
+        return int.from_bytes(h[:8], byteorder="big", signed=False)
+
+    def add(self, item: Any) -> None:
+        """Adds element to the HyperLogLog register sketch."""
+        x = self._hash64(item)
+        idx = x >> (64 - self.p)
+        w = x & ((1 << (64 - self.p)) - 1)
+
+        # Count leading zeros + 1
+        lz = 1
+        if w != 0:
+            lz = (64 - self.p) - w.bit_length() + 1
+        else:
+            lz = (64 - self.p) + 1
+
+        if lz > self.registers[idx]:
+            self.registers[idx] = lz
+
+    def estimate(self) -> int:
+        """Estimates total unique items seen."""
+        z = sum(2.0 ** (-reg) for reg in self.registers)
+        if z == 0:
+            return 0
+        raw_e = self.alpha * (self.m ** 2) / z
+
+        # Small range linear counting correction
+        if raw_e <= 2.5 * self.m:
+            zeros = self.registers.count(0)
+            if zeros != 0:
+                raw_e = self.m * math.log(self.m / zeros)
+
+        return int(round(raw_e))
+
+
+class CountMinSketch:
+    """Count-Min Sketch frequency estimation for high-velocity streaming data."""
+
+    def __init__(self, width: int = 1000, depth: int = 5):
+        self.width = max(10, int(width))
+        self.depth = max(1, int(depth))
+        self.table = [[0] * self.width for _ in range(self.depth)]
+        self.total_count = 0
+
+    def _hash(self, item: Any, seed: int) -> int:
+        s = f"{item}:{seed}".encode("utf-8")
+        h = hashlib.md5(s).digest()
+        val = int.from_bytes(h[:4], byteorder="big", signed=False)
+        return val % self.width
+
+    def add(self, item: Any, count: int = 1) -> None:
+        """Increments item count across all hash rows."""
+        c = int(count)
+        for i in range(self.depth):
+            col = self._hash(item, i)
+            self.table[i][col] += c
+        self.total_count += c
+
+    def estimate(self, item: Any) -> int:
+        """Returns the conservative point frequency estimate for the item."""
+        min_est = float("inf")
+        for i in range(self.depth):
+            col = self._hash(item, i)
+            min_est = min(min_est, self.table[i][col])
+        return int(min_est) if min_est != float("inf") else 0
+
+
+class ReservoirSamplerStream:
+    """Reservoir sampling for uniform random sample of size K from streaming data."""
+
+    def __init__(self, k: int, seed: Optional[int] = 42):
+        self.k = max(1, int(k))
+        self.reservoir: List[Any] = []
+        self.total_seen = 0
+        import random
+        self.rng = random.Random(seed)
+
+    def feed(self, item: Any) -> None:
+        """Feeds a single streaming item into the reservoir."""
+        if len(self.reservoir) < self.k:
+            self.reservoir.append(item)
+        else:
+            j = self.rng.randint(0, self.total_seen)
+            if j < self.k:
+                self.reservoir[j] = item
+        self.total_seen += 1
+
+    def feed_batch(self, items: List[Any]) -> None:
+        """Feeds a batch of items."""
+        for item in items:
+            self.feed(item)
+
+    def get_sample(self) -> List[Any]:
+        """Returns the current uniform random reservoir sample."""
+        return list(self.reservoir)
+
+
+def data_hll_create(precision: int = 10) -> Any:
+    """Creates a HyperLogLog cardinality estimation sketch."""
+    hll = HyperLogLogSketch(precision=precision)
+    return Record({
+        "precision": hll.p,
+        "registers_count": hll.m,
+        "instance": hll,
+    })
+
+
+def data_hll_add(hll: Any, items: List[Any]) -> Any:
+    """Adds items to HyperLogLog sketch."""
+    inst = hll.instance if hasattr(hll, "instance") else hll
+    for item in items:
+        inst.add(item)
+    return Record({
+        "estimate": inst.estimate(),
+        "instance": inst,
+    })
+
+
+def data_hll_estimate(hll: Any) -> int:
+    """Returns cardinality estimate from HyperLogLog sketch."""
+    inst = hll.instance if hasattr(hll, "instance") else hll
+    return inst.estimate()
+
+
+def data_cms_create(width: int = 1000, depth: int = 5) -> Any:
+    """Creates a Count-Min Sketch frequency table."""
+    cms = CountMinSketch(width=width, depth=depth)
+    return Record({
+        "width": cms.width,
+        "depth": cms.depth,
+        "instance": cms,
+    })
+
+
+def data_cms_add(cms: Any, items: List[Any]) -> Any:
+    """Updates Count-Min Sketch with items."""
+    inst = cms.instance if hasattr(cms, "instance") else cms
+    for item in items:
+        inst.add(item)
+    return Record({
+        "total_count": inst.total_count,
+        "instance": inst,
+    })
+
+
+def data_cms_estimate(cms: Any, item: Any) -> int:
+    """Estimates frequency of item in Count-Min Sketch."""
+    inst = cms.instance if hasattr(cms, "instance") else cms
+    return inst.estimate(item)
+
+
+def data_reservoir_sample(stream: List[Any], k: int) -> List[Any]:
+    """Uniformly samples k items from a data stream using Reservoir Sampling."""
+    sampler = ReservoirSamplerStream(k)
+    sampler.feed_batch(stream)
+    return sampler.get_sample()
+

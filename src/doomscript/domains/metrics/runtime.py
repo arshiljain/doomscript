@@ -15,6 +15,7 @@ from __future__ import annotations
 import math
 import time
 from typing import Any, Dict, List, Optional, Tuple, Union
+from doomscript.runtime import Record
 
 
 class Counter:
@@ -438,3 +439,235 @@ def metrics_export_otlp_traces(spans: List[TraceSpan], service_name: str = "doom
 def metrics_create_ewma_detector(alpha: float = 0.2, threshold_z: float = 3.0) -> EWMAAnomalyDetector:
     """Creates a new streaming EWMA anomaly detector."""
     return EWMAAnomalyDetector(alpha, threshold_z)
+
+
+# ==============================================================================
+# NON-PARAMETRIC STATISTICAL TESTS & KERNEL DENSITY ESTIMATION
+# ==============================================================================
+
+class NonParametricMannWhitneyU:
+    """Two-sample Mann-Whitney U test (Wilcoxon rank-sum) with tie correction and continuity."""
+
+    @classmethod
+    def test(cls, sample1: List[float], sample2: List[float]) -> Dict[str, Any]:
+        n1 = len(sample1)
+        n2 = len(sample2)
+        if n1 == 0 or n2 == 0:
+            return {
+                "u_statistic": 0.0,
+                "u1": 0.0,
+                "u2": 0.0,
+                "z_score": 0.0,
+                "p_value": 1.0,
+                "significant_05": False,
+                "n1": n1,
+                "n2": n2,
+            }
+
+        # Combine and sort with group tagging
+        combined = [(float(x), 1) for x in sample1] + [(float(y), 2) for y in sample2]
+        combined.sort(key=lambda item: item[0])
+
+        # Assign average ranks for ties
+        n_total = n1 + n2
+        ranks = [0.0] * n_total
+        i = 0
+        tie_sum = 0
+
+        while i < n_total:
+            j = i
+            while j < n_total - 1 and combined[j][0] == combined[j + 1][0]:
+                j += 1
+            tie_len = j - i + 1
+            if tie_len > 1:
+                tie_sum += (tie_len ** 3) - tie_len
+            avg_rank = (i + 1 + j + 1) / 2.0
+            for k in range(i, j + 1):
+                ranks[k] = avg_rank
+            i = j + 1
+
+        # Sum of ranks for sample 1
+        r1 = sum(ranks[k] for k in range(n_total) if combined[k][1] == 1)
+        r2 = sum(ranks[k] for k in range(n_total) if combined[k][1] == 2)
+
+        u1 = r1 - (n1 * (n1 + 1)) / 2.0
+        u2 = (n1 * n2) - u1
+        u_stat = min(u1, u2)
+
+        # Asymptotic normal approximation with tie correction
+        mean_u = (n1 * n2) / 2.0
+        tie_term = (n1 * n2 * tie_sum) / (12.0 * n_total * (n_total - 1)) if n_total > 1 else 0.0
+        var_u = (n1 * n2 * (n_total + 1)) / 12.0 - tie_term
+        std_u = math.sqrt(max(1e-9, var_u))
+
+        # Continuity correction
+        diff = u_stat - mean_u
+        correction = 0.5 if diff < 0 else (-0.5 if diff > 0 else 0.0)
+        z_score = (diff + correction) / std_u
+
+        # Two-tailed p-value via complementary error function
+        p_val = math.erfc(abs(z_score) / math.sqrt(2.0))
+        p_val = min(1.0, max(0.0, p_val))
+
+        return {
+            "u_statistic": round(u_stat, 4),
+            "u1": round(u1, 4),
+            "u2": round(u2, 4),
+            "z_score": round(z_score, 4),
+            "p_value": round(p_val, 6),
+            "significant_05": bool(p_val < 0.05),
+            "n1": n1,
+            "n2": n2,
+        }
+
+
+class KolmogorovSmirnovTwoSample:
+    """Two-sample Kolmogorov-Smirnov test for continuous distribution equality."""
+
+    @classmethod
+    def test(cls, sample1: List[float], sample2: List[float]) -> Dict[str, Any]:
+        n1 = len(sample1)
+        n2 = len(sample2)
+        if n1 == 0 or n2 == 0:
+            return {
+                "d_statistic": 0.0,
+                "p_value": 1.0,
+                "significant_05": False,
+                "n1": n1,
+                "n2": n2,
+            }
+
+        s1 = sorted([float(x) for x in sample1])
+        s2 = sorted([float(y) for y in sample2])
+
+        # Step through unified sorted values
+        i1 = 0
+        i2 = 0
+        d_max = 0.0
+
+        all_vals = sorted(list(set(s1 + s2)))
+        for val in all_vals:
+            while i1 < n1 and s1[i1] <= val:
+                i1 += 1
+            while i2 < n2 and s2[i2] <= val:
+                i2 += 1
+            cdf1 = i1 / n1
+            cdf2 = i2 / n2
+            diff = abs(cdf1 - cdf2)
+            if diff > d_max:
+                d_max = diff
+
+        # Asymptotic p-value approximation
+        ne = (n1 * n2) / (n1 + n2)
+        lam = (math.sqrt(ne) + 0.12 + 0.11 / math.sqrt(ne)) * d_max
+
+        # Kolmogorov distribution sum
+        p_val = 0.0
+        for j in range(1, 101):
+            term = 2.0 * ((-1) ** (j - 1)) * math.exp(-2.0 * (j ** 2) * (lam ** 2))
+            p_val += term
+            if abs(term) < 1e-12:
+                break
+        p_val = min(1.0, max(0.0, p_val))
+
+        return {
+            "d_statistic": round(d_max, 6),
+            "p_value": round(p_val, 6),
+            "significant_05": bool(p_val < 0.05),
+            "n1": n1,
+            "n2": n2,
+        }
+
+
+class KernelDensityEstimator1D:
+    """1D Non-parametric Kernel Density Estimation (KDE) with Gaussian & Epanechnikov kernels."""
+
+    def __init__(
+        self,
+        data: List[float],
+        bandwidth: Optional[float] = None,
+        kernel: str = "gaussian",
+    ):
+        self.data = sorted([float(x) for x in data])
+        self.n = len(self.data)
+        self.kernel = kernel.lower()
+
+        if bandwidth is not None and bandwidth > 0:
+            self.h = float(bandwidth)
+        else:
+            # Silverman's rule of thumb
+            if self.n > 1:
+                mean_val = sum(self.data) / self.n
+                variance = sum((x - mean_val) ** 2 for x in self.data) / (self.n - 1)
+                std_dev = math.sqrt(max(1e-6, variance))
+                self.h = 1.06 * std_dev * (self.n ** (-0.2))
+            else:
+                self.h = 1.0
+
+    def _kernel_eval(self, u: float) -> float:
+        if self.kernel == "epanechnikov":
+            if abs(u) <= 1.0:
+                return 0.75 * (1.0 - u * u)
+            return 0.0
+        # Default Gaussian
+        return (1.0 / math.sqrt(2.0 * math.pi)) * math.exp(-0.5 * u * u)
+
+    def evaluate_point(self, x: float) -> float:
+        """Evaluates probability density at single point x."""
+        if self.n == 0:
+            return 0.0
+        s = sum(self._kernel_eval((x - xi) / self.h) for xi in self.data)
+        return s / (self.n * self.h)
+
+    def evaluate_grid(self, points: List[float]) -> List[float]:
+        """Evaluates probability density over an array of points."""
+        return [round(self.evaluate_point(pt), 6) for pt in points]
+
+    def find_peaks(self, num_grid_pts: int = 100) -> List[float]:
+        """Finds modal peak coordinates along the empirical range."""
+        if self.n == 0:
+            return []
+        min_x = self.data[0] - 2 * self.h
+        max_x = self.data[-1] + 2 * self.h
+        step = (max_x - min_x) / max(1, num_grid_pts - 1)
+
+        grid_x = [min_x + i * step for i in range(num_grid_pts)]
+        densities = [self.evaluate_point(x) for x in grid_x]
+
+        peaks = []
+        for i in range(1, num_grid_pts - 1):
+            if densities[i] > densities[i - 1] and densities[i] > densities[i + 1]:
+                peaks.append(round(grid_x[i], 4))
+        return peaks
+
+
+def metrics_mann_whitney_u(sample1: List[float], sample2: List[float]) -> Any:
+    """Computes Mann-Whitney U rank-sum test between two independent samples."""
+    return Record(NonParametricMannWhitneyU.test(sample1, sample2))
+
+
+def metrics_kolmogorov_smirnov_2samp(sample1: List[float], sample2: List[float]) -> Any:
+    """Computes two-sample Kolmogorov-Smirnov test."""
+    return Record(KolmogorovSmirnovTwoSample.test(sample1, sample2))
+
+
+def metrics_kde_create(
+    data: List[float],
+    bandwidth: Optional[float] = None,
+    kernel: str = "gaussian",
+) -> Any:
+    """Constructs a 1D Kernel Density Estimator record."""
+    kde = KernelDensityEstimator1D(data, bandwidth=bandwidth, kernel=kernel)
+    return Record({
+        "bandwidth": round(kde.h, 6),
+        "kernel": kde.kernel,
+        "n_samples": kde.n,
+        "instance": kde,
+    })
+
+
+def metrics_kde_evaluate(kde: Any, points: List[float]) -> List[float]:
+    """Evaluates KDE probability density at query points."""
+    inst = kde.instance if hasattr(kde, "instance") else kde
+    return inst.evaluate_grid(points)
+

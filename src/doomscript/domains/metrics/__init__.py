@@ -28,8 +28,15 @@ from doomscript.domains.metrics.runtime import (
     OTLPTraceExporter,
     ExponentialDecayReservoir,
     EWMAAnomalyDetector,
+    NonParametricMannWhitneyU,
+    KolmogorovSmirnovTwoSample,
+    KernelDensityEstimator1D,
     metrics_export_otlp_traces,
     metrics_create_ewma_detector,
+    metrics_mann_whitney_u,
+    metrics_kolmogorov_smirnov_2samp,
+    metrics_kde_create,
+    metrics_kde_evaluate,
 )
 from doomscript.domains.metrics.parser import MetricsDomainParser
 from doomscript.domains.metrics.exporter import MetricsASTExporter
@@ -71,6 +78,8 @@ class MetricsDomain(DomainContract):
     blocks = []
 
     def can_handle_line(self, line: str) -> bool:
+        if self.parser.parse_inspect(line, 0) is not None or self.parser.parse_operation(line, 0) is not None:
+            return True
         s = line.strip().lower()
         return (
             s.startswith("create counter ")
@@ -106,6 +115,13 @@ __all__ = [
     "OTLPTraceExporter",
     "ExponentialDecayReservoir",
     "EWMAAnomalyDetector",
+    "NonParametricMannWhitneyU",
+    "KolmogorovSmirnovTwoSample",
+    "KernelDensityEstimator1D",
     "metrics_export_otlp_traces",
     "metrics_create_ewma_detector",
+    "metrics_mann_whitney_u",
+    "metrics_kolmogorov_smirnov_2samp",
+    "metrics_kde_create",
+    "metrics_kde_evaluate",
 ]

@@ -24,6 +24,7 @@ from doomscript.domains.ml.fallback import (
     r2_score,
 )
 from doomscript.domains.data.runtime import _to_record_list
+from doomscript.runtime import Record
 
 
 class ModelContainer:
@@ -1729,5 +1730,273 @@ def ml_xgboost_exact(X: Any, y: Any, n_estimators: int = 10, max_depth: int = 3)
     model = GradientBoostedTreesExact(n_estimators=n_estimators, max_depth=max_depth)
     model.fit([list(r) for r in X], [float(v) for v in y])
     return model
+
+
+# ==============================================================================
+# GAUSSIAN MIXTURE MODEL (EM) & PRINCIPAL COMPONENT ANALYSIS (PCA)
+# ==============================================================================
+
+class GaussianMixtureModelEM:
+    """Expectation-Maximization (EM) Gaussian Mixture Model for clustering and density estimation."""
+
+    def __init__(self, n_components: int = 2, max_iters: int = 100, tol: float = 1e-4):
+        self.k = max(1, int(n_components))
+        self.max_iters = max(1, int(max_iters))
+        self.tol = float(tol)
+        self.weights: List[float] = []
+        self.means: List[List[float]] = []
+        self.variances: List[List[float]] = []
+        self.converged: bool = False
+        self.iterations: int = 0
+        self.log_likelihood: float = float("-inf")
+        self.bic: float = 0.0
+
+    def fit(self, X: List[List[float]]) -> "GaussianMixtureModelEM":
+        n = len(X)
+        if n == 0:
+            return self
+        d = len(X[0])
+
+        # Initialize components deterministically using quantiles
+        self.weights = [1.0 / self.k] * self.k
+        self.means = []
+        step = max(1, n // self.k)
+        for i in range(self.k):
+            idx = min(n - 1, i * step)
+            self.means.append(list(X[idx]))
+
+        # Global feature variances as initial variance
+        global_var = [0.0] * d
+        global_mean = [sum(X[r][c] for r in range(n)) / n for c in range(d)]
+        for r in range(n):
+            for c in range(d):
+                global_var[c] += (X[r][c] - global_mean[c]) ** 2
+        global_var = [max(1e-4, v / max(1, n)) for v in global_var]
+        self.variances = [list(global_var) for _ in range(self.k)]
+
+        prev_ll = float("-inf")
+
+        for it in range(self.max_iters):
+            self.iterations = it + 1
+
+            # --- E-Step: Responsibilities ---
+            responsibilities: List[List[float]] = []
+            current_ll = 0.0
+
+            for i in range(n):
+                x = X[i]
+                log_probs = []
+                for comp in range(self.k):
+                    w = max(1e-12, self.weights[comp])
+                    m = self.means[comp]
+                    var = self.variances[comp]
+
+                    # Log multivariate Gaussian PDF
+                    log_p = math.log(w)
+                    for j in range(d):
+                        v_j = max(1e-6, var[j])
+                        diff = x[j] - m[j]
+                        log_p += -0.5 * math.log(2.0 * math.pi * v_j) - 0.5 * (diff * diff) / v_j
+                    log_probs.append(log_p)
+
+                # Log-sum-exp trick
+                max_lp = max(log_probs)
+                sum_exp = sum(math.exp(lp - max_lp) for lp in log_probs)
+                log_norm = max_lp + math.log(max(1e-12, sum_exp))
+                current_ll += log_norm
+
+                resps = [math.exp(lp - log_norm) for lp in log_probs]
+                responsibilities.append(resps)
+
+            self.log_likelihood = current_ll
+
+            # Check convergence
+            if it > 0 and abs(current_ll - prev_ll) < self.tol:
+                self.converged = True
+                break
+            prev_ll = current_ll
+
+            # --- M-Step: Parameter Updates ---
+            n_k = [sum(responsibilities[i][comp] for i in range(n)) for comp in range(self.k)]
+
+            for comp in range(self.k):
+                nk = max(1e-10, n_k[comp])
+                self.weights[comp] = nk / n
+
+                # Update mean
+                new_mean = [0.0] * d
+                for i in range(n):
+                    r_ik = responsibilities[i][comp]
+                    for j in range(d):
+                        new_mean[j] += r_ik * X[i][j]
+                self.means[comp] = [val / nk for val in new_mean]
+
+                # Update variance
+                new_var = [0.0] * d
+                for i in range(n):
+                    r_ik = responsibilities[i][comp]
+                    for j in range(d):
+                        diff = X[i][j] - self.means[comp][j]
+                        new_var[j] += r_ik * (diff * diff)
+                self.variances[comp] = [max(1e-6, val / nk) for val in new_var]
+
+        # Calculate Bayesian Information Criterion (BIC)
+        p = self.k - 1 + 2 * self.k * d
+        self.bic = round(-2.0 * self.log_likelihood + p * math.log(max(1, n)), 4)
+        return self
+
+    def predict(self, X: List[List[float]]) -> List[int]:
+        """Assigns each sample to component with maximum posterior responsibility."""
+        predictions = []
+        d = len(self.means[0]) if self.means else 0
+        for x in X:
+            best_comp = 0
+            best_prob = float("-inf")
+            for comp in range(self.k):
+                w = max(1e-12, self.weights[comp])
+                m = self.means[comp]
+                var = self.variances[comp]
+                log_p = math.log(w)
+                for j in range(d):
+                    v_j = max(1e-6, var[j])
+                    diff = x[j] - m[j]
+                    log_p += -0.5 * math.log(2.0 * math.pi * v_j) - 0.5 * (diff * diff) / v_j
+                if log_p > best_prob:
+                    best_prob = log_p
+                    best_comp = comp
+            predictions.append(best_comp)
+        return predictions
+
+
+class PrincipalComponentAnalysisPCA:
+    """Principal Component Analysis (PCA) with Covariance Eigendecomposition."""
+
+    def __init__(self, n_components: int = 2):
+        self.n_components = max(1, int(n_components))
+        self.components: List[List[float]] = []  # Eigenvector matrix (n_components x d)
+        self.explained_variance: List[float] = []
+        self.explained_variance_ratio: List[float] = []
+        self.mean: List[float] = []
+
+    def fit(self, X: List[List[float]]) -> "PrincipalComponentAnalysisPCA":
+        n = len(X)
+        if n == 0:
+            return self
+        d = len(X[0])
+        k = min(self.n_components, d)
+
+        # 1. Compute empirical mean and center data
+        self.mean = [sum(X[r][c] for r in range(n)) / n for c in range(d)]
+        x_centered = [[X[r][c] - self.mean[c] for c in range(d)] for r in range(n)]
+
+        # 2. Compute d x d sample covariance matrix
+        cov = [[0.0] * d for _ in range(d)]
+        denom = max(1, n - 1)
+        for i in range(d):
+            for j in range(i, d):
+                s = sum(x_centered[r][i] * x_centered[r][j] for r in range(n)) / denom
+                cov[i][j] = s
+                cov[j][i] = s
+
+        total_var = sum(cov[i][i] for i in range(d))
+
+        # 3. Orthogonal Power Iteration to extract top k eigenvectors
+        found_vectors: List[List[float]] = []
+        eigenvalues: List[float] = []
+
+        for comp_idx in range(k):
+            # Seed vector
+            v = [1.0 if idx == comp_idx else 0.0 for idx in range(d)]
+
+            for _ in range(60):
+                # Matrix-vector multiply: w = Cov * v
+                w = [0.0] * d
+                for r in range(d):
+                    w[r] = sum(cov[r][c] * v[c] for c in range(d))
+
+                # Gram-Schmidt orthogonalization against prior components
+                for prev_v in found_vectors:
+                    proj = sum(w[c] * prev_v[c] for c in range(d))
+                    for c in range(d):
+                        w[c] -= proj * prev_v[c]
+
+                norm = math.sqrt(sum(x * x for x in w))
+                if norm > 1e-12:
+                    v = [x / norm for x in w]
+                else:
+                    break
+
+            # Eigenvalue = v^T * Cov * v
+            cov_v = [sum(cov[r][c] * v[c] for c in range(d)) for r in range(d)]
+            eig_val = sum(v[c] * cov_v[c] for c in range(d))
+
+            found_vectors.append(v)
+            eigenvalues.append(max(0.0, eig_val))
+
+        self.components = found_vectors
+        self.explained_variance = [round(e, 6) for e in eigenvalues]
+        self.explained_variance_ratio = [
+            round(e / max(1e-12, total_var), 4) for e in eigenvalues
+        ]
+        return self
+
+    def transform(self, X: List[List[float]]) -> List[List[float]]:
+        """Projects data onto principal component subspace."""
+        n = len(X)
+        d = len(self.mean)
+        k = len(self.components)
+        projected = []
+
+        for r in range(n):
+            centered = [X[r][c] - self.mean[c] for c in range(d)]
+            row = []
+            for comp_idx in range(k):
+                comp_v = self.components[comp_idx]
+                proj = sum(centered[c] * comp_v[c] for c in range(d))
+                row.append(round(proj, 4))
+            projected.append(row)
+
+        return projected
+
+
+def ml_gmm_fit(data: List[List[float]], k: int = 2, max_iters: int = 50) -> Any:
+    """Fits Gaussian Mixture Model using Expectation-Maximization."""
+    gmm = GaussianMixtureModelEM(n_components=k, max_iters=max_iters)
+    gmm.fit([list(r) for r in data])
+    return Record({
+        "num_components": gmm.k,
+        "converged": gmm.converged,
+        "iterations": gmm.iterations,
+        "log_likelihood": round(gmm.log_likelihood, 4),
+        "bic": gmm.bic,
+        "weights": [round(w, 4) for w in gmm.weights],
+        "means": [[round(m, 4) for m in comp] for comp in gmm.means],
+        "instance": gmm,
+    })
+
+
+def ml_gmm_predict(model: Any, samples: List[List[float]]) -> List[int]:
+    """Predicts component assignments for samples using trained GMM."""
+    inst = model.instance if hasattr(model, "instance") else model
+    return inst.predict([list(r) for r in samples])
+
+
+def ml_pca_fit(data: List[List[float]], n_components: int = 2) -> Any:
+    """Fits Principal Component Analysis model."""
+    pca = PrincipalComponentAnalysisPCA(n_components=n_components)
+    pca.fit([list(r) for r in data])
+    return Record({
+        "n_components": len(pca.components),
+        "explained_variance": pca.explained_variance,
+        "explained_variance_ratio": pca.explained_variance_ratio,
+        "instance": pca,
+    })
+
+
+def ml_pca_transform(model: Any, data: List[List[float]]) -> List[List[float]]:
+    """Transforms data using fitted PCA components."""
+    inst = model.instance if hasattr(model, "instance") else model
+    return inst.transform([list(r) for r in data])
+
 
 

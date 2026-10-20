@@ -6,6 +6,7 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from doomscript.domains.base import DomainRuntime, DomainIR
 from doomscript.domains.db.spec import QuerySpec, WhereClause
 from doomscript.domains.data.runtime import _to_record_list
+from doomscript.runtime import Record
 
 
 class DBRuntime(DomainRuntime):
@@ -1004,3 +1005,211 @@ def db_wal_create() -> WALCrashRecovery:
 
 def db_mvcc_create() -> SnapshotIsolationMVCC:
     return SnapshotIsolationMVCC()
+
+
+# ==============================================================================
+# B+ TREE STORAGE ENGINE INDEX
+# ==============================================================================
+
+class BPlusTreeNode:
+    """Node in an in-memory B+ Tree index."""
+
+    def __init__(self, is_leaf: bool = False):
+        self.is_leaf = is_leaf
+        self.keys: List[Any] = []
+        self.values: List[Any] = []  # Only used when is_leaf is True
+        self.children: List["BPlusTreeNode"] = []  # Only used when is_leaf is False
+        self.next: Optional["BPlusTreeNode"] = None  # Doubly-linked leaf pointer
+        self.prev: Optional["BPlusTreeNode"] = None
+
+
+class BPlusTreeIndex:
+    """Complete B+ Tree Index with internal/leaf splitting and linked-leaf range scanning."""
+
+    def __init__(self, order: int = 4):
+        self.order = max(3, int(order))
+        self.root = BPlusTreeNode(is_leaf=True)
+        self.total_keys = 0
+
+    def search(self, key: Any) -> Optional[Any]:
+        """Searches for key and returns associated value, or None if not found."""
+        leaf = self._find_leaf(key)
+        for i, k in enumerate(leaf.keys):
+            if k == key:
+                return leaf.values[i]
+        return None
+
+    def insert(self, key: Any, value: Any) -> None:
+        """Inserts key and value into the B+ Tree, performing splits as necessary."""
+        leaf = self._find_leaf(key)
+
+        # Update existing key if present
+        for i, k in enumerate(leaf.keys):
+            if k == key:
+                leaf.values[i] = value
+                return
+
+        # Insert key in sorted order
+        idx = 0
+        while idx < len(leaf.keys) and leaf.keys[idx] < key:
+            idx += 1
+        leaf.keys.insert(idx, key)
+        leaf.values.insert(idx, value)
+        self.total_keys += 1
+
+        # Check for leaf split
+        if len(leaf.keys) >= self.order:
+            self._split_leaf(leaf)
+
+    def range_scan(self, min_key: Any, max_key: Any) -> List[Tuple[Any, Any]]:
+        """Scans and returns all (key, value) pairs within [min_key, max_key] inclusive."""
+        results = []
+        leaf = self._find_leaf(min_key)
+
+        curr: Optional[BPlusTreeNode] = leaf
+        while curr is not None:
+            for i, k in enumerate(curr.keys):
+                if k > max_key:
+                    return results
+                if k >= min_key:
+                    results.append((k, curr.values[i]))
+            curr = curr.next
+
+        return results
+
+    def delete(self, key: Any) -> bool:
+        """Deletes key from index, returning True if key existed."""
+        leaf = self._find_leaf(key)
+        for i, k in enumerate(leaf.keys):
+            if k == key:
+                leaf.keys.pop(i)
+                leaf.values.pop(i)
+                self.total_keys -= 1
+                return True
+        return False
+
+    def get_height(self) -> int:
+        """Returns the height of the B+ Tree."""
+        h = 1
+        curr = self.root
+        while not curr.is_leaf:
+            h += 1
+            curr = curr.children[0]
+        return h
+
+    def get_stats(self) -> Dict[str, Any]:
+        """Returns structural statistics of the B+ Tree."""
+        return {
+            "order": self.order,
+            "total_keys": self.total_keys,
+            "height": self.get_height(),
+        }
+
+    def _find_leaf(self, key: Any) -> BPlusTreeNode:
+        curr = self.root
+        while not curr.is_leaf:
+            idx = 0
+            while idx < len(curr.keys) and key >= curr.keys[idx]:
+                idx += 1
+            curr = curr.children[idx]
+        return curr
+
+    def _find_parent(self, current: BPlusTreeNode, child: BPlusTreeNode) -> Optional[BPlusTreeNode]:
+        if current.is_leaf or not current.children:
+            return None
+        for c in current.children:
+            if c is child:
+                return current
+        for c in current.children:
+            res = self._find_parent(c, child)
+            if res is not None:
+                return res
+        return None
+
+    def _split_leaf(self, leaf: BPlusTreeNode) -> None:
+        mid = len(leaf.keys) // 2
+        right = BPlusTreeNode(is_leaf=True)
+
+        right.keys = leaf.keys[mid:]
+        right.values = leaf.values[mid:]
+        leaf.keys = leaf.keys[:mid]
+        leaf.values = leaf.values[:mid]
+
+        right.next = leaf.next
+        if leaf.next is not None:
+            leaf.next.prev = right
+        leaf.next = right
+        right.prev = leaf
+
+        promoted_key = right.keys[0]
+        parent = self._find_parent(self.root, leaf)
+
+        if parent is None:
+            # Create new root
+            new_root = BPlusTreeNode(is_leaf=False)
+            new_root.keys = [promoted_key]
+            new_root.children = [leaf, right]
+            self.root = new_root
+        else:
+            self._insert_into_parent(parent, promoted_key, right)
+
+    def _split_internal(self, node: BPlusTreeNode) -> None:
+        mid = len(node.keys) // 2
+        promoted_key = node.keys[mid]
+
+        right = BPlusTreeNode(is_leaf=False)
+        right.keys = node.keys[mid + 1 :]
+        right.children = node.children[mid + 1 :]
+
+        node.keys = node.keys[:mid]
+        node.children = node.children[: mid + 1]
+
+        parent = self._find_parent(self.root, node)
+        if parent is None:
+            new_root = BPlusTreeNode(is_leaf=False)
+            new_root.keys = [promoted_key]
+            new_root.children = [node, right]
+            self.root = new_root
+        else:
+            self._insert_into_parent(parent, promoted_key, right)
+
+    def _insert_into_parent(self, parent: BPlusTreeNode, key: Any, right_child: BPlusTreeNode) -> None:
+        idx = 0
+        while idx < len(parent.keys) and parent.keys[idx] < key:
+            idx += 1
+        parent.keys.insert(idx, key)
+        parent.children.insert(idx + 1, right_child)
+
+        if len(parent.keys) >= self.order:
+            self._split_internal(parent)
+
+
+def db_bplus_tree_create(order: int = 4) -> Any:
+    """Creates a new B+ Tree index record."""
+    tree = BPlusTreeIndex(order=order)
+    return Record({
+        "order": tree.order,
+        "total_keys": tree.total_keys,
+        "instance": tree,
+    })
+
+
+def db_bplus_tree_insert(tree: Any, key: Any, value: Any) -> Any:
+    """Inserts key and value into B+ Tree index."""
+    idx = tree.instance if hasattr(tree, "instance") else tree
+    idx.insert(key, value)
+    return Record(idx.get_stats())
+
+
+def db_bplus_tree_search(tree: Any, key: Any) -> Any:
+    """Searches for key in B+ Tree index."""
+    idx = tree.instance if hasattr(tree, "instance") else tree
+    return idx.search(key)
+
+
+def db_bplus_tree_range(tree: Any, min_key: Any, max_key: Any) -> List[Any]:
+    """Scans B+ Tree index for keys within [min_key, max_key]."""
+    idx = tree.instance if hasattr(tree, "instance") else tree
+    pairs = idx.range_scan(min_key, max_key)
+    return [Record({"key": p[0], "value": p[1]}) for p in pairs]
+

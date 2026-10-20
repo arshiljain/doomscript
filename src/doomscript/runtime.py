@@ -2187,6 +2187,11 @@ from doomscript.domains.db.runtime import (
     db_database_size_bytes,
     db_count_distinct_values,
     db_clone_table_schema,
+    BPlusTreeIndex,
+    db_bplus_tree_create,
+    db_bplus_tree_insert,
+    db_bplus_tree_search,
+    db_bplus_tree_range,
 )
 
 def execute_db_ir(spec):
@@ -2615,6 +2620,16 @@ from doomscript.domains.data.runtime import (
     PivotTableEngine,
     data_relational_join,
     data_rolling_aggregate,
+    HyperLogLogSketch,
+    CountMinSketch,
+    ReservoirSamplerStream,
+    data_hll_create,
+    data_hll_add,
+    data_hll_estimate,
+    data_cms_create,
+    data_cms_add,
+    data_cms_estimate,
+    data_reservoir_sample,
 )
 
 from doomscript.domains.nlp.runtime import (
@@ -3767,6 +3782,13 @@ from doomscript.domains.metrics.runtime import (
     EWMAAnomalyDetector,
     metrics_export_otlp_traces,
     metrics_create_ewma_detector,
+    NonParametricMannWhitneyU,
+    KolmogorovSmirnovTwoSample,
+    KernelDensityEstimator1D,
+    metrics_mann_whitney_u,
+    metrics_kolmogorov_smirnov_2samp,
+    metrics_kde_create,
+    metrics_kde_evaluate,
 )
 
 from doomscript.domains.spatial_audio.runtime import (
@@ -3830,6 +3852,12 @@ from doomscript.domains.ml.runtime import (
     ml_kmeans_plus_plus,
     ml_tiny_convnet,
     ml_xgboost_exact,
+    GaussianMixtureModelEM,
+    PrincipalComponentAnalysisPCA,
+    ml_gmm_fit,
+    ml_gmm_predict,
+    ml_pca_fit,
+    ml_pca_transform,
 )
 
 from doomscript.domains.finance.runtime import (

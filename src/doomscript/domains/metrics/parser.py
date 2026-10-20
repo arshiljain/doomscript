@@ -45,6 +45,48 @@ class MetricsDomainParser(DomainParser):
             target = m_exp.group(1).strip()
             return f"set {target} to metrics_export_openmetrics()"
 
+        # calculate mann whitney u test between <s1> and <s2> into <target>
+        m_mwu = re.match(
+            r"^calculate\s+mann\s+whitney\s+u\s+test\s+between\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_mwu:
+            s1, s2, target = m_mwu.group(1).strip(), m_mwu.group(2).strip(), m_mwu.group(3).strip()
+            return f"set {target} to metrics_mann_whitney_u({s1}, {s2})"
+
+        # calculate kolmogorov smirnov test between <s1> and <s2> into <target>
+        m_ks = re.match(
+            r"^calculate\s+kolmogorov\s+smirnov\s+test\s+between\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_ks:
+            s1, s2, target = m_ks.group(1).strip(), m_ks.group(2).strip(), m_ks.group(3).strip()
+            return f"set {target} to metrics_kolmogorov_smirnov_2samp({s1}, {s2})"
+
+        # compute kernel density estimation for <data> [with bandwidth <h>] into <target>
+        m_kde = re.match(
+            r"^compute\s+kernel\s+density\s+estimation\s+for\s+(.+?)(?:\s+with\s+bandwidth\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_kde:
+            data = m_kde.group(1).strip()
+            bw = m_kde.group(2).strip() if m_kde.group(2) else "None"
+            target = m_kde.group(3).strip()
+            return f"set {target} to metrics_kde_create({data}, bandwidth={bw})"
+
+        # evaluate kde <kde> at points <pts> into <target>
+        m_kde_ev = re.match(
+            r"^evaluate\s+kde\s+(.+?)\s+at\s+points\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_kde_ev:
+            kde, pts, target = m_kde_ev.group(1).strip(), m_kde_ev.group(2).strip(), m_kde_ev.group(3).strip()
+            return f"set {target} to metrics_kde_evaluate({kde}, {pts})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

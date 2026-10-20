@@ -404,6 +404,46 @@ class MLDomainParser(DomainParser):
             grads, max_norm, target = clipg_m.group(1).strip(), clipg_m.group(2).strip(), clipg_m.group(3).strip()
             return f"set {target} to ml_gradient_clip_norm({grads}, max_norm={max_norm})"
 
+        # fit gaussian mixture model with <k> components on <data> into <target>
+        m_gmm = re.match(
+            r"^fit\s+gaussian\s+mixture\s+model\s+with\s+(\d+)\s+components\s+on\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_gmm:
+            k, data, target = m_gmm.group(1).strip(), m_gmm.group(2).strip(), m_gmm.group(3).strip()
+            return f"set {target} to ml_gmm_fit({data}, k={k})"
+
+        # predict gmm cluster for <samples> using <model> into <target>
+        m_gmm_p = re.match(
+            r"^predict\s+gmm\s+cluster\s+for\s+(.+?)\s+using\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_gmm_p:
+            samples, model, target = m_gmm_p.group(1).strip(), m_gmm_p.group(2).strip(), m_gmm_p.group(3).strip()
+            return f"set {target} to ml_gmm_predict({model}, {samples})"
+
+        # compute pca with <n_components> components on <data> into <target>
+        m_pca = re.match(
+            r"^compute\s+pca\s+with\s+(\d+)\s+components\s+on\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_pca:
+            k, data, target = m_pca.group(1).strip(), m_pca.group(2).strip(), m_pca.group(3).strip()
+            return f"set {target} to ml_pca_fit({data}, n_components={k})"
+
+        # project data <data> with pca <pca_model> into <target>
+        m_pca_proj = re.match(
+            r"^project\s+data\s+(.+?)\s+with\s+pca\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_pca_proj:
+            data, model, target = m_pca_proj.group(1).strip(), m_pca_proj.group(2).strip(), m_pca_proj.group(3).strip()
+            return f"set {target} to ml_pca_transform({model}, {data})"
+
         return None
 
     def parse_block(

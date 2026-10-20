@@ -430,6 +430,47 @@ class DBDomainParser(DomainParser):
             call = f"db_clone_table_schema(None, {src}, {dst})"
             return f"set {target} to {call}" if target else call
 
+        # create bplus tree index [with order <order>] into <target>
+        m_bpt = re.match(
+            r"^create\s+bplus\s+tree\s+index(?:\s+with\s+order\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_bpt:
+            order = m_bpt.group(1) or "4"
+            target = m_bpt.group(2).strip()
+            return f"set {target} to db_bplus_tree_create({order})"
+
+        # insert key <key> with value <val> into bplus tree <tree>
+        m_bpt_ins = re.match(
+            r"^insert\s+key\s+(.+?)\s+with\s+value\s+(.+?)\s+into\s+bplus\s+tree\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_bpt_ins:
+            key, val, tree = m_bpt_ins.group(1).strip(), m_bpt_ins.group(2).strip(), m_bpt_ins.group(3).strip()
+            return f"db_bplus_tree_insert({tree}, {key}, {val})"
+
+        # search key <key> in bplus tree <tree> into <target>
+        m_bpt_sch = re.match(
+            r"^search\s+key\s+(.+?)\s+in\s+bplus\s+tree\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_bpt_sch:
+            key, tree, target = m_bpt_sch.group(1).strip(), m_bpt_sch.group(2).strip(), m_bpt_sch.group(3).strip()
+            return f"set {target} to db_bplus_tree_search({tree}, {key})"
+
+        # scan range from <min_key> to <max_key> in bplus tree <tree> into <target>
+        m_bpt_rng = re.match(
+            r"^scan\s+range\s+from\s+(.+?)\s+to\s+(.+?)\s+in\s+bplus\s+tree\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_bpt_rng:
+            min_k, max_k, tree, target = m_bpt_rng.group(1).strip(), m_bpt_rng.group(2).strip(), m_bpt_rng.group(3).strip(), m_bpt_rng.group(4).strip()
+            return f"set {target} to db_bplus_tree_range({tree}, {min_k}, {max_k})"
+
         return None
 
     def parse_block(

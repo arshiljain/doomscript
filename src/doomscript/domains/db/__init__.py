@@ -44,6 +44,11 @@ from doomscript.domains.db.runtime import (
     WALCrashRecovery,
     CostBasedQueryOptimizer,
     SnapshotIsolationMVCC,
+    BPlusTreeIndex,
+    db_bplus_tree_create,
+    db_bplus_tree_insert,
+    db_bplus_tree_search,
+    db_bplus_tree_range,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.db.exporter import DBASTExporter
@@ -101,6 +106,8 @@ class DBDomain(DomainContract):
     ]
 
     def can_handle_line(self, line: str) -> bool:
+        if self.parser.parse_inspect(line, 0) is not None or self.parser.parse_operation(line, 0) is not None:
+            return True
         s = line.strip().lower()
         return (
             s.startswith("inspect table ")
@@ -203,4 +210,9 @@ __all__ = [
     "WALCrashRecovery",
     "CostBasedQueryOptimizer",
     "SnapshotIsolationMVCC",
+    "BPlusTreeIndex",
+    "db_bplus_tree_create",
+    "db_bplus_tree_insert",
+    "db_bplus_tree_search",
+    "db_bplus_tree_range",
 ]

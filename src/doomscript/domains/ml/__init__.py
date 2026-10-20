@@ -26,10 +26,16 @@ from doomscript.domains.ml.runtime import (
     KMeansPlusPlus,
     TinyConvNet,
     GradientBoostedTreesExact,
+    GaussianMixtureModelEM,
+    PrincipalComponentAnalysisPCA,
     ml_svm_train,
     ml_kmeans_plus_plus,
     ml_tiny_convnet,
     ml_xgboost_exact,
+    ml_gmm_fit,
+    ml_gmm_predict,
+    ml_pca_fit,
+    ml_pca_transform,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.ml.exporter import MLASTExporter
@@ -102,6 +108,8 @@ class MLDomain(DomainContract):
     ]
 
     def can_handle_line(self, line: str) -> bool:
+        if self.parser.parse_inspect(line, 0) is not None or self.parser.parse_operation(line, 0) is not None:
+            return True
         s = line.strip().lower()
         return (
             s.startswith("train ")
@@ -184,9 +192,15 @@ __all__ = [
     "KMeansPlusPlus",
     "TinyConvNet",
     "GradientBoostedTreesExact",
+    "GaussianMixtureModelEM",
+    "PrincipalComponentAnalysisPCA",
     "ml_svm_train",
     "ml_kmeans_plus_plus",
     "ml_tiny_convnet",
     "ml_xgboost_exact",
+    "ml_gmm_fit",
+    "ml_gmm_predict",
+    "ml_pca_fit",
+    "ml_pca_transform",
 ]
 

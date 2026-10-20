@@ -462,6 +462,77 @@ class DataDomainParser(DomainParser):
             target = col_m.group(2)
             return f"set {target} to data_to_columnar({data_var})"
 
+        # create hyperloglog [with precision <p>] into <target>
+        m_hll = re.match(
+            r"^create\s+hyperloglog(?:\s+with\s+precision\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_hll:
+            p = m_hll.group(1) or "10"
+            target = m_hll.group(2).strip()
+            return f"set {target} to data_hll_create({p})"
+
+        # add items <items> to hyperloglog <hll>
+        m_hll_add = re.match(
+            r"^add\s+items\s+(.+?)\s+to\s+hyperloglog\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_hll_add:
+            items, hll = m_hll_add.group(1).strip(), m_hll_add.group(2).strip()
+            return f"data_hll_add({hll}, {items})"
+
+        # estimate cardinality of hyperloglog <hll> into <target>
+        m_hll_est = re.match(
+            r"^estimate\s+cardinality\s+of\s+hyperloglog\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_hll_est:
+            hll, target = m_hll_est.group(1).strip(), m_hll_est.group(2).strip()
+            return f"set {target} to data_hll_estimate({hll})"
+
+        # create count min sketch with width <w> and depth <d> into <target>
+        m_cms = re.match(
+            r"^create\s+count\s+min\s+sketch\s+with\s+width\s+(\d+)\s+and\s+depth\s+(\d+)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_cms:
+            w, d, target = m_cms.group(1).strip(), m_cms.group(2).strip(), m_cms.group(3).strip()
+            return f"set {target} to data_cms_create({w}, {d})"
+
+        # update count min sketch <cms> with items <items>
+        m_cms_add = re.match(
+            r"^update\s+count\s+min\s+sketch\s+([A-Za-z_]\w*)\s+with\s+items\s+(.+?)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_cms_add:
+            cms, items = m_cms_add.group(1).strip(), m_cms_add.group(2).strip()
+            return f"data_cms_add({cms}, {items})"
+
+        # estimate frequency of item <item> in count min sketch <cms> into <target>
+        m_cms_est = re.match(
+            r"^estimate\s+frequency\s+of\s+item\s+(.+?)\s+in\s+count\s+min\s+sketch\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_cms_est:
+            item, cms, target = m_cms_est.group(1).strip(), m_cms_est.group(2).strip(), m_cms_est.group(3).strip()
+            return f"set {target} to data_cms_estimate({cms}, {item})"
+
+        # sample <k> items from stream <stream> using reservoir sampling into <target>
+        m_res = re.match(
+            r"^sample\s+(\d+)\s+items\s+from\s+stream\s+(.+?)\s+using\s+reservoir\s+sampling\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_res:
+            k, stream, target = m_res.group(1).strip(), m_res.group(2).strip(), m_res.group(3).strip()
+            return f"set {target} to data_reservoir_sample({stream}, {k})"
+
         return None
 
 

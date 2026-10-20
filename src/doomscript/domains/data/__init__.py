@@ -32,9 +32,19 @@ from doomscript.domains.data.runtime import (
     RollingAggregator,
     RelationalJoinEngine,
     PivotTableEngine,
+    HyperLogLogSketch,
+    CountMinSketch,
+    ReservoirSamplerStream,
     data_relational_join,
     data_pivot_table,
     data_rolling_aggregate,
+    data_hll_create,
+    data_hll_add,
+    data_hll_estimate,
+    data_cms_create,
+    data_cms_add,
+    data_cms_estimate,
+    data_reservoir_sample,
 )
 from doomscript.domains.data.exporter import DataASTExporter
 from doomscript.domains.matcher import VerbSpec
@@ -127,6 +137,8 @@ class DataDomain(DomainContract):
     ]
 
     def can_handle_line(self, line: str) -> bool:
+        if self.parser.parse_inspect(line, 0) is not None or self.parser.parse_operation(line, 0) is not None:
+            return True
         s = line.strip().lower()
         return (
             s.startswith("inspect dataset")
@@ -214,7 +226,17 @@ __all__ = [
     "RollingAggregator",
     "RelationalJoinEngine",
     "PivotTableEngine",
+    "HyperLogLogSketch",
+    "CountMinSketch",
+    "ReservoirSamplerStream",
     "data_relational_join",
     "data_pivot_table",
     "data_rolling_aggregate",
+    "data_hll_create",
+    "data_hll_add",
+    "data_hll_estimate",
+    "data_cms_create",
+    "data_cms_add",
+    "data_cms_estimate",
+    "data_reservoir_sample",
 ]
