@@ -135,6 +135,56 @@ class ChainDomainParser(DomainParser):
             proof, pub_y, target = m_schnorr_ver.group(1).strip(), m_schnorr_ver.group(2).strip(), m_schnorr_ver.group(3).strip()
             return f"set {target} to chain_schnorr_verify({pub_y}, {proof})"
 
+        # create merkle patricia trie into <target>
+        m_mpt = re.match(
+            r"^create\s+merkle\s+patricia\s+trie\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_mpt:
+            target = m_mpt.group(1).strip()
+            return f"set {target} to chain_mpt_create()"
+
+        # get mpt root of <mpt> into <target>
+        m_mpt_root = re.match(
+            r"^get\s+mpt\s+root\s+of\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_mpt_root:
+            mpt, target = m_mpt_root.group(1).strip(), m_mpt_root.group(2).strip()
+            return f"set {target} to chain_mpt_root({mpt})"
+
+        # create pos validator pool with validators <vals> into <target>
+        m_pos = re.match(
+            r"^create\s+pos\s+validator\s+pool\s+with\s+validators\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_pos:
+            vals, target = m_pos.group(1).strip(), m_pos.group(2).strip()
+            return f"set {target} to chain_pos_create({vals})"
+
+        # select pos proposer for slot <slot> in <pos> into <target>
+        m_pos_prop = re.match(
+            r"^select\s+pos\s+proposer\s+for\s+slot\s+(\d+)\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_pos_prop:
+            slot, pos, target = m_pos_prop.group(1).strip(), m_pos_prop.group(2).strip(), m_pos_prop.group(3).strip()
+            return f"set {target} to chain_pos_proposer({pos}, {slot})"
+
+        # finalize pos block <hash> with voters <voters> in <pos> into <target>
+        m_pos_vote = re.match(
+            r"^finalize\s+pos\s+block\s+(.+?)\s+with\s+voters\s+(.+?)\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_pos_vote:
+            b_hash, voters, pos, target = m_pos_vote.group(1).strip(), m_pos_vote.group(2).strip(), m_pos_vote.group(3).strip(), m_pos_vote.group(4).strip()
+            return f"set {target} to chain_pos_vote({pos}, {b_hash}, {voters})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

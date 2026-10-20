@@ -147,6 +147,67 @@ class SecDomainParser(DomainParser):
             target = m_ban.group(2).strip()
             return f"set {target} to sec_parse_banner({banner})"
 
+        # derive pbkdf2 key for <pwd> with salt <salt> [with iterations <iter>] into <target>
+        m_pbk = re.match(
+            r"^derive\s+pbkdf2\s+key\s+for\s+(.+?)\s+with\s+salt\s+(.+?)(?:\s+with\s+iterations\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_pbk:
+            pwd = m_pbk.group(1).strip()
+            salt = m_pbk.group(2).strip()
+            iters = m_pbk.group(3) if m_pbk.group(3) else "1000"
+            target = m_pbk.group(4).strip()
+            return f"set {target} to sec_derive_pbkdf2({pwd}, {salt}, iterations={iters})"
+
+        # generate totp token for secret <sec> [at timestamp <ts>] into <target>
+        m_totp_g = re.match(
+            r"^generate\s+totp\s+token\s+for\s+secret\s+(.+?)(?:\s+at\s+timestamp\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_totp_g:
+            secret = m_totp_g.group(1).strip()
+            ts = m_totp_g.group(2).strip() if m_totp_g.group(2) else "None"
+            target = m_totp_g.group(3).strip()
+            return f"set {target} to sec_totp_generate({secret}, timestamp={ts})"
+
+        # verify totp token <tok> for secret <sec> into <target>
+        m_totp_v = re.match(
+            r"^verify\s+totp\s+token\s+(.+?)\s+for\s+secret\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_totp_v:
+            tok = m_totp_v.group(1).strip()
+            secret = m_totp_v.group(2).strip()
+            target = m_totp_v.group(3).strip()
+            return f"set {target} to sec_totp_verify({secret}, {tok})"
+
+        # split secret <sec> with threshold <k> total <n> into <target>
+        m_sham_s = re.match(
+            r"^split\s+secret\s+(.+?)\s+with\s+threshold\s+(.+?)\s+total\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_sham_s:
+            sec_val = m_sham_s.group(1).strip()
+            k = m_sham_s.group(2).strip()
+            n = m_sham_s.group(3).strip()
+            target = m_sham_s.group(4).strip()
+            return f"set {target} to sec_shamir_split({sec_val}, {k}, {n})"
+
+        # combine secret shares <shares> into <target>
+        m_sham_c = re.match(
+            r"^combine\s+secret\s+shares\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_sham_c:
+            shares = m_sham_c.group(1).strip()
+            target = m_sham_c.group(2).strip()
+            return f"set {target} to sec_shamir_combine({shares})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

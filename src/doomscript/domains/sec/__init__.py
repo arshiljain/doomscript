@@ -30,6 +30,13 @@ from doomscript.domains.sec.runtime import (
     ShamirSecretSharing,
     TOTPGenerator,
     Secp256k1Curve,
+    PBKDF2KeyDeriver,
+    TOTPAuthenticator,
+    sec_derive_pbkdf2,
+    sec_totp_generate,
+    sec_totp_verify,
+    sec_shamir_split,
+    sec_shamir_combine,
 )
 from doomscript.domains.sec.parser import SecDomainParser
 from doomscript.domains.sec.exporter import SecASTExporter
@@ -80,6 +87,8 @@ class SecDomain(DomainContract):
     blocks = []
 
     def can_handle_line(self, line: str) -> bool:
+        if self.parser.parse_inspect(line, 0) is not None or self.parser.parse_operation(line, 0) is not None:
+            return True
         s = line.strip().lower()
         return (
             s.startswith("calculate password entropy ")
@@ -94,6 +103,11 @@ class SecDomain(DomainContract):
             or s.startswith("generate hexdump of ")
             or s.startswith("calculate cvss score ")
             or s.startswith("parse port banner ")
+            or s.startswith("derive pbkdf2 key ")
+            or s.startswith("generate totp token ")
+            or s.startswith("verify totp token ")
+            or s.startswith("split secret ")
+            or s.startswith("combine secret shares ")
         )
 
     def can_handle_block(self, header: str) -> bool:
@@ -124,4 +138,11 @@ __all__ = [
     "ShamirSecretSharing",
     "TOTPGenerator",
     "Secp256k1Curve",
+    "PBKDF2KeyDeriver",
+    "TOTPAuthenticator",
+    "sec_derive_pbkdf2",
+    "sec_totp_generate",
+    "sec_totp_verify",
+    "sec_shamir_split",
+    "sec_shamir_combine",
 ]

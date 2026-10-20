@@ -2,6 +2,7 @@
 
 import math
 from typing import List, Tuple, Dict, Any, Optional, Union, Callable
+from doomscript.runtime import Record
 
 
 class Vec3:
@@ -779,4 +780,506 @@ def math3d_quickhull(points: List[List[float]]) -> Dict[str, Any]:
     """Computes the 3D Convex Hull of a cloud of points."""
     qh = Quickhull3D()
     return qh.compute_hull(points)
+
+
+# ==============================================================================
+# ORIENTED BOUNDING BOX (OBB) & 15-AXIS SEPARATING AXIS THEOREM (SAT)
+# ==============================================================================
+
+class OrientedBoundingBoxOBB:
+    """3D Oriented Bounding Box with full 15-axis Separating Axis Theorem (SAT)."""
+
+    def __init__(
+        self,
+        center: Union[Vec3, List[float]],
+        extents: Union[Vec3, List[float]],
+        axes: Optional[List[Union[Vec3, List[float]]]] = None,
+    ):
+        self.center = Vec3(center[0], center[1], center[2]) if not isinstance(center, Vec3) else center
+        self.extents = Vec3(abs(extents[0]), abs(extents[1]), abs(extents[2])) if not isinstance(extents, Vec3) else Vec3(abs(extents.x), abs(extents.y), abs(extents.z))
+        if axes is None:
+            self.axes = [Vec3(1.0, 0.0, 0.0), Vec3(0.0, 1.0, 0.0), Vec3(0.0, 0.0, 1.0)]
+        else:
+            self.axes = [
+                Vec3(a[0], a[1], a[2]).normalize() if not isinstance(a, Vec3) else a.normalize()
+                for a in axes
+            ]
+
+    def get_corners(self) -> List[List[float]]:
+        """Returns the 8 corner vertices in 3D world space."""
+        c = self.center
+        e0 = self.axes[0] * self.extents.x
+        e1 = self.axes[1] * self.extents.y
+        e2 = self.axes[2] * self.extents.z
+        corners = []
+        for s0 in (-1.0, 1.0):
+            for s1 in (-1.0, 1.0):
+                for s2 in (-1.0, 1.0):
+                    p = c + (e0 * s0) + (e1 * s1) + (e2 * s2)
+                    corners.append([p.x, p.y, p.z])
+        return corners
+
+    def contains_point(self, pt: Union[Vec3, List[float]]) -> bool:
+        """Determines if a 3D point lies inside the OBB."""
+        p = Vec3(pt[0], pt[1], pt[2]) if not isinstance(pt, Vec3) else pt
+        d = p - self.center
+        proj0 = abs(d.dot(self.axes[0]))
+        proj1 = abs(d.dot(self.axes[1]))
+        proj2 = abs(d.dot(self.axes[2]))
+        return bool(proj0 <= self.extents.x and proj1 <= self.extents.y and proj2 <= self.extents.z)
+
+    def intersects_obb(self, other: "OrientedBoundingBoxOBB") -> Dict[str, Any]:
+        """Performs full 15-axis SAT collision check between two OBBs."""
+        d = other.center - self.center
+
+        # Build list of candidate test axes: 3 from A, 3 from B, 9 from cross products
+        test_axes = []
+        # Box A face normals
+        for a in self.axes:
+            test_axes.append(a)
+        # Box B face normals
+        for b in other.axes:
+            test_axes.append(b)
+        # 9 cross product axes
+        for a in self.axes:
+            for b in other.axes:
+                cp = a.cross(b)
+                if cp.length_squared() > 1e-8:
+                    test_axes.append(cp.normalize())
+
+        min_overlap = float("inf")
+        best_axis = [0.0, 0.0, 0.0]
+
+        for axis in test_axes:
+            # Projected radius of box A
+            ra = (
+                self.extents.x * abs(self.axes[0].dot(axis))
+                + self.extents.y * abs(self.axes[1].dot(axis))
+                + self.extents.z * abs(self.axes[2].dot(axis))
+            )
+            # Projected radius of box B
+            rb = (
+                other.extents.x * abs(other.axes[0].dot(axis))
+                + other.extents.y * abs(other.axes[1].dot(axis))
+                + other.extents.z * abs(other.axes[2].dot(axis))
+            )
+            # Distance along separating axis
+            dist = abs(d.dot(axis))
+
+            if dist > (ra + rb) + 1e-7:
+                # Disjoint! Separating axis found
+                return {
+                    "colliding": False,
+                    "penetration_depth": 0.0,
+                    "separation_axis": [axis.x, axis.y, axis.z],
+                    "distance": round(dist - (ra + rb), 6),
+                }
+
+            overlap = (ra + rb) - dist
+            if overlap < min_overlap:
+                min_overlap = overlap
+                best_axis = [axis.x, axis.y, axis.z]
+
+        return {
+            "colliding": True,
+            "penetration_depth": round(min_overlap, 6),
+            "separation_axis": best_axis,
+            "distance": 0.0,
+        }
+
+
+# ==============================================================================
+# CAMERA VIEW FRUSTUM CULLING
+# ==============================================================================
+
+class FrustumPlane:
+    """3D Plane representation (A, B, C, D) where A*x + B*y + C*z + D = 0."""
+
+    def __init__(self, normal: Vec3, distance: float):
+        l = normal.length()
+        if l > 1e-9:
+            self.normal = normal / l
+            self.distance = distance / l
+        else:
+            self.normal = normal
+            self.distance = distance
+
+    def signed_distance(self, pt: Vec3) -> float:
+        return self.normal.dot(pt) + self.distance
+
+
+class FrustumCuller3D:
+    """6-plane camera viewing frustum with sphere, AABB, and scene culling."""
+
+    def __init__(
+        self,
+        fov_deg: float = 60.0,
+        aspect: float = 1.333,
+        near: float = 0.1,
+        far: float = 100.0,
+        eye: Optional[Union[Vec3, List[float]]] = None,
+        target: Optional[Union[Vec3, List[float]]] = None,
+        up: Optional[Union[Vec3, List[float]]] = None,
+    ):
+        self.fov_deg = float(fov_deg)
+        self.aspect = float(aspect)
+        self.near = float(near)
+        self.far = float(far)
+
+        cam_eye = Vec3(eye[0], eye[1], eye[2]) if eye is not None and not isinstance(eye, Vec3) else (eye or Vec3(0.0, 0.0, 0.0))
+        cam_tgt = Vec3(target[0], target[1], target[2]) if target is not None and not isinstance(target, Vec3) else (target or Vec3(0.0, 0.0, -1.0))
+        cam_up = Vec3(up[0], up[1], up[2]) if up is not None and not isinstance(up, Vec3) else (up or Vec3(0.0, 1.0, 0.0))
+
+        # Camera coordinate frame
+        fwd = (cam_tgt - cam_eye).normalize()
+        right = fwd.cross(cam_up).normalize()
+        true_up = right.cross(fwd).normalize()
+
+        half_v_fov = math.radians(self.fov_deg) * 0.5
+        tang = math.tan(half_v_fov)
+        nh = self.near * tang
+        nw = nh * self.aspect
+        fh = self.far * tang
+        fw = fh * self.aspect
+
+        nc = cam_eye + (fwd * self.near)
+        fc = cam_eye + (fwd * self.far)
+
+        # 6 planes facing INWARD
+        self.planes: List[FrustumPlane] = []
+
+        # Near plane: normal = fwd, pt = nc
+        self.planes.append(FrustumPlane(fwd, -fwd.dot(nc)))
+        # Far plane: normal = -fwd, pt = fc
+        self.planes.append(FrustumPlane(fwd * -1.0, fwd.dot(fc)))
+
+        # Top plane
+        top_pt = nc + (true_up * nh)
+        top_n = (top_pt - cam_eye).cross(right).normalize()
+        self.planes.append(FrustumPlane(top_n, -top_n.dot(top_pt)))
+
+        # Bottom plane
+        bot_pt = nc - (true_up * nh)
+        bot_n = right.cross(bot_pt - cam_eye).normalize()
+        self.planes.append(FrustumPlane(bot_n, -bot_n.dot(bot_pt)))
+
+        # Left plane
+        left_pt = nc - (right * nw)
+        left_n = (left_pt - cam_eye).cross(true_up).normalize()
+        self.planes.append(FrustumPlane(left_n, -left_n.dot(left_pt)))
+
+        # Right plane
+        right_pt = nc + (right * nw)
+        right_n = true_up.cross(right_pt - cam_eye).normalize()
+        self.planes.append(FrustumPlane(right_n, -right_n.dot(right_pt)))
+
+    def cull_sphere(self, center: Union[Vec3, List[float]], radius: float) -> Dict[str, Any]:
+        """Tests whether a bounding sphere is INSIDE, INTERSECTS, or OUTSIDE the frustum."""
+        c = Vec3(center[0], center[1], center[2]) if not isinstance(center, Vec3) else center
+        r = float(radius)
+        all_inside = True
+
+        for plane in self.planes:
+            dist = plane.signed_distance(c)
+            if dist < -r:
+                return {"status": "OUTSIDE", "visible": False, "distance": dist}
+            elif dist < r:
+                all_inside = False
+
+        status = "INSIDE" if all_inside else "INTERSECTS"
+        return {"status": status, "visible": True, "distance": 0.0}
+
+    def cull_scene(self, objects: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Culls an array of scene objects containing 'center'/'position' and 'radius'."""
+        visible = []
+        culled = 0
+        for obj in objects:
+            pos = obj.get("center") or obj.get("position") or [0.0, 0.0, 0.0]
+            rad = float(obj.get("radius", 1.0))
+            res = self.cull_sphere(pos, rad)
+            if res["visible"]:
+                visible.append(obj)
+            else:
+                culled += 1
+
+        total = len(objects)
+        cull_ratio = round(culled / total, 3) if total > 0 else 0.0
+        return {
+            "visible_objects": visible,
+            "visible_count": len(visible),
+            "culled_count": culled,
+            "total_objects": total,
+            "cull_ratio": cull_ratio,
+        }
+
+
+# ==============================================================================
+# BOUNDING VOLUME HIERARCHY (BVH) ACCELERATION TREE
+# ==============================================================================
+
+class BvhNode:
+    """Node in the hierarchical BVH tree."""
+
+    def __init__(self, min_pt: Vec3, max_pt: Vec3):
+        self.min_pt = min_pt
+        self.max_pt = max_pt
+        self.left: Optional["BvhNode"] = None
+        self.right: Optional["BvhNode"] = None
+        self.triangle_indices: List[int] = []
+        self.is_leaf: bool = False
+
+
+class BvhSpatialTree:
+    """Bounding Volume Hierarchy (BVH) spatial accelerator for 3D meshes."""
+
+    def __init__(self, triangles: List[List[List[float]]], max_leaf_capacity: int = 2):
+        self.triangles = [
+            [Vec3(p[0], p[1], p[2]) for p in tri]
+            for tri in triangles
+        ]
+        self.max_leaf_capacity = max(1, int(max_leaf_capacity))
+        self.centroids: List[Vec3] = []
+        for tri in self.triangles:
+            c = (tri[0] + tri[1] + tri[2]) / 3.0
+            self.centroids.append(c)
+
+        all_indices = list(range(len(self.triangles)))
+        self.root = self._build_tree(all_indices)
+
+    def _compute_bbox(self, indices: List[int]) -> Tuple[Vec3, Vec3]:
+        min_x, min_y, min_z = float("inf"), float("inf"), float("inf")
+        max_x, max_y, max_z = float("-inf"), float("-inf"), float("-inf")
+        for idx in indices:
+            for pt in self.triangles[idx]:
+                min_x = min(min_x, pt.x)
+                min_y = min(min_y, pt.y)
+                min_z = min(min_z, pt.z)
+                max_x = max(max_x, pt.x)
+                max_y = max(max_y, pt.y)
+                max_z = max(max_z, pt.z)
+        return Vec3(min_x, min_y, min_z), Vec3(max_x, max_y, max_z)
+
+    def _build_tree(self, indices: List[int]) -> Optional[BvhNode]:
+        if not indices:
+            return None
+
+        min_pt, max_pt = self._compute_bbox(indices)
+        node = BvhNode(min_pt, max_pt)
+
+        if len(indices) <= self.max_leaf_capacity:
+            node.is_leaf = True
+            node.triangle_indices = indices
+            return node
+
+        # Choose longest axis of bounding box
+        extent = max_pt - min_pt
+        axis = 0
+        if extent.y > extent.x and extent.y > extent.z:
+            axis = 1
+        elif extent.z > extent.x and extent.z > extent.y:
+            axis = 2
+
+        # Sort indices along axis by triangle centroid
+        indices.sort(key=lambda idx: self.centroids[idx][axis])
+        mid = len(indices) // 2
+
+        node.left = self._build_tree(indices[:mid])
+        node.right = self._build_tree(indices[mid:])
+        return node
+
+    def _intersect_ray_aabb(self, node: BvhNode, origin: Vec3, inv_dir: Vec3) -> Tuple[bool, float]:
+        t0x = (node.min_pt.x - origin.x) * inv_dir.x
+        t1x = (node.max_pt.x - origin.x) * inv_dir.x
+        tmin_x, tmax_x = min(t0x, t1x), max(t0x, t1x)
+
+        t0y = (node.min_pt.y - origin.y) * inv_dir.y
+        t1y = (node.max_pt.y - origin.y) * inv_dir.y
+        tmin_y, tmax_y = min(t0y, t1y), max(t0y, t1y)
+
+        tmin = max(tmin_x, tmin_y)
+        tmax = min(tmax_x, tmax_y)
+
+        t0z = (node.min_pt.z - origin.z) * inv_dir.z
+        t1z = (node.max_pt.z - origin.z) * inv_dir.z
+        tmin_z, tmax_z = min(t0z, t1z), max(t0z, t1z)
+
+        tmin = max(tmin, tmin_z)
+        tmax = min(tmax, tmax_z)
+
+        if tmax >= max(0.0, tmin):
+            return True, max(0.0, tmin)
+        return False, float("inf")
+
+    def _intersect_ray_triangle(
+        self, origin: Vec3, direction: Vec3, tri_idx: int
+    ) -> Tuple[bool, float, float, float]:
+        v0, v1, v2 = self.triangles[tri_idx]
+        e1 = v1 - v0
+        e2 = v2 - v0
+        h = direction.cross(e2)
+        a = e1.dot(h)
+
+        if abs(a) < 1e-8:
+            return False, 0.0, 0.0, 0.0
+
+        f = 1.0 / a
+        s = origin - v0
+        u = f * s.dot(h)
+        if u < 0.0 or u > 1.0:
+            return False, 0.0, 0.0, 0.0
+
+        q = s.cross(e1)
+        v = f * direction.dot(q)
+        if v < 0.0 or (u + v) > 1.0:
+            return False, 0.0, 0.0, 0.0
+
+        t = f * e2.dot(q)
+        if t > 1e-7:
+            return True, t, u, v
+        return False, 0.0, 0.0, 0.0
+
+    def intersect_ray(
+        self, origin: Union[Vec3, List[float]], direction: Union[Vec3, List[float]]
+    ) -> Dict[str, Any]:
+        """Traces a ray through the BVH returning closest hit triangle, hit point, and stats."""
+        orig = Vec3(origin[0], origin[1], origin[2]) if not isinstance(origin, Vec3) else origin
+        dir_vec = Vec3(direction[0], direction[1], direction[2]).normalize() if not isinstance(direction, Vec3) else direction.normalize()
+
+        inv_dir = Vec3(
+            1.0 / dir_vec.x if abs(dir_vec.x) > 1e-9 else 1e9,
+            1.0 / dir_vec.y if abs(dir_vec.y) > 1e-9 else 1e9,
+            1.0 / dir_vec.z if abs(dir_vec.z) > 1e-9 else 1e9,
+        )
+
+        closest_t = float("inf")
+        hit_tri_idx = -1
+        hit_u, hit_v = 0.0, 0.0
+        nodes_visited = 0
+        triangles_tested = 0
+
+        stack = [self.root] if self.root else []
+        while stack:
+            node = stack.pop()
+            if not node:
+                continue
+            nodes_visited += 1
+
+            hit_box, t_box = self._intersect_ray_aabb(node, orig, inv_dir)
+            if not hit_box or t_box > closest_t:
+                continue
+
+            if node.is_leaf:
+                for idx in node.triangle_indices:
+                    triangles_tested += 1
+                    hit, t, u, v = self._intersect_ray_triangle(orig, dir_vec, idx)
+                    if hit and t < closest_t:
+                        closest_t = t
+                        hit_tri_idx = idx
+                        hit_u, hit_v = u, v
+            else:
+                if node.left:
+                    stack.append(node.left)
+                if node.right:
+                    stack.append(node.right)
+
+        if hit_tri_idx != -1:
+            hit_pt = orig + (dir_vec * closest_t)
+            return {
+                "hit": True,
+                "t": round(closest_t, 6),
+                "hit_point": [round(hit_pt.x, 6), round(hit_pt.y, 6), round(hit_pt.z, 6)],
+                "triangle_index": hit_tri_idx,
+                "barycentric_u": round(hit_u, 6),
+                "barycentric_v": round(hit_v, 6),
+                "triangles_tested": triangles_tested,
+                "nodes_visited": nodes_visited,
+            }
+        return {
+            "hit": False,
+            "t": -1.0,
+            "hit_point": None,
+            "triangle_index": -1,
+            "barycentric_u": 0.0,
+            "barycentric_v": 0.0,
+            "triangles_tested": triangles_tested,
+            "nodes_visited": nodes_visited,
+        }
+
+
+# ==============================================================================
+# RECORD-WRAPPED DOOMSCRIPT HELPER FUNCTIONS
+# ==============================================================================
+
+def math3d_obb_create(
+    center: List[float],
+    extents: List[float],
+    axes: Optional[List[List[float]]] = None,
+) -> Any:
+    """Creates a 3D Oriented Bounding Box record."""
+    obb = OrientedBoundingBoxOBB(center, extents, axes)
+    return Record({
+        "center": [obb.center.x, obb.center.y, obb.center.z],
+        "extents": [obb.extents.x, obb.extents.y, obb.extents.z],
+        "corners": obb.get_corners(),
+        "instance": obb,
+    })
+
+
+def math3d_obb_test_collision(obb_a: Any, obb_b: Any) -> Any:
+    """Tests collision between two OBBs using 15-axis SAT."""
+    a = obb_a.instance if hasattr(obb_a, "instance") else obb_a
+    b = obb_b.instance if hasattr(obb_b, "instance") else obb_b
+    if not isinstance(a, OrientedBoundingBoxOBB):
+        a = OrientedBoundingBoxOBB(obb_a["center"], obb_a["extents"])
+    if not isinstance(b, OrientedBoundingBoxOBB):
+        b = OrientedBoundingBoxOBB(obb_b["center"], obb_b["extents"])
+    return Record(a.intersects_obb(b))
+
+
+def math3d_frustum_create(
+    fov_deg: float = 60.0,
+    aspect: float = 1.333,
+    near: float = 0.1,
+    far: float = 100.0,
+    eye: Optional[List[float]] = None,
+    target: Optional[List[float]] = None,
+    up: Optional[List[float]] = None,
+) -> Any:
+    """Creates a camera view frustum record."""
+    frustum = FrustumCuller3D(fov_deg, aspect, near, far, eye, target, up)
+    return Record({
+        "fov_deg": frustum.fov_deg,
+        "aspect": frustum.aspect,
+        "near": frustum.near,
+        "far": frustum.far,
+        "instance": frustum,
+    })
+
+
+def math3d_frustum_cull_sphere(frustum: Any, center: List[float], radius: float) -> Any:
+    """Tests if a sphere is inside, intersecting, or outside the frustum."""
+    f = frustum.instance if hasattr(frustum, "instance") else frustum
+    return Record(f.cull_sphere(center, radius))
+
+
+def math3d_frustum_cull_scene(frustum: Any, objects: List[Dict[str, Any]]) -> Any:
+    """Culls an array of 3D scene objects against the frustum."""
+    f = frustum.instance if hasattr(frustum, "instance") else frustum
+    return Record(f.cull_scene(objects))
+
+
+def math3d_bvh_build(triangles: List[List[List[float]]], max_leaf: int = 2) -> Any:
+    """Constructs a Bounding Volume Hierarchy tree from a list of 3D triangles."""
+    bvh = BvhSpatialTree(triangles, max_leaf)
+    return Record({
+        "num_triangles": len(triangles),
+        "instance": bvh,
+    })
+
+
+def math3d_bvh_raycast(bvh: Any, origin: List[float], direction: List[float]) -> Any:
+    """Traces a ray through the BVH spatial acceleration tree."""
+    tree = bvh.instance if hasattr(bvh, "instance") else bvh
+    return Record(tree.intersect_ray(origin, direction))
+
 

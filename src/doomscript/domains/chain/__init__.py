@@ -29,6 +29,13 @@ from doomscript.domains.chain.runtime import (
     PatriciaMerkleTrie,
     SchnorrZKProtocol,
     RaftConsensusEngine,
+    MerklePatriciaTrie,
+    ProofOfStakeValidator,
+    chain_mpt_create,
+    chain_mpt_root,
+    chain_pos_create,
+    chain_pos_proposer,
+    chain_pos_vote,
 )
 from doomscript.domains.chain.parser import ChainDomainParser
 from doomscript.domains.chain.exporter import ChainASTExporter
@@ -116,4 +123,11 @@ __all__ = [
     "PatriciaMerkleTrie",
     "SchnorrZKProtocol",
     "RaftConsensusEngine",
+    "MerklePatriciaTrie",
+    "ProofOfStakeValidator",
+    "chain_mpt_create",
+    "chain_mpt_root",
+    "chain_pos_create",
+    "chain_pos_proposer",
+    "chain_pos_vote",
 ]

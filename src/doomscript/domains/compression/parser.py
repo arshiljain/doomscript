@@ -67,6 +67,26 @@ class CompressionDomainParser(DomainParser):
                 txt = f'"{txt}"'
             return f"set {target} to compression_entropy({txt})"
 
+        # compress integers <seq> with delta bit packing into <target>
+        m_dbp_c = re.match(
+            r"^compress\s+integers\s+(.+?)\s+with\s+delta\s+bit\s+packing\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_dbp_c:
+            seq, target = m_dbp_c.group(1).strip(), m_dbp_c.group(2).strip()
+            return f"set {target} to compression_delta_encode({seq})"
+
+        # decompress delta bit packing <record> into <target>
+        m_dbp_d = re.match(
+            r"^decompress\s+delta\s+bit\s+packing\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_dbp_d:
+            rec, target = m_dbp_d.group(1).strip(), m_dbp_d.group(2).strip()
+            return f"set {target} to compression_delta_decode({rec})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

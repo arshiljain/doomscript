@@ -15,6 +15,7 @@ import struct
 import time
 from typing import Any, Dict, List, Optional, Tuple, Set, Union
 from doomscript.domains.base import DomainRuntime, DomainIR
+from doomscript.runtime import Record
 
 
 # Standard English letter frequency distribution (%)
@@ -639,3 +640,171 @@ class Secp256k1Curve:
         # SHA-256 of the shared x coordinate
         x_bytes = shared_pt[0].to_bytes(32, byteorder="big")
         return hashlib.sha256(x_bytes).hexdigest()
+
+
+# ==============================================================================
+# PBKDF2 KEY DERIVATION & CONSTANT-TIME VERIFICATION
+# ==============================================================================
+
+class PBKDF2KeyDeriver:
+    """RFC 8018 PBKDF2 key derivation using HMAC-SHA256."""
+
+    @classmethod
+    def derive(
+        cls,
+        password: str,
+        salt: str,
+        iterations: int = 1000,
+        key_length: int = 32,
+    ) -> Dict[str, Any]:
+        pwd_bytes = password.encode("utf-8")
+        salt_bytes = salt.encode("utf-8")
+        derived = hashlib.pbkdf2_hmac("sha256", pwd_bytes, salt_bytes, iterations, dklen=key_length)
+        return {
+            "password": password,
+            "salt": salt,
+            "iterations": iterations,
+            "key_length": key_length,
+            "derived_hex": derived.hex(),
+            "key_hex": derived.hex(),
+        }
+
+    @staticmethod
+    def verify(password: str, salt: str, expected_hex: str, iterations: int = 1000) -> bool:
+        pwd_bytes = password.encode("utf-8")
+        salt_bytes = salt.encode("utf-8")
+        key_len = len(bytes.fromhex(expected_hex))
+        derived = hashlib.pbkdf2_hmac("sha256", pwd_bytes, salt_bytes, iterations, dklen=key_len)
+        return hmac.compare_digest(derived.hex(), expected_hex.lower())
+
+
+# ==============================================================================
+# TOTP / HOTP TIME-BASED ONE-TIME PASSWORD (RFC 6238 / RFC 4226)
+# ==============================================================================
+
+class TOTPAuthenticator:
+    """RFC 6238 Time-based One-Time Password generation and verification."""
+
+    @classmethod
+    def _base32_decode(cls, s: str) -> bytes:
+        clean = s.upper().replace(" ", "").replace("-", "")
+        # Pad with '='
+        padding = (8 - len(clean) % 8) % 8
+        clean += "=" * padding
+        return base64.b32decode(clean)
+
+    @classmethod
+    def generate_token(cls, secret_base32: str, current_timestamp: Optional[int] = None, step_sec: int = 30, digits: int = 6) -> str:
+        key = cls._base32_decode(secret_base32)
+        t = int(current_timestamp if current_timestamp is not None else time.time())
+        counter = t // step_sec
+
+        counter_bytes = struct.pack(">Q", counter)
+        h = hmac.new(key, counter_bytes, hashlib.sha1).digest()
+
+        # Dynamic truncation
+        offset = h[-1] & 0x0F
+        binary = struct.unpack(">I", h[offset:offset + 4])[0] & 0x7FFFFFFF
+        token_num = binary % (10 ** digits)
+        return f"{token_num:0{digits}d}"
+
+    @classmethod
+    def verify_token(cls, secret_base32: str, token: str, current_timestamp: Optional[int] = None, step_sec: int = 30, window: int = 1) -> bool:
+        t = int(current_timestamp if current_timestamp is not None else time.time())
+        for delta in range(-window, window + 1):
+            check_t = t + delta * step_sec
+            gen = cls.generate_token(secret_base32, current_timestamp=check_t, step_sec=step_sec, digits=len(token))
+            if hmac.compare_digest(gen, token.strip()):
+                return True
+        return False
+
+
+# ==============================================================================
+# SHAMIR (K, N) THRESHOLD SECRET SHARING
+# ==============================================================================
+
+class ShamirSecretSharing:
+    """(k, n) threshold secret sharing over prime field."""
+
+    PRIME = (1 << 61) - 1  # Mersenne prime 2^61 - 1
+
+    @classmethod
+    def split(cls, secret_int: int, k_threshold: int, n_shares: int) -> List[Tuple[int, int]]:
+        k = max(2, int(k_threshold))
+        n = max(k, int(n_shares))
+        secret = int(secret_int) % cls.PRIME
+
+        # Random polynomial coefficients a_1 ... a_{k-1}
+        # In stdlib, use deterministic pseudorandom derived from secret for reproducibility or random
+        import random
+        rng = random.Random(secret ^ 0x555555)
+        coeffs = [secret] + [rng.randint(1, cls.PRIME - 1) for _ in range(k - 1)]
+
+        shares = []
+        for x in range(1, n + 1):
+            y = 0
+            for idx, c in enumerate(coeffs):
+                y = (y + c * pow(x, idx, cls.PRIME)) % cls.PRIME
+            shares.append((x, y))
+
+        return shares
+
+    @classmethod
+    def combine(cls, shares: List[Tuple[int, int]]) -> int:
+        """Reconstructs secret via Lagrange interpolation at x=0."""
+        p = cls.PRIME
+        secret = 0
+
+        for j, (xj, yj) in enumerate(shares):
+            num = 1
+            den = 1
+            for m, (xm, _) in enumerate(shares):
+                if m == j:
+                    continue
+                num = (num * (-xm)) % p
+                den = (den * (xj - xm)) % p
+
+            inv_den = pow(den, p - 2, p)
+            basis = (num * inv_den) % p
+            secret = (secret + yj * basis) % p
+
+        return secret % p
+
+    split_secret = split
+    recover_secret = combine
+
+
+def sec_derive_pbkdf2(password: str, salt: str, iterations: int = 1000) -> Any:
+    """Derives PBKDF2-HMAC-SHA256 key."""
+    return Record(PBKDF2KeyDeriver.derive(password, salt, iterations=iterations))
+
+
+def sec_totp_generate(secret_base32: str, timestamp: Optional[int] = None) -> str:
+    """Generates 6-digit TOTP token."""
+    return TOTPAuthenticator.generate_token(secret_base32, current_timestamp=timestamp)
+
+
+def sec_totp_verify(secret_base32: str, token: str, timestamp: Optional[int] = None) -> bool:
+    """Verifies 6-digit TOTP token with drift window."""
+    return TOTPAuthenticator.verify_token(secret_base32, token, current_timestamp=timestamp)
+
+
+def sec_shamir_split(secret: int, k: int = 3, n: int = 5) -> Any:
+    """Splits integer secret into n shares with threshold k."""
+    k_eff = min(int(k), int(n))
+    n_eff = max(int(k), int(n))
+    shares = ShamirSecretSharing.split(secret, k_eff, n_eff)
+    return Record({
+        "secret": secret,
+        "threshold": k_eff,
+        "total_shares": n_eff,
+        "shares": shares,
+    })
+
+
+def sec_shamir_combine(shares: Any) -> int:
+    """Reconstructs secret from k shares."""
+    s_list = shares.shares if hasattr(shares, "shares") else shares
+    return ShamirSecretSharing.combine(s_list)
+
+

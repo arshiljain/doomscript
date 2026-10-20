@@ -3268,6 +3268,13 @@ from doomscript.domains.sec.runtime import (
     ShamirSecretSharing,
     TOTPGenerator,
     Secp256k1Curve,
+    PBKDF2KeyDeriver,
+    TOTPAuthenticator,
+    sec_derive_pbkdf2,
+    sec_totp_generate,
+    sec_totp_verify,
+    sec_shamir_split,
+    sec_shamir_combine,
 )
 sec_password_entropy = sec_entropy
 sec_password_audit = sec_audit_password
@@ -3382,6 +3389,13 @@ from doomscript.domains.chain.runtime import (
     chain_schnorr_prove,
     chain_schnorr_verify,
     chain_schnorr_public_key,
+    MerklePatriciaTrie,
+    ProofOfStakeValidator,
+    chain_mpt_create,
+    chain_mpt_root,
+    chain_pos_create,
+    chain_pos_proposer,
+    chain_pos_vote,
 )
 chain_merkle_tree_create = chain_create_merkle_tree
 chain_merkle_root = chain_get_merkle_root
@@ -3405,9 +3419,19 @@ from doomscript.domains.math3d.runtime import (
     Raymarcher3D,
     DualQuaternion,
     Quickhull3D,
+    OrientedBoundingBoxOBB,
+    FrustumCuller3D,
+    BvhSpatialTree,
     math3d_raymarcher_render,
     math3d_dual_quaternion,
     math3d_quickhull,
+    math3d_obb_create,
+    math3d_obb_test_collision,
+    math3d_frustum_create,
+    math3d_frustum_cull_sphere,
+    math3d_frustum_cull_scene,
+    math3d_bvh_build,
+    math3d_bvh_raycast,
 )
 math3d_create_vec3 = Vec3
 from doomscript.domains.math3d import (
@@ -3580,6 +3604,9 @@ from doomscript.domains.compression.runtime import (
     compression_inflate,
     compression_snappy_compress,
     compression_snappy_decompress,
+    DeltaAndBitPackingEncoder,
+    compression_delta_encode,
+    compression_delta_decode,
 )
 
 from doomscript.domains.time_series.runtime import (
@@ -4183,14 +4210,24 @@ def quantum_teleport(alpha: complex, beta: complex) -> Dict[str, Any]:
     return QuantumTeleportation.teleport(alpha, beta)
 
 
-def sec_shamir_split(secret_int: int, n: int, k: int) -> List[Tuple[int, int]]:
+def sec_shamir_split(secret_int: int, n: int = 5, k: int = 3) -> Any:
     """Splits integer secret into n shares with threshold k."""
-    return ShamirSecretSharing.split_secret(secret_int, n=n, k=k)
+    k_eff = min(int(k), int(n))
+    n_eff = max(int(k), int(n))
+    shares = ShamirSecretSharing.split(secret_int, k_eff, n_eff)
+    return Record({
+        "secret": secret_int,
+        "threshold": k_eff,
+        "total_shares": n_eff,
+        "shares": shares,
+    })
 
 
-def sec_shamir_recover(shares: List[Tuple[int, int]]) -> int:
+def sec_shamir_recover(shares: Any) -> int:
     """Reconstructs secret from k shares using Lagrange polynomial interpolation."""
-    return ShamirSecretSharing.recover_secret(shares)
+    s_list = shares.shares if hasattr(shares, "shares") else shares
+    return ShamirSecretSharing.combine(s_list)
+
 
 
 def sec_generate_totp(secret: Union[str, bytes], digits: int = 6) -> str:

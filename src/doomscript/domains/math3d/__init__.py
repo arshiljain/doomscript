@@ -31,9 +31,19 @@ from doomscript.domains.math3d.runtime import (
     Raymarcher3D,
     DualQuaternion,
     Quickhull3D,
+    OrientedBoundingBoxOBB,
+    FrustumCuller3D,
+    BvhSpatialTree,
     math3d_raymarcher_render,
     math3d_dual_quaternion,
     math3d_quickhull,
+    math3d_obb_create,
+    math3d_obb_test_collision,
+    math3d_frustum_create,
+    math3d_frustum_cull_sphere,
+    math3d_frustum_cull_scene,
+    math3d_bvh_build,
+    math3d_bvh_raycast,
 )
 from doomscript.domains.math3d.parser import Math3DDomainParser
 from doomscript.domains.math3d.exporter import Math3DASTExporter
@@ -123,6 +133,8 @@ class Math3DDomain(DomainContract):
     blocks = []
 
     def can_handle_line(self, line: str) -> bool:
+        if self.parser.parse_inspect(line, 0) is not None or self.parser.parse_operation(line, 0) is not None:
+            return True
         s = line.strip().lower()
         return (
             s.startswith("create vector3 ")
@@ -169,7 +181,17 @@ __all__ = [
     "Raymarcher3D",
     "DualQuaternion",
     "Quickhull3D",
+    "OrientedBoundingBoxOBB",
+    "FrustumCuller3D",
+    "BvhSpatialTree",
     "math3d_raymarcher_render",
     "math3d_dual_quaternion",
     "math3d_quickhull",
+    "math3d_obb_create",
+    "math3d_obb_test_collision",
+    "math3d_frustum_create",
+    "math3d_frustum_cull_sphere",
+    "math3d_frustum_cull_scene",
+    "math3d_bvh_build",
+    "math3d_bvh_raycast",
 ]

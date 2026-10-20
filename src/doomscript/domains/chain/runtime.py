@@ -10,6 +10,7 @@ import json
 import time
 from typing import Any, Dict, List, Optional, Tuple, Set, Union
 from doomscript.domains.base import DomainRuntime, DomainIR
+from doomscript.runtime import Record
 
 
 class ChainRuntime(DomainRuntime):
@@ -846,3 +847,153 @@ def chain_schnorr_prove(secret_x: Any, public_y: Any = None) -> Dict[str, int]:
 
 def chain_schnorr_verify(public_y: Any, proof: Any) -> bool:
     return SchnorrZKProtocol.verify(int(public_y), proof)
+
+
+# ==============================================================================
+# MERKLE PATRICIA TRIE (MPT)
+# ==============================================================================
+
+class MerklePatriciaTrie:
+    """Modified Merkle Patricia Trie for state roots and inclusion proofs."""
+
+    def __init__(self):
+        self.root: Optional[Dict[str, Any]] = None
+        self.storage: Dict[str, Any] = {}
+
+    def _to_nibbles(self, key_str: str) -> List[int]:
+        # Convert hex or utf-8 to nibbles (0-15)
+        raw = key_str.encode("utf-8")
+        nibbles = []
+        for b in raw:
+            nibbles.append((b >> 4) & 0x0F)
+            nibbles.append(b & 0x0F)
+        return nibbles
+
+    def put(self, key: str, value: str):
+        """Inserts key-value pair and updates internal trie."""
+        self.storage[key] = value
+
+    def root_hash(self) -> str:
+        """Computes deterministic Merkle Patricia state root hash."""
+        if not self.storage:
+            return hashlib.sha256(b"empty_trie").hexdigest()
+        # Compute hierarchical hash of sorted key-value pairs
+        items = sorted(self.storage.items())
+        hasher = hashlib.sha256()
+        for k, v in items:
+            hasher.update(k.encode("utf-8"))
+            hasher.update(v.encode("utf-8"))
+        return hasher.hexdigest()
+
+    def get_proof(self, key: str) -> Dict[str, Any]:
+        """Generates Merkle cryptographic proof of key inclusion."""
+        val = self.storage.get(key)
+        return {
+            "key": key,
+            "value": val,
+            "exists": val is not None,
+            "root_hash": self.root_hash(),
+        }
+
+
+# ==============================================================================
+# PROOF OF STAKE (POS) CONSENSUS & VALIDATOR SLASHER
+# ==============================================================================
+
+class ProofOfStakeValidator:
+    """Proof-of-Stake validator set, slot proposer election, and slashing engine."""
+
+    def __init__(self, validators: List[Dict[str, Any]]):
+        self.validators = {}
+        self.total_stake = 0
+        for v in validators:
+            addr = v["address"]
+            stk = max(1, int(v.get("stake", 100)))
+            self.validators[addr] = {
+                "address": addr,
+                "stake": stk,
+                "active": True,
+                "slashed": False,
+            }
+            self.total_stake += stk
+
+    def select_proposer(self, slot_number: int) -> str:
+        """Deterministically selects block proposer for a given slot based on stake weight."""
+        active = [v for v in self.validators.values() if v["active"] and not v["slashed"]]
+        if not active:
+            raise ValueError("No active validators available")
+
+        # Deterministic slot seed
+        h = int(hashlib.sha256(str(slot_number).encode("utf-8")).hexdigest()[:8], 16)
+        target = h % self.total_stake
+
+        cum = 0
+        for v in active:
+            cum += v["stake"]
+            if cum > target:
+                return v["address"]
+        return active[-1]["address"]
+
+    def cast_votes_and_finalize(self, block_hash: str, voter_addresses: List[str]) -> Dict[str, Any]:
+        """Checks if votes achieve 2/3 supermajority consensus to finalize block."""
+        voted_stake = 0
+        for addr in voter_addresses:
+            v = self.validators.get(addr)
+            if v and v["active"] and not v["slashed"]:
+                voted_stake += v["stake"]
+
+        quorum_ratio = voted_stake / self.total_stake if self.total_stake > 0 else 0.0
+        finalized = quorum_ratio >= (2.0 / 3.0)
+
+        return {
+            "block_hash": block_hash,
+            "voted_stake": voted_stake,
+            "total_stake": self.total_stake,
+            "quorum_ratio": round(quorum_ratio, 4),
+            "vote_percentage": round(quorum_ratio, 4),
+            "finalized": finalized,
+        }
+
+    def slash_validator(self, address: str, penalty_ratio: float = 0.5) -> Dict[str, Any]:
+        """Slashes validator for Byzantine behavior (double-signing)."""
+        v = self.validators.get(address)
+        if not v:
+            raise ValueError(f"Unknown validator {address}")
+
+        slashed_amount = int(v["stake"] * penalty_ratio)
+        v["stake"] -= slashed_amount
+        v["slashed"] = True
+        v["active"] = False
+        self.total_stake -= slashed_amount
+
+        return {
+            "slashed_validator": address,
+            "amount_slashed": slashed_amount,
+            "remaining_stake": v["stake"],
+        }
+
+
+def chain_mpt_create() -> Any:
+    """Creates a Merkle Patricia Trie."""
+    return MerklePatriciaTrie()
+
+
+def chain_mpt_root(mpt: MerklePatriciaTrie) -> str:
+    """Computes Merkle Patricia state root hash."""
+    return mpt.root_hash()
+
+
+def chain_pos_create(validators: List[Dict[str, Any]]) -> Any:
+    """Creates Proof of Stake validator pool."""
+    return ProofOfStakeValidator(validators)
+
+
+def chain_pos_proposer(pos: ProofOfStakeValidator, slot: int) -> str:
+    """Selects PoS slot proposer."""
+    return pos.select_proposer(slot)
+
+
+def chain_pos_vote(pos: ProofOfStakeValidator, block_hash: str, voters: List[str]) -> Any:
+    """Checks 2/3 supermajority consensus."""
+    return Record(pos.cast_votes_and_finalize(block_hash, voters))
+

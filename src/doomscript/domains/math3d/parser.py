@@ -91,6 +91,66 @@ class Math3DDomainParser(DomainParser):
             ray, center, radius, target = m_sph.group(1).strip(), m_sph.group(2).strip(), m_sph.group(3).strip(), m_sph.group(4).strip()
             return f"set {target} to math3d_ray_sphere_intersect({ray}, {center}, {radius})"
 
+        # create obb at <center> with extents <extents> into <target>
+        m_obb = re.match(
+            r"^create\s+obb\s+at\s+(.+?)\s+with\s+extents\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_obb:
+            center, extents, target = m_obb.group(1).strip(), m_obb.group(2).strip(), m_obb.group(3).strip()
+            return f"set {target} to math3d_obb_create({center}, {extents})"
+
+        # test obb collision between <obb1> and <obb2> into <target>
+        m_obb_col = re.match(
+            r"^test\s+obb\s+collision\s+between\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_obb_col:
+            obb1, obb2, target = m_obb_col.group(1).strip(), m_obb_col.group(2).strip(), m_obb_col.group(3).strip()
+            return f"set {target} to math3d_obb_test_collision({obb1}, {obb2})"
+
+        # create frustum with fov <fov> and aspect <asp> and near <znear> and far <zfar> into <target>
+        m_frust = re.match(
+            r"^create\s+frustum\s+with\s+fov\s+(.+?)\s+and\s+aspect\s+(.+?)\s+and\s+near\s+(.+?)\s+and\s+far\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_frust:
+            fov, asp, znear, zfar, target = m_frust.group(1).strip(), m_frust.group(2).strip(), m_frust.group(3).strip(), m_frust.group(4).strip(), m_frust.group(5).strip()
+            return f"set {target} to math3d_frustum_create({fov}, {asp}, {znear}, {zfar})"
+
+        # cull sphere at <center> with radius <r> against frustum <frustum> into <target>
+        m_cull_sph = re.match(
+            r"^cull\s+sphere\s+at\s+(.+?)\s+with\s+radius\s+(.+?)\s+against\s+frustum\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_cull_sph:
+            center, radius, frustum, target = m_cull_sph.group(1).strip(), m_cull_sph.group(2).strip(), m_cull_sph.group(3).strip(), m_cull_sph.group(4).strip()
+            return f"set {target} to math3d_frustum_cull_sphere({frustum}, {center}, {radius})"
+
+        # build bvh tree from triangles <tris> into <target>
+        m_bvh = re.match(
+            r"^build\s+bvh\s+tree\s+from\s+triangles\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_bvh:
+            tris, target = m_bvh.group(1).strip(), m_bvh.group(2).strip()
+            return f"set {target} to math3d_bvh_build({tris})"
+
+        # trace ray <origin> with direction <direction> in bvh <bvh> into <target>
+        m_ray_bvh = re.match(
+            r"^trace\s+ray\s+(.+?)\s+with\s+direction\s+(.+?)\s+in\s+bvh\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_ray_bvh:
+            origin, direction, bvh, target = m_ray_bvh.group(1).strip(), m_ray_bvh.group(2).strip(), m_ray_bvh.group(3).strip(), m_ray_bvh.group(4).strip()
+            return f"set {target} to math3d_bvh_raycast({bvh}, {origin}, {direction})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

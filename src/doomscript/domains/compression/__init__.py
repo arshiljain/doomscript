@@ -31,12 +31,15 @@ from doomscript.domains.compression.runtime import (
     BWTCompressor,
     DeflateEngine,
     ByteAlignedSnappy,
+    DeltaAndBitPackingEncoder,
     compression_bwt_compress,
     compression_bwt_decompress,
     compression_deflate,
     compression_inflate,
     compression_snappy_compress,
     compression_snappy_decompress,
+    compression_delta_encode,
+    compression_delta_decode,
 )
 from doomscript.domains.compression.parser import CompressionDomainParser
 from doomscript.domains.compression.exporter import CompressionASTExporter
@@ -86,6 +89,8 @@ class CompressionDomain(DomainContract):
     blocks = []
 
     def can_handle_line(self, line: str) -> bool:
+        if self.parser.parse_inspect(line, 0) is not None or self.parser.parse_operation(line, 0) is not None:
+            return True
         s = line.strip().lower()
         return (
             s.startswith("compress text ")
@@ -123,10 +128,13 @@ __all__ = [
     "BWTCompressor",
     "DeflateEngine",
     "ByteAlignedSnappy",
+    "DeltaAndBitPackingEncoder",
     "compression_bwt_compress",
     "compression_bwt_decompress",
     "compression_deflate",
     "compression_inflate",
     "compression_snappy_compress",
     "compression_snappy_decompress",
+    "compression_delta_encode",
+    "compression_delta_decode",
 ]

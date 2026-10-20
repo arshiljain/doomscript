@@ -17,6 +17,7 @@ import math
 from collections import Counter
 from fractions import Fraction
 from typing import Any, Dict, List, Optional, Tuple, Union
+from doomscript.runtime import Record
 
 
 class ShannonEntropy:
@@ -683,3 +684,119 @@ def compression_snappy_compress(data: Union[str, bytes]) -> bytes:
 def compression_snappy_decompress(data: bytes) -> bytes:
     """Decompresses byte-aligned Snappy framing."""
     return ByteAlignedSnappy.decompress(data)
+
+
+# ==============================================================================
+# DELTA & BIT-PACKING COLUMNAR COMPRESSOR
+# ==============================================================================
+
+class DeltaAndBitPackingEncoder:
+    """High-speed integer delta-differencing, zigzag encoding, and bit-packing."""
+
+    @classmethod
+    def encode(cls, integer_sequence: List[int]) -> Dict[str, Any]:
+        if not integer_sequence:
+            return {"encoded_bytes": b"", "count": 0, "bit_width": 0, "compression_ratio": 1.0}
+
+        seq = [int(x) for x in integer_sequence]
+        n = len(seq)
+
+        # 1. Delta differencing
+        deltas = [seq[0]]
+        for i in range(1, n):
+            deltas.append(seq[i] - seq[i - 1])
+
+        # 2. Zigzag encoding
+        zigzag = []
+        for d in deltas:
+            z = (d << 1) if d >= 0 else (-d << 1) - 1
+            zigzag.append(z)
+
+        # 3. Bit width required
+        max_z = max(zigzag)
+        bit_width = max(1, math.ceil(math.log2(max_z + 1))) if max_z > 0 else 1
+
+        # 4. Pack bits into bytearray
+        bit_buffer = 0
+        bits_in_buf = 0
+        packed_bytes = bytearray()
+
+        for z in zigzag:
+            bit_buffer = (bit_buffer << bit_width) | z
+            bits_in_buf += bit_width
+            while bits_in_buf >= 8:
+                bits_in_buf -= 8
+                byte_val = (bit_buffer >> bits_in_buf) & 0xFF
+                packed_bytes.append(byte_val)
+
+        if bits_in_buf > 0:
+            byte_val = (bit_buffer << (8 - bits_in_buf)) & 0xFF
+            packed_bytes.append(byte_val)
+
+        raw_size = n * 8  # 64-bit uncompressed
+        comp_size = len(packed_bytes) + 8  # header + data
+        ratio = round(raw_size / max(1, comp_size), 2)
+
+        return {
+            "count": n,
+            "num_elements": n,
+            "bit_width": bit_width,
+            "compressed_size_bytes": len(packed_bytes),
+            "original_size_bytes": raw_size,
+            "compression_ratio": ratio,
+            "packed_data": bytes(packed_bytes),
+            "deltas": deltas,
+            "zigzag": zigzag,
+        }
+
+    @classmethod
+    def decode(cls, encoded_dict: Dict[str, Any]) -> List[int]:
+        """Reconstructs original integer sequence from packed bitstream."""
+        n = encoded_dict.get("num_elements", encoded_dict.get("count", 0))
+        bit_width = encoded_dict["bit_width"]
+        packed_data = encoded_dict["packed_data"]
+
+        if n == 0:
+            return []
+
+        # Unpack bits
+        bit_buffer = 0
+        bits_in_buf = 0
+        byte_idx = 0
+        zigzag = []
+
+        mask = (1 << bit_width) - 1
+        for _ in range(n):
+            while bits_in_buf < bit_width and byte_idx < len(packed_data):
+                bit_buffer = (bit_buffer << 8) | packed_data[byte_idx]
+                byte_idx += 1
+                bits_in_buf += 8
+
+            bits_in_buf -= bit_width
+            z = (bit_buffer >> bits_in_buf) & mask
+            zigzag.append(z)
+
+        # Un-zigzag
+        deltas = []
+        for z in zigzag:
+            d = (z >> 1) if (z % 2 == 0) else -(z + 1) >> 1
+            deltas.append(d)
+
+        # Undelta
+        reconstructed = [deltas[0]]
+        for i in range(1, n):
+            reconstructed.append(reconstructed[-1] + deltas[i])
+
+        return reconstructed
+
+
+def compression_delta_encode(sequence: List[int]) -> Any:
+    """Compresses integer sequence using Delta differencing and Bit-packing."""
+    return Record(DeltaAndBitPackingEncoder.encode(sequence))
+
+
+def compression_delta_decode(encoded_record: Any) -> List[int]:
+    """Decompresses Delta Bit-packed record back to integer sequence."""
+    d = dict(encoded_record) if not isinstance(encoded_record, dict) else encoded_record
+    return DeltaAndBitPackingEncoder.decode(d)
+
