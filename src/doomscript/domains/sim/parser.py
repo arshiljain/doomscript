@@ -414,6 +414,26 @@ class SimDomainParser(DomainParser):
             dur, ev, target = m_km.group(1).strip(), m_km.group(2).strip(), m_km.group(3).strip()
             return f"set {target} to sim_survival_rate_kaplan_meier({dur}, {ev})"
 
+        # simulate seir epidemic with <n> agents [and <steps> steps] into <target>
+        m_seir = re.match(
+            r"^simulate\s+seir\s+epidemic\s+with\s+(.+?)\s+agents(?:\s+and\s+(\d+)\s+steps)?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_seir:
+            n, steps, target = m_seir.group(1).strip(), m_seir.group(2) or "50", m_seir.group(3).strip()
+            return f"set {target} to sim_seir_epidemic(num_agents={n}, steps={steps})"
+
+        # simulate gillespie ssa with <prey> prey and <pred> predators [max time <t>] into <target>
+        m_ssa = re.match(
+            r"^simulate\s+gillespie\s+ssa\s+with\s+(.+?)\s+prey\s+and\s+(.+?)\s+predators(?:\s+max\s+time\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_ssa:
+            prey, pred, mtime, target = m_ssa.group(1).strip(), m_ssa.group(2).strip(), m_ssa.group(3) or "10.0", m_ssa.group(4).strip()
+            return f"set {target} to sim_gillespie_ssa(initial_prey={prey}, initial_predators={pred}, max_time={mtime})"
+
         return None
 
     def parse_block(

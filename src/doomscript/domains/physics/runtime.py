@@ -1167,3 +1167,127 @@ def physics_lorentz_factor(velocity_m_s: float) -> Record:
     return RelativisticKinematicsLorentz.lorentz_factor(velocity_m_s)
 
 
+class SymplecticStormerVerletIntegrator:
+    """Energy-conserving geometric symplectic integrator for Hamiltonian dynamical systems."""
+
+    @classmethod
+    def simulate_harmonic_oscillator(
+        cls,
+        x0: float = 1.0,
+        v0: float = 0.0,
+        k_spring: float = 1.0,
+        mass: float = 1.0,
+        duration: float = 10.0,
+        dt: float = 0.01,
+    ) -> Dict[str, Any]:
+        # F = -k * x -> a = - (k/m) * x
+        omega_sq = float(k_spring) / max(1e-12, float(mass))
+        x = float(x0)
+        v = float(v0)
+        a = -omega_sq * x
+
+        e_initial = 0.5 * mass * (v ** 2) + 0.5 * k_spring * (x ** 2)
+
+        steps = int(duration / dt)
+        trajectory: List[Tuple[float, float]] = []
+
+        max_drift = 0.0
+
+        for s in range(steps):
+            if s % 50 == 0:
+                trajectory.append((round(s * dt, 2), round(x, 4)))
+
+            # Velocity Verlet step
+            x_next = x + v * dt + 0.5 * a * (dt ** 2)
+            a_next = -omega_sq * x_next
+            v_next = v + 0.5 * (a + a_next) * dt
+
+            x, v, a = x_next, v_next, a_next
+
+            # Monitor energy conservation
+            e_current = 0.5 * mass * (v ** 2) + 0.5 * k_spring * (x ** 2)
+            drift = abs(e_current - e_initial) / max(1e-12, e_initial)
+            if drift > max_drift:
+                max_drift = drift
+
+        e_final = 0.5 * mass * (v ** 2) + 0.5 * k_spring * (x ** 2)
+
+        return {
+            "initial_energy": round(e_initial, 6),
+            "final_energy": round(e_final, 6),
+            "max_energy_drift": round(max_drift, 6),
+            "is_energy_conserved": max_drift < 1e-3,
+            "final_position": round(x, 4),
+            "final_velocity": round(v, 4),
+            "steps_count": steps,
+        }
+
+
+class BrachistochroneCycloidCalculator:
+    """Solves Bernoulli's Brachistochrone problem of fastest descent curve under gravity."""
+
+    GRAVITY = 9.80665  # m/s^2
+
+    @classmethod
+    def calculate(cls, x_end: float, y_end: float) -> Dict[str, Any]:
+        x1 = abs(float(x_end))
+        y1 = abs(float(y_end))
+        if x1 <= 1e-9 or y1 <= 1e-9:
+            return {
+                "cycloid_time_sec": 0.0,
+                "straight_line_time_sec": 0.0,
+                "time_saved_percent": 0.0,
+                "cusp_radius": 0.0,
+                "theta_rad": 0.0,
+            }
+
+        target_ratio = y1 / x1
+
+        # Solve for theta_1 where (1 - cos(th)) / (th - sin(th)) = target_ratio
+        low = 1e-4
+        high = 2.0 * math.pi - 1e-4
+
+        for _ in range(50):
+            mid = 0.5 * (low + high)
+            f_mid = (1.0 - math.cos(mid)) / max(1e-12, mid - math.sin(mid))
+            if f_mid > target_ratio:
+                low = mid
+            else:
+                high = mid
+
+        th1 = 0.5 * (low + high)
+        r = y1 / (1.0 - math.cos(th1))
+
+        # Cycloid travel time: T = theta_1 * sqrt(r / g)
+        t_cycloid = th1 * math.sqrt(r / cls.GRAVITY)
+
+        # Straight incline descent time: T_line = sqrt(2 * d / (g * sin(alpha))) = sqrt(2 * (x1^2 + y1^2) / (g * y1))
+        d_sq = x1 * x1 + y1 * y1
+        t_line = math.sqrt((2.0 * d_sq) / (cls.GRAVITY * y1))
+
+        saved_pct = ((t_line - t_cycloid) / t_line) * 100.0
+
+        return {
+            "cycloid_time_sec": round(t_cycloid, 4),
+            "straight_line_time_sec": round(t_line, 4),
+            "time_saved_percent": round(saved_pct, 2),
+            "cusp_radius": round(r, 4),
+            "theta_rad": round(th1, 4),
+        }
+
+
+def physics_symplectic_verlet(
+    x0: float = 1.0,
+    v0: float = 0.0,
+    duration: float = 10.0,
+) -> Record:
+    """Simulates harmonic oscillator using symplectic Velocity Verlet integration."""
+    return Record(SymplecticStormerVerletIntegrator.simulate_harmonic_oscillator(x0=x0, v0=v0, duration=duration))
+
+
+def physics_brachistochrone(x_end: float, y_end: float) -> Record:
+    """Calculates fastest descent Brachistochrone cycloid curve under gravity."""
+    return Record(BrachistochroneCycloidCalculator.calculate(x_end, y_end))
+
+
+

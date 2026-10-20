@@ -52,6 +52,10 @@ from doomscript.domains.sim.runtime import (
     sim_create_abm_2d,
     sim_mcmc_sample,
     sim_jackson_network,
+    AgentBasedEpidemicSEIRModel,
+    GillespieExactSSA,
+    sim_seir_epidemic,
+    sim_gillespie_ssa,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.sim.exporter import SimASTExporter
@@ -117,6 +121,8 @@ class SimDomain(DomainContract):
     ]
 
     def can_handle_line(self, line: str) -> bool:
+        if self.parser.parse_inspect(line, 0) is not None or self.parser.parse_operation(line, 0) is not None:
+            return True
         s = line.strip().lower()
         return (
             s.startswith("inspect simulation ")
@@ -213,4 +219,8 @@ __all__ = [
     "sim_create_abm_2d",
     "sim_mcmc_sample",
     "sim_jackson_network",
+    "AgentBasedEpidemicSEIRModel",
+    "GillespieExactSSA",
+    "sim_seir_epidemic",
+    "sim_gillespie_ssa",
 ]

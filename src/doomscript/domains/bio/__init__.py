@@ -45,6 +45,9 @@ from doomscript.domains.bio.runtime import (
     bio_bwt_transform,
     bio_bwt_count,
     bio_find_cpg_islands,
+    AffineGapGotohAligner,
+    KozakConsensusScanner,
+    bio_kozak_scan,
 )
 from doomscript.domains.bio.parser import BioDomainParser
 from doomscript.domains.bio.exporter import BioASTExporter
@@ -156,4 +159,7 @@ __all__ = [
     "bio_bwt_transform",
     "bio_bwt_count",
     "bio_find_cpg_islands",
+    "AffineGapGotohAligner",
+    "KozakConsensusScanner",
+    "bio_kozak_scan",
 ]

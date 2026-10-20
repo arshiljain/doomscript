@@ -47,6 +47,10 @@ from doomscript.domains.physics.runtime import (
     physics_carnot_cycle,
     physics_otto_cycle,
     physics_lorentz_factor,
+    SymplecticStormerVerletIntegrator,
+    BrachistochroneCycloidCalculator,
+    physics_symplectic_verlet,
+    physics_brachistochrone,
 )
 from doomscript.domains.physics.parser import PhysicsDomainParser
 from doomscript.domains.physics.exporter import PhysicsASTExporter
@@ -158,4 +162,8 @@ __all__ = [
     "physics_carnot_cycle",
     "physics_otto_cycle",
     "physics_lorentz_factor",
+    "SymplecticStormerVerletIntegrator",
+    "BrachistochroneCycloidCalculator",
+    "physics_symplectic_verlet",
+    "physics_brachistochrone",
 ]

@@ -40,6 +40,10 @@ from doomscript.domains.neuro.runtime import (
     neuro_simulate_fitzhugh_nagumo,
     neuro_spike_cross_correlation,
     neuro_simulate_lsm,
+    BienenstockCooperMunroBCM,
+    AdaptiveExponentialAdExNeuron,
+    neuro_bcm_train,
+    neuro_adex_simulate,
 )
 from doomscript.domains.neuro.parser import NeuroDomainParser
 from doomscript.domains.neuro.exporter import NeuroASTExporter
@@ -132,4 +136,8 @@ __all__ = [
     "neuro_simulate_fitzhugh_nagumo",
     "neuro_spike_cross_correlation",
     "neuro_simulate_lsm",
+    "BienenstockCooperMunroBCM",
+    "AdaptiveExponentialAdExNeuron",
+    "neuro_bcm_train",
+    "neuro_adex_simulate",
 ]

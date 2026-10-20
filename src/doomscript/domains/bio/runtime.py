@@ -1077,3 +1077,183 @@ def bio_find_cpg_islands(dna: str, min_length: int = 10) -> Record:
     return HiddenMarkovModelCpGIslandFinder.find_islands(dna, min_length=min_length)
 
 
+class AffineGapGotohAligner:
+    """Gotoh's dynamic programming sequence aligner with affine gap open and extension penalties."""
+
+    @classmethod
+    def align(
+        cls,
+        seq1: str,
+        seq2: str,
+        match_score: float = 2.0,
+        mismatch_score: float = -1.0,
+        gap_open: float = 3.0,
+        gap_extend: float = 1.0,
+    ) -> Dict[str, Any]:
+        s1 = str(seq1).upper()
+        s2 = str(seq2).upper()
+        n, m = len(s1), len(s2)
+        if n == 0 or m == 0:
+            return {
+                "score": 0.0,
+                "aligned_seq1": s1,
+                "aligned_seq2": s2,
+                "identity_percent": 0.0,
+                "gaps_count": 0,
+            }
+
+        INF = 1e9
+        M = [[-INF] * (m + 1) for _ in range(n + 1)]
+        Ix = [[-INF] * (m + 1) for _ in range(n + 1)]
+        Iy = [[-INF] * (m + 1) for _ in range(n + 1)]
+
+        M[0][0] = 0.0
+        for i in range(1, n + 1):
+            Ix[i][0] = -gap_open - (i - 1) * gap_extend
+        for j in range(1, m + 1):
+            Iy[0][j] = -gap_open - (j - 1) * gap_extend
+
+        for i in range(1, n + 1):
+            for j in range(1, m + 1):
+                sub = match_score if s1[i - 1] == s2[j - 1] else mismatch_score
+                M[i][j] = sub + max(M[i - 1][j - 1], Ix[i - 1][j - 1], Iy[i - 1][j - 1])
+                Ix[i][j] = max(M[i - 1][j] - gap_open, Ix[i - 1][j] - gap_extend)
+                Iy[i][j] = max(M[i][j - 1] - gap_open, Iy[i][j - 1] - gap_extend)
+
+        # Best terminal score
+        best_score = max(M[n][m], Ix[n][m], Iy[n][m])
+
+        # Traceback
+        cur_i, cur_j = n, m
+        aligned1 = []
+        aligned2 = []
+
+        # Determine starting layer
+        if best_score == M[n][m]:
+            state = "M"
+        elif best_score == Ix[n][m]:
+            state = "X"
+        else:
+            state = "Y"
+
+        while cur_i > 0 or cur_j > 0:
+            if state == "M":
+                aligned1.append(s1[cur_i - 1])
+                aligned2.append(s2[cur_j - 1])
+                prev_best = max(M[cur_i - 1][cur_j - 1], Ix[cur_i - 1][cur_j - 1], Iy[cur_i - 1][cur_j - 1])
+                if prev_best == M[cur_i - 1][cur_j - 1]:
+                    state = "M"
+                elif prev_best == Ix[cur_i - 1][cur_j - 1]:
+                    state = "X"
+                else:
+                    state = "Y"
+                cur_i -= 1
+                cur_j -= 1
+            elif state == "X":
+                aligned1.append(s1[cur_i - 1])
+                aligned2.append("-")
+                if Ix[cur_i][cur_j] == M[cur_i - 1][cur_j] - gap_open:
+                    state = "M"
+                else:
+                    state = "X"
+                cur_i -= 1
+            else:  # state == "Y"
+                aligned1.append("-")
+                aligned2.append(s2[cur_j - 1])
+                if Iy[cur_i][cur_j] == M[cur_i][cur_j - 1] - gap_open:
+                    state = "M"
+                else:
+                    state = "Y"
+                cur_j -= 1
+
+        aligned1.reverse()
+        aligned2.reverse()
+
+        identities = sum(1 for a, b in zip(aligned1, aligned2) if a == b and a != "-")
+        gaps = sum(1 for a, b in zip(aligned1, aligned2) if a == "-" or b == "-")
+        total_len = len(aligned1)
+        ident_pct = (identities / max(1, total_len)) * 100.0
+
+        return {
+            "score": round(best_score, 2),
+            "aligned_seq1": "".join(aligned1),
+            "aligned_seq2": "".join(aligned2),
+            "identity_percent": round(ident_pct, 2),
+            "gaps_count": gaps,
+            "alignment_length": total_len,
+        }
+
+
+class KozakConsensusScanner:
+    """Scans mRNA transcripts for eukaryotic translation initiation sites with Kozak consensus scoring."""
+
+    # Consensus: (gcc)gccRccAUGG -> -6 to +4 around AUG (positions -6..-1, AUG at 0..2, +3 is G after AUG)
+    @classmethod
+    def scan(cls, rna_or_dna: str) -> Dict[str, Any]:
+        seq = str(rna_or_dna).upper().replace("U", "T")
+        n = len(seq)
+        sites = []
+
+        for i in range(n - 2):
+            if seq[i : i + 3] == "ATG":
+                # Check surrounding context: -6 to +4 (ATG is at 0..2, position +4 is index i+3)
+                start_ctx = max(0, i - 6)
+                end_ctx = min(n, i + 4)
+                context = seq[start_ctx:end_ctx]
+
+                # Position -3 (index i - 3)
+                p_minus_3 = seq[i - 3] if i >= 3 else ""
+                # Position +4 (index i + 3)
+                p_plus_4 = seq[i + 3] if i + 3 < n else ""
+
+                score = 0.0
+                # Purine (A/G) at -3 is strongest determinant
+                if p_minus_3 in ("A", "G"):
+                    score += 3.0
+                elif p_minus_3:
+                    score += 0.5
+
+                # G at +4 is second strongest determinant
+                if p_plus_4 == "G":
+                    score += 2.0
+                elif p_plus_4:
+                    score += 0.5
+
+                if score >= 4.0:
+                    strength = "strong"
+                elif score >= 2.5:
+                    strength = "moderate"
+                else:
+                    strength = "weak"
+
+                sites.append({
+                    "position": i,
+                    "codon": "AUG",
+                    "context": context,
+                    "score": round(score, 1),
+                    "strength": strength,
+                })
+
+        return {
+            "candidate_sites": [Record(s) for s in sites],
+            "sites_count": len(sites),
+            "sequence_length": n,
+        }
+
+
+def bio_affine_align(
+    seq1: str,
+    seq2: str,
+    gap_open: float = 3.0,
+    gap_extend: float = 1.0,
+) -> Record:
+    """Performs global pairwise sequence alignment with affine gap penalty."""
+    return Record(AffineGapGotohAligner.align(seq1, seq2, gap_open=gap_open, gap_extend=gap_extend))
+
+
+def bio_kozak_scan(sequence: str) -> Record:
+    """Scans mRNA/cDNA sequence for Kozak translation initiation consensus sites."""
+    return Record(KozakConsensusScanner.scan(sequence))
+
+
+

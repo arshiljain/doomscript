@@ -938,3 +938,118 @@ def neuro_simulate_lsm(
     return lsm.simulate(input_series)
 
 
+class BienenstockCooperMunroBCM:
+    """BCM synaptic plasticity learning rule with sliding quadratic modification threshold."""
+
+    @classmethod
+    def train(
+        cls,
+        patterns: List[List[float]],
+        epochs: int = 20,
+        eta: float = 0.02,
+        initial_theta: float = 0.5,
+    ) -> Dict[str, Any]:
+        if not patterns or not patterns[0]:
+            return {"weights": [], "theta_m": 0.0, "epochs": 0}
+
+        dim = len(patterns[0])
+        # Initial small random/uniform weights
+        weights = [1.0 / math.sqrt(dim)] * dim
+        theta_m = float(initial_theta)
+        tau_theta = 20.0
+
+        for _ in range(epochs):
+            for pat in patterns:
+                # Postsynaptic response y = w . x
+                y = sum(w * x for w, x in zip(weights, pat))
+                # Update sliding threshold theta_m towards y^2
+                theta_m += (y ** 2 - theta_m) / tau_theta
+                theta_m = max(0.01, theta_m)
+
+                # Weight update: dw = eta * y * (y - theta_m) * x - decay
+                phi = y * (y - theta_m)
+                for j in range(dim):
+                    dw = eta * phi * pat[j] - 0.001 * weights[j]
+                    weights[j] += dw
+
+        return {
+            "weights": [round(w, 4) for w in weights],
+            "theta_m": round(theta_m, 4),
+            "epochs": epochs,
+            "dimension": dim,
+        }
+
+
+class AdaptiveExponentialAdExNeuron:
+    """Adaptive Exponential (AdEx) integrate-and-fire biophysical neuron with spike-frequency adaptation."""
+
+    @classmethod
+    def simulate(
+        cls,
+        current_i: float = 65.0,  # pA
+        duration_ms: float = 100.0,
+        dt_ms: float = 0.1,
+        c_m: float = 200.0,  # pF
+        g_l: float = 10.0,  # nS
+        e_l: float = -70.0,  # mV
+        v_t: float = -50.0,  # mV
+        delta_t: float = 2.0,  # mV
+        a_param: float = 2.0,  # nS
+        tau_w: float = 30.0,  # ms
+        b_param: float = 60.0,  # pA
+        v_reset: float = -58.0,  # mV
+    ) -> Dict[str, Any]:
+        steps = int(duration_ms / dt_ms)
+        v = e_l
+        w = 0.0
+        spike_times: List[float] = []
+
+        v_peak = 0.0  # mV cutoff
+
+        for step in range(steps):
+            t = step * dt_ms
+            # AdEx dV/dt
+            exp_term = g_l * delta_t * math.exp(min(20.0, (v - v_t) / delta_t))
+            dv_dt = (-g_l * (v - e_l) + exp_term - w + current_i) / c_m
+            # dw/dt
+            dw_dt = (a_param * (v - e_l) - w) / tau_w
+
+            v += dv_dt * dt_ms
+            w += dw_dt * dt_ms
+
+            if v >= v_peak:
+                spike_times.append(round(t, 2))
+                v = v_reset
+                w += b_param
+
+        num_spikes = len(spike_times)
+        freq_hz = (num_spikes / (duration_ms * 0.001)) if duration_ms > 0 else 0.0
+
+        return {
+            "num_spikes": num_spikes,
+            "firing_frequency_hz": round(freq_hz, 1),
+            "spike_times": spike_times,
+            "final_voltage": round(v, 2),
+            "final_adaptation": round(w, 2),
+        }
+
+
+def neuro_bcm_train(
+    patterns: List[List[float]],
+    epochs: int = 20,
+    eta: float = 0.02,
+) -> Record:
+    """Trains synaptic weights using Bienenstock-Cooper-Munro sliding threshold plasticity."""
+    return Record(BienenstockCooperMunroBCM.train(patterns, epochs=epochs, eta=eta))
+
+
+def neuro_adex_simulate(
+    current_i: float = 65.0,
+    duration_ms: float = 100.0,
+    dt_ms: float = 0.1,
+) -> Record:
+    """Simulates Adaptive Exponential (AdEx) integrate-and-fire neuron."""
+    return Record(AdaptiveExponentialAdExNeuron.simulate(current_i=current_i, duration_ms=duration_ms, dt_ms=dt_ms))
+
+
+

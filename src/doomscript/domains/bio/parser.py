@@ -219,6 +219,35 @@ class BioDomainParser(DomainParser):
                 seq = f'"{seq}"'
             return f"set {target} to bio_find_cpg_islands({seq})"
 
+        # align sequences <seq1> and <seq2> with affine gap [open <d>] [extend <e>] into <target>
+        m_aff = re.match(
+            r"^align\s+sequences\s+(.+?)\s+and\s+(.+?)\s+with\s+affine\s+gap(?:\s+open\s+(.+?))?(?:\s+extend\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_aff:
+            s1, s2 = m_aff.group(1).strip(), m_aff.group(2).strip()
+            g_open = m_aff.group(3).strip() if m_aff.group(3) else "3.0"
+            g_ext = m_aff.group(4).strip() if m_aff.group(4) else "1.0"
+            target = m_aff.group(5).strip()
+            if not (s1.startswith('"') or s1.startswith("'") or s1.isidentifier()):
+                s1 = f'"{s1}"'
+            if not (s2.startswith('"') or s2.startswith("'") or s2.isidentifier()):
+                s2 = f'"{s2}"'
+            return f"set {target} to bio_affine_align({s1}, {s2}, gap_open={g_open}, gap_extend={g_ext})"
+
+        # scan kozak consensus in sequence <seq> into <target>
+        m_koz = re.match(
+            r"^scan\s+kozak\s+consensus\s+in\s+sequence\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_koz:
+            seq, target = m_koz.group(1).strip(), m_koz.group(2).strip()
+            if not (seq.startswith('"') or seq.startswith("'") or seq.isidentifier()):
+                seq = f'"{seq}"'
+            return f"set {target} to bio_kozak_scan({seq})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

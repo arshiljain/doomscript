@@ -2738,6 +2738,12 @@ from doomscript.domains.geo.runtime import (
     geo_utm_zone_number,
     geo_rhumb_line_distance,
     geo_rhumb_line_bearing,
+    geo_utm_forward,
+    geo_utm_inverse,
+    geo_geohash_encode,
+    geo_geohash_decode,
+    UniversalTransverseMercatorUTM,
+    GeohashSpatialEncoder,
 )
 
 def execute_geo_ir(spec):
@@ -3276,6 +3282,9 @@ from doomscript.domains.bio.runtime import (
     bio_bwt_transform,
     bio_bwt_count,
     bio_find_cpg_islands,
+    AffineGapGotohAligner,
+    KozakConsensusScanner,
+    bio_kozak_scan,
 )
 bio_transcribe_dna = bio_transcribe
 bio_translate_rna = bio_translate
@@ -3314,6 +3323,10 @@ from doomscript.domains.physics.runtime import (
     physics_carnot_cycle,
     physics_otto_cycle,
     physics_lorentz_factor,
+    SymplecticStormerVerletIntegrator,
+    BrachistochroneCycloidCalculator,
+    physics_symplectic_verlet,
+    physics_brachistochrone,
 )
 physics_trajectory = physics_projectile_trajectory
 physics_ballistic_range = physics_projectile_range
@@ -3878,6 +3891,10 @@ from doomscript.domains.neuro.runtime import (
     neuro_simulate_fitzhugh_nagumo,
     neuro_spike_cross_correlation,
     neuro_simulate_lsm,
+    BienenstockCooperMunroBCM,
+    AdaptiveExponentialAdExNeuron,
+    neuro_bcm_train,
+    neuro_adex_simulate,
 )
 
 from doomscript.domains.automata.runtime import (
@@ -4071,6 +4088,10 @@ from doomscript.domains.sim.runtime import (
     sim_create_abm_2d,
     sim_mcmc_sample,
     sim_jackson_network,
+    AgentBasedEpidemicSEIRModel,
+    GillespieExactSSA,
+    sim_seir_epidemic,
+    sim_gillespie_ssa,
 )
 
 from doomscript.domains.geo.runtime import (

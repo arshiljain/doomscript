@@ -124,6 +124,30 @@ class NeuroDomainParser(DomainParser):
             target = m_lsm.group(2).strip()
             return f"set {target} to neuro_simulate_lsm({inps})"
 
+        # train bcm synapses with patterns <pats> [and epochs <epochs>] into <target>
+        m_bcm = re.match(
+            r"^train\s+bcm\s+synapses\s+with\s+patterns\s+(.+?)(?:\s+and\s+epochs\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_bcm:
+            pats = m_bcm.group(1).strip()
+            epochs = m_bcm.group(2) or "20"
+            target = m_bcm.group(3).strip()
+            return f"set {target} to neuro_bcm_train({pats}, epochs={epochs})"
+
+        # simulate adex neuron with current <i> [and duration <dur>] into <target>
+        m_adex = re.match(
+            r"^simulate\s+adex\s+neuron\s+with\s+current\s+(.+?)(?:\s+and\s+duration\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_adex:
+            curr = m_adex.group(1).strip()
+            dur = m_adex.group(2).strip() if m_adex.group(2) else "100.0"
+            target = m_adex.group(3).strip()
+            return f"set {target} to neuro_adex_simulate({curr}, duration_ms={dur})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

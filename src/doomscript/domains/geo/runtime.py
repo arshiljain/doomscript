@@ -1506,3 +1506,220 @@ def geo_sutherland_hodgman_clip(
     """Clips a polygon against a convex boundary using Sutherland-Hodgman."""
     return Record(PolygonClippingSutherlandHodgman.clip(subject_polygon, clip_polygon))
 
+
+class UniversalTransverseMercatorUTM:
+    """Universal Transverse Mercator (UTM) ellipsoidal forward and inverse projection on WGS-84."""
+
+    A = 6378137.0
+    F = 1.0 / 298.257223563
+    K0 = 0.9996
+
+    @classmethod
+    def forward(cls, lat: float, lon: float) -> Dict[str, Any]:
+        phi = math.radians(lat)
+        lam = math.radians(lon)
+
+        # UTM zone 1-60
+        zone = int((lon + 180.0) / 6.0) + 1
+        lam0 = math.radians((zone - 1) * 6 - 180 + 3)
+
+        e2 = 2.0 * cls.F - cls.F ** 2
+        ep2 = e2 / (1.0 - e2)
+
+        sin_phi = math.sin(phi)
+        cos_phi = math.cos(phi)
+        tan_phi = math.tan(phi)
+
+        N = cls.A / math.sqrt(1.0 - e2 * (sin_phi ** 2))
+        T = tan_phi ** 2
+        C = ep2 * (cos_phi ** 2)
+        A_diff = cos_phi * (lam - lam0)
+
+        # Meridional arc M
+        M = cls.A * (
+            (1.0 - e2 / 4.0 - 3.0 * (e2 ** 2) / 64.0 - 5.0 * (e2 ** 3) / 256.0) * phi
+            - (3.0 * e2 / 8.0 + 3.0 * (e2 ** 2) / 32.0 + 45.0 * (e2 ** 3) / 1024.0) * math.sin(2.0 * phi)
+            + (15.0 * (e2 ** 2) / 256.0 + 45.0 * (e2 ** 3) / 1024.0) * math.sin(4.0 * phi)
+            - (35.0 * (e2 ** 3) / 3072.0) * math.sin(6.0 * phi)
+        )
+
+        easting = cls.K0 * N * (
+            A_diff
+            + (1.0 - T + C) * (A_diff ** 3) / 6.0
+            + (5.0 - 18.0 * T + (T ** 2) + 72.0 * C - 58.0 * ep2) * (A_diff ** 5) / 120.0
+        ) + 500000.0
+
+        northing = cls.K0 * (
+            M
+            + N * tan_phi * (
+                (A_diff ** 2) / 2.0
+                + (5.0 - T + 9.0 * C + 4.0 * (C ** 2)) * (A_diff ** 4) / 24.0
+                + (61.0 - 58.0 * T + (T ** 2) + 600.0 * C - 330.0 * ep2) * (A_diff ** 6) / 720.0
+            )
+        )
+
+        northern = (lat >= 0.0)
+        if not northern:
+            northing += 10000000.0
+
+        return {
+            "easting": round(easting, 2),
+            "northing": round(northing, 2),
+            "zone": zone,
+            "northern": northern,
+        }
+
+    @classmethod
+    def inverse(cls, easting: float, northing: float, zone: int, northern: bool = True) -> Dict[str, Any]:
+        e2 = 2.0 * cls.F - cls.F ** 2
+        ep2 = e2 / (1.0 - e2)
+        e1 = (1.0 - math.sqrt(1.0 - e2)) / (1.0 + math.sqrt(1.0 - e2))
+
+        x = float(easting) - 500000.0
+        y = float(northing)
+        if not northern:
+            y -= 10000000.0
+
+        M = y / cls.K0
+        mu = M / (cls.A * (1.0 - e2 / 4.0 - 3.0 * (e2 ** 2) / 64.0 - 5.0 * (e2 ** 3) / 256.0))
+
+        # Footprint latitude phi1
+        phi1 = mu + (
+            (3.0 * e1 / 2.0 - 27.0 * (e1 ** 3) / 32.0) * math.sin(2.0 * mu)
+            + (21.0 * (e1 ** 2) / 16.0 - 55.0 * (e1 ** 4) / 32.0) * math.sin(4.0 * mu)
+            + (151.0 * (e1 ** 3) / 96.0) * math.sin(6.0 * mu)
+            + (1097.0 * (e1 ** 4) / 512.0) * math.sin(8.0 * mu)
+        )
+
+        sin_phi1 = math.sin(phi1)
+        cos_phi1 = math.cos(phi1)
+        tan_phi1 = math.tan(phi1)
+
+        N1 = cls.A / math.sqrt(1.0 - e2 * (sin_phi1 ** 2))
+        T1 = tan_phi1 ** 2
+        C1 = ep2 * (cos_phi1 ** 2)
+        R1 = cls.A * (1.0 - e2) / ((1.0 - e2 * (sin_phi1 ** 2)) ** 1.5)
+        D = x / (N1 * cls.K0)
+
+        lat = phi1 - (N1 * tan_phi1 / R1) * (
+            (D ** 2) / 2.0
+            - (5.0 + 3.0 * T1 + 10.0 * C1 - 4.0 * (C1 ** 2) - 9.0 * ep2) * (D ** 4) / 24.0
+            + (61.0 + 90.0 * T1 + 298.0 * C1 + 45.0 * (T1 ** 2) - 252.0 * ep2 - 3.0 * (C1 ** 2)) * (D ** 6) / 720.0
+        )
+
+        lam0 = math.radians((zone - 1) * 6 - 180 + 3)
+        lon = lam0 + (
+            D
+            - (1.0 + 2.0 * T1 + C1) * (D ** 3) / 6.0
+            + (5.0 - 2.0 * C1 + 28.0 * T1 - 3.0 * (C1 ** 2) + 8.0 * ep2 + 24.0 * (T1 ** 2)) * (D ** 5) / 120.0
+        ) / cos_phi1
+
+        return {
+            "latitude": round(math.degrees(lat), 6),
+            "longitude": round(math.degrees(lon), 6),
+            "zone": zone,
+            "northern": northern,
+        }
+
+
+class GeohashSpatialEncoder:
+    """Base-32 hierarchical spatial index encoding latitude and longitude into Morton order string."""
+
+    BASE32 = "0123456789bcdefghjkmnpqrstuvwxyz"
+    DECODE_MAP = {c: i for i, c in enumerate(BASE32)}
+
+    @classmethod
+    def encode(cls, lat: float, lon: float, precision: int = 7) -> str:
+        lat_range = [-90.0, 90.0]
+        lon_range = [-180.0, 180.0]
+
+        is_even = True
+        bit = 0
+        ch_idx = 0
+        geohash = []
+
+        while len(geohash) < precision:
+            if is_even:
+                mid = (lon_range[0] + lon_range[1]) * 0.5
+                if lon >= mid:
+                    ch_idx = (ch_idx << 1) | 1
+                    lon_range[0] = mid
+                else:
+                    ch_idx = (ch_idx << 1) | 0
+                    lon_range[1] = mid
+            else:
+                mid = (lat_range[0] + lat_range[1]) * 0.5
+                if lat >= mid:
+                    ch_idx = (ch_idx << 1) | 1
+                    lat_range[0] = mid
+                else:
+                    ch_idx = (ch_idx << 1) | 0
+                    lat_range[1] = mid
+
+            is_even = not is_even
+            bit += 1
+
+            if bit == 5:
+                geohash.append(cls.BASE32[ch_idx])
+                bit = 0
+                ch_idx = 0
+
+        return "".join(geohash)
+
+    @classmethod
+    def decode(cls, geohash: str) -> Dict[str, Any]:
+        lat_range = [-90.0, 90.0]
+        lon_range = [-180.0, 180.0]
+        is_even = True
+
+        for c in str(geohash).lower():
+            val = cls.DECODE_MAP.get(c, 0)
+            for mask in (16, 8, 4, 2, 1):
+                bit = 1 if (val & mask) else 0
+                if is_even:
+                    mid = (lon_range[0] + lon_range[1]) * 0.5
+                    if bit == 1:
+                        lon_range[0] = mid
+                    else:
+                        lon_range[1] = mid
+                else:
+                    mid = (lat_range[0] + lat_range[1]) * 0.5
+                    if bit == 1:
+                        lat_range[0] = mid
+                    else:
+                        lat_range[1] = mid
+                is_even = not is_even
+
+        center_lat = (lat_range[0] + lat_range[1]) * 0.5
+        center_lon = (lon_range[0] + lon_range[1]) * 0.5
+
+        return {
+            "latitude": round(center_lat, 6),
+            "longitude": round(center_lon, 6),
+            "lat_min": round(lat_range[0], 6),
+            "lat_max": round(lat_range[1], 6),
+            "lon_min": round(lon_range[0], 6),
+            "lon_max": round(lon_range[1], 6),
+        }
+
+
+def geo_utm_forward(lat: float, lon: float) -> Record:
+    """Projects geographic coordinates (lat, lon) into Universal Transverse Mercator (UTM)."""
+    return Record(UniversalTransverseMercatorUTM.forward(lat, lon))
+
+
+def geo_utm_inverse(easting: float, northing: float, zone: int, northern: bool = True) -> Record:
+    """Inverts UTM coordinates back to geographic latitude and longitude."""
+    return Record(UniversalTransverseMercatorUTM.inverse(easting, northing, zone, northern=northern))
+
+
+def geo_geohash_encode(lat: float, lon: float, precision: int = 7) -> str:
+    """Encodes latitude and longitude into Base-32 Geohash string."""
+    return GeohashSpatialEncoder.encode(lat, lon, precision=precision)
+
+
+def geo_geohash_decode(geohash: str) -> Record:
+    """Decodes Geohash string into latitude/longitude bounding box and centroid."""
+    return Record(GeohashSpatialEncoder.decode(geohash))
+
+

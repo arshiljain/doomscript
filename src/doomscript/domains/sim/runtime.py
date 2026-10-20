@@ -1519,5 +1519,186 @@ def sim_jackson_network(
     return net.solve()
 
 
+from doomscript.runtime import Record
+
+
+class AgentBasedEpidemicSEIRModel:
+    """Spatial 2D Agent-Based SEIR (Susceptible-Exposed-Infectious-Recovered) epidemic simulator."""
+
+    @classmethod
+    def simulate(
+        cls,
+        num_agents: int = 100,
+        initial_infected: int = 2,
+        infection_radius: float = 3.0,
+        transmission_prob: float = 0.4,
+        incubation_steps: int = 5,
+        recovery_steps: int = 12,
+        steps: int = 50,
+        space_size: float = 50.0,
+        seed: Optional[int] = 42,
+    ) -> Dict[str, Any]:
+        rng = random.Random(seed)
+        n = max(10, int(num_agents))
+
+        # Agent state: dict with x, y, vx, vy, state (S, E, I, R), timer
+        agents = []
+        for i in range(n):
+            st = "I" if i < initial_infected else "S"
+            agents.append({
+                "x": rng.uniform(0.0, space_size),
+                "y": rng.uniform(0.0, space_size),
+                "vx": rng.uniform(-1.0, 1.0),
+                "vy": rng.uniform(-1.0, 1.0),
+                "state": st,
+                "timer": recovery_steps if st == "I" else 0,
+            })
+
+        peak_i = initial_infected
+        r2 = infection_radius * infection_radius
+
+        for _ in range(steps):
+            # 1. Move agents with periodic boundaries
+            for ag in agents:
+                ag["x"] = (ag["x"] + ag["vx"]) % space_size
+                ag["y"] = (ag["y"] + ag["vy"]) % space_size
+
+            # 2. Check contacts between I and S
+            infectious = [ag for ag in agents if ag["state"] == "I"]
+            if len(infectious) > peak_i:
+                peak_i = len(infectious)
+
+            for inf in infectious:
+                for ag in agents:
+                    if ag["state"] == "S":
+                        dx = abs(ag["x"] - inf["x"])
+                        dy = abs(ag["y"] - inf["y"])
+                        # Torus minimum image
+                        dx = min(dx, space_size - dx)
+                        dy = min(dy, space_size - dy)
+                        if dx * dx + dy * dy <= r2:
+                            if rng.random() < transmission_prob:
+                                ag["state"] = "E"
+                                ag["timer"] = incubation_steps
+
+            # 3. Advance timers and state transitions
+            for ag in agents:
+                if ag["state"] == "E":
+                    ag["timer"] -= 1
+                    if ag["timer"] <= 0:
+                        ag["state"] = "I"
+                        ag["timer"] = recovery_steps
+                elif ag["state"] == "I":
+                    ag["timer"] -= 1
+                    if ag["timer"] <= 0:
+                        ag["state"] = "R"
+
+        counts = {
+            "S": sum(1 for a in agents if a["state"] == "S"),
+            "E": sum(1 for a in agents if a["state"] == "E"),
+            "I": sum(1 for a in agents if a["state"] == "I"),
+            "R": sum(1 for a in agents if a["state"] == "R"),
+        }
+
+        return {
+            "total_agents": n,
+            "peak_infected": peak_i,
+            "final_susceptible": counts["S"],
+            "final_exposed": counts["E"],
+            "final_infected": counts["I"],
+            "final_recovered": counts["R"],
+            "steps_simulated": steps,
+        }
+
+
+class GillespieExactSSA:
+    """Gillespie Direct Method for exact stochastic discrete chemical / birth-death reaction simulations."""
+
+    @classmethod
+    def simulate_predator_prey(
+        cls,
+        initial_prey: int = 50,
+        initial_predators: int = 20,
+        c1: float = 1.0,    # Prey reproduction
+        c2: float = 0.02,   # Predation
+        c3: float = 1.0,    # Predator death
+        max_time: float = 10.0,
+        max_reactions: int = 500,
+        seed: Optional[int] = 42,
+    ) -> Dict[str, Any]:
+        rng = random.Random(seed)
+        t = 0.0
+        x1 = int(initial_prey)
+        x2 = int(initial_predators)
+
+        reactions_fired = 0
+
+        for _ in range(max_reactions):
+            # Propensities
+            a1 = c1 * x1
+            a2 = c2 * x1 * x2
+            a3 = c3 * x2
+            a0 = a1 + a2 + a3
+
+            if a0 <= 1e-12:
+                break  # Extinction
+
+            # Time to next reaction tau ~ Exp(a0)
+            u1 = rng.random()
+            while u1 <= 1e-12:
+                u1 = rng.random()
+            tau = -math.log(u1) / a0
+
+            if t + tau > max_time:
+                break
+
+            t += tau
+            reactions_fired += 1
+
+            # Choose reaction channel
+            r = rng.random() * a0
+            if r < a1:
+                x1 += 1  # Prey born
+            elif r < a1 + a2:
+                x1 = max(0, x1 - 1)  # Prey eaten
+                x2 += 1              # Predator born
+            else:
+                x2 = max(0, x2 - 1)  # Predator dies
+
+            if x1 == 0 and x2 == 0:
+                break
+
+        return {
+            "final_time": round(t, 3),
+            "reactions_fired": reactions_fired,
+            "prey_count": x1,
+            "predator_count": x2,
+            "extinction": (x1 == 0 or x2 == 0),
+        }
+
+
+def sim_seir_epidemic(
+    num_agents: int = 100,
+    steps: int = 50,
+    transmission_prob: float = 0.4,
+) -> Record:
+    """Simulates spatial 2D agent-based SEIR epidemic spread."""
+    return Record(AgentBasedEpidemicSEIRModel.simulate(
+        num_agents=num_agents, steps=steps, transmission_prob=transmission_prob
+    ))
+
+
+def sim_gillespie_ssa(
+    initial_prey: int = 50,
+    initial_predators: int = 20,
+    max_time: float = 10.0,
+) -> Record:
+    """Simulates Lotka-Volterra kinetics using Gillespie exact stochastic simulation algorithm."""
+    return Record(GillespieExactSSA.simulate_predator_prey(
+        initial_prey=initial_prey, initial_predators=initial_predators, max_time=max_time
+    ))
+
+
+
 
 

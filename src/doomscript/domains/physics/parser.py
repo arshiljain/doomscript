@@ -240,6 +240,28 @@ class PhysicsDomainParser(DomainParser):
             v, target = m_lor.group(1).strip(), m_lor.group(2).strip()
             return f"set {target} to physics_lorentz_factor({v})"
 
+        # simulate symplectic verlet with x <x0> and v <v0> [duration <dur>] into <target>
+        m_symp = re.match(
+            r"^simulate\s+symplectic\s+verlet\s+with\s+x\s+(.+?)\s+and\s+v\s+(.+?)(?:\s+duration\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_symp:
+            x0, v0 = m_symp.group(1).strip(), m_symp.group(2).strip()
+            dur = m_symp.group(3).strip() if m_symp.group(3) else "10.0"
+            target = m_symp.group(4).strip()
+            return f"set {target} to physics_symplectic_verlet(x0={x0}, v0={v0}, duration={dur})"
+
+        # calculate brachistochrone from origin to x <x> and y <y> into <target>
+        m_brach = re.match(
+            r"^calculate\s+brachistochrone\s+from\s+origin\s+to\s+x\s+(.+?)\s+and\s+y\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_brach:
+            x_end, y_end, target = m_brach.group(1).strip(), m_brach.group(2).strip(), m_brach.group(3).strip()
+            return f"set {target} to physics_brachistochrone({x_end}, {y_end})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

@@ -391,6 +391,51 @@ class GeoDomainParser(DomainParser):
             subj, clip, target = m_clip.group(1).strip(), m_clip.group(2).strip(), m_clip.group(3).strip()
             return f"set {target} to geo_sutherland_hodgman_clip({subj}, {clip})"
 
+        # project utm coordinates lat <lat> lon <lon> into <target>
+        m_utm_fwd = re.match(
+            r"^project\s+utm\s+coordinates\s+lat\s+(.+?)\s+lon\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_utm_fwd:
+            lat, lon, target = m_utm_fwd.group(1).strip(), m_utm_fwd.group(2).strip(), m_utm_fwd.group(3).strip()
+            return f"set {target} to geo_utm_forward({lat}, {lon})"
+
+        # invert utm coordinates easting <e> northing <n> zone <z> [northern <bool>] into <target>
+        m_utm_inv = re.match(
+            r"^invert\s+utm\s+coordinates\s+easting\s+(.+?)\s+northing\s+(.+?)\s+zone\s+(.+?)(?:\s+northern\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_utm_inv:
+            east = m_utm_inv.group(1).strip()
+            north = m_utm_inv.group(2).strip()
+            zone = m_utm_inv.group(3).strip()
+            northern = m_utm_inv.group(4).strip() if m_utm_inv.group(4) else "True"
+            target = m_utm_inv.group(5).strip()
+            return f"set {target} to geo_utm_inverse({east}, {north}, {zone}, {northern})"
+
+        # encode spatial geohash lat <lat> lon <lon> [precision <p>] into <target>
+        m_sge = re.match(
+            r"^encode\s+spatial\s+geohash\s+lat\s+(.+?)\s+lon\s+(.+?)(?:\s+precision\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_sge:
+            lat, lon, prec, target = m_sge.group(1).strip(), m_sge.group(2).strip(), m_sge.group(3), m_sge.group(4).strip()
+            p_val = prec.strip() if prec else "7"
+            return f"set {target} to geo_geohash_encode({lat}, {lon}, {p_val})"
+
+        # decode spatial geohash <hash> into <target>
+        m_sgd = re.match(
+            r"^decode\s+spatial\s+geohash\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_sgd:
+            gh, target = m_sgd.group(1).strip(), m_sgd.group(2).strip()
+            return f"set {target} to geo_geohash_decode({gh})"
+
         return None
 
     def parse_block(
