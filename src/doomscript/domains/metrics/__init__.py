@@ -41,6 +41,10 @@ from doomscript.domains.metrics.runtime import (
     MulticlassROCAUCIntegrator,
     metrics_wasserstein_distance_1d,
     metrics_multiclass_roc_auc,
+    ConfusionMatrixMultiClassMetrics,
+    PrecisionRecallCurveAP,
+    metrics_confusion_matrix_multiclass,
+    metrics_precision_recall_ap,
 )
 from doomscript.domains.metrics.parser import MetricsDomainParser
 from doomscript.domains.metrics.exporter import MetricsASTExporter
@@ -132,4 +136,8 @@ __all__ = [
     "MulticlassROCAUCIntegrator",
     "metrics_wasserstein_distance_1d",
     "metrics_multiclass_roc_auc",
+    "ConfusionMatrixMultiClassMetrics",
+    "PrecisionRecallCurveAP",
+    "metrics_confusion_matrix_multiclass",
+    "metrics_precision_recall_ap",
 ]

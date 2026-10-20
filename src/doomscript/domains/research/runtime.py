@@ -7,6 +7,7 @@ import heapq
 import re
 from collections import deque
 from doomscript.domains.base import DomainRuntime, DomainIR
+from doomscript.runtime import Record
 from doomscript.research.graph import (
     ResearchGraph,
     dijkstra_shortest_path as _core_dijkstra,
@@ -989,5 +990,170 @@ def research_levenberg_marquardt(
     """Fits non-linear model parameters via Levenberg-Marquardt algorithm."""
     lm = LevenbergMarquardt()
     return lm.fit(model_func, x_data, y_data, p0)
+
+
+# ==============================================================================
+# BIBLIOMETRICS (H-INDEX, G-INDEX) & BENJAMINI-HOCHBERG FDR CORRECTION
+# ==============================================================================
+
+
+class HIndexAndCitationBibliometrics:
+    """Computes academic bibliometrics including Hirsch index (h-index),
+    Egghe's g-index, i10-index, contemporary h-index, and citation summary.
+    """
+
+    @classmethod
+    def compute(
+        cls,
+        citations: List[int],
+        publication_years: Optional[List[int]] = None,
+        current_year: int = 2026,
+    ) -> Dict[str, Any]:
+        if not citations:
+            return {
+                "total_publications": 0,
+                "total_citations": 0,
+                "h_index": 0,
+                "g_index": 0,
+                "i10_index": 0,
+                "contemporary_h_index": 0,
+                "average_citations_per_paper": 0.0,
+            }
+
+        c_sorted = sorted([int(c) for c in citations], reverse=True)
+        total_pubs = len(c_sorted)
+        total_cites = sum(c_sorted)
+
+        # 1. Hirsch h-index: largest h where h papers have >= h citations
+        h = 0
+        for i, count in enumerate(c_sorted):
+            if count >= i + 1:
+                h = i + 1
+            else:
+                break
+
+        # 2. Egghe's g-index: largest g where top g papers have >= g^2 citations
+        g = 0
+        cum_citations = 0
+        for i, count in enumerate(c_sorted):
+            cum_citations += count
+            if cum_citations >= (i + 1) ** 2:
+                g = i + 1
+
+        # 3. i10-index: count of papers with >= 10 citations
+        i10 = sum(1 for c in c_sorted if c >= 10)
+
+        # 4. Contemporary h-index (h_c): age-decayed citation scores
+        # Score_i = 4 * C_i / (Y_now - Y_pub + 1)
+        h_c = 0
+        if publication_years and len(publication_years) == total_pubs:
+            decayed = []
+            for c, y in zip(citations, publication_years):
+                age = max(1, current_year - int(y) + 1)
+                decayed.append(4.0 * c / age)
+            decayed.sort(reverse=True)
+            for i, score in enumerate(decayed):
+                if score >= i + 1:
+                    h_c = i + 1
+                else:
+                    break
+        else:
+            h_c = h
+
+        avg_cites = round(total_cites / total_pubs, 2) if total_pubs > 0 else 0.0
+
+        return {
+            "total_publications": total_pubs,
+            "total_citations": total_cites,
+            "h_index": h,
+            "g_index": g,
+            "i10_index": i10,
+            "contemporary_h_index": h_c,
+            "average_citations_per_paper": avg_cites,
+            "max_citations": c_sorted[0] if c_sorted else 0,
+        }
+
+
+class BenjaminiHochbergMultipleTesting:
+    """Controls False Discovery Rate (FDR) and Family-Wise Error Rate (FWER)
+    across multiple statistical hypothesis tests using Benjamini-Hochberg,
+    Holm-Bonferroni, and Bonferroni adjustments.
+    """
+
+    @classmethod
+    def correct(
+        cls,
+        p_values: List[float],
+        alpha: float = 0.05,
+    ) -> Dict[str, Any]:
+        m = len(p_values)
+        if m == 0:
+            return {
+                "total_hypotheses": 0,
+                "significant_count": 0,
+                "adjusted_q_values": [],
+                "bonferroni_p_values": [],
+                "holm_p_values": [],
+            }
+
+        # Sort p-values with original index preservation
+        indexed = sorted(enumerate(p_values), key=lambda x: x[1])
+
+        # 1. Benjamini-Hochberg FDR adjusted q-values
+        q_vals = [0.0] * m
+        min_q = 1.0
+        for rank in range(m, 0, -1):
+            orig_idx, p = indexed[rank - 1]
+            q = min(1.0, (m / rank) * p)
+            min_q = min(min_q, q)
+            q_vals[orig_idx] = round(min_q, 6)
+
+        # 2. Bonferroni FWER adjustment: min(1.0, m * p)
+        bonf_vals = [round(min(1.0, p * m), 6) for p in p_values]
+
+        # 3. Holm-Bonferroni step-down: p_adj_i = max_{k <= i} min(1.0, (m - k + 1) * p_(k))
+        holm_vals = [0.0] * m
+        max_holm = 0.0
+        for rank in range(1, m + 1):
+            orig_idx, p = indexed[rank - 1]
+            p_holm = min(1.0, (m - rank + 1) * p)
+            max_holm = max(max_holm, p_holm)
+            holm_vals[orig_idx] = round(max_holm, 6)
+
+        # Significant under FDR threshold alpha
+        rejected = [q <= alpha for q in q_vals]
+        sig_count = sum(1 for r in rejected if r)
+
+        return {
+            "total_hypotheses": m,
+            "alpha_threshold": alpha,
+            "significant_count": sig_count,
+            "fdr_rejected": rejected,
+            "adjusted_q_values": q_vals,
+            "bonferroni_p_values": bonf_vals,
+            "holm_p_values": holm_vals,
+        }
+
+
+def research_calculate_bibliometrics(
+    citations: List[int],
+    publication_years: Optional[List[int]] = None,
+    current_year: int = 2026,
+) -> Any:
+    """Calculates h-index, g-index, i10-index, and citation profile."""
+    return Record(
+        HIndexAndCitationBibliometrics.compute(
+            citations, publication_years=publication_years, current_year=current_year
+        )
+    )
+
+
+def research_multiple_testing_correction(
+    p_values: List[float],
+    alpha: float = 0.05,
+) -> Any:
+    """Adjusts p-values for multiple hypothesis testing using Benjamini-Hochberg FDR and Holm-Bonferroni."""
+    return Record(BenjaminiHochbergMultipleTesting.correct(p_values, alpha=alpha))
+
 
 

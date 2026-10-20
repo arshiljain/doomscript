@@ -58,6 +58,10 @@ from doomscript.domains.office.runtime import (
     CSVDialectSniffer,
     office_eval_spreadsheet,
     office_sniff_csv,
+    SpreadsheetDependencyDAGTopologicalEvaluator,
+    PivotTableMultiDimensionalAggregation,
+    office_spreadsheet_dag_eval,
+    office_pivot_table_aggregate,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.office.exporter import OfficeASTExporter
@@ -137,6 +141,8 @@ class OfficeDomain(DomainContract):
     ]
 
     def can_handle_line(self, line: str) -> bool:
+        if self.parser.parse_inspect(line, 0) is not None or self.parser.parse_operation(line, 0) is not None:
+            return True
         s = line.strip().lower()
         if (
             s.startswith("create spreadsheet ")
@@ -271,4 +277,8 @@ __all__ = [
     "CSVDialectSniffer",
     "office_eval_spreadsheet",
     "office_sniff_csv",
+    "SpreadsheetDependencyDAGTopologicalEvaluator",
+    "PivotTableMultiDimensionalAggregation",
+    "office_spreadsheet_dag_eval",
+    "office_pivot_table_aggregate",
 ]

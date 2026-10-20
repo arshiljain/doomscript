@@ -2034,6 +2034,14 @@ from doomscript.viz import (
     explore_dataset,
     ExplorationReport,
 )
+from doomscript.domains.viz import (
+    ASCIIHistogramAndBoxPlotRenderer,
+    ForceDirectedGraphLayout2D,
+    viz_ascii_boxplot,
+    viz_ascii_bar_chart,
+    viz_force_directed_layout,
+    viz_render_ascii_network,
+)
 
 def show_plot(obj):
     """Displays a plot or exploration report, or prints the object."""
@@ -3191,6 +3199,10 @@ from doomscript.domains.office.runtime import (
     CSVDialectSniffer,
     office_eval_spreadsheet,
     office_sniff_csv,
+    SpreadsheetDependencyDAGTopologicalEvaluator,
+    PivotTableMultiDimensionalAggregation,
+    office_spreadsheet_dag_eval,
+    office_pivot_table_aggregate,
 )
 
 from doomscript.domains.cloud.runtime import (
@@ -3277,6 +3289,10 @@ from doomscript.domains.research.runtime import (
     research_svd,
     research_rkf45_solve,
     research_levenberg_marquardt,
+    HIndexAndCitationBibliometrics,
+    BenjaminiHochbergMultipleTesting,
+    research_calculate_bibliometrics,
+    research_multiple_testing_correction,
 )
 
 from doomscript.domains.bio.runtime import (
@@ -4044,6 +4060,10 @@ from doomscript.domains.metrics.runtime import (
     MulticlassROCAUCIntegrator,
     metrics_wasserstein_distance_1d,
     metrics_multiclass_roc_auc,
+    ConfusionMatrixMultiClassMetrics,
+    PrecisionRecallCurveAP,
+    metrics_confusion_matrix_multiclass,
+    metrics_precision_recall_ap,
 )
 
 from doomscript.domains.spatial_audio.runtime import (

@@ -40,6 +40,10 @@ from doomscript.domains.research.runtime import (
     research_svd,
     research_rkf45_solve,
     research_levenberg_marquardt,
+    HIndexAndCitationBibliometrics,
+    BenjaminiHochbergMultipleTesting,
+    research_calculate_bibliometrics,
+    research_multiple_testing_correction,
 )
 
 
@@ -95,6 +99,8 @@ class ResearchDomain(DomainContract):
     ]
 
     def can_handle_line(self, line: str) -> bool:
+        if self.parser.parse_inspect(line, 0) is not None or self.parser.parse_operation(line, 0) is not None:
+            return True
         s = line.strip().lower()
         if (
             s.startswith("topological sort of ")
@@ -171,4 +177,8 @@ __all__ = [
     "research_svd",
     "research_rkf45_solve",
     "research_levenberg_marquardt",
+    "HIndexAndCitationBibliometrics",
+    "BenjaminiHochbergMultipleTesting",
+    "research_calculate_bibliometrics",
+    "research_multiple_testing_correction",
 ]

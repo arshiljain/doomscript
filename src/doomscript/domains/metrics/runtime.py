@@ -828,3 +828,211 @@ def metrics_multiclass_roc_auc(
     """Computes multi-class One-vs-Rest ROC curve and macro/micro AUC scores."""
     return Record(MulticlassROCAUCIntegrator.compute(y_true, y_prob_matrix, num_classes))
 
+
+# ==============================================================================
+# MULTICLASS CONFUSION METRICS & PRECISION-RECALL AVERAGE PRECISION (AP)
+# ==============================================================================
+
+
+class ConfusionMatrixMultiClassMetrics:
+    """Computes full multi-class classification metrics: macro/micro/weighted F1,
+    Cohen's Kappa, and Gorodkin's multi-class Matthews Correlation Coefficient (MCC).
+    """
+
+    @classmethod
+    def compute(
+        cls,
+        y_true: List[Any],
+        y_pred: List[Any],
+        labels: Optional[List[Any]] = None,
+    ) -> Dict[str, Any]:
+        if len(y_true) != len(y_pred):
+            raise ValueError(f"Lengths differ: len(y_true)={len(y_true)} vs len(y_pred)={len(y_pred)}")
+
+        n = len(y_true)
+        if n == 0:
+            return {"sample_count": 0, "accuracy": 0.0, "mcc": 0.0, "cohen_kappa": 0.0}
+
+        if labels is None:
+            unique_labels = sorted(list(set(y_true) | set(y_pred)))
+        else:
+            unique_labels = list(labels)
+
+        k = len(unique_labels)
+        lbl_to_idx = {lbl: i for i, lbl in enumerate(unique_labels)}
+
+        matrix = [[0] * k for _ in range(k)]
+        for yt, yp in zip(y_true, y_pred):
+            if yt in lbl_to_idx and yp in lbl_to_idx:
+                matrix[lbl_to_idx[yt]][lbl_to_idx[yp]] += 1
+
+        # Diagonal and sums
+        diag = sum(matrix[i][i] for i in range(k))
+        row_sums = [sum(matrix[i]) for i in range(k)]
+        col_sums = [sum(matrix[i][j] for i in range(k)) for j in range(k)]
+
+        accuracy = diag / n
+
+        # Per-class precision, recall, f1, specificity
+        per_class = []
+        precisions, recalls, f1s = [], [], []
+        supports = []
+
+        for i, lbl in enumerate(unique_labels):
+            tp = matrix[i][i]
+            fp = col_sums[i] - tp
+            fn = row_sums[i] - tp
+            tn = n - (tp + fp + fn)
+
+            prec = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+            rec = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+            f1 = 2.0 * prec * rec / (prec + rec) if (prec + rec) > 0 else 0.0
+            spec = tn / (tn + fp) if (tn + fp) > 0 else 0.0
+            supp = row_sums[i]
+
+            precisions.append(prec)
+            recalls.append(rec)
+            f1s.append(f1)
+            supports.append(supp)
+
+            per_class.append({
+                "label": lbl,
+                "precision": round(prec, 4),
+                "recall": round(rec, 4),
+                "f1_score": round(f1, 4),
+                "specificity": round(spec, 4),
+                "support": supp,
+            })
+
+        # Macro averages
+        macro_prec = sum(precisions) / k if k > 0 else 0.0
+        macro_rec = sum(recalls) / k if k > 0 else 0.0
+        macro_f1 = sum(f1s) / k if k > 0 else 0.0
+
+        # Weighted averages
+        total_supp = sum(supports)
+        weighted_prec = (
+            sum(p * s for p, s in zip(precisions, supports)) / total_supp if total_supp > 0 else 0.0
+        )
+        weighted_rec = (
+            sum(r * s for r, s in zip(recalls, supports)) / total_supp if total_supp > 0 else 0.0
+        )
+        weighted_f1 = (
+            sum(f * s for f, s in zip(f1s, supports)) / total_supp if total_supp > 0 else 0.0
+        )
+
+        # Cohen's Kappa
+        p_o = accuracy
+        p_e = sum(row_sums[i] * col_sums[i] for i in range(k)) / (n * n) if n > 0 else 0.0
+        kappa = (p_o - p_e) / (1.0 - p_e) if (1.0 - p_e) > 0 else 0.0
+
+        # Gorodkin's Multiclass MCC
+        c = diag
+        s = n
+        p_rc = sum(row_sums[i] * col_sums[i] for i in range(k))
+        p_row2 = sum(r * r for r in row_sums)
+        p_col2 = sum(c * c for c in col_sums)
+        num_mcc = c * s - p_rc
+        den_mcc = math.sqrt(max(0.0, s * s - p_row2)) * math.sqrt(max(0.0, s * s - p_col2))
+        mcc = num_mcc / den_mcc if den_mcc > 0 else 0.0
+
+        return {
+            "sample_count": n,
+            "classes_count": k,
+            "labels": unique_labels,
+            "confusion_matrix": matrix,
+            "accuracy": round(accuracy, 4),
+            "macro_precision": round(macro_prec, 4),
+            "macro_recall": round(macro_rec, 4),
+            "macro_f1": round(macro_f1, 4),
+            "weighted_f1": round(weighted_f1, 4),
+            "cohen_kappa": round(kappa, 4),
+            "matthews_corrcoef": round(mcc, 4),
+            "per_class": [Record(r) for r in per_class],
+        }
+
+
+class PrecisionRecallCurveAP:
+    """Computes binary Precision-Recall curve, Average Precision (AP), and optimal F-score threshold."""
+
+    @classmethod
+    def compute(
+        cls,
+        y_true: List[int],
+        scores: List[float],
+        pos_label: int = 1,
+    ) -> Dict[str, Any]:
+        if len(y_true) != len(scores):
+            raise ValueError("y_true and scores must have same length")
+
+        paired = sorted(zip(scores, y_true), key=lambda x: x[0], reverse=True)
+        total_pos = sum(1 for _, y in paired if y == pos_label)
+        n = len(paired)
+
+        if total_pos == 0 or n == 0:
+            return {
+                "average_precision": 0.0,
+                "optimal_threshold": 0.0,
+                "max_f1": 0.0,
+                "curve_points_count": 0,
+            }
+
+        tp = 0
+        fp = 0
+        precisions = [1.0]
+        recalls = [0.0]
+        thresholds = []
+        best_f1 = -1.0
+        best_thresh = 0.5
+
+        for score, y in paired:
+            if y == pos_label:
+                tp += 1
+            else:
+                fp += 1
+
+            p = tp / (tp + fp)
+            r = tp / total_pos
+            f1 = 2.0 * p * r / (p + r) if (p + r) > 0 else 0.0
+
+            precisions.append(p)
+            recalls.append(r)
+            thresholds.append(score)
+
+            if f1 > best_f1:
+                best_f1 = f1
+                best_thresh = score
+
+        # Average Precision (AP) via trapezoidal integration of P(R)
+        ap = 0.0
+        for i in range(1, len(recalls)):
+            dr = recalls[i] - recalls[i - 1]
+            ap += dr * precisions[i]
+
+        return {
+            "average_precision": round(ap, 4),
+            "optimal_threshold": round(best_thresh, 4),
+            "max_f1": round(best_f1, 4),
+            "curve_points_count": len(recalls),
+            "total_positive_samples": total_pos,
+        }
+
+
+def metrics_confusion_matrix_multiclass(
+    y_true: List[Any],
+    y_pred: List[Any],
+    labels: Optional[List[Any]] = None,
+) -> Any:
+    """Computes multiclass confusion matrix and comprehensive macro/micro/MCC statistics."""
+    return Record(ConfusionMatrixMultiClassMetrics.compute(y_true, y_pred, labels=labels))
+
+
+def metrics_precision_recall_ap(
+    y_true: List[int],
+    scores: List[float],
+    pos_label: int = 1,
+) -> Any:
+    """Computes Precision-Recall curve, Average Precision (AP), and optimal decision threshold."""
+    return Record(PrecisionRecallCurveAP.compute(y_true, scores, pos_label=pos_label))
+
+

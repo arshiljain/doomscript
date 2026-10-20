@@ -429,6 +429,34 @@ class OfficeDomainParser(DomainParser):
             target = m_meta.group(2).strip()
             return f"set {target} to office_extract_document_metadata({doc_or_path})"
 
+        # evaluate spreadsheet dag <cells> into <target>
+        m_dag = re.match(
+            r"^evaluate\s+spreadsheet\s+dag\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_dag:
+            cells, target = m_dag.group(1).strip(), m_dag.group(2).strip()
+            return f"set {target} to office_spreadsheet_dag_eval({cells})"
+
+        # create multidimensional pivot table from <records> rows <row_dims> values <val_col> [agg <agg_fn>] into <target>
+        m_piv = re.match(
+            r"^create\s+multidimensional\s+pivot\s+table\s+from\s+(.+?)\s+rows\s+(.+?)\s+values\s+(.+?)(?:\s+agg\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_piv:
+            recs = m_piv.group(1).strip()
+            rows = m_piv.group(2).strip()
+            val = m_piv.group(3).strip()
+            agg = m_piv.group(4).strip() if m_piv.group(4) else '"sum"'
+            target = m_piv.group(5).strip()
+            if not (val.startswith('"') or val.startswith("'")):
+                val = f'"{val}"'
+            if not (agg.startswith('"') or agg.startswith("'")):
+                agg = f'"{agg}"'
+            return f"set {target} to office_pivot_table_aggregate({recs}, {rows}, {val}, aggregation={agg})"
+
         return None
 
     def parse_block(

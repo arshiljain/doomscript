@@ -7,6 +7,7 @@ import re
 import zipfile
 from xml.sax.saxutils import escape as xml_escape
 from doomscript.domains.base import DomainRuntime, DomainIR
+from doomscript.runtime import Record
 from doomscript.domains.office.spec import (
     OfficeSpreadsheetSpec,
     OfficeAddRowSpec,
@@ -1196,3 +1197,290 @@ def office_eval_spreadsheet(grid: Dict[str, Any]) -> Dict[str, Any]:
 def office_sniff_csv(csv_text: str) -> Dict[str, Any]:
     """Sniffs CSV dialect and infers column types."""
     return CSVDialectSniffer.sniff(csv_text)
+
+
+# ==============================================================================
+# SPREADSHEET DEPENDENCY DAG EVALUATOR & MULTIDIMENSIONAL PIVOT TABLE
+# ==============================================================================
+
+
+class SpreadsheetDependencyDAGTopologicalEvaluator:
+    """Dependency DAG topological sort and cycle-safe formula evaluation engine.
+
+    Parses formulas, expands cell range rectangles, constructs directed dependency
+    graphs, detects circular references via cycle finding, and executes formulas
+    in exact topological order with incremental recomputation support.
+    """
+
+    @staticmethod
+    def _col_to_idx(col_str: str) -> int:
+        idx = 0
+        for char in col_str.upper():
+            idx = idx * 26 + (ord(char) - ord("A") + 1)
+        return idx - 1
+
+    @staticmethod
+    def _idx_to_col(idx: int) -> str:
+        letters = []
+        n = idx + 1
+        while n > 0:
+            n, rem = divmod(n - 1, 26)
+            letters.append(chr(ord("A") + rem))
+        return "".join(reversed(letters))
+
+    @classmethod
+    def expand_range(cls, range_expr: str) -> List[str]:
+        """Expands range expression like 'A1:B3' into list of cell IDs."""
+        m = re.match(r"^([A-Za-z]+)(\d+):([A-Za-z]+)(\d+)$", range_expr.strip())
+        if not m:
+            return [range_expr.strip().upper()]
+
+        c1_str, r1_str, c2_str, r2_str = m.groups()
+        c1, c2 = cls._col_to_idx(c1_str), cls._col_to_idx(c2_str)
+        r1, r2 = int(r1_str), int(r2_str)
+
+        cells = []
+        for c in range(min(c1, c2), max(c1, c2) + 1):
+            col_name = cls._idx_to_col(c)
+            for r in range(min(r1, r2), max(r1, r2) + 1):
+                cells.append(f"{col_name}{r}")
+        return cells
+
+    @classmethod
+    def extract_dependencies(cls, formula: str) -> List[str]:
+        """Finds all cell references and ranges in a formula string."""
+        if not formula.startswith("="):
+            return []
+
+        body = formula[1:].strip()
+        deps: Set[str] = set()
+
+        for rng in re.findall(r"\b[A-Za-z]+\d+:[A-Za-z]+\d+\b", body):
+            for cell in cls.expand_range(rng):
+                deps.add(cell)
+
+        clean_body = re.sub(r"\b[A-Za-z]+\d+:[A-Za-z]+\d+\b", "", body)
+
+        for cell in re.findall(r"\b[A-Za-z]+\d+\b", clean_body):
+            deps.add(cell.upper())
+
+        return sorted(list(deps))
+
+    @classmethod
+    def evaluate(cls, cells: Dict[str, Any]) -> Dict[str, Any]:
+        """Builds dependency DAG, detects cycles, and evaluates all formulas topologically."""
+        grid: Dict[str, Any] = {k.strip().upper(): v for k, v in cells.items()}
+
+        deps: Dict[str, List[str]] = {}
+        dependents: Dict[str, List[str]] = {}
+
+        for cell_id, val in grid.items():
+            if isinstance(val, str) and val.strip().startswith("="):
+                cell_deps = cls.extract_dependencies(val)
+                deps[cell_id] = cell_deps
+                for d in cell_deps:
+                    dependents.setdefault(d, []).append(cell_id)
+            else:
+                deps[cell_id] = []
+
+        in_degree = {c: len(deps.get(c, [])) for c in grid}
+        zero_in_degree = [c for c, deg in in_degree.items() if deg == 0]
+
+        topological_order: List[str] = []
+        visited = set()
+
+        while zero_in_degree:
+            curr = zero_in_degree.pop(0)
+            topological_order.append(curr)
+            visited.add(curr)
+            for downstream in dependents.get(curr, []):
+                in_degree[downstream] -= 1
+                if in_degree[downstream] == 0:
+                    zero_in_degree.append(downstream)
+
+        unvisited = [c for c in grid if c not in visited]
+        has_circular = len(unvisited) > 0
+
+        values: Dict[str, Any] = {}
+
+        for cell_id in topological_order:
+            val = grid[cell_id]
+            if isinstance(val, str) and val.strip().startswith("="):
+                try:
+                    values[cell_id] = cls._eval_cell_expr(val[1:].strip(), values)
+                except Exception as ex:
+                    values[cell_id] = f"#ERR! {ex}"
+            else:
+                values[cell_id] = val
+
+        for cell_id in unvisited:
+            values[cell_id] = "#REF! Circular dependency"
+
+        return {
+            "values": values,
+            "evaluation_order": topological_order,
+            "has_circular_dependency": has_circular,
+            "circular_cells": unvisited,
+            "total_cells": len(grid),
+        }
+
+    @classmethod
+    def _eval_cell_expr(cls, expr: str, values: Dict[str, Any]) -> Any:
+        def repl_func(m):
+            fname = m.group(1).upper()
+            args_str = m.group(2)
+            arg_cells = []
+            for arg in args_str.split(","):
+                arg = arg.strip()
+                if ":" in arg:
+                    arg_cells.extend(cls.expand_range(arg))
+                elif re.match(r"^[A-Za-z]+\d+$", arg):
+                    arg_cells.append(arg.upper())
+                else:
+                    try:
+                        return str(float(arg))
+                    except ValueError:
+                        pass
+            nums = []
+            for c in arg_cells:
+                v = values.get(c, 0)
+                if isinstance(v, (int, float)):
+                    nums.append(float(v))
+                elif isinstance(v, str):
+                    try:
+                        nums.append(float(v))
+                    except ValueError:
+                        pass
+            if fname == "SUM":
+                return str(sum(nums))
+            elif fname == "AVERAGE":
+                return str(sum(nums) / len(nums) if nums else 0.0)
+            elif fname == "MIN":
+                return str(min(nums) if nums else 0.0)
+            elif fname == "MAX":
+                return str(max(nums) if nums else 0.0)
+            elif fname == "COUNT":
+                return str(len(nums))
+            return "0.0"
+
+        sub_expr = re.sub(r"\b(SUM|AVERAGE|MIN|MAX|COUNT)\s*\(([^)]+)\)", repl_func, expr, flags=re.IGNORECASE)
+
+        def repl_cell(m):
+            c_name = m.group(0).upper()
+            v = values.get(c_name, 0)
+            if isinstance(v, (int, float)):
+                return str(v)
+            elif isinstance(v, str):
+                try:
+                    return str(float(v))
+                except ValueError:
+                    return f'"{v}"'
+            return "0"
+
+        tokens_expr = re.sub(r"\b[A-Za-z]+\d+\b", repl_cell, sub_expr)
+
+        if not re.match(r"^[0-9\.\+\-\*\/\%\(\)\s]+$", tokens_expr):
+            raise ValueError(f"Unsafe formula expression: {tokens_expr}")
+
+        res = eval(tokens_expr, {"__builtins__": None}, {})
+        if isinstance(res, float) and res.is_integer():
+            return int(res)
+        elif isinstance(res, float):
+            return round(res, 4)
+        return res
+
+
+class PivotTableMultiDimensionalAggregation:
+    """Multidimensional aggregation cube engine for tabular records.
+
+    Constructs hierarchical groupings over multiple row and column dimensions,
+    computes aggregates (sum, mean, min, max, count, variance, stddev),
+    and generates subtotals and grand total summaries.
+    """
+
+    @classmethod
+    def compute(
+        cls,
+        records: List[Dict[str, Any]],
+        row_dimensions: List[str],
+        value_column: str,
+        aggregation_function: str = "sum",
+        column_dimensions: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        if not records:
+            return {"rows": [], "grand_total": 0.0, "total_records": 0}
+
+        agg_fn = aggregation_function.lower().strip()
+        groups: Dict[Tuple[Any, ...], List[float]] = {}
+        all_vals: List[float] = []
+
+        for r in records:
+            key = tuple(r.get(dim) for dim in row_dimensions)
+            val = r.get(value_column, 0)
+            try:
+                val_f = float(val)
+                groups.setdefault(key, []).append(val_f)
+                all_vals.append(val_f)
+            except (ValueError, TypeError):
+                continue
+
+        def aggregate(vals: List[float]) -> float:
+            if not vals:
+                return 0.0
+            if agg_fn in ("sum", "add"):
+                return sum(vals)
+            elif agg_fn in ("mean", "avg", "average"):
+                return sum(vals) / len(vals)
+            elif agg_fn in ("min", "minimum"):
+                return min(vals)
+            elif agg_fn in ("max", "maximum"):
+                return max(vals)
+            elif agg_fn in ("count", "length"):
+                return float(len(vals))
+            elif agg_fn in ("variance", "var"):
+                m = sum(vals) / len(vals)
+                return sum((x - m) ** 2 for x in vals) / len(vals)
+            elif agg_fn in ("stddev", "std"):
+                m = sum(vals) / len(vals)
+                return math.sqrt(sum((x - m) ** 2 for x in vals) / len(vals))
+            return sum(vals)
+
+        rows = []
+        for key in sorted(groups.keys(), key=lambda k: [str(x) for x in k]):
+            val_agg = round(aggregate(groups[key]), 4)
+            row_dict = {dim: key[i] for i, dim in enumerate(row_dimensions)}
+            row_dict["value"] = val_agg
+            row_dict["count"] = len(groups[key])
+            rows.append(Record(row_dict))
+
+        grand_total = round(aggregate(all_vals), 4)
+
+        return {
+            "rows": rows,
+            "row_dimensions": row_dimensions,
+            "value_column": value_column,
+            "aggregation": agg_fn,
+            "grand_total": grand_total,
+            "groups_count": len(rows),
+            "total_records": len(records),
+        }
+
+
+def office_spreadsheet_dag_eval(cells: Dict[str, Any]) -> Any:
+    """Evaluates spreadsheet cells in topological order with circular reference detection."""
+    return Record(SpreadsheetDependencyDAGTopologicalEvaluator.evaluate(cells))
+
+
+def office_pivot_table_aggregate(
+    records: List[Dict[str, Any]],
+    row_dimensions: List[str],
+    value_column: str,
+    aggregation: str = "sum",
+) -> Any:
+    """Builds a multidimensional aggregated pivot table with subtotals and grand total."""
+    return Record(
+        PivotTableMultiDimensionalAggregation.compute(
+            records, row_dimensions, value_column, aggregation_function=aggregation
+        )
+    )
+

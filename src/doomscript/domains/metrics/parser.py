@@ -107,6 +107,26 @@ class MetricsDomainParser(DomainParser):
             y_t, probs, k, target = m_auc.group(1).strip(), m_auc.group(2).strip(), m_auc.group(3).strip(), m_auc.group(4).strip()
             return f"set {target} to metrics_multiclass_roc_auc({y_t}, {probs}, {k})"
 
+        # calculate confusion metrics actual <y_true> predicted <y_pred> into <target>
+        m_cm = re.match(
+            r"^calculate\s+confusion\s+metrics\s+actual\s+(.+?)\s+predicted\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_cm:
+            y_t, y_p, target = m_cm.group(1).strip(), m_cm.group(2).strip(), m_cm.group(3).strip()
+            return f"set {target} to metrics_confusion_matrix_multiclass({y_t}, {y_p})"
+
+        # calculate precision recall ap actual <y_true> scores <scores> into <target>
+        m_ap = re.match(
+            r"^calculate\s+precision\s+recall\s+ap\s+actual\s+(.+?)\s+scores\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_ap:
+            y_t, scores, target = m_ap.group(1).strip(), m_ap.group(2).strip(), m_ap.group(3).strip()
+            return f"set {target} to metrics_precision_recall_ap({y_t}, {scores})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

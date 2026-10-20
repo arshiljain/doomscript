@@ -243,6 +243,30 @@ class ResearchDomainParser(DomainParser):
             target = m_sim.group(3).strip()
             return f'set {target} to sample_distribution("{dist}", {params})'
 
+        # calculate bibliometrics for citations <citations> [years <years>] into <target>
+        m_bib = re.match(
+            r"^calculate\s+bibliometrics\s+for\s+citations\s+(.+?)(?:\s+years\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_bib:
+            cites = m_bib.group(1).strip()
+            years = m_bib.group(2).strip() if m_bib.group(2) else "None"
+            target = m_bib.group(3).strip()
+            return f"set {target} to research_calculate_bibliometrics({cites}, publication_years={years})"
+
+        # correct p values <p_values> with fdr [alpha <alpha>] into <target>
+        m_fdr = re.match(
+            r"^correct\s+p\s+values\s+(.+?)\s+with\s+fdr(?:\s+alpha\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_fdr:
+            p_vals = m_fdr.group(1).strip()
+            alpha = m_fdr.group(2).strip() if m_fdr.group(2) else "0.05"
+            target = m_fdr.group(3).strip()
+            return f"set {target} to research_multiple_testing_correction({p_vals}, alpha={alpha})"
+
         # Fallback to research registry normalization for existing syntax
         from doomscript.research.registry import apply_research_normalization
         return apply_research_normalization(line)
