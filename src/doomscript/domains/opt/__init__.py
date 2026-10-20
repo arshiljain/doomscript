@@ -48,6 +48,12 @@ from doomscript.domains.opt.runtime import (
     ActiveSetQuadraticProgramming,
     opt_particle_swarm_optimize,
     opt_solve_quadratic_program_active_set,
+    NelderMeadSimplexDirectSearch,
+    InteriorPointPrimalDualLP,
+    CMAESContinuousOptimization,
+    opt_nelder_mead_minimize,
+    opt_interior_point_solve_lp,
+    opt_cma_es_optimize,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.opt.exporter import OptASTExporter
@@ -178,4 +184,10 @@ __all__ = [
     "ActiveSetQuadraticProgramming",
     "opt_particle_swarm_optimize",
     "opt_solve_quadratic_program_active_set",
+    "NelderMeadSimplexDirectSearch",
+    "InteriorPointPrimalDualLP",
+    "CMAESContinuousOptimization",
+    "opt_nelder_mead_minimize",
+    "opt_interior_point_solve_lp",
+    "opt_cma_es_optimize",
 ]

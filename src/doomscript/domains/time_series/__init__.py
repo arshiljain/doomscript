@@ -33,6 +33,10 @@ from doomscript.domains.time_series.runtime import (
     SpectralDensityPeriodogram,
     timeseries_dtw_sakoe_chiba,
     timeseries_spectral_periodogram,
+    MultivariateVectorAutoregressionVAR,
+    KalmanFilterStateSpace,
+    timeseries_fit_var_model,
+    timeseries_kalman_filter_smooth,
 )
 from doomscript.domains.time_series.parser import TimeSeriesDomainParser
 from doomscript.domains.time_series.exporter import TimeSeriesASTExporter
@@ -118,4 +122,8 @@ __all__ = [
     "SpectralDensityPeriodogram",
     "timeseries_dtw_sakoe_chiba",
     "timeseries_spectral_periodogram",
+    "MultivariateVectorAutoregressionVAR",
+    "KalmanFilterStateSpace",
+    "timeseries_fit_var_model",
+    "timeseries_kalman_filter_smooth",
 ]

@@ -900,10 +900,19 @@ def symbolic_integrate(coeffs: List[float], a: Optional[float] = None, b: Option
     return SymbolicIntegrator.integrate_polynomial(coeffs)
 
 
-def symbolic_taylor_series(expr: Union[str, Expr], var: str = "x", x0: float = 0.0, order: int = 4) -> Dict[str, Any]:
+def symbolic_taylor_series(
+    expr: Union[str, Expr],
+    var: str = "x",
+    x0: float = 0.0,
+    center: Optional[float] = None,
+    order: int = 4,
+) -> Record:
     """Generates order-N Taylor expansion of symbolic expression."""
-    ts = TaylorSeries(expr, var=var, x0=x0)
-    return ts.expand(order)
+    c = float(center if center is not None else x0)
+    ts = TaylorSeries(expr, var=var, x0=c)
+    res = ts.expand(order)
+    res["center"] = c
+    return Record(res)
 
 
 def symbolic_solve_rational_linear(A: List[List[Any]], b: List[Any]) -> Dict[str, Any]:
@@ -1390,5 +1399,408 @@ def symbolic_pade_approximant(
 ) -> Any:
     """Computes [M/N] Padé rational approximant from Taylor series coefficients."""
     return Record(PadeApproximantGenerator.compute(taylor_coeffs, m_degree, n_degree, eval_points=eval_points))
+
+
+# ==============================================================================
+# MULTIVARIATE GROEBNER BASIS VIA BUCHBERGER'S ALGORITHM
+# ==============================================================================
+
+class GroebnerBasisBuchberger:
+    """Exact multivariate polynomial ideal reduction and Groebner basis computation.
+
+    Implements:
+    - Term orderings: Lexicographic (lex), Graded Lexicographic (grlex), Graded Reverse Lex (grevlex).
+    - Multivariate polynomial division algorithm over Q[x_1, ..., x_n].
+    - S-polynomial construction and pair reduction.
+    - Minimal and fully reduced Groebner basis normalization.
+    """
+
+    @staticmethod
+    def _parse_poly_str(poly_str: str, vars_list: List[str]) -> Dict[Tuple[int, ...], float]:
+        """Parses a multivariate polynomial string into an exponent-tuple-to-coefficient map."""
+        s = poly_str.replace(" ", "").replace("-", "+-")
+        terms = [t for t in s.split("+") if t]
+        poly: Dict[Tuple[int, ...], float] = {}
+
+        n_vars = len(vars_list)
+        var_indices = {v: i for i, v in enumerate(vars_list)}
+
+        for term in terms:
+            if not term:
+                continue
+            # Extract sign and coefficient
+            coeff = 1.0
+            # Tokenize into variable powers
+            # Match leading number/sign
+            m_lead = re.match(r"^([+-]?(?:\d+(?:\.\d+)?|\d+))?(.*)$", term)
+            if m_lead:
+                c_str = m_lead.group(1)
+                rest = m_lead.group(2)
+                if c_str == "-" or c_str == "+-":
+                    coeff = -1.0
+                elif c_str == "+" or not c_str:
+                    coeff = 1.0
+                else:
+                    coeff = float(c_str)
+            else:
+                rest = term
+
+            exps = [0] * n_vars
+            # Find all var^power in rest
+            var_matches = re.findall(r"([A-Za-z_]\w*)(?:\^(\d+))?", rest)
+            for vname, pow_str in var_matches:
+                if vname in var_indices:
+                    idx = var_indices[vname]
+                    p = int(pow_str) if pow_str else 1
+                    exps[idx] += p
+
+            key = tuple(exps)
+            poly[key] = poly.get(key, 0.0) + coeff
+
+        # Clean zero terms
+        return {k: v for k, v in poly.items() if abs(v) > 1e-12}
+
+    @staticmethod
+    def _term_compare(t1: Tuple[int, ...], t2: Tuple[int, ...], order: str = "lex") -> int:
+        """Returns 1 if t1 > t2, -1 if t1 < t2, 0 if t1 == t2."""
+        if t1 == t2:
+            return 0
+        if order == "lex":
+            for a, b in zip(t1, t2):
+                if a > b:
+                    return 1
+                if a < b:
+                    return -1
+            return 0
+        elif order == "grlex":
+            d1, d2 = sum(t1), sum(t2)
+            if d1 > d2:
+                return 1
+            if d1 < d2:
+                return -1
+            for a, b in zip(t1, t2):
+                if a > b:
+                    return 1
+                if a < b:
+                    return -1
+            return 0
+        elif order == "grevlex":
+            d1, d2 = sum(t1), sum(t2)
+            if d1 > d2:
+                return 1
+            if d1 < d2:
+                return -1
+            for a, b in zip(reversed(t1), reversed(t2)):
+                if a < b:
+                    return 1
+                if a > b:
+                    return -1
+            return 0
+        return 0
+
+    @classmethod
+    def _leading_term(cls, poly: Dict[Tuple[int, ...], float], order: str = "lex") -> Tuple[Tuple[int, ...], float]:
+        """Finds leading monomial and leading coefficient."""
+        if not poly:
+            return ((), 0.0)
+        best_m = None
+        for m in poly:
+            if best_m is None or cls._term_compare(m, best_m, order) > 0:
+                best_m = m
+        return (best_m, poly[best_m])
+
+    @classmethod
+    def _poly_add(cls, p1: Dict[Tuple[int, ...], float], p2: Dict[Tuple[int, ...], float], scale2: float = 1.0) -> Dict[Tuple[int, ...], float]:
+        res = dict(p1)
+        for m, c in p2.items():
+            res[m] = res.get(m, 0.0) + scale2 * c
+        return {k: v for k, v in res.items() if abs(v) > 1e-12}
+
+    @classmethod
+    def _poly_mul_monomial(cls, p: Dict[Tuple[int, ...], float], mono: Tuple[int, ...], coeff: float) -> Dict[Tuple[int, ...], float]:
+        res = {}
+        for m, c in p.items():
+            new_m = tuple(a + b for a, b in zip(m, mono))
+            res[new_m] = c * coeff
+        return res
+
+    @classmethod
+    def _monomial_divides(cls, m1: Tuple[int, ...], m2: Tuple[int, ...]) -> bool:
+        return all(a <= b for a, b in zip(m1, m2))
+
+    @classmethod
+    def _monomial_lcm(cls, m1: Tuple[int, ...], m2: Tuple[int, ...]) -> Tuple[int, ...]:
+        return tuple(max(a, b) for a, b in zip(m1, m2))
+
+    @classmethod
+    def multivariate_division(
+        cls,
+        f: Dict[Tuple[int, ...], float],
+        divisors: List[Dict[Tuple[int, ...], float]],
+        order: str = "lex",
+    ) -> Tuple[List[Dict[Tuple[int, ...], float]], Dict[Tuple[int, ...], float]]:
+        """Multivariate polynomial division algorithm: f = sum(q_i * g_i) + r."""
+        p = dict(f)
+        quotients = [{} for _ in divisors]
+        remainder: Dict[Tuple[int, ...], float] = {}
+
+        while p:
+            lm_p, lc_p = cls._leading_term(p, order)
+            divided = False
+            for i, g in enumerate(divisors):
+                if not g:
+                    continue
+                lm_g, lc_g = cls._leading_term(g, order)
+                if cls._monomial_divides(lm_g, lm_p):
+                    q_mono = tuple(a - b for a, b in zip(lm_p, lm_g))
+                    q_coeff = lc_p / lc_g
+                    quotients[i][q_mono] = quotients[i].get(q_mono, 0.0) + q_coeff
+                    # p = p - q_coeff * q_mono * g
+                    sub_term = cls._poly_mul_monomial(g, q_mono, q_coeff)
+                    p = cls._poly_add(p, sub_term, scale2=-1.0)
+                    divided = True
+                    break
+            if not divided:
+                remainder[lm_p] = remainder.get(lm_p, 0.0) + lc_p
+                del p[lm_p]
+
+        remainder = {k: v for k, v in remainder.items() if abs(v) > 1e-12}
+        return quotients, remainder
+
+    @classmethod
+    def s_polynomial(
+        cls,
+        f: Dict[Tuple[int, ...], float],
+        g: Dict[Tuple[int, ...], float],
+        order: str = "lex",
+    ) -> Dict[Tuple[int, ...], float]:
+        """Computes S-polynomial S(f, g) = (L / LT(f)) * f - (L / LT(g)) * g."""
+        lm_f, lc_f = cls._leading_term(f, order)
+        lm_g, lc_g = cls._leading_term(g, order)
+        lcm = cls._monomial_lcm(lm_f, lm_g)
+
+        f_factor_m = tuple(a - b for a, b in zip(lcm, lm_f))
+        g_factor_m = tuple(a - b for a, b in zip(lcm, lm_g))
+
+        f_scaled = cls._poly_mul_monomial(f, f_factor_m, 1.0 / lc_f)
+        g_scaled = cls._poly_mul_monomial(g, g_factor_m, 1.0 / lc_g)
+
+        return cls._poly_add(f_scaled, g_scaled, scale2=-1.0)
+
+    @classmethod
+    def compute(
+        cls,
+        polynomials: List[str],
+        variables: Optional[List[str]] = None,
+        order: str = "lex",
+    ) -> Dict[str, Any]:
+        """Computes reduced Groebner basis using Buchberger's algorithm."""
+        # Auto-detect variables if not provided
+        if variables is None:
+            found_vars = set()
+            for p in polynomials:
+                found_vars.update(re.findall(r"[A-Za-z_]\w*", p))
+            vars_list = sorted(list(found_vars))
+        else:
+            vars_list = list(variables)
+
+        parsed_polys = [cls._parse_poly_str(p, vars_list) for p in polynomials]
+        basis = [p for p in parsed_polys if p]
+
+        pairs = [(i, j) for i in range(len(basis)) for j in range(i + 1, len(basis))]
+
+        while pairs:
+            i, j = pairs.pop(0)
+            p_i, p_j = basis[i], basis[j]
+            s_poly = cls.s_polynomial(p_i, p_j, order)
+            if not s_poly:
+                continue
+
+            _, rem = cls.multivariate_division(s_poly, basis, order)
+            if rem:
+                # Normalize leading coefficient to 1
+                _, lc = cls._leading_term(rem, order)
+                normalized_rem = {m: c / lc for m, c in rem.items()}
+                new_idx = len(basis)
+                for k in range(len(basis)):
+                    pairs.append((k, new_idx))
+                basis.append(normalized_rem)
+
+        # Reduce basis to minimal and canonical reduced form
+        # 1. Eliminate redundant elements whose LM is divisible by another
+        minimal = []
+        for i, g in enumerate(basis):
+            lm_g, _ = cls._leading_term(g, order)
+            redundant = False
+            for j, h in enumerate(basis):
+                if i != j:
+                    lm_h, _ = cls._leading_term(h, order)
+                    if cls._monomial_divides(lm_h, lm_g):
+                        redundant = True
+                        break
+            if not redundant and g not in minimal:
+                minimal.append(g)
+
+        # 2. Reduce each element modulo all others
+        reduced = []
+        for i, g in enumerate(minimal):
+            others = [h for j, h in enumerate(minimal) if i != j]
+            _, rem = cls.multivariate_division(g, others, order)
+            if rem:
+                _, lc = cls._leading_term(rem, order)
+                canonical = {m: round(c / lc, 6) for m, c in rem.items()}
+                reduced.append(canonical)
+
+        # Format output into polynomial strings
+        def poly_to_str(poly: Dict[Tuple[int, ...], float]) -> str:
+            sorted_terms = sorted(poly.items(), key=lambda item: cls._leading_term({item[0]: item[1]}, order)[0], reverse=True)
+            parts = []
+            for m, c in sorted_terms:
+                if abs(c) < 1e-6:
+                    continue
+                var_parts = []
+                for vname, p in zip(vars_list, m):
+                    if p == 1:
+                        var_parts.append(vname)
+                    elif p > 1:
+                        var_parts.append(f"{vname}^{p}")
+                m_str = "*".join(var_parts)
+
+                if not var_parts:
+                    parts.append(f"{c:g}")
+                elif abs(c - 1.0) < 1e-6:
+                    parts.append(m_str)
+                elif abs(c + 1.0) < 1e-6:
+                    parts.append(f"-{m_str}")
+                else:
+                    parts.append(f"{c:g}*{m_str}")
+
+            return " + ".join(parts).replace("+ -", "- ") if parts else "0"
+
+        basis_strings = [poly_to_str(g) for g in reduced]
+
+        return {
+            "variables": vars_list,
+            "order": order,
+            "input_polynomials": polynomials,
+            "groebner_basis": basis_strings,
+            "basis_size": len(reduced),
+            "is_trivial": any(g == {(0,) * len(vars_list): 1.0} for g in reduced),
+        }
+
+
+# ==============================================================================
+# SYMBOLIC SERIES EXPANDER (TAYLOR & MACLAURIN)
+# ==============================================================================
+
+class SymbolicSeriesExpander:
+    """Exact symbolic Taylor & Maclaurin polynomial series expansion."""
+
+    @classmethod
+    def expand(
+        cls,
+        expression_str: str,
+        var: str = "x",
+        center: float = 0.0,
+        order: int = 4,
+    ) -> Dict[str, Any]:
+        expr = parse_expr(expression_str)
+        cur_expr = expr
+
+        coeffs: List[float] = []
+        deriv_strs: List[str] = []
+
+        factorial = 1.0
+        for k in range(order + 1):
+            if k > 0:
+                factorial *= k
+            deriv_strs.append(str(cur_expr))
+            val_at_center = cur_expr.eval({var: center})
+            ck = val_at_center / factorial
+            coeffs.append(round(ck, 6))
+            if k < order:
+                cur_expr = cur_expr.diff(var).simplify()
+
+        # Format polynomial string
+        poly_parts = []
+        for k, c in enumerate(coeffs):
+            if abs(c) < 1e-6:
+                continue
+            if k == 0:
+                poly_parts.append(f"{c:g}")
+            else:
+                var_part = var if center == 0.0 else f"({var} - {center:g})"
+                pow_part = var_part if k == 1 else f"{var_part}^{k}"
+                if abs(c - 1.0) < 1e-6:
+                    poly_parts.append(pow_part)
+                elif abs(c + 1.0) < 1e-6:
+                    poly_parts.append(f"-{pow_part}")
+                else:
+                    poly_parts.append(f"{c:g}*{pow_part}")
+
+        poly_str = " + ".join(poly_parts).replace("+ -", "- ") if poly_parts else "0"
+
+        return {
+            "expression": expression_str,
+            "variable": var,
+            "center": center,
+            "order": order,
+            "coefficients": coeffs,
+            "polynomial_series": poly_str,
+            "derivatives": deriv_strs,
+        }
+
+
+def symbolic_groebner_basis(
+    polynomials: List[str],
+    variables: Optional[List[str]] = None,
+    order: str = "lex",
+) -> Record:
+    """Computes exact reduced Groebner basis using Buchberger's algorithm."""
+    return Record(GroebnerBasisBuchberger.compute(polynomials, variables=variables, order=order))
+
+
+def symbolic_eliminate_variables(
+    polynomials: List[str],
+    eliminate_vars: List[str],
+    all_vars: Optional[List[str]] = None,
+) -> Record:
+    """Eliminates specified variables from polynomial system via Elimination Theorem."""
+    if all_vars is None:
+        found_vars = set()
+        for p in polynomials:
+            found_vars.update(re.findall(r"[A-Za-z_]\w*", p))
+        all_vars = sorted(list(found_vars))
+
+    rem_vars = [v for v in all_vars if v not in eliminate_vars]
+    ordered_vars = list(eliminate_vars) + rem_vars
+
+    gb_res = GroebnerBasisBuchberger.compute(polynomials, variables=ordered_vars, order="lex")
+    basis = gb_res["groebner_basis"]
+
+    # Filter polynomials containing none of the eliminate_vars
+    eliminated_polys = []
+    for poly_str in basis:
+        if not any(re.search(r"\b" + re.escape(ev) + r"\b", poly_str) for ev in eliminate_vars):
+            eliminated_polys.append(poly_str)
+
+    return Record({
+        "eliminated_variables": eliminate_vars,
+        "remaining_variables": rem_vars,
+        "elimination_ideal_basis": eliminated_polys,
+        "full_groebner_basis": basis,
+    })
+
+
+def symbolic_series_expansion(
+    expression_str: str,
+    var: str = "x",
+    center: float = 0.0,
+    order: int = 4,
+) -> Record:
+    """Computes exact symbolic Taylor/Maclaurin series expansion."""
+    return Record(SymbolicSeriesExpander.expand(expression_str, var=var, center=center, order=order))
+
+
 
 

@@ -46,6 +46,9 @@ from doomscript.domains.symbolic.runtime import (
     symbolic_square_free_factorization,
     symbolic_polynomial_resultant,
     symbolic_pade_approximant,
+    GroebnerBasisBuchberger,
+    symbolic_groebner_basis,
+    symbolic_eliminate_variables,
 )
 from doomscript.domains.symbolic.parser import SymbolicDomainParser
 from doomscript.domains.symbolic.exporter import SymbolicASTExporter
@@ -146,4 +149,7 @@ __all__ = [
     "symbolic_square_free_factorization",
     "symbolic_polynomial_resultant",
     "symbolic_pade_approximant",
+    "GroebnerBasisBuchberger",
+    "symbolic_groebner_basis",
+    "symbolic_eliminate_variables",
 ]

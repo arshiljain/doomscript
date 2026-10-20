@@ -43,6 +43,10 @@ from doomscript.domains.astronomy.runtime import (
     LagrangePointsCalculator,
     astronomy_lambert_solve,
     astronomy_lagrange_points,
+    EphemerisKeplerianOrbitPropagator,
+    JulianDaySiderealTimeCalculator,
+    astronomy_propagate_kepler_orbit,
+    astronomy_calculate_sidereal_time,
 )
 from doomscript.domains.astronomy.parser import AstronomyDomainParser
 from doomscript.domains.astronomy.exporter import AstronomyASTExporter
@@ -131,4 +135,8 @@ __all__ = [
     "LagrangePointsCalculator",
     "astronomy_lambert_solve",
     "astronomy_lagrange_points",
+    "EphemerisKeplerianOrbitPropagator",
+    "JulianDaySiderealTimeCalculator",
+    "astronomy_propagate_kepler_orbit",
+    "astronomy_calculate_sidereal_time",
 ]

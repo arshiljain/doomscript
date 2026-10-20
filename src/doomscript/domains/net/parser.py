@@ -414,6 +414,26 @@ class NetDomainParser(DomainParser):
             call = f"net_download_file({url}, {path})"
             return f"set {target} to {call}" if target else call
 
+        # calculate ospf spf links <links> source <src> into <target>
+        m_ospf = re.match(
+            r"^calculate\s+ospf\s+spf\s+links\s+(.+?)\s+source\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_ospf:
+            links, src, target = m_ospf.group(1).strip(), m_ospf.group(2).strip(), m_ospf.group(3).strip()
+            return f"set {target} to net_ospf_calculate_spf({links}, {src})"
+
+        # select bgp routes local_asn <asn> router_id <id> routes <routes> into <target>
+        m_bgp = re.match(
+            r"^select\s+bgp\s+routes\s+local_asn\s+(.+?)\s+router_id\s+(.+?)\s+routes\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_bgp:
+            asn, rid, rts, target = m_bgp.group(1).strip(), m_bgp.group(2).strip(), m_bgp.group(3).strip(), m_bgp.group(4).strip()
+            return f"set {target} to net_bgp_route_selection({asn}, {rid}, {rts})"
+
         return None
 
     def parse_block(

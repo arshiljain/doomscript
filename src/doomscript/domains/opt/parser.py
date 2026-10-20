@@ -321,6 +321,44 @@ class OptDomainParser(DomainParser):
             target = m_qp.group(5).strip()
             return f"set {target} to opt_solve_quadratic_program_active_set({q}, {c}, ineq_matrix={a_ineq}, ineq_vec={b_ineq})"
 
+        # nelder mead minimize <fn> starting at <pt> [step <step>] [tol <tol>] into <target>
+        m_nm = re.match(
+            r"^nelder\s+mead\s+minimize\s+(.+?)\s+starting\s+at\s+(.+?)(?:\s+step\s+(.+?))?(?:\s+tol\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_nm:
+            fn, pt, st, tl, target = m_nm.group(1).strip(), m_nm.group(2).strip(), m_nm.group(3), m_nm.group(4), m_nm.group(5).strip()
+            if not (fn.startswith('"') or fn.startswith("'") or fn.isidentifier()):
+                fn = f'"{fn}"'
+            st_val = st.strip() if st else "0.05"
+            tl_val = tl.strip() if tl else "1e-6"
+            return f"set {target} to opt_nelder_mead_minimize({fn}, {pt}, step_size={st_val}, tol={tl_val})"
+
+        # solve interior point lp c <c> a <a> b <b> into <target>
+        m_ip = re.match(
+            r"^solve\s+interior\s+point\s+lp\s+c\s+(.+?)\s+a\s+(.+?)\s+b\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_ip:
+            c, a, b, target = m_ip.group(1).strip(), m_ip.group(2).strip(), m_ip.group(3).strip(), m_ip.group(4).strip()
+            return f"set {target} to opt_interior_point_solve_lp({c}, {a}, {b})"
+
+        # optimize with cma_es <obj> starting at <pt> [sigma <sig>] [generations <gen>] into <target>
+        m_cma = re.match(
+            r"^optimize\s+with\s+cma_es\s+(.+?)\s+starting\s+at\s+(.+?)(?:\s+sigma\s+(.+?))?(?:\s+generations\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_cma:
+            obj, pt, sig, gen, target = m_cma.group(1).strip(), m_cma.group(2).strip(), m_cma.group(3), m_cma.group(4), m_cma.group(5).strip()
+            if not (obj.startswith('"') or obj.startswith("'") or obj.isidentifier()):
+                obj = f'"{obj}"'
+            s_val = sig.strip() if sig else "0.5"
+            g_val = gen.strip() if gen else "40"
+            return f"set {target} to opt_cma_es_optimize({obj}, {pt}, initial_sigma={s_val}, max_generations={g_val})"
+
         return None
 
     def parse_block(

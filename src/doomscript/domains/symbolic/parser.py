@@ -111,6 +111,54 @@ class SymbolicDomainParser(DomainParser):
             target = m_pade.group(5).strip()
             return f"set {target} to symbolic_pade_approximant({coeffs}, {m}, {n}, eval_points={eval_pts})"
 
+        # calculate groebner basis for <polys> [variables <vars>] [order <ord>] into <target>
+        m_grob = re.match(
+            r"^calculate\s+groebner\s+basis\s+for\s+(.+?)(?:\s+variables\s+(.+?))?(?:\s+order\s+(\w+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_grob:
+            polys, vars_arg, order_arg, target = (
+                m_grob.group(1).strip(),
+                m_grob.group(2),
+                m_grob.group(3),
+                m_grob.group(4).strip(),
+            )
+            v_val = vars_arg.strip() if vars_arg else "None"
+            o_val = f'"{order_arg.strip()}"' if order_arg else '"lex"'
+            return f"set {target} to symbolic_groebner_basis({polys}, variables={v_val}, order={o_val})"
+
+        # expand taylor series for <expr> [var <var>] [center <c>] [order <ord>] into <target>
+        m_tay = re.match(
+            r"^expand\s+taylor\s+series\s+for\s+(.+?)(?:\s+var\s+([A-Za-z_]\w*))?(?:\s+center\s+(.+?))?(?:\s+order\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_tay:
+            expr, v_name, c_val, o_val, target = (
+                m_tay.group(1).strip(),
+                m_tay.group(2),
+                m_tay.group(3),
+                m_tay.group(4),
+                m_tay.group(5).strip(),
+            )
+            if not (expr.startswith('"') or expr.startswith("'") or expr.isidentifier()):
+                expr = f'"{expr}"'
+            v_arg = f'"{v_name.strip()}"' if v_name else '"x"'
+            c_arg = c_val.strip() if c_val else "0.0"
+            o_arg = o_val.strip() if o_val else "4"
+            return f"set {target} to symbolic_taylor_series({expr}, var={v_arg}, center={c_arg}, order={o_arg})"
+
+        # eliminate variables <vars> from polynomials <polys> into <target>
+        m_elim = re.match(
+            r"^eliminate\s+variables\s+(.+?)\s+from\s+polynomials\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_elim:
+            vars_arg, polys_arg, target = m_elim.group(1).strip(), m_elim.group(2).strip(), m_elim.group(3).strip()
+            return f"set {target} to symbolic_eliminate_variables({polys_arg}, {vars_arg})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

@@ -932,3 +932,248 @@ def astronomy_lagrange_points(
     return LagrangePointsCalculator.calculate(m1_kg, m2_kg, distance_km)
 
 
+# ==============================================================================
+# EPHEMERIS KEPLERIAN ORBIT PROPAGATOR
+# ==============================================================================
+
+class EphemerisKeplerianOrbitPropagator:
+    """High-precision two-body Keplerian orbit propagator with 3D ecliptic & equatorial state vectors."""
+
+    GAUSSIAN_K = 0.01720209895  # Gravitational parameter in AU^(3/2) / day
+    OBLIQUITY_J2000_DEG = 23.43929111  # Earth's axial tilt
+
+    @classmethod
+    def propagate(
+        cls,
+        semi_major_axis_au: float,
+        eccentricity: float,
+        inclination_deg: float,
+        raan_deg: float,
+        arg_perihelion_deg: float,
+        mean_anomaly_epoch_deg: float,
+        delta_days: float,
+        mu_sun: bool = True,
+    ) -> Dict[str, Any]:
+        a = float(semi_major_axis_au)
+        e = float(eccentricity)
+        inc = math.radians(float(inclination_deg))
+        raan = math.radians(float(raan_deg))
+        omega = math.radians(float(arg_perihelion_deg))
+        m0_deg = float(mean_anomaly_epoch_deg)
+        dt = float(delta_days)
+
+        if a <= 0:
+            raise ValueError(f"Semi-major axis must be positive, got {a}")
+        if not (0.0 <= e < 1.0):
+            raise ValueError(f"Eccentricity must be in range [0, 1), got {e}")
+
+        # Mean motion n in rad/day
+        n_rad_day = cls.GAUSSIAN_K / (a ** 1.5) if mu_sun else (2.0 * math.pi / (365.256 * (a ** 1.5)))
+        n_deg_day = math.degrees(n_rad_day)
+
+        # Propagated mean anomaly M at epoch + delta_days
+        m_deg = (m0_deg + n_deg_day * dt) % 360.0
+        m_rad = math.radians(m_deg)
+
+        # Newton-Raphson solve for eccentric anomaly E: M = E - e*sin(E)
+        E = m_rad + e * math.sin(m_rad) if e < 0.8 else math.pi
+        for _ in range(100):
+            f = E - e * math.sin(E) - m_rad
+            f_prime = 1.0 - e * math.cos(E)
+            delta = f / f_prime
+            E -= delta
+            if abs(delta) < 1e-12:
+                break
+
+        # True anomaly nu
+        sin_half_nu = math.sqrt(1.0 + e) * math.sin(E / 2.0)
+        cos_half_nu = math.sqrt(1.0 - e) * math.cos(E / 2.0)
+        nu_rad = 2.0 * math.atan2(sin_half_nu, cos_half_nu)
+        nu_deg = math.degrees(nu_rad) % 360.0
+
+        # Heliocentric orbital radius r
+        r_au = a * (1.0 - e * math.cos(E))
+
+        # Position in orbital coordinate plane
+        x_orb = r_au * math.cos(nu_rad)
+        y_orb = r_au * math.sin(nu_rad)
+
+        # Velocity in orbital plane (AU/day)
+        v0 = cls.GAUSSIAN_K / math.sqrt(a * (1.0 - e * e))
+        vx_orb = -v0 * math.sin(nu_rad)
+        vy_orb = v0 * (e + math.cos(nu_rad))
+
+        # Transform to 3D Heliocentric Ecliptic coordinates:
+        # P = R_z(-raan) * R_x(-inc) * R_z(-omega)
+        px1 = math.cos(raan) * math.cos(omega) - math.sin(raan) * math.sin(omega) * math.cos(inc)
+        px2 = -math.cos(raan) * math.sin(omega) - math.sin(raan) * math.cos(omega) * math.cos(inc)
+        py1 = math.sin(raan) * math.cos(omega) + math.cos(raan) * math.sin(omega) * math.cos(inc)
+        py2 = -math.sin(raan) * math.sin(omega) + math.cos(raan) * math.cos(omega) * math.cos(inc)
+        pz1 = math.sin(omega) * math.sin(inc)
+        pz2 = math.cos(omega) * math.sin(inc)
+
+        x_ecl = px1 * x_orb + px2 * y_orb
+        y_ecl = py1 * x_orb + py2 * y_orb
+        z_ecl = pz1 * x_orb + pz2 * y_orb
+
+        vx_ecl = px1 * vx_orb + px2 * vy_orb
+        vy_ecl = py1 * vx_orb + py2 * vy_orb
+        vz_ecl = pz1 * vx_orb + pz2 * vy_orb
+
+        # Velocity in km/s (1 AU/day = 149597870.7 km / 86400 s = 1731.4568 km/s)
+        au_day_to_km_s = 149597870.7 / 86400.0
+        v_mag_km_s = math.sqrt(vx_ecl ** 2 + vy_ecl ** 2 + vz_ecl ** 2) * au_day_to_km_s
+
+        # Ecliptic longitude lambda and latitude beta
+        ecl_lon_deg = math.degrees(math.atan2(y_ecl, x_ecl)) % 360.0
+        ecl_lat_deg = math.degrees(math.atan2(z_ecl, math.sqrt(x_ecl ** 2 + y_ecl ** 2)))
+
+        # Equatorial coordinates conversion (J2000 obliquity)
+        eps = math.radians(cls.OBLIQUITY_J2000_DEG)
+        x_eq = x_ecl
+        y_eq = y_ecl * math.cos(eps) - z_ecl * math.sin(eps)
+        z_eq = y_ecl * math.sin(eps) + z_ecl * math.cos(eps)
+
+        ra_rad = math.atan2(y_eq, x_eq) % (2.0 * math.pi)
+        ra_hours = math.degrees(ra_rad) / 15.0
+        dec_rad = math.atan2(z_eq, math.sqrt(x_eq ** 2 + y_eq ** 2))
+        dec_deg = math.degrees(dec_rad)
+
+        return {
+            "semi_major_axis_au": round(a, 4),
+            "eccentricity": round(e, 6),
+            "delta_days": round(dt, 2),
+            "mean_anomaly_deg": round(m_deg, 4),
+            "eccentric_anomaly_deg": round(math.degrees(E), 4),
+            "true_anomaly_deg": round(nu_deg, 4),
+            "distance_au": round(r_au, 6),
+            "heliocentric_ecliptic_pos": [round(x_ecl, 6), round(y_ecl, 6), round(z_ecl, 6)],
+            "heliocentric_ecliptic_vel_km_s": [
+                round(vx_ecl * au_day_to_km_s, 3),
+                round(vy_ecl * au_day_to_km_s, 3),
+                round(vz_ecl * au_day_to_km_s, 3),
+            ],
+            "orbital_speed_km_s": round(v_mag_km_s, 3),
+            "ecliptic_longitude_deg": round(ecl_lon_deg, 4),
+            "ecliptic_latitude_deg": round(ecl_lat_deg, 4),
+            "equatorial_ra_hours": round(ra_hours, 4),
+            "equatorial_dec_deg": round(dec_deg, 4),
+        }
+
+
+# ==============================================================================
+# JULIAN DAY & SIDEREAL TIME CALCULATOR
+# ==============================================================================
+
+class JulianDaySiderealTimeCalculator:
+    """Astronomical calendar converter and Greenwich/Local Sidereal Time engine (IAU-82/2000)."""
+
+    @classmethod
+    def calculate(
+        cls,
+        year: int,
+        month: int,
+        day: int,
+        hour: int = 0,
+        minute: int = 0,
+        second: float = 0.0,
+        longitude_deg: float = 0.0,
+    ) -> Dict[str, Any]:
+        y = int(year)
+        m = int(month)
+        d = int(day)
+        h = float(hour)
+        mn = float(minute)
+        s = float(second)
+        lon = float(longitude_deg)
+
+        if m <= 2:
+            y -= 1
+            m += 12
+
+        a = math.floor(y / 100.0)
+        b = 2.0 - a + math.floor(a / 4.0)
+        day_frac = (h + (mn + s / 60.0) / 60.0) / 24.0
+        jd = math.floor(365.25 * (y + 4716)) + math.floor(30.6001 * (m + 1)) + d + day_frac + b - 1524.5
+        mjd = jd - 2400000.5
+
+        # Julian centuries from standard epoch J2000.0 (JD 2451545.0)
+        t_cent = (jd - 2451545.0) / 36525.0
+
+        # Greenwich Mean Sidereal Time (GMST) in seconds (IAU formula)
+        gmst_sec = 24110.54841 + 8640184.812866 * t_cent + 0.093104 * (t_cent ** 2) - 6.2e-6 * (t_cent ** 3)
+        gmst_hours = (gmst_sec / 3600.0) % 24.0
+        if gmst_hours < 0:
+            gmst_hours += 24.0
+
+        # Nutation approximation for Equation of the Equinoxes
+        omega_deg = (125.04452 - 1934.136261 * t_cent) % 360.0
+        l_sun_deg = (280.4665 + 36000.7698 * t_cent) % 360.0
+        delta_psi_deg = -0.004778 * math.sin(math.radians(omega_deg)) - 0.000367 * math.sin(math.radians(2.0 * l_sun_deg))
+        obliquity_deg = 23.439291 - 0.0130042 * t_cent
+        eq_equinoxes_sec = (delta_psi_deg * math.cos(math.radians(obliquity_deg))) * 240.0
+        eq_equinoxes_hours = eq_equinoxes_sec / 3600.0
+
+        gast_hours = (gmst_hours + eq_equinoxes_hours) % 24.0
+        if gast_hours < 0:
+            gast_hours += 24.0
+
+        # Local Mean Sidereal Time (LMST) and Local Apparent Sidereal Time (LAST)
+        lmst_hours = (gmst_hours + lon / 15.0) % 24.0
+        if lmst_hours < 0:
+            lmst_hours += 24.0
+
+        last_hours = (gast_hours + lon / 15.0) % 24.0
+        if last_hours < 0:
+            last_hours += 24.0
+
+        return {
+            "julian_date": round(jd, 6),
+            "modified_julian_date": round(mjd, 6),
+            "centuries_since_j2000": round(t_cent, 8),
+            "gmst_hours": round(gmst_hours, 6),
+            "gast_hours": round(gast_hours, 6),
+            "lmst_hours": round(lmst_hours, 6),
+            "last_hours": round(last_hours, 6),
+            "equation_of_equinoxes_sec": round(eq_equinoxes_sec, 4),
+            "observer_longitude_deg": round(lon, 4),
+        }
+
+
+def astronomy_propagate_kepler_orbit(
+    semi_major_axis_au: float,
+    eccentricity: float,
+    inclination_deg: float,
+    raan_deg: float,
+    arg_perihelion_deg: float,
+    mean_anomaly_epoch_deg: float,
+    delta_days: float,
+) -> Record:
+    """Propagates Keplerian orbital elements forward in time to 3D ecliptic state."""
+    return Record(EphemerisKeplerianOrbitPropagator.propagate(
+        semi_major_axis_au,
+        eccentricity,
+        inclination_deg,
+        raan_deg,
+        arg_perihelion_deg,
+        mean_anomaly_epoch_deg,
+        delta_days,
+    ))
+
+
+def astronomy_calculate_sidereal_time(
+    year: int,
+    month: int,
+    day: int,
+    hour: int = 0,
+    minute: int = 0,
+    second: float = 0.0,
+    longitude_deg: float = 0.0,
+) -> Record:
+    """Calculates high-precision Julian Date and Greenwich / Local Sidereal Time."""
+    return Record(JulianDaySiderealTimeCalculator.calculate(
+        year, month, day, hour=hour, minute=minute, second=second, longitude_deg=longitude_deg
+    ))
+
+
+

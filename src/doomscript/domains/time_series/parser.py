@@ -95,6 +95,40 @@ class TimeSeriesDomainParser(DomainParser):
             target = m_spec.group(5).strip()
             return f"set {target} to timeseries_spectral_periodogram({series}, sampling_rate={rate}, window_type={win}, top_k_peaks={peaks})"
 
+        # fit var model on <data> [lags <p>] [forecast <h>] into <target>
+        m_var = re.match(
+            r"^fit\s+var\s+model\s+on\s+(.+?)(?:\s+lags\s+(\d+))?(?:\s+forecast\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_var:
+            data_arg, lags_arg, h_arg, target = (
+                m_var.group(1).strip(),
+                m_var.group(2),
+                m_var.group(3),
+                m_var.group(4).strip(),
+            )
+            p_val = lags_arg.strip() if lags_arg else "1"
+            h_val = h_arg.strip() if h_arg else "3"
+            return f"set {target} to timeseries_fit_var_model({data_arg}, lags={p_val}, forecast_steps={h_val})"
+
+        # apply kalman filter to <measurements> [process_q <q>] [measurement_r <r>] into <target>
+        m_kf = re.match(
+            r"^apply\s+kalman\s+filter\s+to\s+(.+?)(?:\s+process_q\s+(.+?))?(?:\s+measurement_r\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_kf:
+            data_arg, q_arg, r_arg, target = (
+                m_kf.group(1).strip(),
+                m_kf.group(2),
+                m_kf.group(3),
+                m_kf.group(4).strip(),
+            )
+            q_val = q_arg.strip() if q_arg else "1e-4"
+            r_val = r_arg.strip() if r_arg else "1e-2"
+            return f"set {target} to timeseries_kalman_filter_smooth({data_arg}, process_variance_q={q_val}, measurement_variance_r={r_val})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

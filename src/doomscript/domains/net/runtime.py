@@ -11,6 +11,7 @@ import urllib.request
 from typing import Any, Dict, List, Optional, Tuple, Union
 from doomscript.domains.base import DomainRuntime, DomainIR
 from doomscript.domains.net.spec import ApiWorkflowSpec, RequestStep, ParseStep, SaveStep
+from doomscript.runtime import Record
 
 
 class HttpResponseContainer:
@@ -1332,6 +1333,246 @@ def net_build_socks5_response(rep: int = 0, bind_addr: str = "0.0.0.0", bind_por
 def net_create_cidr_trie() -> CIDRPrefixTrie:
     """Creates a new CIDR Longest Prefix Match (LPM) routing trie."""
     return CIDRPrefixTrie()
+
+
+# ==============================================================================
+# OSPF LINK-STATE DATABASE (LSDB) & ECMP DIJKSTRA SPF
+# ==============================================================================
+
+class DijkstraLinkStateOSPF:
+    """OSPF Shortest Path First (SPF) engine with Equal-Cost Multi-Path (ECMP) routing."""
+
+    @classmethod
+    def calculate_spf(
+        cls,
+        links: List[Dict[str, Any]],
+        source_router_id: str,
+    ) -> Dict[str, Any]:
+        """Calculates OSPF shortest path tree and forwarding routing table.
+        Each link dictionary has:
+        - from_router: str
+        - to_router: str
+        - cost: int / float
+        - network_cidr: Optional[str]
+        """
+        adj: Dict[str, List[Tuple[str, float, Optional[str]]]] = {}
+        all_routers = set()
+
+        for link in links:
+            u = str(link["from_router"])
+            v = str(link["to_router"])
+            cost = float(link.get("cost", 10.0))
+            net = link.get("network_cidr")
+            all_routers.add(u)
+            all_routers.add(v)
+            adj.setdefault(u, []).append((v, cost, net))
+
+        src = str(source_router_id)
+        if src not in all_routers:
+            all_routers.add(src)
+
+        # Distances and next hops: router -> (min_dist, set of next_hop_routers)
+        distances: Dict[str, float] = {r: float("inf") for r in all_routers}
+        next_hops: Dict[str, Set[str]] = {r: set() for r in all_routers}
+        visited: Set[str] = set()
+
+        distances[src] = 0.0
+
+        # Unvisited pool
+        unvisited = set(all_routers)
+
+        while unvisited:
+            # Pick min distance unvisited router
+            cur = min(unvisited, key=lambda r: distances[r])
+            if distances[cur] == float("inf"):
+                break
+            unvisited.remove(cur)
+            visited.add(cur)
+
+            cur_dist = distances[cur]
+            cur_next_hops = next_hops[cur]
+
+            for neighbor, weight, _ in adj.get(cur, []):
+                new_dist = cur_dist + weight
+
+                # If from source, neighbor is its own next hop
+                assigned_hops = {neighbor} if cur == src else set(cur_next_hops)
+
+                if new_dist < distances[neighbor] - 1e-9:
+                    distances[neighbor] = new_dist
+                    next_hops[neighbor] = set(assigned_hops)
+                elif abs(new_dist - distances[neighbor]) <= 1e-9:
+                    # Equal-cost multipath (ECMP)
+                    next_hops[neighbor].update(assigned_hops)
+
+        # Build routing table
+        routes = []
+        ecmp_count = 0
+        for r in sorted(list(all_routers)):
+            if r == src or distances[r] == float("inf"):
+                continue
+            nh_list = sorted(list(next_hops[r]))
+            if len(nh_list) > 1:
+                ecmp_count += 1
+            routes.append({
+                "destination_router": r,
+                "metric": round(distances[r], 2),
+                "next_hops": nh_list,
+                "is_ecmp": len(nh_list) > 1,
+            })
+
+        return {
+            "source_router": src,
+            "routers_count": len(all_routers),
+            "routing_table": [Record(rt) for rt in routes],
+            "ecmp_destinations_count": ecmp_count,
+            "reachable_count": len(routes),
+        }
+
+
+# ==============================================================================
+# BGP-4 PATH-VECTOR ROUTER & BEST-PATH DECISION ENGINE (RFC 4271)
+# ==============================================================================
+
+class BGPPathVectorRouter:
+    """BGP-4 Decision Engine with AS-Path loop detection, Local-Pref, MED, and tie-breaking."""
+
+    ORIGIN_RANK = {"IGP": 0, "EGP": 1, "INCOMPLETE": 2}
+
+    def __init__(self, local_asn: int, router_id: str):
+        self.local_asn = int(local_asn)
+        self.router_id = str(router_id)
+        # prefix -> list of candidate routes
+        self.adj_rib_in: Dict[str, List[Dict[str, Any]]] = {}
+        self.loc_rib: Dict[str, Dict[str, Any]] = {}
+
+    def add_route(
+        self,
+        prefix: str,
+        as_path: List[int],
+        next_hop: str,
+        local_pref: int = 100,
+        med: int = 0,
+        origin: str = "IGP",
+        is_ebgp: bool = True,
+        igp_metric: float = 10.0,
+        peer_router_id: str = "0.0.0.0",
+    ) -> Dict[str, Any]:
+        """Receives and validates a BGP route advertisement."""
+        path = [int(a) for a in as_path]
+        orig = origin.upper()
+        if orig not in self.ORIGIN_RANK:
+            orig = "INCOMPLETE"
+
+        # 1. Loop detection: drop if local_asn is in as_path
+        if self.local_asn in path:
+            return {
+                "accepted": False,
+                "reason": f"AS-Path loop detected (contains local ASN {self.local_asn})",
+                "prefix": prefix,
+            }
+
+        route = {
+            "prefix": prefix,
+            "as_path": path,
+            "as_path_len": len(path),
+            "next_hop": next_hop,
+            "local_pref": int(local_pref),
+            "med": int(med),
+            "origin": orig,
+            "origin_rank": self.ORIGIN_RANK[orig],
+            "is_ebgp": bool(is_ebgp),
+            "igp_metric": float(igp_metric),
+            "peer_router_id": str(peer_router_id),
+        }
+
+        self.adj_rib_in.setdefault(prefix, []).append(route)
+        self._select_best_path(prefix)
+
+        return {
+            "accepted": True,
+            "prefix": prefix,
+            "as_path": path,
+            "is_current_best": self.loc_rib[prefix] == route,
+        }
+
+    def _select_best_path(self, prefix: str) -> None:
+        """Applies RFC 4271 tie-breaking rules to choose single best route for prefix."""
+        candidates = self.adj_rib_in.get(prefix, [])
+        if not candidates:
+            self.loc_rib.pop(prefix, None)
+            return
+
+        def route_key(r: Dict[str, Any]):
+            # 1. Highest Local Preference (negated for min sort)
+            # 2. Shortest AS-Path length
+            # 3. Lowest Origin rank (IGP < EGP < INCOMPLETE)
+            # 4. Lowest MED
+            # 5. eBGP preferred over iBGP (True before False -> -1 before 0)
+            # 6. Lowest IGP metric to next-hop
+            # 7. Lowest peer router ID (lexicographical)
+            return (
+                -r["local_pref"],
+                r["as_path_len"],
+                r["origin_rank"],
+                r["med"],
+                -1 if r["is_ebgp"] else 0,
+                r["igp_metric"],
+                r["peer_router_id"],
+            )
+
+        best = min(candidates, key=route_key)
+        self.loc_rib[prefix] = best
+
+    def get_routing_table(self) -> List[Dict[str, Any]]:
+        """Returns active Loc-RIB routing table."""
+        res = []
+        for p, r in sorted(self.loc_rib.items()):
+            res.append(dict(r))
+        return res
+
+
+def net_ospf_calculate_spf(links: List[Dict[str, Any]], source_router_id: str) -> Record:
+    """Calculates OSPF shortest path tree with ECMP multipaths."""
+    return Record(DijkstraLinkStateOSPF.calculate_spf(links, source_router_id))
+
+
+def net_bgp_route_selection(
+    local_asn: int,
+    router_id: str,
+    routes: List[Dict[str, Any]],
+) -> Record:
+    """Simulates BGP-4 decision engine and returns accepted Loc-RIB best routes."""
+    router = BGPPathVectorRouter(local_asn, router_id)
+    accepted = []
+    rejected = []
+    for rt in routes:
+        status = router.add_route(
+            prefix=rt["prefix"],
+            as_path=rt["as_path"],
+            next_hop=rt.get("next_hop", "0.0.0.0"),
+            local_pref=rt.get("local_pref", 100),
+            med=rt.get("med", 0),
+            origin=rt.get("origin", "IGP"),
+            is_ebgp=rt.get("is_ebgp", True),
+            igp_metric=rt.get("igp_metric", 10.0),
+            peer_router_id=rt.get("peer_router_id", "1.1.1.1"),
+        )
+        if status["accepted"]:
+            accepted.append(status)
+        else:
+            rejected.append(status)
+
+    best_routes = router.get_routing_table()
+    return Record({
+        "local_asn": local_asn,
+        "router_id": router_id,
+        "best_routes": [Record(r) for r in best_routes],
+        "accepted_routes_count": len(accepted),
+        "rejected_routes_count": len(rejected),
+        "total_prefixes_count": len(best_routes),
+    })
+
 
 
 

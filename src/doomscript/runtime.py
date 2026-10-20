@@ -3719,6 +3719,10 @@ from doomscript.domains.astronomy.runtime import (
     LagrangePointsCalculator,
     astronomy_lambert_solve,
     astronomy_lagrange_points,
+    EphemerisKeplerianOrbitPropagator,
+    JulianDaySiderealTimeCalculator,
+    astronomy_propagate_kepler_orbit,
+    astronomy_calculate_sidereal_time,
 )
 
 from doomscript.domains.chem.runtime import (
@@ -3808,6 +3812,10 @@ from doomscript.domains.time_series.runtime import (
     SpectralDensityPeriodogram,
     timeseries_dtw_sakoe_chiba,
     timeseries_spectral_periodogram,
+    MultivariateVectorAutoregressionVAR,
+    KalmanFilterStateSpace,
+    timeseries_fit_var_model,
+    timeseries_kalman_filter_smooth,
 )
 
 from doomscript.domains.symbolic.runtime import (
@@ -3844,6 +3852,9 @@ from doomscript.domains.symbolic.runtime import (
     symbolic_square_free_factorization,
     symbolic_polynomial_resultant,
     symbolic_pade_approximant,
+    GroebnerBasisBuchberger,
+    symbolic_groebner_basis,
+    symbolic_eliminate_variables,
 )
 
 from doomscript.domains.graphics.runtime import (
@@ -4128,6 +4139,10 @@ from doomscript.domains.net.runtime import (
     net_parse_tls_client_hello,
     net_build_socks5_response,
     net_create_cidr_trie,
+    DijkstraLinkStateOSPF,
+    BGPPathVectorRouter,
+    net_ospf_calculate_spf,
+    net_bgp_route_selection,
 )
 
 from doomscript.domains.sim.runtime import (
@@ -4188,6 +4203,12 @@ from doomscript.domains.opt.runtime import (
     ActiveSetQuadraticProgramming,
     opt_particle_swarm_optimize,
     opt_solve_quadratic_program_active_set,
+    NelderMeadSimplexDirectSearch,
+    InteriorPointPrimalDualLP,
+    CMAESContinuousOptimization,
+    opt_nelder_mead_minimize,
+    opt_interior_point_solve_lp,
+    opt_cma_es_optimize,
 )
 
 

@@ -98,6 +98,44 @@ class AstronomyDomainParser(DomainParser):
             m1, m2, dist, target = m_lag.group(1).strip(), m_lag.group(2).strip(), m_lag.group(3).strip(), m_lag.group(4).strip()
             return f"set {target} to astronomy_lagrange_points({m1}, {m2}, {dist})"
 
+        # propagate kepler orbit semi_major <a> eccentricity <e> inclination <i> raan <raan> arg_peri <arg> mean_anomaly <m0> delta_days <dt> into <target>
+        m_prop = re.match(
+            r"^propagate\s+kepler\s+orbit\s+semi_major\s+(.+?)\s+eccentricity\s+(.+?)\s+inclination\s+(.+?)\s+raan\s+(.+?)\s+arg_peri\s+(.+?)\s+mean_anomaly\s+(.+?)\s+delta_days\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_prop:
+            a, e, inc, raan, arg, m0, dt, target = (
+                m_prop.group(1).strip(),
+                m_prop.group(2).strip(),
+                m_prop.group(3).strip(),
+                m_prop.group(4).strip(),
+                m_prop.group(5).strip(),
+                m_prop.group(6).strip(),
+                m_prop.group(7).strip(),
+                m_prop.group(8).strip(),
+            )
+            return f"set {target} to astronomy_propagate_kepler_orbit({a}, {e}, {inc}, {raan}, {arg}, {m0}, {dt})"
+
+        # calculate sidereal time year <y> month <m> day <d> hour <h> min <mn> sec <s> lon <lon> into <target>
+        m_sid = re.match(
+            r"^calculate\s+sidereal\s+time\s+year\s+(.+?)\s+month\s+(.+?)\s+day\s+(.+?)\s+hour\s+(.+?)\s+min\s+(.+?)\s+sec\s+(.+?)\s+lon\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_sid:
+            y, m, d, h, mn, sc, lon, target = (
+                m_sid.group(1).strip(),
+                m_sid.group(2).strip(),
+                m_sid.group(3).strip(),
+                m_sid.group(4).strip(),
+                m_sid.group(5).strip(),
+                m_sid.group(6).strip(),
+                m_sid.group(7).strip(),
+                m_sid.group(8).strip(),
+            )
+            return f"set {target} to astronomy_calculate_sidereal_time({y}, {m}, {d}, {h}, {mn}, {sc}, {lon})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

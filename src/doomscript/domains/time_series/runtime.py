@@ -889,3 +889,290 @@ def timeseries_spectral_periodogram(
         series, sampling_rate=sampling_rate, window_type=window_type, top_k_peaks=top_k_peaks
     ))
 
+
+# ==============================================================================
+# MULTIVARIATE VECTOR AUTOREGRESSION (VAR(p)) & GRANGER CAUSALITY
+# ==============================================================================
+
+class MultivariateVectorAutoregressionVAR:
+    """Vector Autoregressive VAR(p) model with multivariate OLS and Granger causality."""
+
+    @staticmethod
+    def _invert_matrix(A: List[List[float]]) -> List[List[float]]:
+        """Inverts a square matrix using Gauss-Jordan elimination with partial pivoting."""
+        n = len(A)
+        # Augment with identity
+        aug = [list(A[i]) + [1.0 if i == j else 0.0 for j in range(n)] for i in range(n)]
+
+        for c in range(n):
+            # Pivot
+            pivot = max(range(c, n), key=lambda r: abs(aug[r][c]))
+            if abs(aug[pivot][c]) < 1e-12:
+                raise ValueError("Matrix is singular or near-singular")
+            aug[c], aug[pivot] = aug[pivot], aug[c]
+
+            pv = aug[c][c]
+            for j in range(2 * n):
+                aug[c][j] /= pv
+
+            for r in range(n):
+                if r != c:
+                    factor = aug[r][c]
+                    for j in range(2 * n):
+                        aug[r][j] -= factor * aug[c][j]
+
+        return [row[n:] for row in aug]
+
+    @staticmethod
+    def _mat_mul(A: List[List[float]], B: List[List[float]]) -> List[List[float]]:
+        n, m = len(A), len(B[0])
+        p = len(B)
+        res = [[0.0] * m for _ in range(n)]
+        for i in range(n):
+            for k in range(p):
+                aik = A[i][k]
+                for j in range(m):
+                    res[i][j] += aik * B[k][j]
+        return res
+
+    @staticmethod
+    def _mat_transpose(A: List[List[float]]) -> List[List[float]]:
+        return [[A[r][c] for r in range(len(A))] for c in range(len(A[0]))]
+
+    @classmethod
+    def fit_and_forecast(
+        cls,
+        data: List[List[float]],
+        lags: int = 1,
+        forecast_steps: int = 3,
+        variable_names: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """Fits VAR(p) on multivariate time series (data is T x K) and computes h-step forecasts."""
+        t_total = len(data)
+        k_vars = len(data[0])
+        p = max(1, int(lags))
+        h = max(1, int(forecast_steps))
+
+        if t_total <= p + k_vars * p + 1:
+            raise ValueError(f"Insufficient observations T={t_total} for VAR({p}) with {k_vars} variables")
+
+        vnames = variable_names or [f"var_{i}" for i in range(k_vars)]
+
+        # Construct Design Matrix Z and Target Matrix Y
+        # For t = p, ..., T-1:
+        # y_t = [c, y_{t-1}, y_{t-2}, ..., y_{t-p}] * B + eps
+        n_obs = t_total - p
+        y_mat = []
+        z_mat = []
+
+        for t in range(p, t_total):
+            y_mat.append(list(data[t]))
+            row = [1.0]  # Intercept
+            for lag in range(1, p + 1):
+                row.extend(data[t - lag])
+            z_mat.append(row)
+
+        # OLS: B = (Z^T Z)^(-1) Z^T Y
+        zt = cls._mat_transpose(z_mat)
+        zt_z = cls._mat_mul(zt, z_mat)
+        # Ridge regularization if needed for stability
+        for i in range(len(zt_z)):
+            zt_z[i][i] += 1e-9
+        inv_zt_z = cls._invert_matrix(zt_z)
+        zt_y = cls._mat_mul(zt, y_mat)
+        b_coeff = cls._mat_mul(inv_zt_z, zt_y)  # (1 + K*p) x K
+
+        # Residuals and Sigma
+        y_pred = cls._mat_mul(z_mat, b_coeff)
+        residuals = [[y_mat[r][c] - y_pred[r][c] for c in range(k_vars)] for r in range(n_obs)]
+
+        dof = max(1, n_obs - (1 + k_vars * p))
+        sigma = [[0.0] * k_vars for _ in range(k_vars)]
+        for r in range(n_obs):
+            for i in range(k_vars):
+                for j in range(k_vars):
+                    sigma[i][j] += residuals[r][i] * residuals[r][j] / dof
+
+        # Granger causality F-tests (for each pair (cause, effect))
+        granger_tests = []
+        for cause_idx in range(k_vars):
+            for effect_idx in range(k_vars):
+                if cause_idx == effect_idx:
+                    continue
+                # Unrestricted RSS
+                rss_u = sum(residuals[r][effect_idx] ** 2 for r in range(n_obs))
+
+                # Restricted model without lags of cause_idx
+                # Form restricted Z
+                z_res = []
+                for t in range(p, t_total):
+                    row = [1.0]
+                    for lag in range(1, p + 1):
+                        for var_j in range(k_vars):
+                            if var_j != cause_idx:
+                                row.append(data[t - lag][var_j])
+                    z_res.append(row)
+
+                zt_r = cls._mat_transpose(z_res)
+                ztr_zr = cls._mat_mul(zt_r, z_res)
+                for ii in range(len(ztr_zr)):
+                    ztr_zr[ii][ii] += 1e-9
+                inv_zr = cls._invert_matrix(ztr_zr)
+                y_eff = [[y_mat[r][effect_idx]] for r in range(n_obs)]
+                zr_y = cls._mat_mul(zt_r, y_eff)
+                b_res = cls._mat_mul(inv_zr, zr_y)
+                y_pred_res = cls._mat_mul(z_res, b_res)
+                rss_r = sum((y_eff[r][0] - y_pred_res[r][0]) ** 2 for r in range(n_obs))
+
+                # F-statistic: ((RSS_R - RSS_U) / p) / (RSS_U / dof)
+                num = max(0.0, (rss_r - rss_u) / p)
+                den = max(1e-12, rss_u / dof)
+                f_stat = num / den
+
+                granger_tests.append({
+                    "cause": vnames[cause_idx],
+                    "effect": vnames[effect_idx],
+                    "f_statistic": round(f_stat, 4),
+                    "is_causal": f_stat > 3.0,
+                })
+
+        # Recursive h-step forecasting
+        history = [list(row) for row in data]
+        forecasts = []
+
+        for _ in range(h):
+            t_curr = len(history)
+            row = [1.0]
+            for lag in range(1, p + 1):
+                row.extend(history[t_curr - lag])
+
+            # Next state: row * B
+            next_vals = [0.0] * k_vars
+            for j in range(k_vars):
+                next_vals[j] = sum(row[k] * b_coeff[k][j] for k in range(len(row)))
+
+            forecasts.append({vnames[j]: round(next_vals[j], 4) for j in range(k_vars)})
+            history.append(next_vals)
+
+        return {
+            "num_variables": k_vars,
+            "variable_names": vnames,
+            "lags": p,
+            "forecast_steps": h,
+            "residual_covariance": [[round(x, 6) for x in row] for row in sigma],
+            "forecasts": [Record(fc) for fc in forecasts],
+            "granger_causality": [Record(gt) for gt in granger_tests],
+        }
+
+
+# ==============================================================================
+# STATE-SPACE KALMAN FILTER & RTS BACKWARD SMOOTHER
+# ==============================================================================
+
+class KalmanFilterStateSpace:
+    """Linear Dynamic State-Space Model with forward Kalman filter and Rauch-Tung-Striebel smoother."""
+
+    @staticmethod
+    def _inv_2x2(M: List[List[float]]) -> List[List[float]]:
+        det = M[0][0] * M[1][1] - M[0][1] * M[1][0]
+        if abs(det) < 1e-12:
+            return [[1.0, 0.0], [0.0, 1.0]]
+        inv_det = 1.0 / det
+        return [
+            [M[1][1] * inv_det, -M[0][1] * inv_det],
+            [-M[1][0] * inv_det, M[0][0] * inv_det],
+        ]
+
+    @classmethod
+    def filter_and_smooth_1d(
+        cls,
+        measurements: List[float],
+        process_variance_q: float = 1e-4,
+        measurement_variance_r: float = 1e-2,
+        initial_state: float = 0.0,
+        initial_covariance: float = 1.0,
+        drift_f: float = 1.0,
+    ) -> Dict[str, Any]:
+        """Runs 1D Kalman filter and RTS smoother on a series of observations."""
+        q = float(process_variance_q)
+        r = float(measurement_variance_r)
+        f = float(drift_f)
+
+        x_hat = float(initial_state)
+        p = float(initial_covariance)
+
+        filtered_x = []
+        filtered_p = []
+        predicted_x = []
+        predicted_p = []
+        innovations = []
+
+        for z in measurements:
+            # 1. Predict
+            x_pred = f * x_hat
+            p_pred = (f * p * f) + q
+            predicted_x.append(x_pred)
+            predicted_p.append(p_pred)
+
+            # 2. Update
+            y = z - x_pred  # Innovation
+            s = p_pred + r  # Innovation variance
+            k = p_pred / max(1e-12, s)  # Kalman gain
+
+            x_hat = x_pred + k * y
+            p = (1.0 - k) * p_pred
+
+            filtered_x.append(x_hat)
+            filtered_p.append(p)
+            innovations.append(round(y, 4))
+
+        # Rauch-Tung-Striebel backward smoother
+        n = len(measurements)
+        smoothed_x = list(filtered_x)
+        smoothed_p = list(filtered_p)
+
+        for t in range(n - 2, -1, -1):
+            c_t = (filtered_p[t] * f) / max(1e-12, predicted_p[t + 1])
+            smoothed_x[t] = filtered_x[t] + c_t * (smoothed_x[t + 1] - predicted_x[t + 1])
+            smoothed_p[t] = filtered_p[t] + (c_t ** 2) * (smoothed_p[t + 1] - predicted_p[t + 1])
+
+        return {
+            "observations_count": n,
+            "filtered_states": [round(v, 4) for v in filtered_x],
+            "filtered_variances": [round(v, 6) for v in filtered_p],
+            "smoothed_states": [round(v, 4) for v in smoothed_x],
+            "smoothed_variances": [round(v, 6) for v in smoothed_p],
+            "innovations": innovations,
+            "final_gain": round(k, 4),
+        }
+
+
+def timeseries_fit_var_model(
+    data: List[List[float]],
+    lags: int = 1,
+    forecast_steps: int = 3,
+    variable_names: Optional[List[str]] = None,
+) -> Record:
+    """Fits multivariate Vector Autoregression VAR(p) with Granger causality and forecasts."""
+    return Record(MultivariateVectorAutoregressionVAR.fit_and_forecast(
+        data, lags=lags, forecast_steps=forecast_steps, variable_names=variable_names
+    ))
+
+
+def timeseries_kalman_filter_smooth(
+    measurements: List[float],
+    process_variance_q: float = 1e-4,
+    measurement_variance_r: float = 1e-2,
+    initial_state: float = 0.0,
+    initial_covariance: float = 1.0,
+) -> Record:
+    """Applies 1D forward Kalman filter and RTS backward smoother to noisy measurements."""
+    return Record(KalmanFilterStateSpace.filter_and_smooth_1d(
+        measurements,
+        process_variance_q=process_variance_q,
+        measurement_variance_r=measurement_variance_r,
+        initial_state=initial_state,
+        initial_covariance=initial_covariance,
+    ))
+
+

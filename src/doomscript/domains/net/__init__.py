@@ -50,6 +50,10 @@ from doomscript.domains.net.runtime import (
     net_parse_tls_client_hello,
     net_build_socks5_response,
     net_create_cidr_trie,
+    DijkstraLinkStateOSPF,
+    BGPPathVectorRouter,
+    net_ospf_calculate_spf,
+    net_bgp_route_selection,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.net.exporter import NetASTExporter
@@ -100,6 +104,8 @@ class NetDomain(DomainContract):
     ]
 
     def can_handle_line(self, line: str) -> bool:
+        if self.parser.parse_operation(line, 0) is not None:
+            return True
         s = line.strip().lower()
         if (
             s.startswith("inspect response ")
@@ -221,4 +227,8 @@ __all__ = [
     "net_parse_tls_client_hello",
     "net_build_socks5_response",
     "net_create_cidr_trie",
+    "DijkstraLinkStateOSPF",
+    "BGPPathVectorRouter",
+    "net_ospf_calculate_spf",
+    "net_bgp_route_selection",
 ]

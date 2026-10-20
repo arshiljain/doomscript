@@ -2208,5 +2208,473 @@ def opt_solve_quadratic_program_active_set(
     ))
 
 
+# ==============================================================================
+# NELDER-MEAD SIMPLEX DIRECT SEARCH MINIMIZATION
+# ==============================================================================
+
+class NelderMeadSimplexDirectSearch:
+    """Derivative-free multi-dimensional non-linear function minimization."""
+
+    @staticmethod
+    def _evaluate_fn(fn_or_expr: Any, pt: List[float]) -> float:
+        if callable(fn_or_expr):
+            return float(fn_or_expr(pt))
+        if isinstance(fn_or_expr, str):
+            # Parse variables e.g. x0, x1 or x, y, z
+            env = {f"x{i}": pt[i] for i in range(len(pt))}
+            if len(pt) >= 1:
+                env["x"] = pt[0]
+            if len(pt) >= 2:
+                env["y"] = pt[1]
+            if len(pt) >= 3:
+                env["z"] = pt[2]
+            env["math"] = math
+            return float(eval(fn_or_expr, {"__builtins__": {}}, env))
+        raise ValueError(f"Objective must be callable or expression string, got {type(fn_or_expr)}")
+
+    @classmethod
+    def minimize(
+        cls,
+        objective: Any,
+        initial_point: List[float],
+        step_size: float = 0.05,
+        tol: float = 1e-6,
+        max_iter: int = 200,
+        alpha: float = 1.0,   # Reflection
+        gamma: float = 2.0,   # Expansion
+        beta: float = 0.5,    # Contraction
+        delta: float = 0.5,   # Shrink
+    ) -> Dict[str, Any]:
+        x0 = [float(v) for v in initial_point]
+        n = len(x0)
+
+        # Initialize n+1 vertices
+        vertices = [list(x0)]
+        for i in range(n):
+            v = list(x0)
+            v[i] += step_size if abs(v[i]) < 1e-6 else (v[i] * step_size)
+            vertices.append(v)
+
+        values = [cls._evaluate_fn(objective, v) for v in vertices]
+
+        iterations = 0
+        converged = False
+
+        while iterations < max_iter:
+            iterations += 1
+
+            # Order vertices: values[0] is best, values[-1] is worst
+            order = sorted(range(n + 1), key=lambda idx: values[idx])
+            vertices = [vertices[idx] for idx in order]
+            values = [values[idx] for idx in order]
+
+            # Standard deviation check on function values
+            mean_val = sum(values) / (n + 1)
+            variance = sum((v - mean_val) ** 2 for v in values) / (n + 1)
+            std_dev = math.sqrt(variance)
+
+            if std_dev < tol:
+                converged = True
+                break
+
+            # Centroid of best n vertices (excluding worst vertex n)
+            x_bar = [sum(vertices[i][d] for i in range(n)) / n for d in range(n)]
+
+            # 1. Reflection
+            x_worst = vertices[n]
+            f_worst = values[n]
+            f_second_worst = values[n - 1]
+            f_best = values[0]
+
+            x_r = [x_bar[d] + alpha * (x_bar[d] - x_worst[d]) for d in range(n)]
+            f_r = cls._evaluate_fn(objective, x_r)
+
+            if f_best <= f_r < f_second_worst:
+                # Accept reflection
+                vertices[n] = x_r
+                values[n] = f_r
+                continue
+
+            # 2. Expansion
+            if f_r < f_best:
+                x_e = [x_bar[d] + gamma * (x_r[d] - x_bar[d]) for d in range(n)]
+                f_e = cls._evaluate_fn(objective, x_e)
+                if f_e < f_r:
+                    vertices[n] = x_e
+                    values[n] = f_e
+                else:
+                    vertices[n] = x_r
+                    values[n] = f_r
+                continue
+
+            # 3. Contraction
+            if f_r < f_worst:
+                # Outside contraction
+                x_c = [x_bar[d] + beta * (x_r[d] - x_bar[d]) for d in range(n)]
+                f_c = cls._evaluate_fn(objective, x_c)
+                if f_c <= f_r:
+                    vertices[n] = x_c
+                    values[n] = f_c
+                    continue
+            else:
+                # Inside contraction
+                x_c = [x_bar[d] - beta * (x_bar[d] - x_worst[d]) for d in range(n)]
+                f_c = cls._evaluate_fn(objective, x_c)
+                if f_c < f_worst:
+                    vertices[n] = x_c
+                    values[n] = f_c
+                    continue
+
+            # 4. Shrink all towards best vertex vertices[0]
+            for i in range(1, n + 1):
+                vertices[i] = [vertices[0][d] + delta * (vertices[i][d] - vertices[0][d]) for d in range(n)]
+                values[i] = cls._evaluate_fn(objective, vertices[i])
+
+        best_idx = 0
+        return {
+            "optimal_x": [round(v, 6) for v in vertices[best_idx]],
+            "optimal_value": round(values[best_idx], 6),
+            "iterations": iterations,
+            "converged": converged,
+            "standard_deviation": round(std_dev, 8),
+        }
+
+
+# ==============================================================================
+# PRIMAL-DUAL INTERIOR POINT METHOD FOR LINEAR PROGRAMMING
+# ==============================================================================
+
+class InteriorPointPrimalDualLP:
+    """Mehrotra Predictor-Corrector style Primal-Dual Interior Point Method for min c^T x s.t. Ax = b, x >= 0."""
+
+    @staticmethod
+    def _solve_system(A: List[List[float]], b: List[float]) -> List[float]:
+        """Solves A x = b via Gaussian elimination with partial pivoting."""
+        n = len(A)
+        aug = [list(A[i]) + [b[i]] for i in range(n)]
+
+        for c in range(n):
+            pivot = max(range(c, n), key=lambda r: abs(aug[r][c]))
+            if abs(aug[pivot][c]) < 1e-12:
+                # Add small ridge
+                aug[c][c] += 1e-6
+            else:
+                aug[c], aug[pivot] = aug[pivot], aug[c]
+
+            pv = aug[c][c]
+            for j in range(c, n + 1):
+                aug[c][j] /= pv
+
+            for r in range(n):
+                if r != c:
+                    factor = aug[r][c]
+                    for j in range(c, n + 1):
+                        aug[r][j] -= factor * aug[c][j]
+
+        return [aug[i][n] for i in range(n)]
+
+    @classmethod
+    def solve(
+        cls,
+        c_vec: List[float],
+        a_matrix: List[List[float]],
+        b_vec: List[float],
+        max_iter: int = 100,
+        tol: float = 1e-6,
+    ) -> Dict[str, Any]:
+        """Solves standard form linear program: min c^T x s.t. A x = b, x >= 0."""
+        c = [float(v) for v in c_vec]
+        b = [float(v) for v in b_vec]
+        A = [[float(v) for v in row] for row in a_matrix]
+
+        m = len(A)     # Number of equality constraints
+        n = len(c)     # Number of variables
+
+        # Strictly feasible interior starting point (x > 0, s > 0)
+        x = [1.0] * n
+        y = [0.0] * m
+        s = [1.0] * n
+
+        iterations = 0
+        converged = False
+
+        while iterations < max_iter:
+            iterations += 1
+
+            # Primal residual: r_p = b - A*x
+            rp = [b[i] - sum(A[i][j] * x[j] for j in range(n)) for i in range(m)]
+
+            # Dual residual: r_d = c - A^T*y - s
+            rd = [c[j] - sum(A[i][j] * y[i] for i in range(m)) - s[j] for j in range(n)]
+
+            # Complementarity gap: mu = (x^T * s) / n
+            mu = sum(x[j] * s[j] for j in range(n)) / n
+
+            norm_rp = math.sqrt(sum(v * v for v in rp))
+            norm_rd = math.sqrt(sum(v * v for v in rd))
+
+            if mu < tol and norm_rp < tol and norm_rd < tol:
+                converged = True
+                break
+
+            # Normal matrix M = A * S^(-1) * X * A^T
+            # D = X / S
+            d = [x[j] / max(1e-12, s[j]) for j in range(n)]
+
+            # Predictor step (affine scaling, sigma = 0)
+            # r_xs = -x .* s
+            r_xs = [-x[j] * s[j] for j in range(n)]
+
+            # Form normal equations: M * dy = rhs
+            # rhs = rp + A * S^(-1) * (r_xs - X * rd) = rp + A * (S^(-1)*r_xs - D * rd)
+            # S^(-1)*r_xs = -x
+            vec_temp = [-x[j] - d[j] * rd[j] for j in range(n)]
+            rhs = [rp[i] + sum(A[i][j] * vec_temp[j] for j in range(n)) for i in range(m)]
+
+            M = [[sum(A[i][k] * d[k] * A[j][k] for k in range(n)) for j in range(m)] for i in range(m)]
+            # Ridge regularization for positive definiteness
+            for i in range(m):
+                M[i][i] += 1e-9
+
+            dy_aff = cls._solve_system(M, rhs)
+            ds_aff = [rd[j] - sum(A[i][j] * dy_aff[i] for i in range(m)) for j in range(n)]
+            dx_aff = [(-r_xs[j] - x[j] * ds_aff[j]) / max(1e-12, s[j]) for j in range(n)]
+
+            # Step lengths for affine scaling
+            alpha_p_aff = 1.0
+            alpha_d_aff = 1.0
+            for j in range(n):
+                if dx_aff[j] < 0:
+                    alpha_p_aff = min(alpha_p_aff, -x[j] / dx_aff[j])
+                if ds_aff[j] < 0:
+                    alpha_d_aff = min(alpha_d_aff, -s[j] / ds_aff[j])
+
+            # Centering parameter sigma via Mehrotra heuristic
+            mu_aff = sum((x[j] + alpha_p_aff * dx_aff[j]) * (s[j] + alpha_d_aff * ds_aff[j]) for j in range(n)) / n
+            sigma = (mu_aff / max(1e-12, mu)) ** 3
+            sigma = min(1.0, max(0.0, sigma))
+
+            # Corrector + Centering step
+            # r_xs_comb = sigma*mu - x.*s - dx_aff .* ds_aff
+            r_xs_comb = [sigma * mu - x[j] * s[j] - dx_aff[j] * ds_aff[j] for j in range(n)]
+            vec_temp2 = [(r_xs_comb[j] - x[j] * rd[j]) / max(1e-12, s[j]) for j in range(n)]
+            rhs2 = [rp[i] + sum(A[i][j] * vec_temp2[j] for j in range(n)) for i in range(m)]
+
+            dy = cls._solve_system(M, rhs2)
+            ds = [rd[j] - sum(A[i][j] * dy[i] for i in range(m)) for j in range(n)]
+            dx = [(r_xs_comb[j] - x[j] * ds[j]) / max(1e-12, s[j]) for j in range(n)]
+
+            # Safe step length with fraction-to-boundary rule (gamma = 0.99)
+            gamma_step = 0.99
+            alpha_p = 1.0
+            alpha_d = 1.0
+            for j in range(n):
+                if dx[j] < 0:
+                    alpha_p = min(alpha_p, gamma_step * (-x[j] / dx[j]))
+                if ds[j] < 0:
+                    alpha_d = min(alpha_d, gamma_step * (-s[j] / ds[j]))
+
+            # Update iterates
+            for j in range(n):
+                x[j] = max(1e-12, x[j] + alpha_p * dx[j])
+                s[j] = max(1e-12, s[j] + alpha_d * ds[j])
+            for i in range(m):
+                y[i] += alpha_d * dy[i]
+
+        opt_val = sum(c[j] * x[j] for j in range(n))
+
+        return {
+            "optimal_x": [round(v, 6) for v in x],
+            "optimal_value": round(opt_val, 6),
+            "dual_y": [round(v, 6) for v in y],
+            "slack_s": [round(v, 6) for v in s],
+            "duality_gap": round(mu, 8),
+            "iterations": iterations,
+            "converged": converged,
+        }
+
+
+def opt_nelder_mead_minimize(
+    objective: Any,
+    initial_point: List[float],
+    step_size: float = 0.05,
+    tol: float = 1e-6,
+    max_iter: int = 200,
+) -> Record:
+    """Minimizes continuous function using derivative-free Nelder-Mead simplex algorithm."""
+    return Record(NelderMeadSimplexDirectSearch.minimize(
+        objective, initial_point, step_size=step_size, tol=tol, max_iter=max_iter
+    ))
+
+
+def opt_interior_point_solve_lp(
+    c_vec: List[float],
+    a_matrix: List[List[float]],
+    b_vec: List[float],
+    max_iter: int = 100,
+    tol: float = 1e-6,
+) -> Record:
+    """Solves canonical linear program min c^T x s.t. Ax = b, x >= 0 via Primal-Dual Interior Point."""
+    return Record(InteriorPointPrimalDualLP.solve(
+        c_vec, a_matrix, b_vec, max_iter=max_iter, tol=tol
+    ))
+
+
+# ==============================================================================
+# COVARIANCE MATRIX ADAPTATION EVOLUTION STRATEGY (CMA-ES)
+# ==============================================================================
+
+class CMAESContinuousOptimization:
+    """Covariance Matrix Adaptation Evolution Strategy for non-convex continuous optimization."""
+
+    @staticmethod
+    def _evaluate_fn(fn_or_expr: Any, pt: List[float]) -> float:
+        if callable(fn_or_expr):
+            return float(fn_or_expr(pt))
+        if isinstance(fn_or_expr, str):
+            env = {f"x{i}": pt[i] for i in range(len(pt))}
+            if len(pt) >= 1:
+                env["x"] = pt[0]
+            if len(pt) >= 2:
+                env["y"] = pt[1]
+            if len(pt) >= 3:
+                env["z"] = pt[2]
+            env["math"] = math
+            return float(eval(fn_or_expr, {"__builtins__": {}}, env))
+        raise ValueError(f"Objective must be callable or expression string, got {type(fn_or_expr)}")
+
+    @classmethod
+    def optimize(
+        cls,
+        objective: Any,
+        initial_mean: List[float],
+        initial_sigma: float = 0.5,
+        population_size: int = 12,
+        max_generations: int = 40,
+    ) -> Dict[str, Any]:
+        dim = len(initial_mean)
+        m = [float(v) for v in initial_mean]
+        sigma = float(initial_sigma)
+        lam = max(4, int(population_size))
+        mu = lam // 2
+
+        # Recombination weights
+        raw_weights = [math.log(mu + 0.5) - math.log(i + 1) for i in range(mu)]
+        sum_w = sum(raw_weights)
+        weights = [w / sum_w for w in raw_weights]
+        mueff = 1.0 / sum(w ** 2 for w in weights)
+
+        # Strategy parameters
+        cc = (4.0 + mueff / dim) / (dim + 4.0 + 2.0 * mueff / dim)
+        cs = (mueff + 2.0) / (dim + mueff + 5.0)
+        c1 = 2.0 / ((dim + 1.3) ** 2 + mueff)
+        cmu = min(1.0 - c1, 2.0 * (mueff - 2.0 + 1.0 / mueff) / ((dim + 2.0) ** 2 + mueff))
+        damps = 1.0 + 2.0 * max(0.0, math.sqrt((mueff - 1.0) / (dim + 1.0)) - 1.0) + cs
+        chi_n = math.sqrt(dim) * (1.0 - 1.0 / (4.0 * dim) + 1.0 / (21.0 * (dim ** 2)))
+
+        # Evolution paths
+        ps = [0.0] * dim
+        pc = [0.0] * dim
+
+        # Covariance matrix C initialized to identity
+        C = [[1.0 if i == j else 0.0 for j in range(dim)] for i in range(dim)]
+
+        best_x = list(m)
+        best_val = cls._evaluate_fn(objective, m)
+        history = []
+
+        rnd = random.Random(42)
+
+        for gen in range(1, max_generations + 1):
+            # Sample lambda candidates: x_k = m + sigma * y_k
+            # Approximation: sample standard normals and scale by diagonal approximation / C
+            # Using Cholesky approximation of C:
+            # L such that L L^T = C
+            L = [[0.0] * dim for _ in range(dim)]
+            for i in range(dim):
+                for j in range(i + 1):
+                    s_sum = sum(L[i][k] * L[j][k] for k in range(j))
+                    if i == j:
+                        val = C[i][i] - s_sum
+                        L[i][j] = math.sqrt(max(1e-9, val))
+                    else:
+                        L[i][j] = (C[i][j] - s_sum) / max(1e-9, L[j][j])
+
+            pop = []
+            z_vectors = []
+            for _ in range(lam):
+                z = [rnd.gauss(0.0, 1.0) for _ in range(dim)]
+                # y = L * z
+                y = [sum(L[i][j] * z[j] for j in range(i + 1)) for i in range(dim)]
+                cand = [m[i] + sigma * y[i] for i in range(dim)]
+                f_val = cls._evaluate_fn(objective, cand)
+                pop.append((cand, y, f_val))
+                z_vectors.append(z)
+
+            # Sort population by fitness
+            pop.sort(key=lambda item: item[2])
+            if pop[0][2] < best_val:
+                best_val = pop[0][2]
+                best_x = list(pop[0][0])
+
+            history.append(round(best_val, 6))
+
+            # Update mean: m_new = m + sigma * sum(w_i * y_i)
+            y_w = [sum(weights[i] * pop[i][1][d] for i in range(mu)) for d in range(dim)]
+            m = [m[d] + sigma * y_w[d] for d in range(dim)]
+
+            # Update evolution paths
+            # ps = (1 - cs)*ps + sqrt(cs*(2-cs)*mueff) * z_w
+            z_w = [sum(weights[i] * z_vectors[i][d] for i in range(mu)) for d in range(dim)]
+            for d in range(dim):
+                ps[d] = (1.0 - cs) * ps[d] + math.sqrt(cs * (2.0 - cs) * mueff) * z_w[d]
+
+            norm_ps = math.sqrt(sum(v * v for v in ps))
+
+            # Threshold for pc update
+            h_sig = 1.0 if (norm_ps / math.sqrt(1.0 - (1.0 - cs) ** (2.0 * gen))) < (1.4 + 2.0 / (dim + 1.0)) * chi_n else 0.0
+
+            for d in range(dim):
+                pc[d] = (1.0 - cc) * pc[d] + h_sig * math.sqrt(cc * (2.0 - cc) * mueff) * y_w[d]
+
+            # Update Covariance matrix C
+            # C = (1 - c1 - cmu)*C + c1*(pc*pc^T + (1-h_sig)*cc*(2-cc)*C) + cmu*sum(w_i * y_i * y_i^T)
+            for i in range(dim):
+                for j in range(dim):
+                    rank_mu_term = sum(weights[k] * pop[k][1][i] * pop[k][1][j] for k in range(mu))
+                    C[i][j] = (
+                        (1.0 - c1 - cmu) * C[i][j]
+                        + c1 * (pc[i] * pc[j] + (1.0 - h_sig) * cc * (2.0 - cc) * C[i][j])
+                        + cmu * rank_mu_term
+                    )
+
+            # Update step size sigma
+            sigma *= math.exp((cs / damps) * (norm_ps / chi_n - 1.0))
+            sigma = max(1e-12, min(100.0, sigma))
+
+        return {
+            "optimal_x": [round(v, 6) for v in best_x],
+            "optimal_value": round(best_val, 6),
+            "final_sigma": round(sigma, 6),
+            "generations": max_generations,
+            "convergence_history": history,
+        }
+
+
+def opt_cma_es_optimize(
+    objective: Any,
+    initial_mean: List[float],
+    initial_sigma: float = 0.5,
+    population_size: int = 12,
+    max_generations: int = 40,
+) -> Record:
+    """Optimizes continuous objective using Covariance Matrix Adaptation Evolution Strategy (CMA-ES)."""
+    return Record(CMAESContinuousOptimization.optimize(
+        objective, initial_mean, initial_sigma=initial_sigma, population_size=population_size, max_generations=max_generations
+    ))
+
+
+
+
 
 
