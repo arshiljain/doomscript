@@ -1418,4 +1418,220 @@ def image_hough_lines(
     return Record(HoughTransformLineDetector.detect(edge_matrix, threshold=threshold, num_rho=num_rho, num_theta=num_theta))
 
 
+# ==============================================================================
+# CANNY EDGE DETECTOR (PURE PYTHON)
+# ==============================================================================
+
+class CannyEdgeDetectorPure:
+    """Complete 5-stage Canny Edge Detection pipeline in 100% pure Python."""
+
+    GAUSSIAN_5X5 = [
+        [1, 4, 7, 4, 1],
+        [4, 16, 26, 16, 4],
+        [7, 26, 41, 26, 7],
+        [4, 16, 26, 16, 4],
+        [1, 4, 7, 4, 1],
+    ]
+    GAUSSIAN_NORM = 273.0
+
+    @classmethod
+    def detect(
+        cls,
+        image_matrix: List[List[float]],
+        low_threshold: float = 30.0,
+        high_threshold: float = 80.0,
+    ) -> Dict[str, Any]:
+        img = [[float(v) for v in row] for row in image_matrix]
+        rows = len(img)
+        cols = len(img[0]) if rows > 0 else 0
+        if rows < 5 or cols < 5:
+            return {"rows": rows, "cols": cols, "edges_count": 0, "edge_matrix": img}
+
+        # 1. 5x5 Gaussian Smoothing
+        blurred = [[0.0] * cols for _ in range(rows)]
+        for r in range(2, rows - 2):
+            for c in range(2, cols - 2):
+                acc = sum(
+                    cls.GAUSSIAN_5X5[kr + 2][kc + 2] * img[r + kr][c + kc]
+                    for kr in range(-2, 3)
+                    for kc in range(-2, 3)
+                )
+                blurred[r][c] = acc / cls.GAUSSIAN_NORM
+
+        # 2. Sobel Gradients
+        sobel_x = [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]]
+        sobel_y = [[-1, -2, -1], [0, 0, 0], [1, 2, 1]]
+
+        grad_mag = [[0.0] * cols for _ in range(rows)]
+        grad_dir = [[0.0] * cols for _ in range(rows)]
+
+        for r in range(1, rows - 1):
+            for c in range(1, cols - 1):
+                gx = sum(sobel_x[kr + 1][kc + 1] * blurred[r + kr][c + kc] for kr in range(-1, 2) for kc in range(-1, 2))
+                gy = sum(sobel_y[kr + 1][kc + 1] * blurred[r + kr][c + kc] for kr in range(-1, 2) for kc in range(-1, 2))
+                mag = math.sqrt(gx * gx + gy * gy)
+                ang = (math.degrees(math.atan2(gy, gx)) + 180.0) % 180.0
+                grad_mag[r][c] = mag
+                grad_dir[r][c] = ang
+
+        # 3. Non-Maximum Suppression (NMS)
+        nms = [[0.0] * cols for _ in range(rows)]
+
+        for r in range(1, rows - 1):
+            for c in range(1, cols - 1):
+                ang = grad_dir[r][c]
+                m = grad_mag[r][c]
+
+                # Quantize angle to 0, 45, 90, 135 deg
+                if (0 <= ang < 22.5) or (157.5 <= ang <= 180):
+                    q = grad_mag[r][c + 1]
+                    p = grad_mag[r][c - 1]
+                elif 22.5 <= ang < 67.5:
+                    q = grad_mag[r + 1][c - 1]
+                    p = grad_mag[r - 1][c + 1]
+                elif 67.5 <= ang < 112.5:
+                    q = grad_mag[r + 1][c]
+                    p = grad_mag[r - 1][c]
+                else:
+                    q = grad_mag[r - 1][c - 1]
+                    p = grad_mag[r + 1][c + 1]
+
+                if m >= q and m >= p:
+                    nms[r][c] = m
+                else:
+                    nms[r][c] = 0.0
+
+        # 4. Double Thresholding & 5. Hysteresis Tracking
+        STRONG = 255
+        WEAK = 50
+        res = [[0] * cols for _ in range(rows)]
+        strong_queue = []
+
+        for r in range(rows):
+            for c in range(cols):
+                val = nms[r][c]
+                if val >= high_threshold:
+                    res[r][c] = STRONG
+                    strong_queue.append((r, c))
+                elif val >= low_threshold:
+                    res[r][c] = WEAK
+
+        # Hysteresis: connect weak edges to strong edges
+        while strong_queue:
+            cr, cc = strong_queue.pop(0)
+            for dr in (-1, 0, 1):
+                for dc in (-1, 0, 1):
+                    nr, nc = cr + dr, cc + dc
+                    if 0 <= nr < rows and 0 <= nc < cols:
+                        if res[nr][nc] == WEAK:
+                            res[nr][nc] = STRONG
+                            strong_queue.append((nr, nc))
+
+        # Suppress any remaining isolated weak edges
+        edges_count = 0
+        final_edges = [[0] * cols for _ in range(rows)]
+        for r in range(rows):
+            for c in range(cols):
+                if res[r][c] == STRONG:
+                    final_edges[r][c] = 1
+                    edges_count += 1
+
+        return {
+            "rows": rows,
+            "cols": cols,
+            "low_threshold": low_threshold,
+            "high_threshold": high_threshold,
+            "edges_count": edges_count,
+            "edge_density": round(edges_count / max(1, rows * cols), 4),
+            "edge_matrix": final_edges,
+        }
+
+
+# ==============================================================================
+# OTSU GLOBAL & LOCAL ADAPTIVE BINARIZATION
+# ==============================================================================
+
+class OtsuAdaptiveThresholding:
+    """Otsu inter-class variance optimal binarization thresholding."""
+
+    @classmethod
+    def binarize(
+        cls,
+        image_matrix: List[List[float]],
+    ) -> Dict[str, Any]:
+        rows = len(image_matrix)
+        cols = len(image_matrix[0]) if rows > 0 else 0
+        total_pixels = rows * cols
+        if total_pixels == 0:
+            return {"optimal_threshold": 128, "foreground_count": 0, "binary_matrix": []}
+
+        # Build 256-bin histogram
+        hist = [0] * 256
+        for r in range(rows):
+            for c in range(cols):
+                val = int(max(0, min(255, round(image_matrix[r][c]))))
+                hist[val] += 1
+
+        total_sum = sum(i * hist[i] for i in range(256))
+
+        weight_bg = 0
+        sum_bg = 0.0
+        max_variance = -1.0
+        best_thresholds: List[int] = []
+
+        for t in range(256):
+            weight_bg += hist[t]
+            if weight_bg == 0:
+                continue
+            weight_fg = total_pixels - weight_bg
+            if weight_fg == 0:
+                break
+
+            sum_bg += t * hist[t]
+            mean_bg = sum_bg / weight_bg
+            mean_fg = (total_sum - sum_bg) / weight_fg
+
+            # Between-class variance: w0 * w1 * (mu0 - mu1)^2
+            variance = float(weight_bg) * float(weight_fg) * ((mean_bg - mean_fg) ** 2)
+
+            if variance > max_variance + 1e-6:
+                max_variance = variance
+                best_thresholds = [t]
+            elif abs(variance - max_variance) <= 1e-6:
+                best_thresholds.append(t)
+
+        best_threshold = int(round(sum(best_thresholds) / len(best_thresholds))) if best_thresholds else 128
+
+        # Apply threshold (foreground: pixels > best_threshold)
+        binary_mat = [[1 if image_matrix[r][c] > best_threshold else 0 for c in range(cols)] for r in range(rows)]
+        fg_count = sum(sum(row) for row in binary_mat)
+
+        return {
+            "rows": rows,
+            "cols": cols,
+            "optimal_threshold": best_threshold,
+            "max_between_class_variance": round(max_variance / (total_pixels ** 2), 4),
+            "foreground_count": fg_count,
+            "background_count": total_pixels - fg_count,
+            "binary_matrix": binary_mat,
+        }
+
+
+def image_canny_edge_detection(
+    image_matrix: List[List[float]],
+    low_threshold: float = 30.0,
+    high_threshold: float = 80.0,
+) -> Record:
+    """Performs 5-stage Canny Edge Detection."""
+    return Record(CannyEdgeDetectorPure.detect(image_matrix, low_threshold=low_threshold, high_threshold=high_threshold))
+
+
+def image_otsu_binarize(
+    image_matrix: List[List[float]],
+) -> Record:
+    """Calculates Otsu optimal binarization threshold and segments image."""
+    return Record(OtsuAdaptiveThresholding.binarize(image_matrix))
+
+
+
 

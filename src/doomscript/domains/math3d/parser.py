@@ -171,6 +171,26 @@ class Math3DDomainParser(DomainParser):
             t1, r1, t2, r2, t, target = m_sclerp.group(1).strip(), m_sclerp.group(2).strip(), m_sclerp.group(3).strip(), m_sclerp.group(4).strip(), m_sclerp.group(5).strip(), m_sclerp.group(6).strip()
             return f"set {target} to math3d_dual_quaternion_sclerp({t1}, {r1}, {t2}, {r2}, {t})"
 
+        # test gjk collision between <shape1> and <shape2> into <target>
+        m_gjk = re.match(
+            r"^test\s+gjk\s+collision\s+between\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_gjk:
+            s1, s2, target = m_gjk.group(1).strip(), m_gjk.group(2).strip(), m_gjk.group(3).strip()
+            return f"set {target} to math3d_gjk_intersection({s1}, {s2})"
+
+        # query kdtree points <pts> for target <target_pt> into <target>
+        m_kd = re.match(
+            r"^query\s+kdtree\s+points\s+(.+?)\s+for\s+target\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_kd:
+            pts, tgt, target = m_kd.group(1).strip(), m_kd.group(2).strip(), m_kd.group(3).strip()
+            return f"set {target} to math3d_kdtree_query({pts}, {tgt})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

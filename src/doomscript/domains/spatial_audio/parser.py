@@ -131,6 +131,31 @@ class SpatialAudioDomainParser(DomainParser):
             sig, ir, target = m_conv.group(1).strip(), m_conv.group(2).strip(), m_conv.group(3).strip()
             return f"set {target} to spatial_audio_convolve_ir({sig}, {ir})"
 
+        # calculate spherical harmonics azimuth <az> elevation <el> [order <ord>] into <target>
+        m_sh = re.match(
+            r"^calculate\s+spherical\s+harmonics\s+azimuth\s+(.+?)\s+elevation\s+(.+?)(?:\s+order\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_sh:
+            az, el = m_sh.group(1).strip(), m_sh.group(2).strip()
+            ord_val = m_sh.group(3).strip() if m_sh.group(3) else "2"
+            target = m_sh.group(4).strip()
+            return f"set {target} to spatial_audio_spherical_harmonics_encode({az}, {el}, order={ord_val})"
+
+        # simulate acoustic ray tracing room <dims> source <src> receiver <rec> [absorption <abs>] [rays <rays>] into <target>
+        m_rt = re.match(
+            r"^simulate\s+acoustic\s+ray\s+tracing\s+room\s+(.+?)\s+source\s+(.+?)\s+receiver\s+(.+?)(?:\s+absorption\s+(.+?))?(?:\s+rays\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_rt:
+            dims, src, rec = m_rt.group(1).strip(), m_rt.group(2).strip(), m_rt.group(3).strip()
+            abs_val = m_rt.group(4).strip() if m_rt.group(4) else "0.15"
+            rays_val = m_rt.group(5).strip() if m_rt.group(5) else "60"
+            target = m_rt.group(6).strip()
+            return f"set {target} to spatial_audio_ray_trace_room({dims}, {src}, {rec}, absorption={abs_val}, num_rays={rays_val})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

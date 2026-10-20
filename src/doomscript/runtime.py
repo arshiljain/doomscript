@@ -2927,6 +2927,10 @@ from doomscript.domains.image.runtime import (
     image_warp_affine,
     image_morphology,
     image_quantize_palette,
+    CannyEdgeDetectorPure,
+    OtsuAdaptiveThresholding,
+    image_canny_edge_detection,
+    image_otsu_binarize,
 )
 
 from doomscript.domains.web.runtime import (
@@ -3037,6 +3041,10 @@ from doomscript.domains.audio.runtime import (
     audio_hoa_3d_encode,
     audio_hoa_binaural_decode,
     audio_dynamic_compressor,
+    LPCVocoderLinearPredictiveCoding,
+    BiquadIIRFilterCascaded,
+    audio_lpc_analyze_synthesize,
+    audio_biquad_eq_filter,
 )
 
 from doomscript.domains.finance.runtime import (
@@ -3569,6 +3577,10 @@ from doomscript.domains.math3d.runtime import (
     DualQuaternionScLERP,
     math3d_dual_quaternion_transform,
     math3d_dual_quaternion_sclerp,
+    GJKCollision3DAndEPA,
+    SpatialKDTree3D,
+    math3d_gjk_intersection,
+    math3d_kdtree_query,
 )
 math3d_create_vec3 = Vec3
 from doomscript.domains.math3d import (
@@ -3874,6 +3886,12 @@ from doomscript.domains.graphics.runtime import (
     graphics_blinn_phong,
     graphics_sample_bilinear,
     graphics_supersampled_framebuffer,
+    BresenhamWuAntiAliasedLine,
+    PolygonScanlineActiveEdgeTableRasterizer,
+    RayMarchingSignedDistanceFieldSDF,
+    graphics_draw_wu_line,
+    graphics_scanline_fill_polygon,
+    graphics_ray_march_sdf,
 )
 
 from doomscript.domains.telecom.runtime import (
@@ -4031,6 +4049,10 @@ from doomscript.domains.spatial_audio.runtime import (
     ConvolveImpulseResponse,
     spatial_audio_early_reflections,
     spatial_audio_convolve_ir,
+    HigherOrderSphericalHarmonics3D,
+    AcousticRayTracingShoebox,
+    spatial_audio_spherical_harmonics_encode,
+    spatial_audio_ray_trace_room,
 )
 
 from doomscript.domains.dsa.runtime import (

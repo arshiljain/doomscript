@@ -1216,3 +1216,217 @@ def audio_dynamic_compressor(
         samples, threshold_db=threshold_db, ratio=ratio, attack_ms=attack_ms,
         release_ms=release_ms, makeup_gain_db=makeup_gain_db, sample_rate=sample_rate,
     ))
+
+
+# ==============================================================================
+# LINEAR PREDICTIVE CODING (LPC) VOCODER & LEVINSON-DURBIN SOLVER
+# ==============================================================================
+
+class LPCVocoderLinearPredictiveCoding:
+    """Speech analysis and synthesis using Levinson-Durbin all-pole LPC modeling."""
+
+    @classmethod
+    def analyze_and_synthesize(
+        cls,
+        samples: List[float],
+        order: int = 10,
+    ) -> Dict[str, Any]:
+        x = [float(s) for s in samples]
+        n = len(x)
+        p = max(1, min(int(order), n - 1))
+
+        if n <= p:
+            raise ValueError(f"Sample length {n} must be greater than LPC order {p}")
+
+        # 1. Sample autocorrelation R[k] for k = 0, ..., p
+        r = [0.0] * (p + 1)
+        for k in range(p + 1):
+            r[k] = sum(x[i] * x[i + k] for i in range(n - k))
+
+        if r[0] < 1e-12:
+            return {
+                "lpc_order": p,
+                "coefficients": [0.0] * p,
+                "reflection_coefficients": [0.0] * p,
+                "prediction_gain_db": 0.0,
+                "residual_energy": 0.0,
+                "reconstructed_samples": [0.0] * n,
+            }
+
+        # 2. Levinson-Durbin Recursion
+        # E_0 = R[0]
+        e = r[0]
+        alpha = [0.0] * p
+        k_reflect = [0.0] * p
+
+        for i in range(p):
+            # Compute reflection coefficient k_i
+            acc = sum(alpha[j] * r[i + 1 - 1 - j] for j in range(i))
+            k_val = (r[i + 1] - acc) / max(1e-12, e)
+
+            # Clamp for filter stability
+            k_val = max(-0.999999, min(0.999999, k_val))
+            k_reflect[i] = k_val
+
+            # Update prediction polynomial alpha
+            alpha_prev = list(alpha)
+            alpha[i] = k_val
+            for j in range(i):
+                alpha[j] = alpha_prev[j] - k_val * alpha_prev[i - 1 - j]
+
+            # Update error energy
+            e = e * (1.0 - k_val * k_val)
+            if e <= 1e-12:
+                break
+
+        # 3. Residual excitation signal e[n] = x[n] - sum_{j=1}^p alpha_j * x[n-j]
+        residual = [0.0] * n
+        for t in range(n):
+            pred = sum(alpha[j] * x[t - 1 - j] for j in range(min(t, p)))
+            residual[t] = x[t] - pred
+
+        # Prediction gain
+        pred_gain_db = 10.0 * math.log10(max(1e-12, r[0]) / max(1e-12, e))
+
+        # 4. All-pole synthesis: x_hat[t] = e[t] + sum_{j=1}^p alpha_j * x_hat[t-1-j]
+        reconstructed = [0.0] * n
+        for t in range(n):
+            pred = sum(alpha[j] * reconstructed[t - 1 - j] for j in range(min(t, p)))
+            reconstructed[t] = residual[t] + pred
+
+        return {
+            "lpc_order": p,
+            "coefficients": [round(c, 6) for c in alpha],
+            "reflection_coefficients": [round(k, 6) for k in k_reflect],
+            "prediction_gain_db": round(pred_gain_db, 2),
+            "residual_energy": round(e, 6),
+            "residual_samples": [round(s, 5) for s in residual],
+            "reconstructed_samples": [round(s, 5) for s in reconstructed],
+        }
+
+
+# ==============================================================================
+# AUDIO EQ COOKBOOK BIQUAD IIR FILTER
+# ==============================================================================
+
+class BiquadIIRFilterCascaded:
+    """Robert Bristow-Johnson (RBJ) Audio EQ Cookbook second-order IIR biquad filter."""
+
+    @classmethod
+    def filter_signal(
+        cls,
+        samples: List[float],
+        filter_type: str = "lowpass",
+        cutoff_hz: float = 1000.0,
+        sample_rate: int = 44100,
+        q: float = 0.7071,
+        gain_db: float = 0.0,
+    ) -> Dict[str, Any]:
+        fs = float(sample_rate)
+        f0 = max(1.0, min(fs / 2.0 - 1.0, float(cutoff_hz)))
+        q_val = max(0.01, float(q))
+        ftype = filter_type.lower()
+
+        # Intermediate variables
+        w0 = 2.0 * math.pi * f0 / fs
+        cos_w0 = math.cos(w0)
+        sin_w0 = math.sin(w0)
+        alpha = sin_w0 / (2.0 * q_val)
+        A = 10.0 ** (float(gain_db) / 40.0)
+
+        # Coefficients b0, b1, b2, a0, a1, a2
+        if ftype == "lowpass":
+            b0 = (1.0 - cos_w0) / 2.0
+            b1 = 1.0 - cos_w0
+            b2 = (1.0 - cos_w0) / 2.0
+            a0 = 1.0 + alpha
+            a1 = -2.0 * cos_w0
+            a2 = 1.0 - alpha
+        elif ftype == "highpass":
+            b0 = (1.0 + cos_w0) / 2.0
+            b1 = -(1.0 + cos_w0)
+            b2 = (1.0 + cos_w0) / 2.0
+            a0 = 1.0 + alpha
+            a1 = -2.0 * cos_w0
+            a2 = 1.0 - alpha
+        elif ftype == "bandpass":
+            b0 = alpha
+            b1 = 0.0
+            b2 = -alpha
+            a0 = 1.0 + alpha
+            a1 = -2.0 * cos_w0
+            a2 = 1.0 - alpha
+        elif ftype == "notch":
+            b0 = 1.0
+            b1 = -2.0 * cos_w0
+            b2 = 1.0
+            a0 = 1.0 + alpha
+            a1 = -2.0 * cos_w0
+            a2 = 1.0 - alpha
+        elif ftype == "peaking":
+            b0 = 1.0 + alpha * A
+            b1 = -2.0 * cos_w0
+            b2 = 1.0 - alpha * A
+            a0 = 1.0 + alpha / A
+            a1 = -2.0 * cos_w0
+            a2 = 1.0 - alpha / A
+        else:
+            raise ValueError(f"Unknown biquad filter type '{filter_type}'")
+
+        # Normalize by a0
+        nb0, nb1, nb2 = b0 / a0, b1 / a0, b2 / a0
+        na1, na2 = a1 / a0, a2 / a0
+
+        # Direct Form II Transposed / Direct Form I difference equation
+        output = []
+        x1 = x2 = 0.0
+        y1 = y2 = 0.0
+
+        for x0 in samples:
+            y0 = nb0 * x0 + nb1 * x1 + nb2 * x2 - na1 * y1 - na2 * y2
+            output.append(round(y0, 6))
+            x2 = x1
+            x1 = x0
+            y2 = y1
+            y1 = y0
+
+        # Frequency response at f0: H(e^{j w0})
+        num = nb0 + nb1 * cmath.exp(-1j * w0) + nb2 * cmath.exp(-2j * w0)
+        den = 1.0 + na1 * cmath.exp(-1j * w0) + na2 * cmath.exp(-2j * w0)
+        h_f0 = num / den
+        mag_db = 20.0 * math.log10(max(1e-9, abs(h_f0)))
+        phase_deg = math.degrees(cmath.phase(h_f0))
+
+        return {
+            "filter_type": ftype,
+            "cutoff_hz": f0,
+            "sample_rate": sample_rate,
+            "normalized_b": [round(nb0, 6), round(nb1, 6), round(nb2, 6)],
+            "normalized_a": [1.0, round(na1, 6), round(na2, 6)],
+            "magnitude_at_cutoff_db": round(mag_db, 2),
+            "phase_at_cutoff_deg": round(phase_deg, 2),
+            "output_samples": output,
+        }
+
+
+def audio_lpc_analyze_synthesize(
+    samples: List[float],
+    order: int = 10,
+) -> Record:
+    """Performs speech Linear Predictive Coding (LPC) analysis and all-pole synthesis."""
+    return Record(LPCVocoderLinearPredictiveCoding.analyze_and_synthesize(samples, order=order))
+
+
+def audio_biquad_eq_filter(
+    samples: List[float],
+    filter_type: str = "lowpass",
+    cutoff_hz: float = 1000.0,
+    sample_rate: int = 44100,
+    q: float = 0.7071,
+    gain_db: float = 0.0,
+) -> Record:
+    """Applies second-order RBJ Audio EQ Cookbook biquad IIR filter."""
+    return Record(BiquadIIRFilterCascaded.filter_signal(
+        samples, filter_type=filter_type, cutoff_hz=cutoff_hz, sample_rate=sample_rate, q=q, gain_db=gain_db
+    ))
+

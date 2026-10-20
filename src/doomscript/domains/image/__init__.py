@@ -62,6 +62,10 @@ from doomscript.domains.image.runtime import (
     image_warp_affine,
     image_morphology,
     image_quantize_palette,
+    CannyEdgeDetectorPure,
+    OtsuAdaptiveThresholding,
+    image_canny_edge_detection,
+    image_otsu_binarize,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.image.exporter import ImageASTExporter
@@ -272,5 +276,9 @@ __all__ = [
     "image_warp_affine",
     "image_morphology",
     "image_quantize_palette",
+    "CannyEdgeDetectorPure",
+    "OtsuAdaptiveThresholding",
+    "image_canny_edge_detection",
+    "image_otsu_binarize",
 ]
 

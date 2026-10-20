@@ -36,6 +36,10 @@ from doomscript.domains.spatial_audio.runtime import (
     ConvolveImpulseResponse,
     spatial_audio_early_reflections,
     spatial_audio_convolve_ir,
+    HigherOrderSphericalHarmonics3D,
+    AcousticRayTracingShoebox,
+    spatial_audio_spherical_harmonics_encode,
+    spatial_audio_ray_trace_room,
 )
 from doomscript.domains.spatial_audio.parser import SpatialAudioDomainParser
 from doomscript.domains.spatial_audio.exporter import SpatialAudioASTExporter
@@ -118,4 +122,8 @@ __all__ = [
     "ConvolveImpulseResponse",
     "spatial_audio_early_reflections",
     "spatial_audio_convolve_ir",
+    "HigherOrderSphericalHarmonics3D",
+    "AcousticRayTracingShoebox",
+    "spatial_audio_spherical_harmonics_encode",
+    "spatial_audio_ray_trace_room",
 ]

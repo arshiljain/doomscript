@@ -723,3 +723,249 @@ def spatial_audio_convolve_ir(
     return ConvolveImpulseResponse.convolve(signal, ir)
 
 
+# ==============================================================================
+# HIGHER-ORDER SPHERICAL HARMONICS 3D (HOA) ENCODER
+# ==============================================================================
+
+class HigherOrderSphericalHarmonics3D:
+    """Higher-Order Ambisonics 3D spherical harmonics encoder with ACN sorting and N3D/SN3D."""
+
+    @staticmethod
+    def _legendre_polynomials(l_max: int, x: float) -> Dict[Tuple[int, int], float]:
+        """Calculates associated Legendre polynomials P_l^m(x) via stable recurrence."""
+        p: Dict[Tuple[int, int], float] = {}
+        # Base case P_0^0 = 1
+        p[(0, 0)] = 1.0
+        if l_max == 0:
+            return p
+
+        # P_m^m(x) = (-1)^m * (2m - 1)!! * (1 - x^2)^(m/2)
+        somx2 = math.sqrt(max(0.0, 1.0 - x * x))
+        fact = 1.0
+        for m in range(1, l_max + 1):
+            fact *= (2.0 * m - 1.0)
+            val = fact * (somx2 ** m)
+            if m % 2 != 0:
+                val = -val
+            p[(m, m)] = val
+
+        # P_{m+1}^m(x) = x * (2m + 1) * P_m^m(x)
+        for m in range(l_max):
+            p[(m + 1, m)] = x * (2.0 * m + 1.0) * p[(m, m)]
+
+        # Recurrence for l > m + 1:
+        # (l - m) P_l^m(x) = x (2l - 1) P_{l-1}^m(x) - (l + m - 1) P_{l-2}^m(x)
+        for m in range(l_max + 1):
+            for l in range(m + 2, l_max + 1):
+                num = x * (2.0 * l - 1.0) * p[(l - 1, m)] - (l + m - 1.0) * p[(l - 2, m)]
+                p[(l, m)] = num / (l - m)
+
+        return p
+
+    @classmethod
+    def encode_direction(
+        cls,
+        azimuth_deg: float,
+        elevation_deg: float,
+        order: int = 2,
+        normalization: str = "N3D",
+    ) -> Dict[str, Any]:
+        """Encodes 3D direction (azimuth phi, elevation theta) into HOA spherical harmonics weights."""
+        l_max = max(0, min(3, int(order)))
+        phi = math.radians(azimuth_deg % 360.0)
+        theta = math.radians(max(-90.0, min(90.0, elevation_deg)))
+
+        # x = sin(elevation)
+        x = math.sin(theta)
+        leg = cls._legendre_polynomials(l_max, x)
+
+        acn_channels = []
+        n_channels = (l_max + 1) ** 2
+
+        for l in range(l_max + 1):
+            for m in range(-l, l + 1):
+                acn = l * l + l + m
+                abs_m = abs(m)
+
+                # Normalization constant N_l^m
+                # N3D: sqrt( (2l + 1) * (l - |m|)! / (l + |m|)! )
+                fact_ratio = math.factorial(l - abs_m) / math.factorial(l + abs_m)
+                if normalization.upper() == "N3D":
+                    norm_k = math.sqrt((2.0 * l + 1.0) * fact_ratio)
+                else:  # SN3D
+                    norm_k = math.sqrt(fact_ratio)
+
+                p_val = leg[(l, abs_m)]
+
+                if m > 0:
+                    y_lm = math.sqrt(2.0) * norm_k * p_val * math.cos(m * phi)
+                elif m < 0:
+                    y_lm = math.sqrt(2.0) * norm_k * p_val * math.sin(abs_m * phi)
+                else:
+                    y_lm = norm_k * p_val
+
+                acn_channels.append({
+                    "acn": acn,
+                    "order_l": l,
+                    "degree_m": m,
+                    "weight": round(y_lm, 6),
+                })
+
+        return {
+            "order": l_max,
+            "normalization": normalization.upper(),
+            "channels_count": n_channels,
+            "azimuth_deg": azimuth_deg,
+            "elevation_deg": elevation_deg,
+            "channels": [Record(ch) for ch in acn_channels],
+        }
+
+
+# ==============================================================================
+# ACOUSTIC RAY TRACING & REVERBERATION TIME (RT60) SOLVER
+# ==============================================================================
+
+class AcousticRayTracingShoebox:
+    """Stochastic Monte Carlo ray-tracing room acoustics and Sabine/Eyring RT60 estimation."""
+
+    SPEED_OF_SOUND = 343.0  # m/s
+
+    @classmethod
+    def simulate(
+        cls,
+        room_dimensions_m: List[float],
+        source_pos_m: List[float],
+        receiver_pos_m: List[float],
+        absorption_coeff: float = 0.15,
+        num_rays: int = 60,
+        max_bounces: int = 8,
+    ) -> Dict[str, Any]:
+        lx, ly, lz = [float(v) for v in room_dimensions_m]
+        sx, sy, sz = [float(v) for v in source_pos_m]
+        rx, ry, rz = [float(v) for v in receiver_pos_m]
+        alpha = max(0.01, min(0.99, float(absorption_coeff)))
+
+        # Sabine and Eyring RT60 formulas
+        volume = lx * ly * lz
+        surface_area = 2.0 * (lx * ly + ly * lz + lz * lx)
+        rt60_sabine = 0.161 * volume / (surface_area * alpha)
+        rt60_eyring = 0.161 * volume / (-surface_area * math.log(1.0 - alpha))
+
+        # Direct sound distance and time of flight
+        direct_dist = math.sqrt((rx - sx) ** 2 + (ry - sy) ** 2 + (rz - sz) ** 2)
+        direct_tof_ms = (direct_dist / cls.SPEED_OF_SOUND) * 1000.0
+
+        # Receiver detection radius
+        receiver_radius = 0.8  # m
+
+        detections = []
+        n_rays = max(10, int(num_rays))
+
+        for ray_idx in range(n_rays):
+            # Uniform spherical distribution on sphere (Fibonacci lattice)
+            theta = math.acos(1.0 - 2.0 * (ray_idx + 0.5) / n_rays)
+            phi = math.pi * (1.0 + 5.0 ** 0.5) * ray_idx
+
+            dx = math.sin(theta) * math.cos(phi)
+            dy = math.sin(theta) * math.sin(phi)
+            dz = math.cos(theta)
+
+            px, py, pz = sx, sy, sz
+            energy = 1.0
+            total_dist = 0.0
+
+            for bounce in range(max_bounces):
+                # Find collision with closest room boundary plane
+                # x in {0, lx}, y in {0, ly}, z in {0, lz}
+                t_candidates = []
+                if dx > 1e-6:
+                    t_candidates.append(((lx - px) / dx, "x_max"))
+                elif dx < -1e-6:
+                    t_candidates.append((-px / dx, "x_min"))
+
+                if dy > 1e-6:
+                    t_candidates.append(((ly - py) / dy, "y_max"))
+                elif dy < -1e-6:
+                    t_candidates.append((-py / dy, "y_min"))
+
+                if dz > 1e-6:
+                    t_candidates.append(((lz - pz) / dz, "z_max"))
+                elif dz < -1e-6:
+                    t_candidates.append((-pz / dz, "z_min"))
+
+                if not t_candidates:
+                    break
+
+                t_hit, plane = min(t_candidates, key=lambda item: item[0])
+
+                # Check if ray segment intersects receiver sphere
+                # Vector from p to receiver
+                vx, vy, vz = rx - px, ry - py, rz - pz
+                t_proj = vx * dx + vy * dy + vz * dz
+                if 0 < t_proj < t_hit:
+                    # Closest distance to receiver
+                    perp_sq = (vx * vx + vy * vy + vz * vz) - (t_proj * t_proj)
+                    if perp_sq < (receiver_radius * receiver_radius):
+                        hit_dist = total_dist + t_proj
+                        detections.append({
+                            "arrival_time_ms": round((hit_dist / cls.SPEED_OF_SOUND) * 1000.0, 2),
+                            "energy": round(energy, 6),
+                            "bounce_order": bounce,
+                        })
+
+                # Advance ray to wall
+                px += t_hit * dx
+                py += t_hit * dy
+                pz += t_hit * dz
+                total_dist += t_hit
+
+                # Specular reflection
+                if "x" in plane:
+                    dx = -dx
+                elif "y" in plane:
+                    dy = -dy
+                elif "z" in plane:
+                    dz = -dz
+
+                # Absorb energy
+                energy *= (1.0 - alpha)
+
+        detections.sort(key=lambda d: d["arrival_time_ms"])
+
+        return {
+            "room_volume_m3": round(volume, 2),
+            "surface_area_m2": round(surface_area, 2),
+            "rt60_sabine_sec": round(rt60_sabine, 3),
+            "rt60_eyring_sec": round(rt60_eyring, 3),
+            "direct_tof_ms": round(direct_tof_ms, 2),
+            "detected_reflections_count": len(detections),
+            "early_reflections": [Record(d) for d in detections[:10]],
+        }
+
+
+def spatial_audio_spherical_harmonics_encode(
+    azimuth_deg: float,
+    elevation_deg: float,
+    order: int = 2,
+    normalization: str = "N3D",
+) -> Record:
+    """Encodes 3D audio source into Higher-Order Ambisonics spherical harmonics."""
+    return Record(HigherOrderSphericalHarmonics3D.encode_direction(
+        azimuth_deg, elevation_deg, order=order, normalization=normalization
+    ))
+
+
+def spatial_audio_ray_trace_room(
+    room_dims: List[float],
+    source_pos: List[float],
+    receiver_pos: List[float],
+    absorption: float = 0.15,
+    num_rays: int = 60,
+) -> Record:
+    """Performs stochastic Monte Carlo acoustic ray-tracing and estimates RT60."""
+    return Record(AcousticRayTracingShoebox.simulate(
+        room_dims, source_pos, receiver_pos, absorption_coeff=absorption, num_rays=num_rays
+    ))
+
+
+

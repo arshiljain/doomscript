@@ -48,6 +48,10 @@ from doomscript.domains.math3d.runtime import (
     DualQuaternionScLERP,
     math3d_dual_quaternion_transform,
     math3d_dual_quaternion_sclerp,
+    GJKCollision3DAndEPA,
+    SpatialKDTree3D,
+    math3d_gjk_intersection,
+    math3d_kdtree_query,
 )
 from doomscript.domains.math3d.parser import Math3DDomainParser
 from doomscript.domains.math3d.exporter import Math3DASTExporter
@@ -202,4 +206,8 @@ __all__ = [
     "DualQuaternionScLERP",
     "math3d_dual_quaternion_transform",
     "math3d_dual_quaternion_sclerp",
+    "GJKCollision3DAndEPA",
+    "SpatialKDTree3D",
+    "math3d_gjk_intersection",
+    "math3d_kdtree_query",
 ]

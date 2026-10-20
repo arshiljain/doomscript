@@ -488,6 +488,30 @@ class ImageDomainParser(DomainParser):
             target = m_hough.group(3).strip()
             return f"set {target} to image_hough_lines({mat}, threshold={th})"
 
+        # detect canny edges in image <mat> [low <low>] [high <high>] into <target>
+        m_canny = re.match(
+            r"^detect\s+canny\s+edges\s+in\s+image\s+(.+?)(?:\s+low\s+(.+?))?(?:\s+high\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_canny:
+            mat = m_canny.group(1).strip()
+            low = m_canny.group(2).strip() if m_canny.group(2) else "30.0"
+            high = m_canny.group(3).strip() if m_canny.group(3) else "80.0"
+            target = m_canny.group(4).strip()
+            return f"set {target} to image_canny_edge_detection({mat}, low_threshold={low}, high_threshold={high})"
+
+        # binarize image with otsu <mat> into <target>
+        m_otsu = re.match(
+            r"^binarize\s+image\s+with\s+otsu\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_otsu:
+            mat = m_otsu.group(1).strip()
+            target = m_otsu.group(2).strip()
+            return f"set {target} to image_otsu_binarize({mat})"
+
         return None
 
     def parse_block(

@@ -463,6 +463,34 @@ class AudioDomainParser(DomainParser):
             target = m_comp.group(4).strip()
             return f"set {target} to audio_dynamic_compressor({smps}, threshold_db={th}, ratio={rat})"
 
+        # analyze lpc speech samples <samples> [order <ord>] into <target>
+        m_lpc = re.match(
+            r"^analyze\s+lpc\s+speech\s+samples\s+(.+?)(?:\s+order\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_lpc:
+            smps = m_lpc.group(1).strip()
+            ord_val = m_lpc.group(2).strip() if m_lpc.group(2) else "10"
+            target = m_lpc.group(3).strip()
+            return f"set {target} to audio_lpc_analyze_synthesize({smps}, order={ord_val})"
+
+        # apply biquad filter <ftype> to <samples> cutoff <f0> [sample_rate <fs>] [q <q>] [gain <g>] into <target>
+        m_bq = re.match(
+            r"^apply\s+biquad\s+filter\s+([A-Za-z_]\w*)\s+to\s+(.+?)\s+cutoff\s+(.+?)(?:\s+sample_rate\s+(\d+))?(?:\s+q\s+(.+?))?(?:\s+gain\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_bq:
+            ftype = m_bq.group(1).strip()
+            smps = m_bq.group(2).strip()
+            f0 = m_bq.group(3).strip()
+            fs = m_bq.group(4).strip() if m_bq.group(4) else "44100"
+            q_val = m_bq.group(5).strip() if m_bq.group(5) else "0.7071"
+            g_val = m_bq.group(6).strip() if m_bq.group(6) else "0.0"
+            target = m_bq.group(7).strip()
+            return f'set {target} to audio_biquad_eq_filter({smps}, filter_type="{ftype}", cutoff_hz={f0}, sample_rate={fs}, q={q_val}, gain_db={g_val})'
+
         return None
 
     def parse_block(

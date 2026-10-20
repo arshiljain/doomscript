@@ -14,6 +14,7 @@ from __future__ import annotations
 import math
 import struct
 from typing import Any, Dict, List, Optional, Tuple, Union
+from doomscript.runtime import Record
 
 
 ColorRGB = Tuple[int, int, int]
@@ -480,4 +481,278 @@ def graphics_sample_bilinear(tex: BilinearTextureMapper, u: float, v: float) -> 
 def graphics_supersampled_framebuffer(width: int, height: int, scale: int = 2) -> SuperSampledFrameBuffer:
     """Creates a high-resolution SSAA FrameBuffer."""
     return SuperSampledFrameBuffer(width, height, scale)
+
+
+# ==============================================================================
+# XIAOLIN WU SUB-PIXEL ANTI-ALIASED LINE RASTERIZER
+# ==============================================================================
+
+class BresenhamWuAntiAliasedLine:
+    """Xiaolin Wu's algorithm for drawing sub-pixel anti-aliased lines."""
+
+    @staticmethod
+    def rasterize(
+        x0: float,
+        y0: float,
+        x1: float,
+        y1: float,
+        color: Tuple[int, int, int] = (255, 255, 255),
+    ) -> List[Tuple[int, int, Tuple[int, int, int, int]]]:
+        """Rasterizes anti-aliased line and returns list of (x, y, (r, g, b, a)) pixels."""
+        steep = abs(y1 - y0) > abs(x1 - x0)
+        if steep:
+            x0, y0 = y0, x0
+            x1, y1 = y1, x1
+        if x0 > x1:
+            x0, x1 = x1, x0
+            y0, y1 = y1, y0
+
+        dx = x1 - x0
+        dy = y1 - y0
+        gradient = (dy / dx) if dx != 0 else 1.0
+
+        pixels = []
+
+        # First endpoint
+        xend = round(x0)
+        yend = y0 + gradient * (xend - x0)
+        xgap = 1.0 - (x0 + 0.5 - math.floor(x0 + 0.5))
+        xpxl1 = int(xend)
+        ypxl1 = int(math.floor(yend))
+
+        rfpart = lambda y: y - math.floor(y)
+        fpart = lambda y: 1.0 - rfpart(y)
+
+        c_r, c_g, c_b = color
+
+        def add_pix(px, py, weight):
+            a = max(0, min(255, int(weight * 255)))
+            if steep:
+                pixels.append((py, px, (c_r, c_g, c_b, a)))
+            else:
+                pixels.append((px, py, (c_r, c_g, c_b, a)))
+
+        add_pix(xpxl1, ypxl1, fpart(yend) * xgap)
+        add_pix(xpxl1, ypxl1 + 1, rfpart(yend) * xgap)
+        intery = yend + gradient
+
+        # Second endpoint
+        xend = round(x1)
+        yend = y1 + gradient * (xend - x1)
+        xgap = x1 + 0.5 - math.floor(x1 + 0.5)
+        xpxl2 = int(xend)
+        ypxl2 = int(math.floor(yend))
+
+        add_pix(xpxl2, ypxl2, fpart(yend) * xgap)
+        add_pix(xpxl2, ypxl2 + 1, rfpart(yend) * xgap)
+
+        # Main loop between endpoints
+        for x in range(xpxl1 + 1, xpxl2):
+            add_pix(x, int(math.floor(intery)), fpart(intery))
+            add_pix(x, int(math.floor(intery)) + 1, rfpart(intery))
+            intery += gradient
+
+        return pixels
+
+
+# ==============================================================================
+# POLYGON SCANLINE ACTIVE EDGE TABLE (AET) RASTERIZER
+# ==============================================================================
+
+class PolygonScanlineActiveEdgeTableRasterizer:
+    """General concave/convex polygon scanline filling with Edge Table and Active Edge Table."""
+
+    @classmethod
+    def rasterize_polygon(
+        cls,
+        vertices: List[Tuple[float, float]],
+        color: Tuple[int, int, int] = (255, 255, 255),
+    ) -> Dict[str, Any]:
+        n = len(vertices)
+        if n < 3:
+            return {"total_pixels": 0, "pixels": []}
+
+        # Find y bounds
+        all_y = [v[1] for v in vertices]
+        min_y = int(math.floor(min(all_y)))
+        max_y = int(math.ceil(max(all_y)))
+
+        # Build Edge Table (ET): y_min -> list of (y_max, x_at_ymin, dx/dy)
+        edge_table: Dict[int, List[Dict[str, float]]] = {}
+
+        for i in range(n):
+            x1, y1 = vertices[i]
+            x2, y2 = vertices[(i + 1) % n]
+
+            if abs(y1 - y2) < 1e-6:
+                continue  # Horizontal edge: skip in ET
+
+            if y1 > y2:
+                x1, y1, x2, y2 = x2, y2, x1, y1
+
+            ymin_i = int(math.floor(y1))
+            ymax_i = int(math.floor(y2))
+            inv_slope = (x2 - x1) / (y2 - y1)
+            x_start = x1 + inv_slope * (ymin_i - y1)
+
+            edge = {
+                "ymax": ymax_i,
+                "x": x_start,
+                "inv_slope": inv_slope,
+            }
+            edge_table.setdefault(ymin_i, []).append(edge)
+
+        # Active Edge Table (AET)
+        active_edges: List[Dict[str, float]] = []
+        filled_pixels: List[Tuple[int, int]] = []
+
+        c_r, c_g, c_b = color
+
+        for y in range(min_y, max_y + 1):
+            # 1. Add edges from ET at current y
+            if y in edge_table:
+                active_edges.extend(edge_table[y])
+
+            # 2. Remove edges where y >= ymax
+            active_edges = [e for e in active_edges if y < e["ymax"]]
+
+            # 3. Sort AET by current x
+            active_edges.sort(key=lambda e: e["x"])
+
+            # 4. Fill spans between pairs of edges (even-odd parity rule)
+            for k in range(0, len(active_edges) - 1, 2):
+                x_start = int(math.ceil(active_edges[k]["x"]))
+                x_end = int(math.floor(active_edges[k + 1]["x"]))
+                for x in range(x_start, x_end + 1):
+                    filled_pixels.append((x, y))
+
+            # 5. Update x coordinates for next scanline
+            for e in active_edges:
+                e["x"] += e["inv_slope"]
+
+        return {
+            "vertices_count": n,
+            "total_pixels": len(filled_pixels),
+            "y_bounds": [min_y, max_y],
+            "pixels": filled_pixels,
+        }
+
+
+# ==============================================================================
+# RAY MARCHING SIGNED DISTANCE FIELD (SDF) ENGINE
+# ==============================================================================
+
+class RayMarchingSignedDistanceFieldSDF:
+    """3D volumetric Sphere-Tracing / Ray Marching renderer for implicit SDF shapes."""
+
+    @staticmethod
+    def sdf_sphere(p: Tuple[float, float, float], center: Tuple[float, float, float], radius: float) -> float:
+        dx, dy, dz = p[0] - center[0], p[1] - center[1], p[2] - center[2]
+        return math.sqrt(dx * dx + dy * dy + dz * dz) - radius
+
+    @staticmethod
+    def sdf_box(p: Tuple[float, float, float], center: Tuple[float, float, float], bounds: Tuple[float, float, float]) -> float:
+        dx = abs(p[0] - center[0]) - bounds[0]
+        dy = abs(p[1] - center[1]) - bounds[1]
+        dz = abs(p[2] - center[2]) - bounds[2]
+        outside = math.sqrt(max(0.0, dx) ** 2 + max(0.0, dy) ** 2 + max(0.0, dz) ** 2)
+        inside = min(max(dx, max(dy, dz)), 0.0)
+        return outside + inside
+
+    @classmethod
+    def scene_sdf(cls, p: Tuple[float, float, float]) -> float:
+        """Scene containing smooth blended sphere and box."""
+        d_sphere = cls.sdf_sphere(p, (0.0, 0.0, 3.0), 1.0)
+        d_box = cls.sdf_box(p, (0.8, -0.5, 3.0), (0.6, 0.6, 0.6))
+        # Smooth minimum blend: smin(d1, d2, k=0.2)
+        k = 0.2
+        h = max(0.0, min(1.0, 0.5 + 0.5 * (d_box - d_sphere) / k))
+        return (d_box * (1.0 - h) + d_sphere * h) - k * h * (1.0 - h)
+
+    @classmethod
+    def calculate_normal(cls, p: Tuple[float, float, float], eps: float = 1e-4) -> Tuple[float, float, float]:
+        """Approximates surface normal via central differences gradient."""
+        d = cls.scene_sdf(p)
+        nx = cls.scene_sdf((p[0] + eps, p[1], p[2])) - cls.scene_sdf((p[0] - eps, p[1], p[2]))
+        ny = cls.scene_sdf((p[0], p[1] + eps, p[2])) - cls.scene_sdf((p[0], p[1] - eps, p[2]))
+        nz = cls.scene_sdf((p[0], p[1], p[2] + eps)) - cls.scene_sdf((p[0], p[1], p[2] - eps))
+        mag = math.sqrt(nx * nx + ny * ny + nz * nz)
+        return (nx / max(1e-9, mag), ny / max(1e-9, mag), nz / max(1e-9, mag))
+
+    @classmethod
+    def ray_march(
+        cls,
+        ray_origin: Tuple[float, float, float],
+        ray_direction: Tuple[float, float, float],
+        max_steps: int = 64,
+        max_dist: float = 20.0,
+        surface_eps: float = 1e-3,
+    ) -> Dict[str, Any]:
+        # Normalize ray direction
+        rx, ry, rz = ray_direction
+        mag_dir = math.sqrt(rx * rx + ry * ry + rz * rz)
+        dx, dy, dz = rx / max(1e-9, mag_dir), ry / max(1e-9, mag_dir), rz / max(1e-9, mag_dir)
+
+        t = 0.0
+        hit = False
+        steps_taken = 0
+
+        for step in range(max_steps):
+            steps_taken += 1
+            curr_pos = (ray_origin[0] + t * dx, ray_origin[1] + t * dy, ray_origin[2] + t * dz)
+            dist = cls.scene_sdf(curr_pos)
+
+            if dist < surface_eps:
+                hit = True
+                break
+
+            t += dist
+            if t > max_dist:
+                break
+
+        hit_point = (ray_origin[0] + t * dx, ray_origin[1] + t * dy, ray_origin[2] + t * dz) if hit else (0.0, 0.0, 0.0)
+        normal = cls.calculate_normal(hit_point) if hit else (0.0, 0.0, 0.0)
+
+        return {
+            "hit": hit,
+            "distance": round(t, 4) if hit else -1.0,
+            "steps": steps_taken,
+            "hit_point": [round(v, 4) for v in hit_point],
+            "surface_normal": [round(v, 4) for v in normal],
+        }
+
+
+def graphics_draw_wu_line(
+    x0: float,
+    y0: float,
+    x1: float,
+    y1: float,
+    color: Tuple[int, int, int] = (255, 255, 255),
+) -> Record:
+    """Rasterizes sub-pixel anti-aliased line using Xiaolin Wu's algorithm."""
+    pixels = BresenhamWuAntiAliasedLine.rasterize(x0, y0, x1, y1, color=color)
+    return Record({
+        "pixel_count": len(pixels),
+        "pixels": [Record({"x": p[0], "y": p[1], "rgba": p[2]}) for p in pixels],
+    })
+
+
+def graphics_scanline_fill_polygon(
+    vertices: List[Tuple[float, float]],
+    color: Tuple[int, int, int] = (255, 255, 255),
+) -> Record:
+    """Fills general polygon using Active Edge Table scanline algorithm."""
+    return Record(PolygonScanlineActiveEdgeTableRasterizer.rasterize_polygon(vertices, color=color))
+
+
+def graphics_ray_march_sdf(
+    ray_origin: Tuple[float, float, float],
+    ray_direction: Tuple[float, float, float],
+    max_steps: int = 64,
+) -> Record:
+    """Sphere-traces 3D signed distance field (SDF) along a viewing ray."""
+    return Record(RayMarchingSignedDistanceFieldSDF.ray_march(
+        ray_origin, ray_direction, max_steps=max_steps
+    ))
+
 

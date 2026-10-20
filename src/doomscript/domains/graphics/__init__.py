@@ -29,6 +29,12 @@ from doomscript.domains.graphics.runtime import (
     graphics_blinn_phong,
     graphics_sample_bilinear,
     graphics_supersampled_framebuffer,
+    BresenhamWuAntiAliasedLine,
+    PolygonScanlineActiveEdgeTableRasterizer,
+    RayMarchingSignedDistanceFieldSDF,
+    graphics_draw_wu_line,
+    graphics_scanline_fill_polygon,
+    graphics_ray_march_sdf,
 )
 from doomscript.domains.graphics.parser import GraphicsDomainParser
 from doomscript.domains.graphics.exporter import GraphicsASTExporter
@@ -106,4 +112,10 @@ __all__ = [
     "graphics_blinn_phong",
     "graphics_sample_bilinear",
     "graphics_supersampled_framebuffer",
+    "BresenhamWuAntiAliasedLine",
+    "PolygonScanlineActiveEdgeTableRasterizer",
+    "RayMarchingSignedDistanceFieldSDF",
+    "graphics_draw_wu_line",
+    "graphics_scanline_fill_polygon",
+    "graphics_ray_march_sdf",
 ]

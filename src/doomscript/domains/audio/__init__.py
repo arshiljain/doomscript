@@ -60,6 +60,10 @@ from doomscript.domains.audio.runtime import (
     audio_hoa_3d_encode,
     audio_hoa_binaural_decode,
     audio_dynamic_compressor,
+    LPCVocoderLinearPredictiveCoding,
+    BiquadIIRFilterCascaded,
+    audio_lpc_analyze_synthesize,
+    audio_biquad_eq_filter,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.audio.exporter import AudioASTExporter
@@ -264,5 +268,9 @@ __all__ = [
     "audio_hoa_3d_encode",
     "audio_hoa_binaural_decode",
     "audio_dynamic_compressor",
+    "LPCVocoderLinearPredictiveCoding",
+    "BiquadIIRFilterCascaded",
+    "audio_lpc_analyze_synthesize",
+    "audio_biquad_eq_filter",
 ]
 

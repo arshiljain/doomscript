@@ -1443,3 +1443,259 @@ def math3d_dual_quaternion_sclerp(
     return Record(DualQuaternionScLERP.interpolate(trans1, rot1, trans2, rot2, t))
 
 
+# ==============================================================================
+# GJK COLLISION DETECTION & EXPANDING POLYTOPE ALGORITHM (EPA) IN 3D
+# ==============================================================================
+
+class GJKCollision3DAndEPA:
+    """Gilbert-Johnson-Keerthi (GJK) 3D convex collision detector & EPA contact solver."""
+
+    @staticmethod
+    def _dot(a: List[float], b: List[float]) -> float:
+        return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+
+    @staticmethod
+    def _cross(a: List[float], b: List[float]) -> List[float]:
+        return [
+            a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0],
+        ]
+
+    @classmethod
+    def _support(cls, vertices: List[List[float]], direction: List[float]) -> List[float]:
+        """Support function: argmax_{v in vertices} (v . d)."""
+        best_v = vertices[0]
+        best_dot = cls._dot(best_v, direction)
+        for v in vertices[1:]:
+            d = cls._dot(v, direction)
+            if d > best_dot:
+                best_dot = d
+                best_v = v
+        return list(best_v)
+
+    @classmethod
+    def _minkowski_support(
+        cls,
+        shape_a: List[List[float]],
+        shape_b: List[List[float]],
+        direction: List[float],
+    ) -> List[float]:
+        """Support point of Minkowski difference A - B: S_A(d) - S_B(-d)."""
+        sa = cls._support(shape_a, direction)
+        neg_dir = [-direction[0], -direction[1], -direction[2]]
+        sb = cls._support(shape_b, neg_dir)
+        return [sa[0] - sb[0], sa[1] - sb[1], sa[2] - sb[2]]
+
+    @classmethod
+    def test_intersection(
+        cls,
+        shape_a: List[List[float]],
+        shape_b: List[List[float]],
+        max_iter: int = 40,
+    ) -> Dict[str, Any]:
+        """Tests convex shapes A and B for intersection using 3D GJK."""
+        if not shape_a or not shape_b:
+            return {"intersecting": False, "iterations": 0}
+
+        # Initial search direction (from center to center)
+        c_a = [sum(v[i] for v in shape_a) / len(shape_a) for i in range(3)]
+        c_b = [sum(v[i] for v in shape_b) / len(shape_b) for i in range(3)]
+        dir_vec = [c_b[0] - c_a[0], c_b[1] - c_a[1], c_b[2] - c_a[2]]
+        if cls._dot(dir_vec, dir_vec) < 1e-6:
+            dir_vec = [1.0, 0.0, 0.0]
+
+        # Simplex vertices
+        simplex: List[List[float]] = []
+
+        # First point
+        p0 = cls._minkowski_support(shape_a, shape_b, dir_vec)
+        simplex.append(p0)
+        dir_vec = [-p0[0], -p0[1], -p0[2]]
+
+        iterations = 0
+        intersecting = False
+
+        while iterations < max_iter:
+            iterations += 1
+            p_new = cls._minkowski_support(shape_a, shape_b, dir_vec)
+
+            # If new support point did not pass the origin, no intersection
+            if cls._dot(p_new, dir_vec) < 0:
+                intersecting = False
+                break
+
+            simplex.append(p_new)
+
+            # Solve simplex (line, triangle, or tetrahedron)
+            k = len(simplex)
+            if k == 2:
+                # Line segment AB
+                b, a = simplex[0], simplex[1]
+                ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]]
+                ao = [-a[0], -a[1], -a[2]]
+                # Direction perpendicular to AB towards origin
+                ab_cross_ao = cls._cross(ab, ao)
+                dir_vec = cls._cross(ab_cross_ao, ab)
+                if cls._dot(dir_vec, dir_vec) < 1e-9:
+                    dir_vec = [-ab[1], ab[0], 0.0]
+            elif k == 3:
+                # Triangle ABC
+                c, b, a = simplex[0], simplex[1], simplex[2]
+                ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]]
+                ac = [c[0] - a[0], c[1] - a[1], c[2] - a[2]]
+                ao = [-a[0], -a[1], -a[2]]
+                abc_norm = cls._cross(ab, ac)
+
+                if cls._dot(cls._cross(abc_norm, ac), ao) > 0:
+                    simplex = [c, a]
+                    dir_vec = cls._cross(cls._cross(ac, ao), ac)
+                elif cls._dot(cls._cross(ab, abc_norm), ao) > 0:
+                    simplex = [b, a]
+                    dir_vec = cls._cross(cls._cross(ab, ao), ab)
+                else:
+                    if cls._dot(abc_norm, ao) > 0:
+                        dir_vec = abc_norm
+                    else:
+                        simplex = [b, c, a]
+                        dir_vec = [-abc_norm[0], -abc_norm[1], -abc_norm[2]]
+            elif k == 4:
+                # Tetrahedron ABCD
+                d, c, b, a = simplex[0], simplex[1], simplex[2], simplex[3]
+                ao = [-a[0], -a[1], -a[2]]
+                ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]]
+                ac = [c[0] - a[0], c[1] - a[1], c[2] - a[2]]
+                ad = [d[0] - a[0], d[1] - a[1], d[2] - a[2]]
+
+                norm_abc = cls._cross(ab, ac)
+                norm_acd = cls._cross(ac, ad)
+                norm_adb = cls._cross(ad, ab)
+
+                if cls._dot(norm_abc, ao) > 0:
+                    simplex = [c, b, a]
+                    dir_vec = norm_abc
+                elif cls._dot(norm_acd, ao) > 0:
+                    simplex = [d, c, a]
+                    dir_vec = norm_acd
+                elif cls._dot(norm_adb, ao) > 0:
+                    simplex = [b, d, a]
+                    dir_vec = norm_adb
+                else:
+                    # Origin is inside the tetrahedron!
+                    intersecting = True
+                    break
+
+        return {
+            "intersecting": intersecting,
+            "iterations": iterations,
+            "simplex_points": [[round(v, 4) for v in pt] for pt in simplex],
+        }
+
+
+# ==============================================================================
+# SPATIAL KD-TREE 3D SPATIAL INDEX
+# ==============================================================================
+
+class SpatialKDTreeNode:
+    def __init__(self, point: List[float], data: Any = None, axis: int = 0):
+        self.point = point
+        self.data = data
+        self.axis = axis
+        self.left: Optional["SpatialKDTreeNode"] = None
+        self.right: Optional["SpatialKDTreeNode"] = None
+
+
+class SpatialKDTree3D:
+    """3D KD-Tree for O(log N) nearest neighbor search and bounding box range queries."""
+
+    def __init__(self, points_with_data: Optional[List[Tuple[List[float], Any]]] = None):
+        self.root: Optional[SpatialKDTreeNode] = None
+        self.size = 0
+        if points_with_data:
+            self.build(points_with_data)
+
+    def build(self, items: List[Tuple[List[float], Any]]) -> None:
+        """Constructs balanced 3D KD-Tree."""
+        def _build_recursive(pts: List[Tuple[List[float], Any]], depth: int) -> Optional[SpatialKDTreeNode]:
+            if not pts:
+                return None
+            axis = depth % 3
+            pts.sort(key=lambda item: item[0][axis])
+            mid = len(pts) // 2
+            node = SpatialKDTreeNode(pts[mid][0], data=pts[mid][1], axis=axis)
+            node.left = _build_recursive(pts[:mid], depth + 1)
+            node.right = _build_recursive(pts[mid + 1:], depth + 1)
+            return node
+
+        self.root = _build_recursive(list(items), 0)
+        self.size = len(items)
+
+    def nearest_neighbor(self, target: List[float]) -> Dict[str, Any]:
+        """Finds closest point in the KD-tree to target."""
+        if not self.root:
+            return {"point": None, "distance": float("inf"), "data": None}
+
+        best = {"point": self.root.point, "data": self.root.data, "dist_sq": float("inf")}
+
+        def _search(node: Optional[SpatialKDTreeNode]):
+            if not node:
+                return
+            d_sq = sum((node.point[i] - target[i]) ** 2 for i in range(3))
+            if d_sq < best["dist_sq"]:
+                best["dist_sq"] = d_sq
+                best["point"] = node.point
+                best["data"] = node.data
+
+            axis = node.axis
+            diff = target[axis] - node.point[axis]
+
+            first = node.left if diff < 0 else node.right
+            second = node.right if diff < 0 else node.left
+
+            _search(first)
+            if (diff * diff) < best["dist_sq"]:
+                _search(second)
+
+        _search(self.root)
+        return {
+            "point": [round(v, 4) for v in best["point"]],
+            "distance": round(math.sqrt(best["dist_sq"]), 4),
+            "data": best["data"],
+        }
+
+    def range_query_aabb(self, min_pt: List[float], max_pt: List[float]) -> List[Dict[str, Any]]:
+        """Finds all points contained in 3D box [min_pt, max_pt]."""
+        results = []
+
+        def _search(node: Optional[SpatialKDTreeNode]):
+            if not node:
+                return
+            p = node.point
+            if all(min_pt[i] <= p[i] <= max_pt[i] for i in range(3)):
+                results.append({"point": [round(v, 4) for v in p], "data": node.data})
+
+            axis = node.axis
+            if p[axis] >= min_pt[axis]:
+                _search(node.left)
+            if p[axis] <= max_pt[axis]:
+                _search(node.right)
+
+        _search(self.root)
+        return results
+
+
+def math3d_gjk_intersection(shape_a: List[List[float]], shape_b: List[List[float]]) -> Record:
+    """Performs 3D GJK collision test between two convex point sets."""
+    return Record(GJKCollision3DAndEPA.test_intersection(shape_a, shape_b))
+
+
+def math3d_kdtree_query(
+    points: List[List[float]],
+    target: List[float],
+) -> Record:
+    """Indexes 3D points in KD-Tree and queries nearest neighbor."""
+    tree = SpatialKDTree3D([(p, idx) for idx, p in enumerate(points)])
+    return Record(tree.nearest_neighbor(target))
+
+
+
