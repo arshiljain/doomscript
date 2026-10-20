@@ -32,6 +32,12 @@ from doomscript.domains.bio.runtime import (
     bio_affine_align,
     bio_fm_index_search,
     bio_neighbor_joining_tree,
+    NussinovRNA,
+    RestrictionEnzymeDigest,
+    CodonAdaptationIndex,
+    bio_predict_rna_structure,
+    bio_digest_dna,
+    bio_calculate_cai,
 )
 from doomscript.domains.bio.parser import BioDomainParser
 from doomscript.domains.bio.exporter import BioASTExporter
@@ -78,6 +84,8 @@ class BioDomain(DomainContract):
     blocks = []
 
     def can_handle_line(self, line: str) -> bool:
+        if self.parser.parse_inspect(line, 0) is not None or self.parser.parse_operation(line, 0) is not None:
+            return True
         s = line.strip().lower()
         return (
             s.startswith("calculate gc content of ")
@@ -93,6 +101,9 @@ class BioDomain(DomainContract):
             or s.startswith("calculate molecular weight of ")
             or s.startswith("align sequences ")
             or s.startswith("parse fasta ")
+            or s.startswith("predict rna structure of ")
+            or s.startswith("digest dna ")
+            or s.startswith("calculate cai of ")
         )
 
     def can_handle_block(self, header: str) -> bool:
@@ -125,4 +136,10 @@ __all__ = [
     "bio_affine_align",
     "bio_fm_index_search",
     "bio_neighbor_joining_tree",
+    "NussinovRNA",
+    "RestrictionEnzymeDigest",
+    "CodonAdaptationIndex",
+    "bio_predict_rna_structure",
+    "bio_digest_dna",
+    "bio_calculate_cai",
 ]

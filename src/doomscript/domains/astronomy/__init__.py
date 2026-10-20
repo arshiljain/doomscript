@@ -30,6 +30,15 @@ from doomscript.domains.astronomy.runtime import (
     astronomy_planet_geocentric,
     astronomy_predict_eclipse,
     astronomy_atmospheric_refraction,
+    NBodySimulator,
+    OrbitalTransfer,
+    IAUPrecessionNutation,
+    CelestialRiseSetTransit,
+    astronomy_simulate_n_body,
+    astronomy_calculate_hohmann,
+    astronomy_calculate_bi_elliptic,
+    astronomy_precession_j2000_to_date,
+    astronomy_calculate_rise_set,
 )
 from doomscript.domains.astronomy.parser import AstronomyDomainParser
 from doomscript.domains.astronomy.exporter import AstronomyASTExporter
@@ -67,10 +76,16 @@ class AstronomyDomain(DomainContract):
     blocks = []
 
     def can_handle_line(self, line: str) -> bool:
+        if self.parser.parse_inspect(line, 0) is not None or self.parser.parse_operation(line, 0) is not None:
+            return True
         s = line.strip().lower()
         return (
             s.startswith("calculate julian date for ")
-            or s.startswith("calculate hohmann transfer from ")
+            or s.startswith("calculate hohmann transfer ")
+            or s.startswith("simulate n body system ")
+            or s.startswith("calculate bi-elliptic transfer ")
+            or s.startswith("precess coordinates ")
+            or s.startswith("calculate celestial rise and set ")
         )
 
     def can_handle_block(self, header: str) -> bool:
@@ -99,4 +114,13 @@ __all__ = [
     "astronomy_planet_geocentric",
     "astronomy_predict_eclipse",
     "astronomy_atmospheric_refraction",
+    "NBodySimulator",
+    "OrbitalTransfer",
+    "IAUPrecessionNutation",
+    "CelestialRiseSetTransit",
+    "astronomy_simulate_n_body",
+    "astronomy_calculate_hohmann",
+    "astronomy_calculate_bi_elliptic",
+    "astronomy_precession_j2000_to_date",
+    "astronomy_calculate_rise_set",
 ]

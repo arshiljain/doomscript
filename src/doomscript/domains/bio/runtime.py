@@ -9,6 +9,7 @@ import math
 import re
 from typing import Any, Dict, List, Optional, Tuple, Set
 from doomscript.domains.base import DomainRuntime, DomainIR
+from doomscript.runtime import Record
 
 
 # Standard Genetic Code Codon Table
@@ -571,3 +572,291 @@ def bio_fm_index_search(text: str, pattern: str) -> Dict[str, Any]:
 def bio_neighbor_joining_tree(taxa: List[str], distance_matrix: Dict[str, Dict[str, float]]) -> Dict[str, Any]:
     """Reconstructs phylogenetic tree from distance matrix using Neighbor-Joining."""
     return PhylogeneticTreeNJ.build_tree(taxa, distance_matrix)
+
+
+# ==============================================================================
+# NUSSINOV RNA SECONDARY STRUCTURE PREDICTION DYNAMIC PROGRAMMING
+# ==============================================================================
+
+class NussinovRNA:
+    """Nussinov dynamic programming secondary structure prediction for RNA.
+
+    Predicts base pairing maximizing complementary bonds (Watson-Crick AU/UA, GC/CG
+    and wobble GU/UG) subject to minimum hairpin loop distance constraint.
+    """
+
+    CANONICAL_PAIRS: Set[Tuple[str, str]] = {
+        ("A", "U"), ("U", "A"),
+        ("G", "C"), ("C", "G"),
+        ("G", "U"), ("U", "G"),
+    }
+
+    @classmethod
+    def can_pair(cls, b1: str, b2: str) -> bool:
+        return (b1.upper(), b2.upper()) in cls.CANONICAL_PAIRS
+
+    @classmethod
+    def fold(cls, rna_sequence: str, min_loop: int = 3) -> Dict[str, Any]:
+        seq = rna_sequence.upper().replace("T", "U")
+        n = len(seq)
+        if n == 0:
+            return {"sequence": seq, "dot_bracket": "", "pairs": [], "pair_count": 0}
+
+        # DP matrix dp[i][j]: maximum pairs in seq[i..j]
+        dp = [[0] * n for _ in range(n)]
+
+        # Fill along diagonals of increasing subsegment length
+        for length in range(1, n):
+            for i in range(n - length):
+                j = i + length
+                if j - i <= min_loop:
+                    dp[i][j] = 0
+                    continue
+
+                # Case 1 & 2: unpaired ends
+                best = max(dp[i + 1][j], dp[i][j - 1])
+
+                # Case 3: i and j pair
+                if cls.can_pair(seq[i], seq[j]):
+                    pair_score = (dp[i + 1][j - 1] if i + 1 <= j - 1 else 0) + 1
+                    if pair_score > best:
+                        best = pair_score
+
+                # Case 4: bifurcation split at k
+                for k in range(i + 1, j):
+                    bif_score = dp[i][k] + dp[k + 1][j]
+                    if bif_score > best:
+                        best = bif_score
+
+                dp[i][j] = best
+
+        # Backtrack to reconstruct pairs
+        pairs: List[Tuple[int, int]] = []
+        stack: List[Tuple[int, int]] = [(0, n - 1)]
+
+        while stack:
+            i, j = stack.pop()
+            if i >= j or j - i <= min_loop:
+                continue
+
+            if dp[i][j] == dp[i + 1][j]:
+                stack.append((i + 1, j))
+            elif dp[i][j] == dp[i][j - 1]:
+                stack.append((i, j - 1))
+            elif cls.can_pair(seq[i], seq[j]) and dp[i][j] == ((dp[i + 1][j - 1] if i + 1 <= j - 1 else 0) + 1):
+                pairs.append((i, j))
+                stack.append((i + 1, j - 1))
+            else:
+                found_split = False
+                for k in range(i + 1, j):
+                    if dp[i][j] == dp[i][k] + dp[k + 1][j]:
+                        stack.append((k + 1, j))
+                        stack.append((i, k))
+                        found_split = True
+                        break
+                if not found_split:
+                    stack.append((i + 1, j))
+
+        pairs.sort()
+
+        # Build dot-bracket string
+        db = ["."] * n
+        for i, j in pairs:
+            db[i] = "("
+            db[j] = ")"
+        dot_bracket = "".join(db)
+
+        # Structure analysis
+        unpaired_count = n - 2 * len(pairs)
+        gc_pairs = sum(1 for i, j in pairs if (seq[i] in "GC" and seq[j] in "GC"))
+        au_pairs = sum(1 for i, j in pairs if (seq[i] in "AU" and seq[j] in "AU"))
+        gu_pairs = len(pairs) - gc_pairs - au_pairs
+
+        return {
+            "sequence": seq,
+            "dot_bracket": dot_bracket,
+            "pairs": pairs,
+            "pair_count": len(pairs),
+            "unpaired_count": unpaired_count,
+            "gc_pairs": gc_pairs,
+            "au_pairs": au_pairs,
+            "gu_pairs": gu_pairs,
+        }
+
+
+# ==============================================================================
+# RESTRICTION ENZYME DIGESTION & AGAROSE GEL SIMULATION
+# ==============================================================================
+
+class RestrictionEnzymeDigest:
+    """Simulates restriction endonuclease digestion mapping and gel electrophoresis."""
+
+    ENZYMES: Dict[str, Tuple[str, int]] = {
+        "ECORI": ("GAATTC", 1),
+        "BAMHI": ("GGATCC", 1),
+        "HINDIII": ("AAGCTT", 1),
+        "NOTI": ("GCGGCCGC", 2),
+        "TAQI": ("TCGA", 1),
+        "HAEIII": ("GGCC", 2),
+        "PSTI": ("CTGCAG", 5),
+        "XHOI": ("CTCGAG", 1),
+        "ALUI": ("AGCT", 2),
+        "DPNI": ("GATC", 2),
+        "SMAI": ("CCCGGG", 3),
+        "XBAI": ("TCTAGA", 1),
+    }
+
+    LADDER_1KB = [10000, 8000, 6000, 5000, 4000, 3000, 2000, 1500, 1000, 750, 500, 250]
+
+    @classmethod
+    def digest(cls, dna_sequence: str, enzyme_name: str, circular: bool = False) -> Dict[str, Any]:
+        seq = dna_sequence.upper().strip()
+        enz = enzyme_name.upper().strip()
+        if enz not in cls.ENZYMES:
+            raise ValueError(f"Unknown restriction enzyme '{enzyme_name}'. Available: {list(cls.ENZYMES.keys())}")
+
+        site, cut_offset = cls.ENZYMES[enz]
+        site_len = len(site)
+        n = len(seq)
+
+        # Find all recognition sites
+        cut_indices: List[int] = []
+        search_seq = seq + (seq[:site_len] if circular else "")
+        start = 0
+        while True:
+            idx = search_seq.find(site, start)
+            if idx == -1 or (circular and idx >= n):
+                break
+            cut_pos = (idx + cut_offset) % n
+            cut_indices.append(cut_pos)
+            start = idx + 1
+
+        cut_indices = sorted(list(set(cut_indices)))
+
+        # Compute fragments
+        fragments: List[str] = []
+        if not cut_indices:
+            fragments = [seq]
+        elif not circular:
+            prev = 0
+            for cut in cut_indices:
+                fragments.append(seq[prev:cut])
+                prev = cut
+            fragments.append(seq[prev:])
+        else:
+            if len(cut_indices) == 1:
+                fragments = [seq]
+            else:
+                for k in range(len(cut_indices)):
+                    c1 = cut_indices[k]
+                    c2 = cut_indices[(k + 1) % len(cut_indices)]
+                    if c2 > c1:
+                        fragments.append(seq[c1:c2])
+                    else:
+                        fragments.append(seq[c1:] + seq[:c2])
+
+        fragment_lengths = sorted([len(f) for f in fragments if len(f) > 0], reverse=True)
+
+        # Simulate agarose gel migration (relative migration distance 0.0 - 1.0)
+        gel_bands = []
+        for length in fragment_lengths:
+            # Logarithmic migration: smaller fragments migrate farther
+            rf = max(0.05, min(0.95, 1.0 - 0.22 * math.log10(max(10, length))))
+            gel_bands.append({
+                "length_bp": length,
+                "migration_rf": round(rf, 4),
+            })
+
+        return {
+            "enzyme": enz,
+            "recognition_site": site,
+            "cut_offset": cut_offset,
+            "cut_positions": cut_indices,
+            "fragment_count": len(fragment_lengths),
+            "fragment_lengths": fragment_lengths,
+            "gel_bands": gel_bands,
+            "circular": circular,
+        }
+
+
+# ==============================================================================
+# CODON ADAPTATION INDEX (CAI) & RSCU ANALYSIS
+# ==============================================================================
+
+class CodonAdaptationIndex:
+    """Codon usage bias and translation efficiency index (Sharp & Li, 1987)."""
+
+    # Empirical reference frequencies from highly expressed genes
+    ECOLI_REFERENCE_WEIGHTS: Dict[str, float] = {
+        "TTT": 0.296, "TTC": 1.000, "TTA": 0.020, "TTG": 0.020,
+        "CTT": 0.042, "CTC": 0.037, "CTA": 0.007, "CTG": 1.000,
+        "ATT": 0.185, "ATC": 1.000, "ATA": 0.003, "ATG": 1.000,
+        "GTT": 0.783, "GTC": 0.062, "GTA": 0.495, "GTG": 0.221,
+        "TCT": 1.000, "TCC": 0.744, "TCA": 0.077, "TCG": 0.017,
+        "CCT": 0.070, "CCC": 0.012, "CCA": 0.135, "CCG": 1.000,
+        "ACT": 0.965, "ACC": 1.000, "ACA": 0.076, "ACG": 0.099,
+        "GCT": 1.000, "GCC": 0.122, "GCA": 0.586, "GCG": 0.424,
+        "TAT": 0.239, "TAC": 1.000, "TAA": 1.000, "TAG": 0.000,
+        "CAT": 0.291, "CAC": 1.000, "CAA": 0.124, "CAG": 1.000,
+        "AAT": 0.051, "AAC": 1.000, "AAA": 1.000, "AAG": 0.253,
+        "GAT": 0.434, "GAC": 1.000, "GAA": 1.000, "GAG": 0.259,
+        "TGT": 0.500, "TGC": 1.000, "TGA": 0.000, "TGG": 1.000,
+        "CGT": 1.000, "CGC": 0.356, "CGA": 0.004, "CGG": 0.004,
+        "AGT": 0.085, "AGC": 0.410, "AGA": 0.004, "AGG": 0.002,
+        "GGT": 0.472, "GGC": 0.724, "GGA": 0.010, "GGG": 0.019,
+    }
+
+    @classmethod
+    def calculate_cai(cls, dna_sequence: str, custom_weights: Optional[Dict[str, float]] = None) -> Dict[str, Any]:
+        seq = dna_sequence.upper().strip().replace("U", "T")
+        weights = custom_weights if custom_weights is not None else cls.ECOLI_REFERENCE_WEIGHTS
+
+        # Extract in-frame codons
+        codons = [seq[i:i + 3] for i in range(0, len(seq) - (len(seq) % 3), 3)]
+        if not codons:
+            return {"cai": 0.0, "codon_count": 0, "gc3_content": 0.0}
+
+        log_sum = 0.0
+        analyzed_count = 0
+        gc3_count = 0
+
+        for c in codons:
+            if len(c) == 3:
+                # GC3 content
+                if c[2] in "GC":
+                    gc3_count += 1
+
+                # Stop codons or single-codon amino acids (Met, Trp) are typically excluded or given w=1.0
+                if c in ("TAA", "TAG", "TGA"):
+                    continue
+
+                w = weights.get(c, 0.01)
+                w = max(0.001, w)
+                log_sum += math.log(w)
+                analyzed_count += 1
+
+        cai = math.exp(log_sum / analyzed_count) if analyzed_count > 0 else 0.0
+        gc3_pct = round((gc3_count / len(codons)) * 100.0, 2)
+
+        return {
+            "cai": round(cai, 4),
+            "codon_count": len(codons),
+            "analyzed_codons": analyzed_count,
+            "gc3_percent": gc3_pct,
+        }
+
+
+def bio_predict_rna_structure(sequence: str, min_loop: int = 3) -> Any:
+    """Predicts RNA secondary structure using Nussinov dynamic programming."""
+    return Record(NussinovRNA.fold(sequence, min_loop=min_loop))
+
+
+def bio_digest_dna(sequence: str, enzyme: str, circular: bool = False) -> Any:
+    """Simulates restriction enzyme digestion and fragment migration."""
+    return Record(RestrictionEnzymeDigest.digest(sequence, enzyme, circular=circular))
+
+
+def bio_calculate_cai(sequence: str) -> Any:
+    """Calculates Codon Adaptation Index (CAI) and GC3 frequency."""
+    return Record(CodonAdaptationIndex.calculate_cai(sequence))
+

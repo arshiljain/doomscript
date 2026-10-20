@@ -1406,7 +1406,8 @@ class DoomToPython(Transformer):
         return ast.Name(id=name, ctx=ast.Load())
 
     def num(self, args):
-        val = float(args[0]) if '.' in str(args[0]) else int(args[0])
+        s = str(args[0])
+        val = float(s) if ('.' in s or 'e' in s.lower()) else int(s)
         return ast.Constant(value=val)
 
     def str(self, args):

@@ -2,6 +2,7 @@
 
 import math
 from typing import List, Dict, Any, Tuple, Optional
+from doomscript.runtime import Record
 
 
 G_CONST = 6.67430e-11  # m^3 kg^-1 s^-2
@@ -432,3 +433,378 @@ def astronomy_predict_eclipse(jd: float) -> Dict[str, Any]:
 def astronomy_atmospheric_refraction(apparent_alt_deg: float, temp_c: float = 10.0, pressure_mbar: float = 1013.25) -> Dict[str, float]:
     """Calculates apparent to true altitude refraction correction and airmass."""
     return AtmosphericRefraction.calculate_refraction(apparent_alt_deg, temp_c, pressure_mbar)
+
+
+# ==============================================================================
+# SYMPLECTIC N-BODY GRAVITATIONAL DYNAMICS SIMULATOR
+# ==============================================================================
+
+class NBodySimulator:
+    """Symplectic Leapfrog (Velocity-Verlet) gravitational N-body integrator.
+
+    Conserves total energy and angular momentum over long integration times.
+    """
+
+    def __init__(self, bodies: List[Dict[str, Any]], g_const: float = G_CONST, softening: float = 1000.0):
+        self.G = float(g_const)
+        self.softening_sq = float(softening) ** 2
+        self.names = [b.get("name", f"body_{i}") for i, b in enumerate(bodies)]
+        self.m = [float(b.get("mass", 1.0)) for b in bodies]
+        self.r = [[float(b.get("x", 0.0)), float(b.get("y", 0.0)), float(b.get("z", 0.0))] for b in bodies]
+        self.v = [[float(b.get("vx", 0.0)), float(b.get("vy", 0.0)), float(b.get("vz", 0.0))] for b in bodies]
+        self.n = len(bodies)
+
+    def _accelerations(self) -> List[List[float]]:
+        acc = [[0.0, 0.0, 0.0] for _ in range(self.n)]
+        for i in range(self.n):
+            xi, yi, zi = self.r[i]
+            for j in range(i + 1, self.n):
+                xj, yj, zj = self.r[j]
+                dx = xj - xi
+                dy = yj - yi
+                dz = zj - zi
+                dist_sq = dx * dx + dy * dy + dz * dz + self.softening_sq
+                dist = math.sqrt(dist_sq)
+                inv_dist_cube = 1.0 / (dist_sq * dist)
+
+                f_ij = self.G * inv_dist_cube
+                f_i = f_ij * self.m[j]
+                f_j = f_ij * self.m[i]
+
+                acc[i][0] += f_i * dx
+                acc[i][1] += f_i * dy
+                acc[i][2] += f_i * dz
+
+                acc[j][0] -= f_j * dx
+                acc[j][1] -= f_j * dy
+                acc[j][2] -= f_j * dz
+        return acc
+
+    def compute_energy(self) -> Tuple[float, float, float]:
+        """Calculates kinetic (T), potential (U), and total mechanical energy (E)."""
+        kinetic = 0.0
+        for i in range(self.n):
+            vx, vy, vz = self.v[i]
+            v_sq = vx * vx + vy * vy + vz * vz
+            kinetic += 0.5 * self.m[i] * v_sq
+
+        potential = 0.0
+        for i in range(self.n):
+            xi, yi, zi = self.r[i]
+            for j in range(i + 1, self.n):
+                xj, yj, zj = self.r[j]
+                dx = xj - xi
+                dy = yj - yi
+                dz = zj - zi
+                dist = math.sqrt(dx * dx + dy * dy + dz * dz + self.softening_sq)
+                potential -= (self.G * self.m[i] * self.m[j]) / dist
+
+        return kinetic, potential, kinetic + potential
+
+    def compute_angular_momentum(self) -> List[float]:
+        """Calculates total angular momentum vector L = sum(m_i * r_i x v_i)."""
+        lx, ly, lz = 0.0, 0.0, 0.0
+        for i in range(self.n):
+            m = self.m[i]
+            x, y, z = self.r[i]
+            vx, vy, vz = self.v[i]
+            lx += m * (y * vz - z * vy)
+            ly += m * (z * vx - x * vz)
+            lz += m * (x * vy - y * vx)
+        return [lx, ly, lz]
+
+    def simulate(self, duration_sec: float, dt_sec: float = 60.0) -> Dict[str, Any]:
+        """Executes symplectic velocity-verlet time-stepping."""
+        steps = max(1, int(duration_sec / dt_sec))
+        init_t, init_u, init_e = self.compute_energy()
+        init_l = self.compute_angular_momentum()
+
+        acc = self._accelerations()
+        for _ in range(steps):
+            # Half-kick velocity
+            for i in range(self.n):
+                self.v[i][0] += 0.5 * dt_sec * acc[i][0]
+                self.v[i][1] += 0.5 * dt_sec * acc[i][1]
+                self.v[i][2] += 0.5 * dt_sec * acc[i][2]
+
+            # Full drift position
+            for i in range(self.n):
+                self.r[i][0] += dt_sec * self.v[i][0]
+                self.r[i][1] += dt_sec * self.v[i][1]
+                self.r[i][2] += dt_sec * self.v[i][2]
+
+            # Recompute accelerations
+            acc = self._accelerations()
+
+            # Final half-kick velocity
+            for i in range(self.n):
+                self.v[i][0] += 0.5 * dt_sec * acc[i][0]
+                self.v[i][1] += 0.5 * dt_sec * acc[i][1]
+                self.v[i][2] += 0.5 * dt_sec * acc[i][2]
+
+        final_t, final_u, final_e = self.compute_energy()
+        final_l = self.compute_angular_momentum()
+        energy_drift = abs((final_e - init_e) / init_e) if abs(init_e) > 1e-12 else 0.0
+
+        final_bodies = []
+        for i in range(self.n):
+            final_bodies.append({
+                "name": self.names[i],
+                "mass": self.m[i],
+                "x": round(self.r[i][0], 2),
+                "y": round(self.r[i][1], 2),
+                "z": round(self.r[i][2], 2),
+                "vx": round(self.v[i][0], 4),
+                "vy": round(self.v[i][1], 4),
+                "vz": round(self.v[i][2], 4),
+                "speed": round(math.sqrt(sum(v * v for v in self.v[i])), 4),
+            })
+
+        return {
+            "duration_sec": duration_sec,
+            "steps": steps,
+            "bodies": final_bodies,
+            "initial_energy": round(init_e, 4),
+            "final_energy": round(final_e, 4),
+            "energy_drift_relative": round(energy_drift, 8),
+            "conserved": energy_drift < 0.01,
+        }
+
+
+# ==============================================================================
+# HOHMANN & BI-ELLIPTIC ORBITAL TRANSFERS
+# ==============================================================================
+
+class OrbitalTransfer:
+    """Orbital maneuver optimization for circular coplanar orbits."""
+
+    @staticmethod
+    def hohmann(r1: float, r2: float, mu: float = MU_EARTH) -> Dict[str, Any]:
+        """Calculates impulsive delta-v burns and transfer duration for a Hohmann transfer."""
+        r1, r2, mu = float(r1), float(r2), float(mu)
+        if r1 <= 0 or r2 <= 0 or mu <= 0:
+            raise ValueError("Radii and gravitational parameter must be positive")
+
+        v1 = math.sqrt(mu / r1)
+        v2 = math.sqrt(mu / r2)
+        a_trans = 0.5 * (r1 + r2)
+
+        v_t1 = math.sqrt(mu * (2.0 / r1 - 1.0 / a_trans))
+        v_t2 = math.sqrt(mu * (2.0 / r2 - 1.0 / a_trans))
+
+        dv1 = abs(v_t1 - v1)
+        dv2 = abs(v2 - v_t2)
+        dv_total = dv1 + dv2
+        t_trans = math.pi * math.sqrt((a_trans ** 3) / mu)
+
+        return {
+            "r1_m": r1,
+            "r2_m": r2,
+            "delta_v1_mps": round(dv1, 3),
+            "delta_v2_mps": round(dv2, 3),
+            "total_delta_v_mps": round(dv_total, 3),
+            "transfer_time_sec": round(t_trans, 2),
+            "transfer_time_hours": round(t_trans / 3600.0, 3),
+        }
+
+    @staticmethod
+    def bi_elliptic(r1: float, r2: float, rb: float, mu: float = MU_EARTH) -> Dict[str, Any]:
+        """Calculates 3-burn bi-elliptic transfer via intermediate apoapsis rb."""
+        r1, r2, rb, mu = float(r1), float(r2), float(rb), float(mu)
+        if rb < max(r1, r2):
+            raise ValueError("Intermediate apoapsis rb must be greater than both r1 and r2")
+
+        v1 = math.sqrt(mu / r1)
+        v2 = math.sqrt(mu / r2)
+
+        a1 = 0.5 * (r1 + rb)
+        a2 = 0.5 * (rb + r2)
+
+        v_t1_peri = math.sqrt(mu * (2.0 / r1 - 1.0 / a1))
+        v_t1_apo = math.sqrt(mu * (2.0 / rb - 1.0 / a1))
+
+        v_t2_apo = math.sqrt(mu * (2.0 / rb - 1.0 / a2))
+        v_t2_peri = math.sqrt(mu * (2.0 / r2 - 1.0 / a2))
+
+        dv1 = abs(v_t1_peri - v1)
+        dv2 = abs(v_t2_apo - v_t1_apo)
+        dv3 = abs(v2 - v_t2_peri)
+        dv_total = dv1 + dv2 + dv3
+
+        t1 = math.pi * math.sqrt((a1 ** 3) / mu)
+        t2 = math.pi * math.sqrt((a2 ** 3) / mu)
+        total_time = t1 + t2
+
+        hoh = OrbitalTransfer.hohmann(r1, r2, mu)
+        hoh_dv = hoh["total_delta_v_mps"]
+        savings_mps = round(hoh_dv - dv_total, 3)
+
+        return {
+            "r1_m": r1,
+            "r2_m": r2,
+            "rb_m": rb,
+            "delta_v1_mps": round(dv1, 3),
+            "delta_v2_mps": round(dv2, 3),
+            "delta_v3_mps": round(dv3, 3),
+            "total_delta_v_mps": round(dv_total, 3),
+            "total_time_hours": round(total_time / 3600.0, 3),
+            "hohmann_delta_v_mps": hoh_dv,
+            "delta_v_savings_mps": savings_mps,
+            "is_more_efficient": dv_total < hoh_dv,
+        }
+
+
+# ==============================================================================
+# IAU PRECESSION & NUTATION COORDINATE TRANSFORMATIONS
+# ==============================================================================
+
+class IAUPrecessionNutation:
+    """Precession and nutation rig for equatorial celestial coordinates."""
+
+    @staticmethod
+    def precession_j2000_to_date(ra_deg: float, dec_deg: float, jd: float) -> Dict[str, float]:
+        """Precesses equatorial coordinates from epoch J2000.0 to mean equinox of date."""
+        # Julian centuries from J2000.0 (JD 2451545.0)
+        t = (jd - 2451545.0) / 36525.0
+
+        # Precession angles in arcseconds
+        zeta = (2306.2181 * t + 0.30188 * t * t + 0.017998 * t * t * t) / 3600.0
+        z = (2306.2181 * t + 1.09468 * t * t + 0.018203 * t * t * t) / 3600.0
+        theta = (2004.3109 * t - 0.42665 * t * t - 0.041833 * t * t * t) / 3600.0
+
+        ra_rad = math.radians(ra_deg)
+        dec_rad = math.radians(dec_deg)
+        zeta_rad = math.radians(zeta)
+        z_rad = math.radians(z)
+        theta_rad = math.radians(theta)
+
+        # Direction cosines in J2000
+        x0 = math.cos(dec_rad) * math.cos(ra_rad)
+        y0 = math.cos(dec_rad) * math.sin(ra_rad)
+        z0 = math.sin(dec_rad)
+
+        # Precession rotation matrix R = R_z(-z) * R_y(theta) * R_z(-zeta)
+        # Apply R_z(-zeta)
+        x1 = math.cos(zeta_rad) * x0 - math.sin(zeta_rad) * y0
+        y1 = math.sin(zeta_rad) * x0 + math.cos(zeta_rad) * y0
+        z1 = z0
+
+        # Apply R_y(theta)
+        x2 = math.cos(theta_rad) * x1 + math.sin(theta_rad) * z1
+        y2 = y1
+        z2 = -math.sin(theta_rad) * x1 + math.cos(theta_rad) * z1
+
+        # Apply R_z(-z)
+        x3 = math.cos(z_rad) * x2 - math.sin(z_rad) * y2
+        y3 = math.sin(z_rad) * x2 + math.cos(z_rad) * y2
+        z3 = z2
+
+        # Convert back to spherical coordinates
+        ra_date = math.degrees(math.atan2(y3, x3)) % 360.0
+        dec_date = math.degrees(math.asin(max(-1.0, min(1.0, z3))))
+
+        return {
+            "ra_deg": round(ra_date, 6),
+            "dec_deg": round(dec_date, 6),
+            "epoch_jd": jd,
+            "centuries_t": round(t, 6),
+        }
+
+
+# ==============================================================================
+# CELESTIAL RISE / SET / MERIDIAN TRANSIT EPHEMERIS
+# ==============================================================================
+
+class CelestialRiseSetTransit:
+    """Calculates rise, set, and meridian transit times for any celestial object."""
+
+    @classmethod
+    def calculate(
+        cls,
+        ra_deg: float,
+        dec_deg: float,
+        lat_deg: float,
+        lon_deg: float,
+        jd: float,
+        h0_deg: float = -0.8333,
+    ) -> Dict[str, Any]:
+        """Computes UT hours of rise, transit, and set for target celestial position."""
+        # Mean sidereal time at Greenwich at 0h UT
+        jd_0h = math.floor(jd - 0.5) + 0.5
+        t = (jd_0h - 2451545.0) / 36525.0
+        theta_0 = 100.46061837 + 36000.770053608 * t + 0.000387933 * t * t - (t ** 3) / 38710000.0
+        theta_0 = theta_0 % 360.0
+
+        ra_rad = math.radians(ra_deg)
+        dec_rad = math.radians(dec_deg)
+        lat_rad = math.radians(lat_deg)
+        h0_rad = math.radians(h0_deg)
+
+        # Approximate meridian transit hour angle
+        transit_hour = ((ra_deg - theta_0 - lon_deg) / 15.0) % 24.0
+
+        # Cosine of hour angle at horizon
+        cos_h0 = (math.sin(h0_rad) - math.sin(lat_rad) * math.sin(dec_rad)) / (
+            math.cos(lat_rad) * math.cos(dec_rad)
+        )
+
+        if cos_h0 > 1.0:
+            status = "never_rises"
+            rise_hour = None
+            set_hour = None
+        elif cos_h0 < -1.0:
+            status = "circumpolar_always_visible"
+            rise_hour = None
+            set_hour = None
+        else:
+            status = "rises_and_sets"
+            h0_hours = math.degrees(math.acos(cos_h0)) / 15.0
+            rise_hour = (transit_hour - h0_hours) % 24.0
+            set_hour = (transit_hour + h0_hours) % 24.0
+
+        return {
+            "status": status,
+            "transit_ut_hour": round(transit_hour, 3),
+            "rise_ut_hour": round(rise_hour, 3) if rise_hour is not None else None,
+            "set_ut_hour": round(set_hour, 3) if set_hour is not None else None,
+            "latitude_deg": lat_deg,
+            "longitude_deg": lon_deg,
+        }
+
+
+def astronomy_simulate_n_body(
+    bodies: List[Dict[str, Any]],
+    duration_sec: float,
+    dt_sec: float = 60.0,
+    g_const: float = G_CONST,
+) -> Any:
+    """Simulates gravitational N-body system using symplectic Leapfrog integration."""
+    sim = NBodySimulator(bodies, g_const=g_const)
+    return Record(sim.simulate(duration_sec, dt_sec=dt_sec))
+
+
+def astronomy_calculate_hohmann(r1: float, r2: float, mu: float = MU_EARTH) -> Any:
+    """Calculates Hohmann orbital transfer delta-v burns and duration."""
+    return Record(OrbitalTransfer.hohmann(r1, r2, mu=mu))
+
+
+def astronomy_calculate_bi_elliptic(r1: float, r2: float, rb: float, mu: float = MU_EARTH) -> Any:
+    """Calculates 3-burn bi-elliptic orbital transfer and compares with Hohmann."""
+    return Record(OrbitalTransfer.bi_elliptic(r1, r2, rb, mu=mu))
+
+
+def astronomy_precession_j2000_to_date(ra_deg: float, dec_deg: float, jd: float) -> Any:
+    """Precesses coordinates from J2000.0 to epoch of date."""
+    return Record(IAUPrecessionNutation.precession_j2000_to_date(ra_deg, dec_deg, jd))
+
+
+def astronomy_calculate_rise_set(
+    ra_deg: float,
+    dec_deg: float,
+    lat_deg: float,
+    lon_deg: float,
+    jd: float,
+) -> Any:
+    """Calculates celestial rise, set, and meridian transit times."""
+    return Record(CelestialRiseSetTransit.calculate(ra_deg, dec_deg, lat_deg, lon_deg, jd))
+

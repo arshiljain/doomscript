@@ -44,6 +44,50 @@ class NeuroDomainParser(DomainParser):
             w, dt, target = m_stdp.group(1).strip(), m_stdp.group(2).strip(), m_stdp.group(3).strip()
             return f"set {target} to neuro_stdp_update({w}, {dt})"
 
+        # simulate hodgkin huxley with current <curr> duration <dur> into <target>
+        m_hh = re.match(
+            r"^simulate\s+hodgkin\s+huxley\s+with\s+current\s+(.+?)\s+duration\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_hh:
+            curr, dur, target = m_hh.group(1).strip(), m_hh.group(2).strip(), m_hh.group(3).strip()
+            return f"set {target} to neuro_simulate_hodgkin_huxley({curr}, {dur})"
+
+        # simulate wilson cowan with p_ext <p_ext> duration <dur> into <target>
+        m_wc = re.match(
+            r"^simulate\s+wilson\s+cowan\s+with\s+p_ext\s+(.+?)\s+duration\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_wc:
+            p_ext, dur, target = m_wc.group(1).strip(), m_wc.group(2).strip(), m_wc.group(3).strip()
+            return f"set {target} to neuro_simulate_wilson_cowan({p_ext}, {dur})"
+
+        # analyze eeg bands in <sig> [with sample rate <sr>] into <target>
+        m_eeg = re.match(
+            r"^analyze\s+eeg\s+bands\s+in\s+(.+?)(?:\s+with\s+sample\s+rate\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_eeg:
+            sig = m_eeg.group(1).strip()
+            sr = m_eeg.group(2).strip() if m_eeg.group(2) else "250"
+            target = m_eeg.group(3).strip()
+            return f"set {target} to neuro_analyze_eeg_bands({sig}, {sr})"
+
+        # compute psth for trials <trials> duration <dur> [with bin width <bw>] into <target>
+        m_psth = re.match(
+            r"^compute\s+psth\s+for\s+trials\s+(.+?)\s+duration\s+(.+?)(?:\s+with\s+bin\s+width\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_psth:
+            trials, dur = m_psth.group(1).strip(), m_psth.group(2).strip()
+            bw = m_psth.group(3).strip() if m_psth.group(3) else "10.0"
+            target = m_psth.group(4).strip()
+            return f"set {target} to neuro_compute_psth({trials}, {dur}, {bw})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

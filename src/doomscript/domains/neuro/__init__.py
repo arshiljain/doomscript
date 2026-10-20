@@ -26,6 +26,14 @@ from doomscript.domains.neuro.runtime import (
     TsodyksMarkramSynapse,
     FitzHughNagumoNeuron,
     WinnerTakeAllNetwork,
+    HodgkinHuxleyNeuron,
+    WilsonCowanNetwork,
+    EEGBandpowerAnalyzer,
+    PSTHAnalyzer,
+    neuro_simulate_hodgkin_huxley,
+    neuro_simulate_wilson_cowan,
+    neuro_analyze_eeg_bands,
+    neuro_compute_psth,
 )
 from doomscript.domains.neuro.parser import NeuroDomainParser
 from doomscript.domains.neuro.exporter import NeuroASTExporter
@@ -67,11 +75,17 @@ class NeuroDomain(DomainContract):
     blocks = []
 
     def can_handle_line(self, line: str) -> bool:
+        if self.parser.parse_inspect(line, 0) is not None or self.parser.parse_operation(line, 0) is not None:
+            return True
         s = line.strip().lower()
         return (
             s.startswith("create lif neuron ")
             or s.startswith("generate poisson spikes with ")
             or s.startswith("apply stdp to weight ")
+            or s.startswith("simulate hodgkin huxley ")
+            or s.startswith("simulate wilson cowan ")
+            or s.startswith("analyze eeg bands ")
+            or s.startswith("compute psth ")
         )
 
     def can_handle_block(self, header: str) -> bool:
@@ -98,4 +112,12 @@ __all__ = [
     "TsodyksMarkramSynapse",
     "FitzHughNagumoNeuron",
     "WinnerTakeAllNetwork",
+    "HodgkinHuxleyNeuron",
+    "WilsonCowanNetwork",
+    "EEGBandpowerAnalyzer",
+    "PSTHAnalyzer",
+    "neuro_simulate_hodgkin_huxley",
+    "neuro_simulate_wilson_cowan",
+    "neuro_analyze_eeg_bands",
+    "neuro_compute_psth",
 ]

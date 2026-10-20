@@ -3204,6 +3204,12 @@ from doomscript.domains.bio.runtime import (
     bio_affine_align,
     bio_fm_index_search,
     bio_neighbor_joining_tree,
+    NussinovRNA,
+    RestrictionEnzymeDigest,
+    CodonAdaptationIndex,
+    bio_predict_rna_structure,
+    bio_digest_dna,
+    bio_calculate_cai,
 )
 bio_transcribe_dna = bio_transcribe
 bio_translate_rna = bio_translate
@@ -3495,6 +3501,15 @@ from doomscript.domains.astronomy.runtime import (
     astronomy_planet_geocentric,
     astronomy_predict_eclipse,
     astronomy_atmospheric_refraction,
+    NBodySimulator,
+    OrbitalTransfer,
+    IAUPrecessionNutation,
+    CelestialRiseSetTransit,
+    astronomy_simulate_n_body,
+    astronomy_calculate_hohmann,
+    astronomy_calculate_bi_elliptic,
+    astronomy_precession_j2000_to_date,
+    astronomy_calculate_rise_set,
 )
 
 from doomscript.domains.chem.runtime import (
@@ -3641,6 +3656,14 @@ from doomscript.domains.neuro.runtime import (
     TsodyksMarkramSynapse,
     FitzHughNagumoNeuron,
     WinnerTakeAllNetwork,
+    HodgkinHuxleyNeuron,
+    WilsonCowanNetwork,
+    EEGBandpowerAnalyzer,
+    PSTHAnalyzer,
+    neuro_simulate_hodgkin_huxley,
+    neuro_simulate_wilson_cowan,
+    neuro_analyze_eeg_bands,
+    neuro_compute_psth,
 )
 
 from doomscript.domains.automata.runtime import (

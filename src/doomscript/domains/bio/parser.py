@@ -137,6 +137,42 @@ class BioDomainParser(DomainParser):
             target = m_fa.group(2).strip()
             return f"set {target} to bio_parse_fasta({text})"
 
+        # predict rna structure of <seq> [with min loop <min_loop>] into <target>
+        m_rna = re.match(
+            r"^predict\s+rna\s+structure\s+of\s+(.+?)(?:\s+with\s+min\s+loop\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_rna:
+            seq = m_rna.group(1).strip()
+            min_loop = m_rna.group(2) if m_rna.group(2) else "3"
+            target = m_rna.group(3).strip()
+            return f"set {target} to bio_predict_rna_structure({seq}, {min_loop})"
+
+        # digest dna [sequence] <seq> with enzyme <enz> [circular] into <target>
+        m_enz = re.match(
+            r"^digest\s+dna(?:\s+sequence)?\s+(.+?)\s+with\s+enzyme\s+(.+?)(?:\s+(circular))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_enz:
+            seq = m_enz.group(1).strip()
+            enz = m_enz.group(2).strip()
+            is_circ = "True" if m_enz.group(3) else "False"
+            target = m_enz.group(4).strip()
+            return f"set {target} to bio_digest_dna({seq}, {enz}, circular={is_circ})"
+
+        # calculate cai of <seq> into <target>
+        m_cai = re.match(
+            r"^calculate\s+cai\s+of\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_cai:
+            seq = m_cai.group(1).strip()
+            target = m_cai.group(2).strip()
+            return f"set {target} to bio_calculate_cai({seq})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

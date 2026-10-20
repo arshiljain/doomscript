@@ -14,6 +14,7 @@ from __future__ import annotations
 import math
 import random
 from typing import Any, Dict, List, Optional, Tuple, Union
+from doomscript.runtime import Record
 
 
 class LIFNeuron:
@@ -410,3 +411,320 @@ class WinnerTakeAllNetwork:
             "converged": True,
             "steps_taken": step_idx + 1,
         }
+
+
+# ==============================================================================
+# HODGKIN-HUXLEY 4-VARIABLE CONDUCTANCE BIOPHYSICAL NEURON MODEL
+# ==============================================================================
+
+class HodgkinHuxleyNeuron:
+    """Biophysical Hodgkin-Huxley model of squid giant axon action potentials.
+
+    Variables:
+    - V: Membrane potential (mV)
+    - m: Sodium channel activation gate [0, 1]
+    - h: Sodium channel inactivation gate [0, 1]
+    - n: Potassium channel activation gate [0, 1]
+    """
+
+    def __init__(
+        self,
+        c_m: float = 1.0,         # Membrane capacitance (uF/cm^2)
+        g_na: float = 120.0,      # Max Sodium conductance (mS/cm^2)
+        g_k: float = 36.0,        # Max Potassium conductance (mS/cm^2)
+        g_l: float = 0.3,         # Leak conductance (mS/cm^2)
+        e_na: float = 50.0,       # Sodium reversal potential (mV)
+        e_k: float = -77.0,       # Potassium reversal potential (mV)
+        e_l: float = -54.387,     # Leak reversal potential (mV)
+        v_init: float = -65.0,    # Initial membrane potential (mV)
+    ):
+        self.C_m = float(c_m)
+        self.g_Na = float(g_na)
+        self.g_K = float(g_k)
+        self.g_L = float(g_l)
+        self.E_Na = float(e_na)
+        self.E_K = float(e_k)
+        self.E_L = float(e_l)
+
+        self.V = float(v_init)
+        self.m = self._alpha_m(self.V) / (self._alpha_m(self.V) + self._beta_m(self.V))
+        self.h = self._alpha_h(self.V) / (self._alpha_h(self.V) + self._beta_h(self.V))
+        self.n = self._alpha_n(self.V) / (self._alpha_n(self.V) + self._beta_n(self.V))
+
+    @staticmethod
+    def _alpha_m(V: float) -> float:
+        v = V + 40.0
+        return 0.1 * v / (1.0 - math.exp(-v / 10.0)) if abs(v) > 1e-6 else 1.0
+
+    @staticmethod
+    def _beta_m(V: float) -> float:
+        return 4.0 * math.exp(-(V + 65.0) / 18.0)
+
+    @staticmethod
+    def _alpha_h(V: float) -> float:
+        return 0.07 * math.exp(-(V + 65.0) / 20.0)
+
+    @staticmethod
+    def _beta_h(V: float) -> float:
+        return 1.0 / (1.0 + math.exp(-(V + 35.0) / 10.0))
+
+    @staticmethod
+    def _alpha_n(V: float) -> float:
+        v = V + 55.0
+        return 0.01 * v / (1.0 - math.exp(-v / 10.0)) if abs(v) > 1e-6 else 0.1
+
+    @staticmethod
+    def _beta_n(V: float) -> float:
+        return 0.125 * math.exp(-(V + 65.0) / 80.0)
+
+    def step(self, i_inj: float, dt_ms: float = 0.02) -> Dict[str, float]:
+        """Integrates one time step dt using 4th-order Runge-Kutta / Euler."""
+        # Ionic currents
+        i_na = self.g_Na * (self.m ** 3) * self.h * (self.V - self.E_Na)
+        i_k = self.g_K * (self.n ** 4) * (self.V - self.E_K)
+        i_l = self.g_L * (self.V - self.E_L)
+
+        dv = (i_inj - i_na - i_k - i_l) / self.C_m
+        dm = self._alpha_m(self.V) * (1.0 - self.m) - self._beta_m(self.V) * self.m
+        dh = self._alpha_h(self.V) * (1.0 - self.h) - self._beta_h(self.V) * self.h
+        dn = self._alpha_n(self.V) * (1.0 - self.n) - self._beta_n(self.V) * self.n
+
+        self.V += dt_ms * dv
+        self.m += dt_ms * dm
+        self.h += dt_ms * dh
+        self.n += dt_ms * dn
+
+        return {
+            "v": round(self.V, 3),
+            "m": round(self.m, 4),
+            "h": round(self.h, 4),
+            "n": round(self.n, 4),
+            "i_na": round(i_na, 3),
+            "i_k": round(i_k, 3),
+        }
+
+    def simulate(self, current_pulse_uA: float, duration_ms: float = 50.0, dt_ms: float = 0.02) -> Dict[str, Any]:
+        """Runs continuous simulation under constant injected current."""
+        steps = int(duration_ms / dt_ms)
+        voltages = []
+        spike_count = 0
+        in_spike = False
+
+        for _ in range(steps):
+            res = self.step(current_pulse_uA, dt_ms=dt_ms)
+            v = res["v"]
+            voltages.append(v)
+            if v >= 0.0 and not in_spike:
+                spike_count += 1
+                in_spike = True
+            elif v < -20.0 and in_spike:
+                in_spike = False
+
+        return {
+            "duration_ms": duration_ms,
+            "voltages": voltages,
+            "spike_count": spike_count,
+            "firing_rate_hz": round((spike_count / (duration_ms / 1000.0)), 2),
+            "v_max": round(max(voltages), 2) if voltages else round(self.V, 2),
+            "v_min": round(min(voltages), 2) if voltages else round(self.V, 2),
+            "final_v": round(self.V, 3),
+        }
+
+
+# ==============================================================================
+# WILSON-COWAN EXCITATORY-INHIBITORY NEURAL POPULATION MODEL
+# ==============================================================================
+
+class WilsonCowanNetwork:
+    """Nonlinear coupled excitatory (E) and inhibitory (I) neural population dynamics."""
+
+    def __init__(
+        self,
+        c_ee: float = 16.0,
+        c_ie: float = 12.0,
+        c_ei: float = 15.0,
+        c_ii: float = 3.0,
+        tau_e: float = 8.0,
+        tau_i: float = 8.0,
+        theta_e: float = 4.0,
+        theta_i: float = 3.7,
+        a_e: float = 1.3,
+        a_i: float = 2.0,
+    ):
+        self.c_ee = float(c_ee)
+        self.c_ie = float(c_ie)
+        self.c_ei = float(c_ei)
+        self.c_ii = float(c_ii)
+        self.tau_e = float(tau_e)
+        self.tau_i = float(tau_i)
+        self.theta_e = float(theta_e)
+        self.theta_i = float(theta_i)
+        self.a_e = float(a_e)
+        self.a_i = float(a_i)
+
+        self.E = 0.1
+        self.I = 0.1
+
+    def _sigmoid(self, x: float, a: float, theta: float) -> float:
+        arg = -a * (x - theta)
+        arg = max(-50.0, min(50.0, arg))
+        return 1.0 / (1.0 + math.exp(arg))
+
+    def step(self, p_ext: float = 1.0, q_ext: float = 0.0, dt: float = 0.1) -> Tuple[float, float]:
+        s_e = self._sigmoid(self.c_ee * self.E - self.c_ie * self.I + p_ext, self.a_e, self.theta_e)
+        s_i = self._sigmoid(self.c_ei * self.E - self.c_ii * self.I + q_ext, self.a_i, self.theta_i)
+
+        de = (-self.E + s_e) / self.tau_e
+        di = (-self.I + s_i) / self.tau_i
+
+        self.E = max(0.0, min(1.0, self.E + dt * de))
+        self.I = max(0.0, min(1.0, self.I + dt * di))
+
+        return round(self.E, 4), round(self.I, 4)
+
+    def simulate(self, p_ext: float = 1.25, q_ext: float = 0.0, duration: float = 100.0, dt: float = 0.1) -> Dict[str, Any]:
+        steps = int(duration / dt)
+        e_history = []
+        i_history = []
+        for _ in range(steps):
+            e_val, i_val = self.step(p_ext, q_ext, dt=dt)
+            e_history.append(e_val)
+            i_history.append(i_val)
+
+        return {
+            "steps": steps,
+            "duration": duration,
+            "e_history": e_history,
+            "i_history": i_history,
+            "final_e": e_history[-1] if e_history else 0.0,
+            "final_i": i_history[-1] if i_history else 0.0,
+            "amplitude_e": round(max(e_history) - min(e_history), 4) if e_history else 0.0,
+        }
+
+
+# ==============================================================================
+# EEG SPECTRAL BANDPOWER ANALYSIS
+# ==============================================================================
+
+class EEGBandpowerAnalyzer:
+    """Clinical EEG frequency band decomposition and cognitive workload indices."""
+
+    BANDS = {
+        "delta": (0.5, 4.0),
+        "theta": (4.0, 8.0),
+        "alpha": (8.0, 13.0),
+        "beta": (13.0, 30.0),
+        "gamma": (30.0, 80.0),
+    }
+
+    @classmethod
+    def analyze(cls, eeg_signal: List[float], sample_rate: int = 250) -> Dict[str, float]:
+        """Calculates absolute bandpower, relative power, and alpha/theta workload ratio."""
+        n = len(eeg_signal)
+        if n < 4:
+            return {b: 0.0 for b in cls.BANDS}
+
+        # Demean
+        mean_v = sum(eeg_signal) / n
+        s_norm = [v - mean_v for v in eeg_signal]
+
+        # Power spectrum via DFT
+        freq_res = sample_rate / n
+        powers = {}
+        total_power = 0.0
+
+        for band_name, (f_low, f_high) in cls.BANDS.items():
+            k_low = int(math.floor(f_low / freq_res))
+            k_high = min(int(math.ceil(f_high / freq_res)), n // 2)
+            band_sum = 0.0
+
+            for k in range(k_low, k_high + 1):
+                # Calculate DFT coefficient for bin k
+                re_sum = 0.0
+                im_sum = 0.0
+                for t, x in enumerate(s_norm):
+                    ang = -2.0 * math.pi * k * t / n
+                    re_sum += x * math.cos(ang)
+                    im_sum += x * math.sin(ang)
+                p = (re_sum * re_sum + im_sum * im_sum) / (n * n)
+                band_sum += p
+
+            powers[band_name] = round(band_sum, 6)
+            total_power += band_sum
+
+        results = {}
+        for b, p in powers.items():
+            results[f"{b}_power"] = p
+            results[f"{b}_relative"] = round(p / total_power, 4) if total_power > 1e-12 else 0.0
+
+        # Cognitive index: Alpha / Theta ratio
+        theta_p = powers.get("theta", 1e-6)
+        alpha_p = powers.get("alpha", 0.0)
+        results["alpha_theta_ratio"] = round(alpha_p / theta_p, 4) if theta_p > 1e-12 else 0.0
+        results["total_power"] = round(total_power, 6)
+
+        return results
+
+
+# ==============================================================================
+# PERISTIMULUS TIME HISTOGRAM (PSTH) & SPIKE RASTER ANALYTICS
+# ==============================================================================
+
+class PSTHAnalyzer:
+    """Computes trial-averaged Peristimulus Time Histogram and time-varying firing rate."""
+
+    @staticmethod
+    def compute(
+        trials_spike_times_ms: List[List[float]],
+        duration_ms: float,
+        bin_width_ms: float = 10.0,
+    ) -> Dict[str, Any]:
+        num_trials = len(trials_spike_times_ms)
+        if num_trials == 0 or duration_ms <= 0:
+            return {"bins": [], "counts": [], "firing_rates_hz": [], "mean_rate_hz": 0.0}
+
+        num_bins = max(1, int(math.ceil(duration_ms / bin_width_ms)))
+        counts = [0] * num_bins
+        bin_edges = [round(i * bin_width_ms, 2) for i in range(num_bins)]
+
+        total_spikes = 0
+        for trial in trials_spike_times_ms:
+            for t in trial:
+                if 0.0 <= t < duration_ms:
+                    b = int(t // bin_width_ms)
+                    if b < num_bins:
+                        counts[b] += 1
+                        total_spikes += 1
+
+        # Rate in Hz = (count / num_trials) / (bin_width_sec)
+        bin_sec = bin_width_ms / 1000.0
+        rates_hz = [round((c / num_trials) / bin_sec, 2) for c in counts]
+        mean_rate = round(total_spikes / (num_trials * (duration_ms / 1000.0)), 2)
+
+        return {
+            "bin_edges_ms": bin_edges,
+            "counts": counts,
+            "firing_rates_hz": rates_hz,
+            "mean_rate_hz": mean_rate,
+            "total_spikes": total_spikes,
+        }
+
+
+# High-level domain entrypoints
+def neuro_simulate_hodgkin_huxley(current_uA: float, duration_ms: float = 50.0) -> Any:
+    hh = HodgkinHuxleyNeuron()
+    return Record(hh.simulate(current_uA, duration_ms=duration_ms))
+
+
+def neuro_simulate_wilson_cowan(p_ext: float = 1.25, duration: float = 50.0) -> Any:
+    wc = WilsonCowanNetwork()
+    return Record(wc.simulate(p_ext=p_ext, duration=duration))
+
+
+def neuro_analyze_eeg_bands(signal: List[float], sample_rate: int = 250) -> Any:
+    return Record(EEGBandpowerAnalyzer.analyze(signal, sample_rate=sample_rate))
+
+
+def neuro_compute_psth(trials: List[List[float]], duration_ms: float, bin_width_ms: float = 10.0) -> Any:
+    return Record(PSTHAnalyzer.compute(trials, duration_ms, bin_width_ms))
+
