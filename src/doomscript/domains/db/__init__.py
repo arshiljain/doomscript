@@ -63,6 +63,10 @@ from doomscript.domains.db.runtime import (
     db_lsm_delete,
     db_lsm_flush,
     db_lsm_compact,
+    BTreeStorageEnginePure,
+    CostBasedQueryOptimizerCBO,
+    db_btree_index_benchmark,
+    db_cost_based_join_optimizer,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.db.exporter import DBASTExporter
@@ -243,4 +247,8 @@ __all__ = [
     "db_lsm_delete",
     "db_lsm_flush",
     "db_lsm_compact",
+    "BTreeStorageEnginePure",
+    "CostBasedQueryOptimizerCBO",
+    "db_btree_index_benchmark",
+    "db_cost_based_join_optimizer",
 ]

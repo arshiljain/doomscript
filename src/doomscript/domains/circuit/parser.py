@@ -248,6 +248,30 @@ class CircuitDomainParser(DomainParser):
             va_arg = f", va={va.strip()}" if va else ""
             return f"set {target} to circuit_bjt_operating_point({vcc}, {rb}, {rc}{b_arg}{va_arg})"
 
+        # solve circuit mna components <comps> [ground <gnd>] into <target>
+        m_mna = re.match(
+            r"^solve\s+circuit\s+mna\s+components\s+(.+?)(?:\s+ground\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_mna:
+            comps = m_mna.group(1).strip()
+            gnd = m_mna.group(2).strip() if m_mna.group(2) else "0"
+            target = m_mna.group(3).strip()
+            return f"set {target} to circuit_mna_solve({comps}, ground_node={gnd})"
+
+        # analyze digital static timing gates <gates> [clock period <clk>] into <target>
+        m_sta = re.match(
+            r"^analyze\s+digital\s+static\s+timing\s+gates\s+(.+?)(?:\s+clock\s+period\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_sta:
+            gates = m_sta.group(1).strip()
+            clk = m_sta.group(2).strip() if m_sta.group(2) else "10.0"
+            target = m_sta.group(3).strip()
+            return f"set {target} to circuit_static_timing_analysis({gates}, clock_period_ns={clk})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

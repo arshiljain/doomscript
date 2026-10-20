@@ -1574,5 +1574,217 @@ def net_bgp_route_selection(
     })
 
 
+# ==============================================================================
+# TCP BBR CONGESTION CONTROL & DIFFSERV TWO-RATE THREE-COLOR MARKER (trTCM)
+# ==============================================================================
+
+
+class TCPCongestionControlBBR:
+    """Bottleneck Bandwidth and RTT (BBR) Model-Based Congestion Control.
+
+    Estimates path characteristics via decoupled windowed max-filter Bottleneck Bandwidth
+    (BtlBw) and windowed min-filter Round-Trip Propagation time (RTprop).
+    Regulates sending rate via pacing_rate = pacing_gain * BtlBw and in-flight packets
+    via cwnd = max(cwnd_gain * BDP, 4 * MSS). Manages STARTUP, DRAIN, PROBE_BW, and PROBE_RTT phases.
+    """
+
+    STARTUP_GAIN = 2.885
+    DRAIN_GAIN = 0.35
+    PROBE_BW_PACING_GAINS = [1.25, 0.75, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+
+    @classmethod
+    def simulate(
+        cls,
+        delivery_rate_samples: List[float],
+        rtt_samples: List[float],
+        mss: int = 1460,
+    ) -> Dict[str, Any]:
+        """Simulates BBR congestion control over a sequence of delivery and RTT measurements."""
+        n = min(len(delivery_rate_samples), len(rtt_samples))
+        if n == 0:
+            return {"cwnd_bytes": 4 * mss, "pacing_rate_bps": 0.0, "state": "STARTUP"}
+
+        # State machine
+        state = "STARTUP"
+        pacing_gain = cls.STARTUP_GAIN
+        cwnd_gain = 2.0
+
+        btlbw = 0.0  # bps
+        rtprop = float("inf")  # seconds
+        probe_phase_idx = 0
+
+        cwnd_trace = []
+        pacing_rate_trace = []
+        state_trace = []
+
+        round_count = 0
+        bw_plateau_count = 0
+        prev_max_bw = 0.0
+
+        for i in range(n):
+            del_rate = float(delivery_rate_samples[i])
+            rtt = float(rtt_samples[i])
+
+            # Update filters
+            if del_rate > btlbw:
+                btlbw = del_rate
+            if rtt < rtprop:
+                rtprop = rtt
+
+            # State transitions
+            if state == "STARTUP":
+                # Check for 3 consecutive rounds without 25% growth
+                if btlbw > prev_max_bw * 1.25:
+                    prev_max_bw = btlbw
+                    bw_plateau_count = 0
+                else:
+                    bw_plateau_count += 1
+
+                if bw_plateau_count >= 3:
+                    state = "DRAIN"
+                    pacing_gain = cls.DRAIN_GAIN
+                    cwnd_gain = 2.0
+
+            elif state == "DRAIN":
+                # Inflight drained to BDP
+                bdp = btlbw * rtprop
+                state = "PROBE_BW"
+                probe_phase_idx = 0
+                pacing_gain = cls.PROBE_BW_PACING_GAINS[0]
+                cwnd_gain = 2.0
+
+            elif state == "PROBE_BW":
+                probe_phase_idx = (probe_phase_idx + 1) % len(cls.PROBE_BW_PACING_GAINS)
+                pacing_gain = cls.PROBE_BW_PACING_GAINS[probe_phase_idx]
+                cwnd_gain = 2.0
+
+            # Calculate BDP, pacing rate, and cwnd
+            eff_rtprop = max(1e-4, rtprop) if rtprop < float("inf") else 0.05
+            bdp_bytes = (btlbw * eff_rtprop) / 8.0
+            pacing_rate_bps = pacing_gain * btlbw
+            cwnd = max(int(round(cwnd_gain * bdp_bytes)), 4 * mss)
+
+            cwnd_trace.append(cwnd)
+            pacing_rate_trace.append(round(pacing_rate_bps, 1))
+            state_trace.append(state)
+
+        return {
+            "final_state": state,
+            "estimated_btlbw_bps": round(btlbw, 1),
+            "estimated_rtprop_sec": round(rtprop, 4) if rtprop < float("inf") else 0.05,
+            "final_cwnd_bytes": cwnd_trace[-1] if cwnd_trace else 4 * mss,
+            "final_pacing_rate_bps": pacing_rate_trace[-1] if pacing_rate_trace else 0.0,
+            "cwnd_history": cwnd_trace,
+            "pacing_history": pacing_rate_trace,
+            "states_history": state_trace,
+        }
+
+
+class DiffServTokenBucketPolicer:
+    """DiffServ Two-Rate Three-Color Marker (trTCM - RFC 2698).
+
+    Meters an IP packet stream and marks packets Green (conforming), Yellow (exceeding),
+    or Red (violating) according to Committed Information Rate (CIR), Committed Burst Size (CBS),
+    Peak Information Rate (PIR), and Peak Burst Size (PBS).
+    """
+
+    @classmethod
+    def police(
+        cls,
+        packet_sizes_bytes: List[int],
+        time_intervals_sec: Optional[List[float]] = None,
+        cir_bps: float = 1_000_000.0,
+        cbs_bytes: int = 10_000,
+        pir_bps: float = 2_000_000.0,
+        pbs_bytes: int = 20_000,
+    ) -> Dict[str, Any]:
+        """Marks packet sequence into Green, Yellow, or Red classes."""
+        n = len(packet_sizes_bytes)
+        if n == 0:
+            return {"marked_colors": [], "green_count": 0, "yellow_count": 0, "red_count": 0}
+
+        if time_intervals_sec is None:
+            time_intervals_sec = [0.01] * n
+
+        # Initial full buckets
+        tc = float(cbs_bytes)
+        tp = float(pbs_bytes)
+
+        colors: List[str] = []
+        green_bytes = 0
+        yellow_bytes = 0
+        red_bytes = 0
+
+        for i in range(n):
+            dt = max(0.0, time_intervals_sec[i])
+            b = packet_sizes_bytes[i]
+
+            # Replenish token buckets
+            tc = min(float(cbs_bytes), tc + (cir_bps / 8.0) * dt)
+            tp = min(float(pbs_bytes), tp + (pir_bps / 8.0) * dt)
+
+            # trTCM metering logic:
+            if tp - b < 0:
+                # Violating peak rate -> Red
+                colors.append("RED")
+                red_bytes += b
+            elif tc - b < 0:
+                # Exceeding committed rate -> Yellow
+                colors.append("YELLOW")
+                tp -= b
+                yellow_bytes += b
+            else:
+                # Conforming -> Green
+                colors.append("GREEN")
+                tc -= b
+                tp -= b
+                green_bytes += b
+
+        tot_bytes = green_bytes + yellow_bytes + red_bytes
+        conforming_pct = (green_bytes / max(1, tot_bytes)) * 100.0
+
+        return {
+            "marked_colors": colors,
+            "green_count": colors.count("GREEN"),
+            "yellow_count": colors.count("YELLOW"),
+            "red_count": colors.count("RED"),
+            "green_bytes": green_bytes,
+            "yellow_bytes": yellow_bytes,
+            "red_bytes": red_bytes,
+            "conforming_percent": round(conforming_pct, 2),
+            "final_c_bucket_bytes": round(tc, 1),
+            "final_p_bucket_bytes": round(tp, 1),
+        }
+
+
+def net_bbr_congestion_control(
+    delivery_rate_samples: List[float],
+    rtt_samples: List[float],
+    mss: int = 1460,
+) -> Record:
+    """Simulates TCP BBR congestion control rate and window dynamics."""
+    return Record(TCPCongestionControlBBR.simulate(delivery_rate_samples, rtt_samples, mss=mss))
+
+
+def net_diffserv_trtcm_police(
+    packet_sizes_bytes: List[int],
+    cir_bps: float = 1_000_000.0,
+    cbs_bytes: int = 10_000,
+    pir_bps: float = 2_000_000.0,
+    pbs_bytes: int = 20_000,
+) -> Record:
+    """Meters and marks packet stream with DiffServ Two-Rate Three-Color Marker (trTCM)."""
+    return Record(
+        DiffServTokenBucketPolicer.police(
+            packet_sizes_bytes,
+            cir_bps=cir_bps,
+            cbs_bytes=cbs_bytes,
+            pir_bps=pir_bps,
+            pbs_bytes=pbs_bytes,
+        )
+    )
+
+
+
 
 

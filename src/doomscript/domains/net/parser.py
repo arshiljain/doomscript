@@ -434,6 +434,34 @@ class NetDomainParser(DomainParser):
             asn, rid, rts, target = m_bgp.group(1).strip(), m_bgp.group(2).strip(), m_bgp.group(3).strip(), m_bgp.group(4).strip()
             return f"set {target} to net_bgp_route_selection({asn}, {rid}, {rts})"
 
+        # simulate tcp bbr rates <rates> rtts <rtts> [mss <mss>] into <target>
+        m_bbr = re.match(
+            r"^simulate\s+tcp\s+bbr\s+rates\s+(.+?)\s+rtts\s+(.+?)(?:\s+mss\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_bbr:
+            rates = m_bbr.group(1).strip()
+            rtts = m_bbr.group(2).strip()
+            mss_val = m_bbr.group(3).strip() if m_bbr.group(3) else "1460"
+            target = m_bbr.group(4).strip()
+            return f"set {target} to net_bbr_congestion_control({rates}, {rtts}, mss={mss_val})"
+
+        # police diffserv trtcm packets <pkts> [cir <cir>] [cbs <cbs>] [pir <pir>] [pbs <pbs>] into <target>
+        m_trtcm = re.match(
+            r"^police\s+diffserv\s+trtcm\s+packets\s+(.+?)(?:\s+cir\s+(.+?))?(?:\s+cbs\s+(\d+))?(?:\s+pir\s+(.+?))?(?:\s+pbs\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_trtcm:
+            pkts = m_trtcm.group(1).strip()
+            cir = m_trtcm.group(2).strip() if m_trtcm.group(2) else "1000000.0"
+            cbs = m_trtcm.group(3).strip() if m_trtcm.group(3) else "10000"
+            pir = m_trtcm.group(4).strip() if m_trtcm.group(4) else "2000000.0"
+            pbs = m_trtcm.group(5).strip() if m_trtcm.group(5) else "20000"
+            target = m_trtcm.group(6).strip()
+            return f"set {target} to net_diffserv_trtcm_police({pkts}, cir_bps={cir}, cbs_bytes={cbs}, pir_bps={pir}, pbs_bytes={pbs})"
+
         return None
 
     def parse_block(

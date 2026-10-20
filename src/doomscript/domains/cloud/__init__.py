@@ -70,6 +70,10 @@ from doomscript.domains.cloud.runtime import (
     cloud_leaky_bucket_create,
     cloud_leaky_bucket_enqueue,
     cloud_leaky_bucket_drain,
+    PaxosConsensusProtocolStateReplication,
+    RaftLeaderElectionLogReplication,
+    cloud_paxos_simulate_round,
+    cloud_raft_simulate_cluster,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.cloud.exporter import CloudASTExporter
@@ -255,4 +259,8 @@ __all__ = [
     "cloud_leaky_bucket_create",
     "cloud_leaky_bucket_enqueue",
     "cloud_leaky_bucket_drain",
+    "PaxosConsensusProtocolStateReplication",
+    "RaftLeaderElectionLogReplication",
+    "cloud_paxos_simulate_round",
+    "cloud_raft_simulate_cluster",
 ]

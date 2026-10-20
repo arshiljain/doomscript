@@ -2214,6 +2214,10 @@ from doomscript.domains.db.runtime import (
     db_lsm_delete,
     db_lsm_flush,
     db_lsm_compact,
+    BTreeStorageEnginePure,
+    CostBasedQueryOptimizerCBO,
+    db_btree_index_benchmark,
+    db_cost_based_join_optimizer,
 )
 
 def execute_db_ir(spec):
@@ -3267,6 +3271,10 @@ from doomscript.domains.cloud.runtime import (
     cloud_leaky_bucket_create,
     cloud_leaky_bucket_enqueue,
     cloud_leaky_bucket_drain,
+    PaxosConsensusProtocolStateReplication,
+    RaftLeaderElectionLogReplication,
+    cloud_paxos_simulate_round,
+    cloud_raft_simulate_cluster,
 )
 
 from doomscript.domains.research.runtime import (
@@ -3430,6 +3438,10 @@ from doomscript.domains.sec.runtime import (
     sec_chaum_sign_blinded,
     sec_chaum_unblind_signature,
     sec_chaum_verify_signature,
+    ZeroKnowledgeSchnorrIdentificationProtocol,
+    PBKDF2KeyDerivationFunctionPure,
+    sec_schnorr_zkp_prove_verify,
+    sec_pbkdf2_sha256,
 )
 sec_password_entropy = sec_entropy
 sec_password_audit = sec_audit_password
@@ -3550,6 +3562,10 @@ from doomscript.domains.circuit.runtime import (
     SmallSignalDiodeBJTAnalyzer,
     circuit_quine_mccluskey_minimize,
     circuit_bjt_operating_point,
+    ModifiedNodalAnalysisMNASolver,
+    DigitalStaticTimingAnalyzerSTA,
+    circuit_mna_solve,
+    circuit_static_timing_analysis,
 )
 
 from doomscript.domains.chain.runtime import (
@@ -4244,6 +4260,10 @@ from doomscript.domains.net.runtime import (
     BGPPathVectorRouter,
     net_ospf_calculate_spf,
     net_bgp_route_selection,
+    TCPCongestionControlBBR,
+    DiffServTokenBucketPolicer,
+    net_bbr_congestion_control,
+    net_diffserv_trtcm_police,
 )
 
 from doomscript.domains.sim.runtime import (

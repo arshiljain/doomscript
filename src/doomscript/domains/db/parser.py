@@ -583,6 +583,31 @@ class DBDomainParser(DomainParser):
             tree, target = m_lsm_cmp.group(1).strip(), m_lsm_cmp.group(2).strip()
             return f"set {target} to db_lsm_compact({tree})"
 
+        # benchmark btree index [order <ord>] [keys <num>] into <target>
+        m_btree = re.match(
+            r"^benchmark\s+btree\s+index(?:\s+order\s+(\d+))?(?:\s+keys\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_btree:
+            ord_val = m_btree.group(1).strip() if m_btree.group(1) else "4"
+            k_val = m_btree.group(2).strip() if m_btree.group(2) else "20"
+            target = m_btree.group(3).strip()
+            return f"set {target} to db_btree_index_benchmark(order={ord_val}, num_keys={k_val})"
+
+        # optimize join query tables <tables> joins <joins> [predicates <preds>] into <target>
+        m_cbo = re.match(
+            r"^optimize\s+join\s+query\s+tables\s+(.+?)\s+joins\s+(.+?)(?:\s+predicates\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_cbo:
+            tbls = m_cbo.group(1).strip()
+            jns = m_cbo.group(2).strip()
+            preds = m_cbo.group(3).strip() if m_cbo.group(3) else "None"
+            target = m_cbo.group(4).strip()
+            return f"set {target} to db_cost_based_join_optimizer({tbls}, {jns}, predicates={preds})"
+
         return None
 
     def parse_block(

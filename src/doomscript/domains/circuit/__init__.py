@@ -48,6 +48,10 @@ from doomscript.domains.circuit.runtime import (
     SmallSignalDiodeBJTAnalyzer,
     circuit_quine_mccluskey_minimize,
     circuit_bjt_operating_point,
+    ModifiedNodalAnalysisMNASolver,
+    DigitalStaticTimingAnalyzerSTA,
+    circuit_mna_solve,
+    circuit_static_timing_analysis,
 )
 from doomscript.domains.circuit.parser import CircuitDomainParser
 from doomscript.domains.circuit.exporter import CircuitASTExporter
@@ -156,4 +160,8 @@ __all__ = [
     "SmallSignalDiodeBJTAnalyzer",
     "circuit_quine_mccluskey_minimize",
     "circuit_bjt_operating_point",
+    "ModifiedNodalAnalysisMNASolver",
+    "DigitalStaticTimingAnalyzerSTA",
+    "circuit_mna_solve",
+    "circuit_static_timing_analysis",
 ]

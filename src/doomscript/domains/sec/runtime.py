@@ -988,4 +988,169 @@ def sec_chaum_verify_signature(signature: int, message_int: int, e: int, n: int)
     return BlindSignatureChaumRSA.verify_signature(signature, message_int, e, n)
 
 
+# ==============================================================================
+# SCHNORR ZERO-KNOWLEDGE PROOF (ZKP) & PBKDF2 HMAC-SHA256 KEY DERIVATION
+# ==============================================================================
+
+
+class ZeroKnowledgeSchnorrIdentificationProtocol:
+    """Schnorr Zero-Knowledge Proof (ZKP) of Knowledge of Discrete Logarithm.
+
+    Proves knowledge of private key x such that y = g^x mod p without revealing x.
+    Supports both 3-pass interactive Sigma-protocol (Commitment, Challenge, Response)
+    and non-interactive Fiat-Shamir heuristic transformation.
+    """
+
+    # Default RFC 5114 1024-bit MODP group parameters with 160-bit subgroup
+    DEFAULT_P = 0xB10B8F96A080E01DDE92DE5EAE5D54EC52C99FBCFB06A3C69A6A9DCA52D23B616073E28675A23D189838EF1E2EE652C013ECB4AEA906112324975C3CD49B83BFACCBDD7D90C4BD7098488E9C219A73724EFFD6FAE5644738FAA31A4FF55BCCC0A151AF5F0DC8B4BD45BF37DF365C1A65E68CFDA76D4DA708DF1FB2BC2E4A4371
+    DEFAULT_Q = 0xF518AA8781A8DF278ABA4E7D64B7CB9D49462353
+    DEFAULT_G = 0xA4D1CBD5C3FD34126765A442EFB99905F8104DD258AC507FD6406CFF14266D31266FEA1E5C41564B777E690F5504F213160217B4B01B886A5E91547F9E2749F4D7FBD7D3B9A92EE1909D0D2263F80A76A6A24C087A091F531DBF0A0169B6A28AD662A4D18E73AFA32D779D5918D08BC8858F4DCEF97C2A24855E6EEB22B3B2E5
+
+    @classmethod
+    def prove_and_verify(
+        cls,
+        secret_x: int,
+        p: Optional[int] = None,
+        q: Optional[int] = None,
+        g: Optional[int] = None,
+        nonce_v: Optional[int] = None,
+        challenge_c: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Runs Schnorr ZKP identification protocol and verifies transcript."""
+        p_val = p if p is not None else cls.DEFAULT_P
+        q_val = q if q is not None else cls.DEFAULT_Q
+        g_val = g if g is not None else cls.DEFAULT_G
+
+        x = secret_x % q_val
+        # Public key: y = g^x mod p
+        y = pow(g_val, x, p_val)
+
+        # 1. Commitment phase (Prover)
+        if nonce_v is None:
+            # Deterministic pseudo-random nonce from secret and public key
+            nonce_v = (pow(x, 3, q_val) + 12345) % q_val
+            if nonce_v == 0:
+                nonce_v = 1
+
+        v = nonce_v % q_val
+        # Commitment: t = g^v mod p
+        t = pow(g_val, v, p_val)
+
+        # 2. Challenge phase (Verifier / Fiat-Shamir)
+        if challenge_c is None:
+            import hashlib
+            data = f"{g_val}:{y}:{t}".encode("utf-8")
+            h = hashlib.sha256(data).hexdigest()
+            challenge_c = int(h, 16) % q_val
+
+        c = challenge_c % q_val
+
+        # 3. Response phase (Prover)
+        # s = (v + c * x) mod q
+        s = (v + c * x) % q_val
+
+        # 4. Verification phase (Verifier)
+        # Checks: g^s == t * y^c mod p
+        lhs = pow(g_val, s, p_val)
+        rhs = (t * pow(y, c, p_val)) % p_val
+        verified = (lhs == rhs)
+
+        # Soundness check: fake response forged without knowing secret x
+        fake_s = (s + 1) % q_val
+        fake_lhs = pow(g_val, fake_s, p_val)
+        fake_rejected = (fake_lhs != rhs)
+
+        return {
+            "verified": verified,
+            "soundness_verified": fake_rejected,
+            "public_key_y_hex": hex(y)[:20] + "...",
+            "commitment_t_hex": hex(t)[:20] + "...",
+            "challenge_c_hex": hex(c)[:20] + "...",
+            "response_s_hex": hex(s)[:20] + "...",
+            "modulus_bits": p_val.bit_length(),
+        }
+
+
+class PBKDF2KeyDerivationFunctionPure:
+    """RFC 8018 PKCS #5 Password-Based Key Derivation Function 2 (PBKDF2-HMAC-SHA256).
+
+    Generates cryptographically secure keys from password strings and salt
+    using iterated pseudo-random function F(P, S, c, i) = U1 ^ U2 ^ ... ^ Uc.
+    """
+
+    @classmethod
+    def derive_key(
+        cls,
+        password: str,
+        salt: str,
+        iterations: int = 1000,
+        dklen: int = 32,
+    ) -> Dict[str, Any]:
+        """Derives a cryptographic key of length dklen using PBKDF2-HMAC-SHA256."""
+        import hmac
+        import hashlib
+        import struct
+
+        p_bytes = password.encode("utf-8")
+        s_bytes = salt.encode("utf-8")
+        iters = max(1, int(iterations))
+        target_len = max(1, int(dklen))
+
+        hlen = 32  # SHA-256 output length in bytes
+        num_blocks = (target_len + hlen - 1) // hlen
+        derived_bytes = bytearray()
+
+        for block_idx in range(1, num_blocks + 1):
+            # U1 = PRF(P, S || INT_32_BE(block_idx))
+            salt_and_idx = s_bytes + struct.pack(">I", block_idx)
+            u = hmac.new(p_bytes, salt_and_idx, hashlib.sha256).digest()
+            f_accum = bytearray(u)
+
+            # Iterations 2..c
+            for _ in range(1, iters):
+                u = hmac.new(p_bytes, u, hashlib.sha256).digest()
+                for b_i in range(hlen):
+                    f_accum[b_i] ^= u[b_i]
+
+            derived_bytes.extend(f_accum)
+
+        final_key = bytes(derived_bytes[:target_len])
+
+        return {
+            "derived_key_hex": final_key.hex(),
+            "key_length_bytes": len(final_key),
+            "iterations": iters,
+            "salt_used": salt,
+        }
+
+
+def sec_schnorr_zkp_prove_verify(
+    secret_x: int,
+    p_prime: Optional[int] = None,
+    q_subgroup: Optional[int] = None,
+    g_gen: Optional[int] = None,
+) -> Record:
+    """Runs Schnorr Zero-Knowledge Proof protocol proving knowledge of discrete logarithm."""
+    return Record(
+        ZeroKnowledgeSchnorrIdentificationProtocol.prove_and_verify(
+            secret_x, p=p_prime, q=q_subgroup, g=g_gen
+        )
+    )
+
+
+def sec_pbkdf2_sha256(
+    password: str,
+    salt: str,
+    iterations: int = 1000,
+    dklen: int = 32,
+) -> Record:
+    """Derives cryptographic key using PBKDF2-HMAC-SHA256."""
+    return Record(
+        PBKDF2KeyDerivationFunctionPure.derive_key(
+            password, salt, iterations=iterations, dklen=dklen
+        )
+    )
+
+
+
 

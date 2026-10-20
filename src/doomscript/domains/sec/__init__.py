@@ -46,6 +46,10 @@ from doomscript.domains.sec.runtime import (
     sec_chaum_sign_blinded,
     sec_chaum_unblind_signature,
     sec_chaum_verify_signature,
+    ZeroKnowledgeSchnorrIdentificationProtocol,
+    PBKDF2KeyDerivationFunctionPure,
+    sec_schnorr_zkp_prove_verify,
+    sec_pbkdf2_sha256,
 )
 from doomscript.domains.sec.parser import SecDomainParser
 from doomscript.domains.sec.exporter import SecASTExporter
@@ -163,4 +167,8 @@ __all__ = [
     "sec_chaum_sign_blinded",
     "sec_chaum_unblind_signature",
     "sec_chaum_verify_signature",
+    "ZeroKnowledgeSchnorrIdentificationProtocol",
+    "PBKDF2KeyDerivationFunctionPure",
+    "sec_schnorr_zkp_prove_verify",
+    "sec_pbkdf2_sha256",
 ]

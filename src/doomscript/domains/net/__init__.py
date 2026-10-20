@@ -54,6 +54,10 @@ from doomscript.domains.net.runtime import (
     BGPPathVectorRouter,
     net_ospf_calculate_spf,
     net_bgp_route_selection,
+    TCPCongestionControlBBR,
+    DiffServTokenBucketPolicer,
+    net_bbr_congestion_control,
+    net_diffserv_trtcm_police,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.net.exporter import NetASTExporter
@@ -231,4 +235,8 @@ __all__ = [
     "BGPPathVectorRouter",
     "net_ospf_calculate_spf",
     "net_bgp_route_selection",
+    "TCPCongestionControlBBR",
+    "DiffServTokenBucketPolicer",
+    "net_bbr_congestion_control",
+    "net_diffserv_trtcm_police",
 ]

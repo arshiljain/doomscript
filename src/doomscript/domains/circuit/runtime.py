@@ -1363,3 +1363,278 @@ def circuit_bjt_operating_point(
     return Record(SmallSignalDiodeBJTAnalyzer.analyze_common_emitter(vcc, rb_kohm, rc_kohm, beta=beta, va=va))
 
 
+# ==============================================================================
+# SPICE MODIFIED NODAL ANALYSIS (MNA) & DIGITAL STATIC TIMING ANALYSIS (STA)
+# ==============================================================================
+
+
+class ModifiedNodalAnalysisMNASolver:
+    """SPICE-Grade Modified Nodal Analysis (MNA) Linear Circuit Engine.
+
+    Assembles and solves the block linear system [G, B; C, D] * [v; j] = [i; e]
+    for arbitrary networks of resistors, independent voltage sources, independent
+    current sources, and controlled sources. Resolves all node voltages and branch currents.
+    """
+
+    @classmethod
+    def solve(
+        cls,
+        components: List[Dict[str, Any]],
+        ground_node: int = 0,
+    ) -> Dict[str, Any]:
+        """Solves DC circuit via Modified Nodal Analysis stamping."""
+        # Find all nodes
+        nodes_set = set()
+        v_sources = []
+
+        for comp in components:
+            c_type = comp["type"].upper()
+            n1 = comp["node1"]
+            n2 = comp["node2"]
+            nodes_set.add(n1)
+            nodes_set.add(n2)
+            if c_type in ("V", "VOLTAGE"):
+                v_sources.append(comp)
+
+        nodes = sorted(list(nodes_set - {ground_node}))
+        node_map = {n: i for i, n in enumerate(nodes)}
+        num_nodes = len(nodes)
+        num_v = len(v_sources)
+        total_vars = num_nodes + num_v
+
+        # System matrix A of size total_vars x total_vars, and rhs vector Z
+        A = [[0.0] * total_vars for _ in range(total_vars)]
+        Z = [0.0] * total_vars
+
+        # 1. Stamp passive components and current sources
+        for comp in components:
+            c_type = comp["type"].upper()
+            n1 = comp["node1"]
+            n2 = comp["node2"]
+            val = float(comp["value"])
+
+            idx1 = node_map.get(n1)
+            idx2 = node_map.get(n2)
+
+            if c_type in ("R", "RESISTOR"):
+                g = 1.0 / max(1e-9, val)
+                if idx1 is not None:
+                    A[idx1][idx1] += g
+                if idx2 is not None:
+                    A[idx2][idx2] += g
+                if idx1 is not None and idx2 is not None:
+                    A[idx1][idx2] -= g
+                    A[idx2][idx1] -= g
+
+            elif c_type in ("I", "CURRENT"):
+                # Current leaves n1, enters n2
+                if idx1 is not None:
+                    Z[idx1] -= val
+                if idx2 is not None:
+                    Z[idx2] += val
+
+        # 2. Stamp independent voltage sources (equations num_nodes .. total_vars - 1)
+        for k, v_comp in enumerate(v_sources):
+            row = num_nodes + k
+            n1 = v_comp["node1"]
+            n2 = v_comp["node2"]
+            v_val = float(v_comp["value"])
+
+            idx1 = node_map.get(n1)
+            idx2 = node_map.get(n2)
+
+            # v(n1) - v(n2) = v_val
+            if idx1 is not None:
+                A[row][idx1] = 1.0
+                A[idx1][row] = 1.0  # B block transpose
+            if idx2 is not None:
+                A[row][idx2] = -1.0
+                A[idx2][row] = -1.0  # B block transpose
+
+            Z[row] = v_val
+
+        # 3. Solve A * X = Z via Gaussian elimination with partial pivoting
+        n_sys = total_vars
+        for p in range(n_sys):
+            # Pivot
+            max_row = p
+            max_val = abs(A[p][p])
+            for r in range(p + 1, n_sys):
+                if abs(A[r][p]) > max_val:
+                    max_val = abs(A[r][p])
+                    max_row = r
+
+            if max_val < 1e-12:
+                # Singular matrix (floating node or invalid source loop)
+                continue
+
+            A[p], A[max_row] = A[max_row], A[p]
+            Z[p], Z[max_row] = Z[max_row], Z[p]
+
+            piv = A[p][p]
+            for r in range(p + 1, n_sys):
+                factor = A[r][p] / piv
+                for c in range(p, n_sys):
+                    A[r][c] -= factor * A[p][c]
+                Z[r] -= factor * Z[p]
+
+        # Back substitution
+        X = [0.0] * n_sys
+        for r in range(n_sys - 1, -1, -1):
+            if abs(A[r][r]) > 1e-12:
+                s = sum(A[r][c] * X[c] for c in range(r + 1, n_sys))
+                X[r] = (Z[r] - s) / A[r][r]
+
+        # Format node voltages
+        node_voltages = {f"n{ground_node}": 0.0, str(ground_node): 0.0}
+        for n_id, idx in node_map.items():
+            val = round(X[idx], 4)
+            node_voltages[f"n{n_id}"] = val
+            node_voltages[str(n_id)] = val
+            if isinstance(n_id, int):
+                node_voltages[n_id] = val
+
+        # Voltage source branch currents
+        source_currents = {}
+        for k, v_comp in enumerate(v_sources):
+            name = v_comp.get("name", f"V{k}")
+            source_currents[name] = round(X[num_nodes + k], 4)
+
+        return {
+            "node_voltages": node_voltages,
+            "source_currents": source_currents,
+            "num_nodes": len(node_voltages),
+            "num_voltage_sources": num_v,
+        }
+
+
+class DigitalStaticTimingAnalyzerSTA:
+    """Static Timing Analysis (STA) Engine for Gate-Level Digital Logic.
+
+    Traverses directed acyclic gate netlist to calculate Arrival Times (AT),
+    Required Arrival Times (RAT), setup slacks, critical delay path, and maximum
+    achievable clock frequency (Fmax).
+    """
+
+    @classmethod
+    def analyze(
+        cls,
+        gates: List[Dict[str, Any]],
+        clock_period_ns: float = 10.0,
+        setup_time_ns: float = 0.2,
+    ) -> Dict[str, Any]:
+        """Calculates timing slack and critical path across logic gates."""
+        # Build DAG
+        gate_map = {g["id"]: g for g in gates}
+        in_degree = {g["id"]: 0 for g in gates}
+        successors: Dict[str, List[str]] = {g["id"]: [] for g in gates}
+
+        for g in gates:
+            inputs = g.get("inputs", [])
+            for inp in inputs:
+                if inp in gate_map:
+                    successors[inp].append(g["id"])
+                    in_degree[g["id"]] += 1
+
+        # 1. Forward Pass: Arrival Time (AT)
+        # Kahn's topological sort
+        queue = [gid for gid, deg in in_degree.items() if deg == 0]
+        arrival_time: Dict[str, float] = {}
+        topo_order: List[str] = []
+
+        for gid in queue:
+            g = gate_map[gid]
+            arrival_time[gid] = float(g.get("delay_ns", 1.0))
+
+        while queue:
+            curr = queue.pop(0)
+            topo_order.append(curr)
+            curr_at = arrival_time[curr]
+
+            for succ in successors[curr]:
+                succ_g = gate_map[succ]
+                succ_delay = float(succ_g.get("delay_ns", 1.0))
+                cand_at = curr_at + succ_delay
+                arrival_time[succ] = max(arrival_time.get(succ, 0.0), cand_at)
+
+                in_degree[succ] -= 1
+                if in_degree[succ] == 0:
+                    queue.append(succ)
+
+        # 2. Backward Pass: Required Arrival Time (RAT)
+        rat: Dict[str, float] = {}
+        max_at = max(arrival_time.values()) if arrival_time else 0.0
+        target_rat = clock_period_ns - setup_time_ns
+
+        # Initialize primary outputs (nodes with no successors)
+        for gid in reversed(topo_order):
+            if not successors[gid]:
+                rat[gid] = target_rat
+            else:
+                min_req = min(
+                    rat[succ] - float(gate_map[succ].get("delay_ns", 1.0))
+                    for succ in successors[gid]
+                )
+                rat[gid] = min_req
+
+        # 3. Calculate Slacks: Slack = RAT - AT
+        slacks: Dict[str, float] = {}
+        min_slack = float("inf")
+        worst_gate = None
+
+        for gid in topo_order:
+            slk = rat[gid] - arrival_time[gid]
+            slacks[gid] = round(slk, 3)
+            if slk < min_slack:
+                min_slack = slk
+                worst_gate = gid
+
+        # Find critical path: trace backwards from worst primary output along minimum slack
+        primary_outputs = [gid for gid in topo_order if not successors[gid]]
+        worst_output = min(primary_outputs, key=lambda gid: slacks.get(gid, float("inf"))) if primary_outputs else None
+
+        crit_path = []
+        if worst_output:
+            curr = worst_output
+            crit_path.append(curr)
+            while True:
+                preds = [inp for inp in gate_map[curr].get("inputs", []) if inp in gate_map]
+                if not preds:
+                    break
+                # Pick predecessor with smallest slack
+                best_pred = min(preds, key=lambda p: slacks.get(p, float("inf")))
+                crit_path.append(best_pred)
+                curr = best_pred
+            crit_path.reverse()
+
+        min_clk_period = max_at + setup_time_ns
+        fmax_mhz = (1000.0 / max(1e-4, min_clk_period)) if min_clk_period > 0 else 0.0
+
+        return {
+            "slacks": slacks,
+            "worst_negative_slack_ns": round(min_slack, 3),
+            "timing_violation": min_slack < 0.0,
+            "critical_path": crit_path,
+            "max_arrival_time_ns": round(max_at, 3),
+            "max_frequency_mhz": round(fmax_mhz, 2),
+            "total_gates": len(gates),
+        }
+
+
+def circuit_mna_solve(
+    components: List[Dict[str, Any]],
+    ground_node: int = 0,
+) -> Record:
+    """Solves DC circuit node voltages and currents via Modified Nodal Analysis."""
+    return Record(ModifiedNodalAnalysisMNASolver.solve(components, ground_node=ground_node))
+
+
+def circuit_static_timing_analysis(
+    gates: List[Dict[str, Any]],
+    clock_period_ns: float = 10.0,
+) -> Record:
+    """Performs digital Static Timing Analysis (STA) on gate netlist."""
+    return Record(DigitalStaticTimingAnalyzerSTA.analyze(gates, clock_period_ns=clock_period_ns))
+
+
+

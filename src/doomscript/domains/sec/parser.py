@@ -278,6 +278,35 @@ class SecDomainParser(DomainParser):
             sig, msg, e, n, target = m_ch_v.group(1).strip(), m_ch_v.group(2).strip(), m_ch_v.group(3).strip(), m_ch_v.group(4).strip(), m_ch_v.group(5).strip()
             return f"set {target} to sec_chaum_verify_signature({sig}, {msg}, {e}, {n})"
 
+        # prove schnorr zkp secret <sec> into <target>
+        m_schnorr = re.match(
+            r"^prove\s+schnorr\s+zkp\s+secret\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_schnorr:
+            sec_val = m_schnorr.group(1).strip()
+            target = m_schnorr.group(2).strip()
+            return f"set {target} to sec_schnorr_zkp_prove_verify({sec_val})"
+
+        # derive pbkdf2 key password <pwd> salt <salt> [iterations <iter>] [length <len>] into <target>
+        m_pbkdf = re.match(
+            r"^derive\s+pbkdf2\s+key\s+password\s+(.+?)\s+salt\s+(.+?)(?:\s+iterations\s+(\d+))?(?:\s+length\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_pbkdf:
+            pwd = m_pbkdf.group(1).strip()
+            salt = m_pbkdf.group(2).strip()
+            it = m_pbkdf.group(3).strip() if m_pbkdf.group(3) else "1000"
+            l_val = m_pbkdf.group(4).strip() if m_pbkdf.group(4) else "32"
+            target = m_pbkdf.group(5).strip()
+            if not (pwd.startswith('"') or pwd.startswith("'") or pwd.isidentifier()):
+                pwd = f'"{pwd}"'
+            if not (salt.startswith('"') or salt.startswith("'") or salt.isidentifier()):
+                salt = f'"{salt}"'
+            return f"set {target} to sec_pbkdf2_sha256({pwd}, {salt}, iterations={it}, dklen={l_val})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

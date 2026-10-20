@@ -499,6 +499,30 @@ class CloudDomainParser(DomainParser):
             pkt, bucket, target = m_lbenq.group(1).strip(), m_lbenq.group(2).strip(), m_lbenq.group(3).strip()
             return f"set {target} to cloud_leaky_bucket_enqueue({bucket}, {pkt})"
 
+        # simulate paxos consensus [acceptors <n>] proposals <props> into <target>
+        m_paxos = re.match(
+            r"^simulate\s+paxos\s+consensus(?:\s+acceptors\s+(\d+))?\s+proposals\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_paxos:
+            acc = m_paxos.group(1).strip() if m_paxos.group(1) else "5"
+            props = m_paxos.group(2).strip()
+            target = m_paxos.group(3).strip()
+            return f"set {target} to cloud_paxos_simulate_round(num_acceptors={acc}, proposals={props})"
+
+        # simulate raft cluster [nodes <n>] [commands <cmds>] into <target>
+        m_raft = re.match(
+            r"^simulate\s+raft\s+cluster(?:\s+nodes\s+(\d+))?(?:\s+commands\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_raft:
+            n_nodes = m_raft.group(1).strip() if m_raft.group(1) else "5"
+            cmds = m_raft.group(2).strip() if m_raft.group(2) else "None"
+            target = m_raft.group(3).strip()
+            return f"set {target} to cloud_raft_simulate_cluster(num_nodes={n_nodes}, commands={cmds})"
+
         return None
 
     def parse_block(
