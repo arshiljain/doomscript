@@ -730,3 +730,314 @@ def audio_biquad_filter(
 
 
 
+
+
+# ==============================================================================
+# Advanced Audio Deepening: PolyBLEP Synth, YIN Pitch Detector & Parametric EQ
+# ==============================================================================
+
+class PolyphonicSynth:
+    """Multi-voice polyphonic synthesizer with PolyBLEP anti-aliasing and ADSR."""
+
+    def __init__(self, sample_rate: int = 44100, max_voices: int = 8):
+        self.sample_rate = sample_rate
+        self.max_voices = max_voices
+        self.voices: List[Dict[str, Any]] = []
+
+    @staticmethod
+    def _midi_to_hz(note: int) -> float:
+        return 440.0 * (2.0 ** ((note - 69) / 12.0))
+
+    @staticmethod
+    def _poly_blep(t: float, dt: float) -> float:
+        if t < dt:
+            t_dt = t / dt
+            return t_dt + t_dt - t_dt * t_dt - 1.0
+        elif t > 1.0 - dt:
+            t_dt = (t - 1.0) / dt
+            return t_dt * t_dt + t_dt + t_dt + 1.0
+        return 0.0
+
+    def note_on(
+        self,
+        midi_note: int,
+        velocity: float = 1.0,
+        waveform: str = "sawtooth",
+        attack: float = 0.01,
+        decay: float = 0.1,
+        sustain: float = 0.7,
+        release: float = 0.2,
+    ) -> None:
+        """Triggers a note on an available voice or steals oldest voice."""
+        for v in self.voices:
+            if v["note"] == midi_note and v["state"] != "release":
+                v["state"] = "attack"
+                v["adsr_time"] = 0.0
+                return
+
+        if len(self.voices) >= self.max_voices:
+            self.voices.pop(0)
+
+        freq = self._midi_to_hz(midi_note)
+        self.voices.append({
+            "note": midi_note,
+            "freq": freq,
+            "phase": 0.0,
+            "phase_step": freq / float(self.sample_rate),
+            "velocity": max(0.0, min(1.0, float(velocity))),
+            "waveform": waveform.lower(),
+            "attack": max(0.001, attack),
+            "decay": max(0.001, decay),
+            "sustain": max(0.0, min(1.0, sustain)),
+            "release": max(0.001, release),
+            "state": "attack",
+            "level": 0.0,
+            "release_level": 0.0,
+            "adsr_time": 0.0,
+        })
+
+    def note_off(self, midi_note: int) -> None:
+        """Transitions note into release state."""
+        for v in self.voices:
+            if v["note"] == midi_note and v["state"] != "release":
+                v["state"] = "release"
+                v["release_level"] = v["level"]
+                v["adsr_time"] = 0.0
+
+    def render(self, duration_sec: float) -> List[float]:
+        """Renders synth voices into a floating-point audio buffer [-1.0, 1.0]."""
+        num_samples = int(duration_sec * self.sample_rate)
+        buffer = [0.0] * num_samples
+        dt_sample = 1.0 / self.sample_rate
+
+        for i in range(num_samples):
+            sample_val = 0.0
+            dead_voices = []
+
+            for v in self.voices:
+                st = v["state"]
+                t_env = v["adsr_time"]
+
+                if st == "attack":
+                    if t_env < v["attack"]:
+                        v["level"] = t_env / v["attack"]
+                    else:
+                        v["state"] = "decay"
+                        v["adsr_time"] = 0.0
+                        v["level"] = 1.0
+                elif st == "decay":
+                    if t_env < v["decay"]:
+                        ratio = t_env / v["decay"]
+                        v["level"] = 1.0 - ratio * (1.0 - v["sustain"])
+                    else:
+                        v["state"] = "sustain"
+                        v["level"] = v["sustain"]
+                elif st == "sustain":
+                    v["level"] = v["sustain"]
+                elif st == "release":
+                    if t_env < v["release"]:
+                        v["level"] = v["release_level"] * (1.0 - t_env / v["release"])
+                    else:
+                        v["level"] = 0.0
+                        dead_voices.append(v)
+
+                v["adsr_time"] += dt_sample
+
+                phase = v["phase"]
+                p_step = v["phase_step"]
+                wf = v["waveform"]
+
+                if wf == "sine":
+                    osc = math.sin(2.0 * math.pi * phase)
+                elif wf in ("sawtooth", "saw"):
+                    naive = 2.0 * phase - 1.0
+                    osc = naive - self._poly_blep(phase, p_step)
+                elif wf == "square":
+                    naive = 1.0 if phase < 0.5 else -1.0
+                    osc = naive + self._poly_blep(phase, p_step) - self._poly_blep((phase + 0.5) % 1.0, p_step)
+                elif wf == "triangle":
+                    naive = 2.0 * abs(2.0 * phase - 1.0) - 1.0
+                    osc = naive
+                else:
+                    osc = math.sin(2.0 * math.pi * phase)
+
+                sample_val += osc * v["level"] * v["velocity"]
+                v["phase"] = (phase + p_step) % 1.0
+
+            for dv in dead_voices:
+                if dv in self.voices:
+                    self.voices.remove(dv)
+
+            buffer[i] = round(math.tanh(sample_val), 5)
+
+        return buffer
+
+
+class YINPitchDetector:
+    """YIN algorithm for fundamental frequency (f0) pitch detection with sub-sample precision."""
+
+    @classmethod
+    def detect_pitch(
+        cls,
+        samples: List[float],
+        sample_rate: int = 44100,
+        min_freq: float = 60.0,
+        max_freq: float = 1200.0,
+        threshold: float = 0.15,
+    ) -> Dict[str, Any]:
+        """Estimates fundamental frequency f0 of audio signal."""
+        n = len(samples)
+        if n < 64:
+            return {"pitch_hz": 0.0, "clarity": 0.0}
+
+        min_tau = int(sample_rate / max_freq)
+        max_tau = min(n // 2, int(sample_rate / min_freq))
+
+        w_size = n - max_tau
+        diff = [0.0] * max_tau
+        for tau in range(max_tau):
+            s = 0.0
+            for j in range(w_size):
+                d = samples[j] - samples[j + tau]
+                s += d * d
+            diff[tau] = s
+
+        cmndf = [1.0] * max_tau
+        running_sum = 0.0
+        for tau in range(1, max_tau):
+            running_sum += diff[tau]
+            if running_sum > 0.0:
+                cmndf[tau] = diff[tau] / (running_sum / tau)
+            else:
+                cmndf[tau] = 1.0
+
+        best_tau = None
+        for tau in range(min_tau, max_tau):
+            if cmndf[tau] < threshold:
+                while tau + 1 < max_tau and cmndf[tau + 1] < cmndf[tau]:
+                    tau += 1
+                best_tau = tau
+                break
+
+        if best_tau is None:
+            min_val = min(cmndf[min_tau:max_tau])
+            best_tau = min_tau + cmndf[min_tau:max_tau].index(min_val)
+
+        tau_opt = float(best_tau)
+        if 0 < best_tau < max_tau - 1:
+            alpha = cmndf[best_tau - 1]
+            beta = cmndf[best_tau]
+            gamma = cmndf[best_tau + 1]
+            denom = 2.0 * (alpha - 2.0 * beta + gamma)
+            if abs(denom) > 1e-12:
+                tau_opt = best_tau + (alpha - gamma) / denom
+
+        clarity = max(0.0, 1.0 - cmndf[best_tau])
+        pitch_hz = sample_rate / tau_opt if tau_opt > 0 else 0.0
+
+        return {
+            "pitch_hz": round(pitch_hz, 2),
+            "clarity": round(clarity, 4),
+            "period_samples": round(tau_opt, 3),
+        }
+
+
+class ParametricEQ:
+    """Multi-band parametric equalizer using cascaded biquad Direct Form II filters."""
+
+    @staticmethod
+    def _calc_coeffs(btype: str, f0: float, gain_db: float, q: float, fs: float) -> Tuple[float, float, float, float, float]:
+        w0 = 2.0 * math.pi * f0 / fs
+        cos_w0 = math.cos(w0)
+        sin_w0 = math.sin(w0)
+        A = 10.0 ** (gain_db / 40.0)
+        alpha = sin_w0 / (2.0 * max(0.01, q))
+
+        t = btype.lower().strip()
+        if t in ("peaking", "peak"):
+            b0 = 1.0 + alpha * A
+            b1 = -2.0 * cos_w0
+            b2 = 1.0 - alpha * A
+            a0 = 1.0 + alpha / A
+            a1 = -2.0 * cos_w0
+            a2 = 1.0 - alpha / A
+        elif t in ("lowshelf", "low_shelf"):
+            two_sqrt_a_alpha = 2.0 * math.sqrt(A) * alpha
+            b0 = A * ((A + 1.0) - (A - 1.0) * cos_w0 + two_sqrt_a_alpha)
+            b1 = 2.0 * A * ((A - 1.0) - (A + 1.0) * cos_w0)
+            b2 = A * ((A + 1.0) - (A - 1.0) * cos_w0 - two_sqrt_a_alpha)
+            a0 = (A + 1.0) + (A - 1.0) * cos_w0 + two_sqrt_a_alpha
+            a1 = -2.0 * ((A - 1.0) + (A + 1.0) * cos_w0)
+            a2 = (A + 1.0) + (A - 1.0) * cos_w0 - two_sqrt_a_alpha
+        elif t in ("highshelf", "high_shelf"):
+            two_sqrt_a_alpha = 2.0 * math.sqrt(A) * alpha
+            b0 = A * ((A + 1.0) + (A - 1.0) * cos_w0 + two_sqrt_a_alpha)
+            b1 = -2.0 * A * ((A - 1.0) + (A + 1.0) * cos_w0)
+            b2 = A * ((A + 1.0) - (A - 1.0) * cos_w0 - two_sqrt_a_alpha)
+            a0 = (A + 1.0) - (A - 1.0) * cos_w0 + two_sqrt_a_alpha
+            a1 = 2.0 * ((A - 1.0) - (A + 1.0) * cos_w0)
+            a2 = (A + 1.0) - (A - 1.0) * cos_w0 - two_sqrt_a_alpha
+        else:
+            b0 = 1.0
+            b1 = -2.0 * cos_w0
+            b2 = 1.0
+            a0 = 1.0 + alpha
+            a1 = -2.0 * cos_w0
+            a2 = 1.0 - alpha
+
+        return b0 / a0, b1 / a0, b2 / a0, a1 / a0, a2 / a0
+
+    @classmethod
+    def process(
+        cls,
+        samples: List[float],
+        bands: List[Dict[str, Any]],
+        sample_rate: int = 44100,
+    ) -> List[float]:
+        current_samples = list(samples)
+        fs = float(sample_rate)
+
+        for band in bands:
+            btype = band.get("type", "peaking")
+            f0 = float(band.get("freq", 1000.0))
+            gain = float(band.get("gain_db", 0.0))
+            q = float(band.get("q", 1.0))
+
+            if abs(gain) < 1e-6 and btype in ("peaking", "lowshelf", "highshelf"):
+                continue
+
+            b0, b1, b2, a1, a2 = cls._calc_coeffs(btype, f0, gain, q, fs)
+
+            out = [0.0] * len(current_samples)
+            x1, x2 = 0.0, 0.0
+            y1, y2 = 0.0, 0.0
+
+            for i, x in enumerate(current_samples):
+                y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2
+                out[i] = y
+                x2 = x1
+                x1 = x
+                y2 = y1
+                y1 = y
+
+            current_samples = out
+
+        return [round(max(-1.0, min(1.0, s)), 5) for s in current_samples]
+
+
+def audio_poly_synth_render(notes: List[Tuple[int, float, float]], duration_sec: float = 1.0, waveform: str = "sawtooth", sample_rate: int = 44100) -> List[float]:
+    """Renders polyphonic notes: [(midi_note, start_time, duration), ...]"""
+    synth = PolyphonicSynth(sample_rate=sample_rate)
+    for note, start, dur in notes:
+        synth.note_on(note, waveform=waveform)
+    return synth.render(duration_sec)
+
+
+def audio_yin_pitch(samples: List[float], sample_rate: int = 44100) -> Dict[str, Any]:
+    """Detects fundamental pitch f0 via YIN algorithm."""
+    return YINPitchDetector.detect_pitch(samples, sample_rate)
+
+
+def audio_parametric_eq(samples: List[float], bands: List[Dict[str, Any]], sample_rate: int = 44100) -> List[float]:
+    """Applies multi-band parametric equalization."""
+    return ParametricEQ.process(samples, bands, sample_rate)

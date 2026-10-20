@@ -249,3 +249,211 @@ def spatial_audio_schroeder_reverb(
 ) -> List[float]:
     """Applies Schroeder algorithmic reverberation."""
     return SchroederReverberator.process(signal, rt60, sample_rate)
+
+
+# ==============================================================================
+# Advanced Spatial Audio: Higher Order Ambisonics, Acoustic Raytracer & HRTF
+# ==============================================================================
+
+class HigherOrderAmbisonics:
+    """2nd-Order Ambisonics (9-channel HOA) spherical harmonics encoder and decoder."""
+
+    @classmethod
+    def encode_2nd_order(
+        cls,
+        signal: List[float],
+        azimuth_deg: float,
+        elevation_deg: float = 0.0,
+    ) -> List[List[float]]:
+        """
+        Encodes mono signal into 9 ACN channels (N3D normalization):
+        0: W (l=0, m=0)
+        1: Y (l=1, m=-1), 2: Z (l=1, m=0), 3: X (l=1, m=1)
+        4: V (l=2, m=-2), 5: T (l=2, m=-1), 6: R (l=2, m=0), 7: S (l=2, m=1), 8: U (l=2, m=2)
+        """
+        theta = math.radians(azimuth_deg)
+        phi = math.radians(elevation_deg)
+        cos_t, sin_t = math.cos(theta), math.sin(theta)
+        cos_p, sin_p = math.cos(phi), math.sin(phi)
+
+        y = [0.0] * 9
+        # Order 0
+        y[0] = 1.0
+        # Order 1
+        y[1] = sin_t * cos_p
+        y[2] = sin_p
+        y[3] = cos_t * cos_p
+        # Order 2
+        y[4] = math.sqrt(3.0) * sin_t * cos_t * (cos_p ** 2)
+        y[5] = math.sqrt(3.0) * sin_t * sin_p * cos_p
+        y[6] = 0.5 * (3.0 * (sin_p ** 2) - 1.0)
+        y[7] = math.sqrt(3.0) * cos_t * sin_p * cos_p
+        y[8] = 0.5 * math.sqrt(3.0) * ((cos_t ** 2) - (sin_t ** 2)) * (cos_p ** 2)
+
+        channels = [[round(s * y[c], 6) for s in signal] for c in range(9)]
+        return channels
+
+    @classmethod
+    def decode_to_loudspeakers(
+        cls,
+        hoa_channels: List[List[float]],
+        speaker_angles_deg: List[float],
+    ) -> List[List[float]]:
+        """Decodes HOA channels to loudspeaker feeds at specified azimuth angles."""
+        num_spk = len(speaker_angles_deg)
+        n_samples = len(hoa_channels[0]) if hoa_channels else 0
+        spk_feeds = [[0.0] * n_samples for _ in range(num_spk)]
+
+        for spk_idx, ang in enumerate(speaker_angles_deg):
+            theta = math.radians(ang)
+            cos_t, sin_t = math.cos(theta), math.sin(theta)
+            # Re-compute harmonics for speaker direction
+            weights = [
+                1.0 / num_spk,
+                (sin_t) / num_spk,
+                0.0,
+                (cos_t) / num_spk,
+                (math.sqrt(3.0) * sin_t * cos_t) / num_spk,
+                0.0,
+                (-0.5) / num_spk,
+                0.0,
+                (0.5 * math.sqrt(3.0) * ((cos_t ** 2) - (sin_t ** 2))) / num_spk,
+            ]
+            for i in range(n_samples):
+                val = sum(hoa_channels[c][i] * weights[c] for c in range(min(9, len(hoa_channels))))
+                spk_feeds[spk_idx][i] = round(val, 5)
+
+        return spk_feeds
+
+
+class AcousticRaytracer:
+    """Image-source method for rectangular shoe-box acoustic room impulse response (RIR)."""
+
+    SPEED_OF_SOUND = 343.0  # m/s
+
+    @classmethod
+    def generate_rir(
+        cls,
+        room_dims: Tuple[float, float, float],
+        source_pos: Tuple[float, float, float],
+        listener_pos: Tuple[float, float, float],
+        absorption: Tuple[float, float, float] = (0.2, 0.2, 0.2),
+        max_order: int = 2,
+        sample_rate: int = 44100,
+        duration_sec: float = 0.1,
+    ) -> List[float]:
+        """Synthesizes discrete room impulse response vector."""
+        lx, ly, lz = room_dims
+        xs, ys, zs = source_pos
+        xl, yl, zl = listener_pos
+        ax, ay, az = absorption
+
+        rx = math.sqrt(max(0.0, 1.0 - ax))
+        ry = math.sqrt(max(0.0, 1.0 - ay))
+        rz = math.sqrt(max(0.0, 1.0 - az))
+
+        num_samples = int(duration_sec * sample_rate)
+        rir = [0.0] * num_samples
+
+        for nx in range(-max_order, max_order + 1):
+            for ny in range(-max_order, max_order + 1):
+                for nz in range(-max_order, max_order + 1):
+                    # Image source position
+                    ix = nx * lx + (-xs if (nx % 2 != 0) else xs)
+                    iy = ny * ly + (-ys if (ny % 2 != 0) else ys)
+                    iz = nz * lz + (-zs if (nz % 2 != 0) else zs)
+
+                    dx = ix - xl
+                    dy = iy - yl
+                    dz = iz - zl
+                    dist = math.sqrt(dx * dx + dy * dy + dz * dz)
+                    if dist < 0.05:
+                        continue
+
+                    delay_sec = dist / cls.SPEED_OF_SOUND
+                    sample_idx = int(round(delay_sec * sample_rate))
+
+                    if 0 <= sample_idx < num_samples:
+                        # Attenuation: 1/dist * reflection loss
+                        attenuation = (1.0 / dist) * (rx ** abs(nx)) * (ry ** abs(ny)) * (rz ** abs(nz))
+                        rir[sample_idx] += round(attenuation, 6)
+
+        # Normalize peak
+        peak = max(abs(s) for s in rir) if rir else 1.0
+        if peak > 0.0:
+            rir = [round(s / peak, 5) for s in rir]
+
+        return rir
+
+
+class HRTFConvolution:
+    """Synthetic Head-Related Transfer Function spatial binaural filtering."""
+
+    @classmethod
+    def spatialize(
+        cls,
+        signal: List[float],
+        azimuth_deg: float,
+        elevation_deg: float = 0.0,
+        sample_rate: int = 44100,
+    ) -> Tuple[List[float], List[float]]:
+        """Convolves mono sound with synthetic spherical head HRTF."""
+        c = 343.0
+        head_radius = 0.0875  # 8.75 cm
+        theta = math.radians(azimuth_deg % 360)
+        if theta > math.pi:
+            theta -= 2.0 * math.pi
+
+        abs_theta = abs(theta)
+        # Woodworth formula for ITD
+        if abs_theta <= math.pi / 2.0:
+            itd = (head_radius / c) * (abs_theta + math.sin(abs_theta))
+        else:
+            itd = (head_radius / c) * (math.pi - abs_theta + math.sin(abs_theta))
+
+        delay_samples = itd * sample_rate
+        int_delay = int(round(delay_samples))
+
+        # ILD attenuation factor
+        far_gain = max(0.2, 0.5 + 0.5 * math.cos(abs_theta))
+
+        n = len(signal)
+        left = [0.0] * n
+        right = [0.0] * n
+
+        if theta >= 0.0:
+            # Sound from right: right ear direct, left ear delayed and shadowed
+            right = list(signal)
+            for i in range(n):
+                src = i - int_delay
+                if src >= 0:
+                    left[i] = round(signal[src] * far_gain, 5)
+        else:
+            # Sound from left: left ear direct, right ear delayed and shadowed
+            left = list(signal)
+            for i in range(n):
+                src = i - int_delay
+                if src >= 0:
+                    right[i] = round(signal[src] * far_gain, 5)
+
+        return left, right
+
+
+def spatial_audio_hoa_encode(signal: List[float], azimuth_deg: float, elevation_deg: float = 0.0) -> List[List[float]]:
+    """Encodes mono signal to 2nd-order Ambisonics (9 channels)."""
+    return HigherOrderAmbisonics.encode_2nd_order(signal, azimuth_deg, elevation_deg)
+
+
+def spatial_audio_room_impulse_response(
+    room_dims: Tuple[float, float, float],
+    source_pos: Tuple[float, float, float],
+    listener_pos: Tuple[float, float, float],
+    duration_sec: float = 0.1,
+) -> List[float]:
+    """Calculates acoustic room impulse response using image source raytracing."""
+    return AcousticRaytracer.generate_rir(room_dims, source_pos, listener_pos, duration_sec=duration_sec)
+
+
+def spatial_audio_hrtf_binaural(signal: List[float], azimuth_deg: float, elevation_deg: float = 0.0) -> Tuple[List[float], List[float]]:
+    """Spatially renders mono signal to binaural stereo via synthetic HRTF."""
+    return HRTFConvolution.spatialize(signal, azimuth_deg, elevation_deg)

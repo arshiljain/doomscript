@@ -25,6 +25,11 @@ from doomscript.domains.metrics.runtime import (
     metrics_calculate_percentile,
     metrics_export_prometheus,
     metrics_clear,
+    OTLPTraceExporter,
+    ExponentialDecayReservoir,
+    EWMAAnomalyDetector,
+    metrics_export_otlp_traces,
+    metrics_create_ewma_detector,
 )
 from doomscript.domains.metrics.parser import MetricsDomainParser
 from doomscript.domains.metrics.exporter import MetricsASTExporter
@@ -98,4 +103,9 @@ __all__ = [
     "metrics_export_openmetrics",
     "metrics_export_prometheus",
     "metrics_clear",
+    "OTLPTraceExporter",
+    "ExponentialDecayReservoir",
+    "EWMAAnomalyDetector",
+    "metrics_export_otlp_traces",
+    "metrics_create_ewma_detector",
 ]

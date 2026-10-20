@@ -27,6 +27,17 @@ from doomscript.domains.game.runtime import (
     game_combatant_create,
     game_resolve_turn,
     game_apply_buff,
+    BehaviorTree,
+    SequenceNode,
+    SelectorNode,
+    InverterNode,
+    ActionNode,
+    ConditionNode,
+    SteeringBehaviors,
+    TilemapPhysics,
+    game_create_behavior_tree,
+    game_steering_seek,
+    game_tilemap_resolve,
 )
 from doomscript.domains.game.parser import GameDomainParser
 from doomscript.domains.game.exporter import GameASTExporter
@@ -109,4 +120,15 @@ __all__ = [
     "game_combatant_create",
     "game_resolve_turn",
     "game_apply_buff",
+    "BehaviorTree",
+    "SequenceNode",
+    "SelectorNode",
+    "InverterNode",
+    "ActionNode",
+    "ConditionNode",
+    "SteeringBehaviors",
+    "TilemapPhysics",
+    "game_create_behavior_tree",
+    "game_steering_seek",
+    "game_tilemap_resolve",
 ]

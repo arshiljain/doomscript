@@ -49,6 +49,12 @@ from doomscript.domains.audio.runtime import (
     audio_mel_spectrogram,
     audio_mfcc,
     audio_biquad_filter,
+    PolyphonicSynth,
+    YINPitchDetector,
+    ParametricEQ,
+    audio_poly_synth_render,
+    audio_yin_pitch,
+    audio_parametric_eq,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.audio.exporter import AudioASTExporter
@@ -240,5 +246,11 @@ __all__ = [
     "audio_mel_spectrogram",
     "audio_mfcc",
     "audio_biquad_filter",
+    "PolyphonicSynth",
+    "YINPitchDetector",
+    "ParametricEQ",
+    "audio_poly_synth_render",
+    "audio_yin_pitch",
+    "audio_parametric_eq",
 ]
 

@@ -22,6 +22,12 @@ from doomscript.domains.spatial_audio.runtime import (
     spatial_audio_ambisonics_decode_stereo,
     spatial_audio_doppler,
     spatial_audio_schroeder_reverb,
+    HigherOrderAmbisonics,
+    AcousticRaytracer,
+    HRTFConvolution,
+    spatial_audio_hoa_encode,
+    spatial_audio_room_impulse_response,
+    spatial_audio_hrtf_binaural,
 )
 from doomscript.domains.spatial_audio.parser import SpatialAudioDomainParser
 from doomscript.domains.spatial_audio.exporter import SpatialAudioASTExporter
@@ -90,4 +96,10 @@ __all__ = [
     "spatial_audio_ambisonics_decode_stereo",
     "spatial_audio_doppler",
     "spatial_audio_schroeder_reverb",
+    "HigherOrderAmbisonics",
+    "AcousticRaytracer",
+    "HRTFConvolution",
+    "spatial_audio_hoa_encode",
+    "spatial_audio_room_impulse_response",
+    "spatial_audio_hrtf_binaural",
 ]

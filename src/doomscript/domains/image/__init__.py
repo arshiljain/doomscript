@@ -53,6 +53,12 @@ from doomscript.domains.image.runtime import (
     image_otsu_threshold,
     image_bilateral_filter,
     image_hough_lines,
+    GeometricWarp,
+    MorphologicalOps,
+    ColorQuantizer,
+    image_warp_affine,
+    image_morphology,
+    image_quantize_palette,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.image.exporter import ImageASTExporter
@@ -252,5 +258,11 @@ __all__ = [
     "image_otsu_threshold",
     "image_bilateral_filter",
     "image_hough_lines",
+    "GeometricWarp",
+    "MorphologicalOps",
+    "ColorQuantizer",
+    "image_warp_affine",
+    "image_morphology",
+    "image_quantize_palette",
 ]
 

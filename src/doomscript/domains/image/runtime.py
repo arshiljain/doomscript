@@ -1,6 +1,7 @@
 """Runtime execution engine for Image & Vision domain."""
 
 from typing import Any, Dict, List, Optional, Tuple, Union
+import math
 import os
 from doomscript.domains.base import DomainRuntime, DomainIR
 from doomscript.domains.image.spec import (
@@ -899,6 +900,354 @@ def image_hough_lines(
 
     lines.sort(key=lambda l: l["votes"], reverse=True)
     return lines
+
+
+# ==============================================================================
+# Advanced Image Deepening: Geometric Warp, Morphological Ops & Quantization
+# ==============================================================================
+
+class GeometricWarp:
+    """Affine & Perspective homography transformations with inverse bilinear mapping."""
+
+    @staticmethod
+    def _invert_3x3(m: List[List[float]]) -> List[List[float]]:
+        # Determinant
+        det = (
+            m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
+            - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+            + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0])
+        )
+        if abs(det) < 1e-12:
+            raise ValueError("Singular transformation matrix cannot be inverted")
+
+        inv_det = 1.0 / det
+        return [
+            [
+                (m[1][1] * m[2][2] - m[1][2] * m[2][1]) * inv_det,
+                (m[0][2] * m[2][1] - m[0][1] * m[2][2]) * inv_det,
+                (m[0][1] * m[1][2] - m[0][2] * m[1][1]) * inv_det,
+            ],
+            [
+                (m[1][2] * m[2][0] - m[1][0] * m[2][2]) * inv_det,
+                (m[0][0] * m[2][2] - m[0][2] * m[2][0]) * inv_det,
+                (m[0][2] * m[1][0] - m[0][0] * m[1][2]) * inv_det,
+            ],
+            [
+                (m[1][0] * m[2][1] - m[1][1] * m[2][0]) * inv_det,
+                (m[0][1] * m[2][0] - m[0][0] * m[2][1]) * inv_det,
+                (m[0][0] * m[1][1] - m[0][1] * m[1][0]) * inv_det,
+            ],
+        ]
+
+    @classmethod
+    def affine_matrix(
+        cls,
+        translation: Tuple[float, float] = (0.0, 0.0),
+        rotation_deg: float = 0.0,
+        scale: Tuple[float, float] = (1.0, 1.0),
+        shear: Tuple[float, float] = (0.0, 0.0),
+    ) -> List[List[float]]:
+        """Constructs 3x3 forward 2D affine transformation matrix."""
+        rad = math.radians(rotation_deg)
+        cos_t, sin_t = math.cos(rad), math.sin(rad)
+        sx, sy = scale
+        shx, shy = shear
+        tx, ty = translation
+
+        # T * R * Sh * S
+        # Scale & Shear
+        # [sx,      shx * sy, 0]
+        # [shy * sx, sy,      0]
+        # [0,       0,        1]
+        m00 = cos_t * sx - sin_t * shy * sx
+        m01 = cos_t * shx * sy - sin_t * sy
+        m02 = tx
+        m10 = sin_t * sx + cos_t * shy * sx
+        m11 = sin_t * shx * sy + cos_t * sy
+        m12 = ty
+
+        return [
+            [m00, m01, m02],
+            [m10, m11, m12],
+            [0.0, 0.0, 1.0],
+        ]
+
+    @classmethod
+    def warp(
+        cls,
+        img: Any,
+        matrix: List[List[float]],
+        out_dims: Optional[Tuple[int, int]] = None,
+        fill_val: float = 0.0,
+    ) -> List[List[float]]:
+        """
+        Applies forward 3x3 transformation matrix to grayscale image via inverse bilinear interpolation.
+        """
+        grid, in_w, in_h = _to_gray_grid(img)
+        out_w, out_h = out_dims if out_dims is not None else (in_w, in_h)
+
+        inv_m = cls._invert_3x3(matrix)
+        out = [[fill_val] * out_w for _ in range(out_h)]
+
+        for yd in range(out_h):
+            for xd in range(out_w):
+                # Map destination (xd, yd) to source (xs, ys)
+                w_norm = inv_m[2][0] * xd + inv_m[2][1] * yd + inv_m[2][2]
+                if abs(w_norm) < 1e-9:
+                    continue
+                xs = (inv_m[0][0] * xd + inv_m[0][1] * yd + inv_m[0][2]) / w_norm
+                ys = (inv_m[1][0] * xd + inv_m[1][1] * yd + inv_m[1][2]) / w_norm
+
+                if 0.0 <= xs <= in_w - 1.0 and 0.0 <= ys <= in_h - 1.0:
+                    x0 = int(math.floor(xs))
+                    y0 = int(math.floor(ys))
+                    x1 = min(in_w - 1, x0 + 1)
+                    y1 = min(in_h - 1, y0 + 1)
+
+                    dx = xs - x0
+                    dy = ys - y0
+
+                    v00 = grid[y0][x0]
+                    v01 = grid[y0][x1]
+                    v10 = grid[y1][x0]
+                    v11 = grid[y1][x1]
+
+                    interp = (
+                        (1.0 - dx) * (1.0 - dy) * v00
+                        + dx * (1.0 - dy) * v01
+                        + (1.0 - dx) * dy * v10
+                        + dx * dy * v11
+                    )
+                    out[yd][xd] = round(interp, 2)
+
+        return out
+
+
+class MorphologicalOps:
+    """Grayscale and binary morphological filtering (dilation, erosion, opening, closing)."""
+
+    @staticmethod
+    def _get_structuring_element(shape: str = "rect", size: int = 3) -> List[Tuple[int, int]]:
+        rad = size // 2
+        offsets = []
+        for dy in range(-rad, rad + 1):
+            for dx in range(-rad, rad + 1):
+                if shape == "cross":
+                    if dx == 0 or dy == 0:
+                        offsets.append((dx, dy))
+                elif shape == "disk":
+                    if dx * dx + dy * dy <= rad * rad:
+                        offsets.append((dx, dy))
+                else:  # rect
+                    offsets.append((dx, dy))
+        return offsets
+
+    @classmethod
+    def dilate(cls, img: Any, size: int = 3, shape: str = "rect") -> List[List[float]]:
+        """Morphological dilation (maximum filter within kernel)."""
+        grid, w, h = _to_gray_grid(img)
+        offsets = cls._get_structuring_element(shape, size)
+        out = [[0.0] * w for _ in range(h)]
+
+        for y in range(h):
+            for x in range(w):
+                max_v = -float("inf")
+                for dx, dy in offsets:
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < w and 0 <= ny < h:
+                        v = grid[ny][nx]
+                        if v > max_v:
+                            max_v = v
+                out[y][x] = max(0.0, max_v)
+        return out
+
+    @classmethod
+    def erode(cls, img: Any, size: int = 3, shape: str = "rect") -> List[List[float]]:
+        """Morphological erosion (minimum filter within kernel)."""
+        grid, w, h = _to_gray_grid(img)
+        offsets = cls._get_structuring_element(shape, size)
+        out = [[0.0] * w for _ in range(h)]
+
+        for y in range(h):
+            for x in range(w):
+                min_v = float("inf")
+                for dx, dy in offsets:
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < w and 0 <= ny < h:
+                        v = grid[ny][nx]
+                        if v < min_v:
+                            min_v = v
+                out[y][x] = min_v if min_v != float("inf") else 0.0
+        return out
+
+    @classmethod
+    def open(cls, img: Any, size: int = 3, shape: str = "rect") -> List[List[float]]:
+        """Morphological opening (erosion followed by dilation)."""
+        return cls.dilate(cls.erode(img, size, shape), size, shape)
+
+    @classmethod
+    def close(cls, img: Any, size: int = 3, shape: str = "rect") -> List[List[float]]:
+        """Morphological closing (dilation followed by erosion)."""
+        return cls.erode(cls.dilate(img, size, shape), size, shape)
+
+    @classmethod
+    def gradient(cls, img: Any, size: int = 3, shape: str = "rect") -> List[List[float]]:
+        """Morphological gradient (dilation minus erosion)."""
+        dil = cls.dilate(img, size, shape)
+        ero = cls.erode(img, size, shape)
+        h = len(dil)
+        w = len(dil[0]) if h > 0 else 0
+        return [[round(max(0.0, dil[y][x] - ero[y][x]), 2) for x in range(w)] for y in range(h)]
+
+
+class ColorQuantizer:
+    """Median Cut color palette reduction and Floyd-Steinberg error diffusion dithering."""
+
+    @classmethod
+    def median_cut(cls, pixels_rgb: List[Tuple[int, int, int]], num_colors: int = 16) -> List[Tuple[int, int, int]]:
+        """Reduces RGB color space to `num_colors` representative palette using Median Cut."""
+        if not pixels_rgb:
+            return [(0, 0, 0)]
+        boxes = [list(pixels_rgb)]
+
+        while len(boxes) < num_colors:
+            # Pick box with largest color channel spread
+            best_idx = -1
+            best_spread = -1
+            best_channel = 0
+
+            for idx, box in enumerate(boxes):
+                if len(box) <= 1:
+                    continue
+                min_r = min(p[0] for p in box)
+                max_r = max(p[0] for p in box)
+                min_g = min(p[1] for p in box)
+                max_g = max(p[1] for p in box)
+                min_b = min(p[2] for p in box)
+                max_b = max(p[2] for p in box)
+
+                spread_r = max_r - min_r
+                spread_g = max_g - min_g
+                spread_b = max_b - min_b
+                max_s = max(spread_r, spread_g, spread_b)
+
+                if max_s > best_spread:
+                    best_spread = max_s
+                    best_idx = idx
+                    if max_s == spread_r:
+                        best_channel = 0
+                    elif max_s == spread_g:
+                        best_channel = 1
+                    else:
+                        best_channel = 2
+
+            if best_idx == -1 or best_spread == 0:
+                break
+
+            target_box = boxes.pop(best_idx)
+            target_box.sort(key=lambda p: p[best_channel])
+            mid = len(target_box) // 2
+            boxes.append(target_box[:mid])
+            boxes.append(target_box[mid:])
+
+        palette = []
+        for box in boxes:
+            if not box:
+                continue
+            r_avg = sum(p[0] for p in box) // len(box)
+            g_avg = sum(p[1] for p in box) // len(box)
+            b_avg = sum(p[2] for p in box) // len(box)
+            palette.append((r_avg, g_avg, b_avg))
+
+        return palette
+
+    @classmethod
+    def dither_floyd_steinberg(
+        cls,
+        image_rgb: List[List[Tuple[int, int, int]]],
+        palette: List[Tuple[int, int, int]],
+    ) -> List[List[Tuple[int, int, int]]]:
+        """Floyd-Steinberg 2D error diffusion dithering."""
+        h = len(image_rgb)
+        w = len(image_rgb[0]) if h > 0 else 0
+
+        # Mutable float buffer
+        buf = [[[float(c) for c in image_rgb[y][x]] for x in range(w)] for y in range(h)]
+        out = [[(0, 0, 0)] * w for _ in range(h)]
+
+        for y in range(h):
+            for x in range(w):
+                old_r, old_g, old_b = buf[y][x]
+                old_r = max(0.0, min(255.0, old_r))
+                old_g = max(0.0, min(255.0, old_g))
+                old_b = max(0.0, min(255.0, old_b))
+
+                # Find nearest palette color
+                best_color = palette[0]
+                best_dist = float("inf")
+                for pr, pg, pb in palette:
+                    dist = (old_r - pr) ** 2 + (old_g - pg) ** 2 + (old_b - pb) ** 2
+                    if dist < best_dist:
+                        best_dist = dist
+                        best_color = (pr, pg, pb)
+
+                out[y][x] = best_color
+                er = old_r - best_color[0]
+                eg = old_g - best_color[1]
+                eb = old_b - best_color[2]
+
+                # Distribute error to 4 neighbors:
+                # (x+1, y): 7/16, (x-1, y+1): 3/16, (x, y+1): 5/16, (x+1, y+1): 1/16
+                if x + 1 < w:
+                    buf[y][x + 1][0] += er * (7.0 / 16.0)
+                    buf[y][x + 1][1] += eg * (7.0 / 16.0)
+                    buf[y][x + 1][2] += eb * (7.0 / 16.0)
+                if y + 1 < h:
+                    if x - 1 >= 0:
+                        buf[y + 1][x - 1][0] += er * (3.0 / 16.0)
+                        buf[y + 1][x - 1][1] += eg * (3.0 / 16.0)
+                        buf[y + 1][x - 1][2] += eb * (3.0 / 16.0)
+                    buf[y + 1][x][0] += er * (5.0 / 16.0)
+                    buf[y + 1][x][1] += eg * (5.0 / 16.0)
+                    buf[y + 1][x][2] += eb * (5.0 / 16.0)
+                    if x + 1 < w:
+                        buf[y + 1][x + 1][0] += er * (1.0 / 16.0)
+                        buf[y + 1][x + 1][1] += eg * (1.0 / 16.0)
+                        buf[y + 1][x + 1][2] += eb * (1.0 / 16.0)
+
+        return out
+
+
+def image_warp_affine(
+    img: Any,
+    translation: Tuple[float, float] = (0.0, 0.0),
+    rotation_deg: float = 0.0,
+    scale: Tuple[float, float] = (1.0, 1.0),
+) -> List[List[float]]:
+    """Warps image using affine transformation with bilinear interpolation."""
+    mat = GeometricWarp.affine_matrix(translation, rotation_deg, scale)
+    return GeometricWarp.warp(img, mat)
+
+
+def image_morphology(img: Any, operation: str = "dilate", size: int = 3, shape: str = "rect") -> List[List[float]]:
+    """Applies morphological operator: dilate, erode, open, close, gradient."""
+    op = operation.strip().lower()
+    if op == "dilate":
+        return MorphologicalOps.dilate(img, size, shape)
+    elif op == "erode":
+        return MorphologicalOps.erode(img, size, shape)
+    elif op == "open":
+        return MorphologicalOps.open(img, size, shape)
+    elif op == "close":
+        return MorphologicalOps.close(img, size, shape)
+    elif op == "gradient":
+        return MorphologicalOps.gradient(img, size, shape)
+    raise ValueError(f"Unknown morphological operation: {operation}")
+
+
+def image_quantize_palette(pixels_rgb: List[Tuple[int, int, int]], num_colors: int = 16) -> List[Tuple[int, int, int]]:
+    """Extracts optimal discrete color palette using median-cut."""
+    return ColorQuantizer.median_cut(pixels_rgb, num_colors)
 
 
 

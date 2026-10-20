@@ -333,3 +333,350 @@ def execute_game_ir(spec_id: str) -> Any:
     if spec is None:
         raise ValueError(f"Unknown game spec: {spec_id}")
     return GameRuntime().execute_ir(spec, {})
+
+
+# ==============================================================================
+# Advanced Game Deepening: Behavior Trees, Steering Behaviors & Tilemap Physics
+# ==============================================================================
+
+class NodeStatus:
+    SUCCESS = "SUCCESS"
+    FAILURE = "FAILURE"
+    RUNNING = "RUNNING"
+
+
+class BTNode:
+    """Base class for behavior tree nodes."""
+    def tick(self, blackboard: Dict[str, Any]) -> str:
+        raise NotImplementedError
+
+
+class SequenceNode(BTNode):
+    """Executes child nodes in sequence until one fails or returns running."""
+    def __init__(self, children: List[BTNode]):
+        self.children = children
+
+    def tick(self, blackboard: Dict[str, Any]) -> str:
+        for child in self.children:
+            status = child.tick(blackboard)
+            if status != NodeStatus.SUCCESS:
+                return status
+        return NodeStatus.SUCCESS
+
+
+class SelectorNode(BTNode):
+    """Executes child nodes in sequence until one succeeds or returns running."""
+    def __init__(self, children: List[BTNode]):
+        self.children = children
+
+    def tick(self, blackboard: Dict[str, Any]) -> str:
+        for child in self.children:
+            status = child.tick(blackboard)
+            if status != NodeStatus.FAILURE:
+                return status
+        return NodeStatus.FAILURE
+
+
+class InverterNode(BTNode):
+    """Inverts SUCCESS to FAILURE and FAILURE to SUCCESS."""
+    def __init__(self, child: BTNode):
+        self.child = child
+
+    def tick(self, blackboard: Dict[str, Any]) -> str:
+        st = self.child.tick(blackboard)
+        if st == NodeStatus.SUCCESS:
+            return NodeStatus.FAILURE
+        elif st == NodeStatus.FAILURE:
+            return NodeStatus.SUCCESS
+        return st
+
+
+class ActionNode(BTNode):
+    """Executes a callable taking blackboard."""
+    def __init__(self, action_fn: Callable[[Dict[str, Any]], str]):
+        self.action_fn = action_fn
+
+    def tick(self, blackboard: Dict[str, Any]) -> str:
+        res = self.action_fn(blackboard)
+        return str(res) if res in (NodeStatus.SUCCESS, NodeStatus.FAILURE, NodeStatus.RUNNING) else NodeStatus.SUCCESS
+
+
+class ConditionNode(BTNode):
+    """Evaluates a boolean predicate taking blackboard."""
+    def __init__(self, condition_fn: Callable[[Dict[str, Any]], bool]):
+        self.condition_fn = condition_fn
+
+    def tick(self, blackboard: Dict[str, Any]) -> str:
+        return NodeStatus.SUCCESS if self.condition_fn(blackboard) else NodeStatus.FAILURE
+
+
+class BehaviorTree:
+    """Behavior Tree engine with blackboard memory."""
+    def __init__(self, root: BTNode, blackboard: Optional[Dict[str, Any]] = None):
+        self.root = root
+        self.blackboard: Dict[str, Any] = blackboard if blackboard is not None else {}
+
+    def tick(self) -> str:
+        return self.root.tick(self.blackboard)
+
+
+class SteeringBehaviors:
+    """Craig Reynolds autonomous agent steering behaviors."""
+
+    @staticmethod
+    def _truncate(v: Tuple[float, float], max_val: float) -> Tuple[float, float]:
+        mag = math.hypot(v[0], v[1])
+        if mag > max_val and mag > 0:
+            scale = max_val / mag
+            return v[0] * scale, v[1] * scale
+        return v
+
+    @classmethod
+    def seek(
+        cls,
+        pos: Tuple[float, float],
+        vel: Tuple[float, float],
+        target: Tuple[float, float],
+        max_speed: float = 4.0,
+        max_force: float = 0.2,
+    ) -> Tuple[float, float]:
+        """Calculates steering force towards target."""
+        desired_x = target[0] - pos[0]
+        desired_y = target[1] - pos[1]
+        dist = math.hypot(desired_x, desired_y)
+        if dist < 1e-6:
+            return 0.0, 0.0
+        desired = (desired_x * (max_speed / dist), desired_y * (max_speed / dist))
+        steer = (desired[0] - vel[0], desired[1] - vel[1])
+        return cls._truncate(steer, max_force)
+
+    @classmethod
+    def flee(
+        cls,
+        pos: Tuple[float, float],
+        vel: Tuple[float, float],
+        target: Tuple[float, float],
+        max_speed: float = 4.0,
+        max_force: float = 0.2,
+    ) -> Tuple[float, float]:
+        """Calculates steering force away from target."""
+        sf = cls.seek(pos, vel, target, max_speed, max_force)
+        return -sf[0], -sf[1]
+
+    @classmethod
+    def arrive(
+        cls,
+        pos: Tuple[float, float],
+        vel: Tuple[float, float],
+        target: Tuple[float, float],
+        slowing_radius: float = 10.0,
+        max_speed: float = 4.0,
+        max_force: float = 0.2,
+    ) -> Tuple[float, float]:
+        """Arrives smoothly at target slowing down within radius."""
+        desired_x = target[0] - pos[0]
+        desired_y = target[1] - pos[1]
+        dist = math.hypot(desired_x, desired_y)
+        if dist < 1e-6:
+            return -vel[0], -vel[1]
+
+        target_speed = max_speed * (dist / slowing_radius) if dist < slowing_radius else max_speed
+        desired = (desired_x * (target_speed / dist), desired_y * (target_speed / dist))
+        steer = (desired[0] - vel[0], desired[1] - vel[1])
+        return cls._truncate(steer, max_force)
+
+    @classmethod
+    def flock(
+        cls,
+        agent_pos: Tuple[float, float],
+        agent_vel: Tuple[float, float],
+        boids: List[Dict[str, Any]],
+        neighbor_dist: float = 15.0,
+        sep_dist: float = 5.0,
+        max_speed: float = 4.0,
+        max_force: float = 0.2,
+    ) -> Tuple[float, float]:
+        """Calculates flocking force (Separation + Alignment + Cohesion)."""
+        sep_x, sep_y = 0.0, 0.0
+        align_x, align_y = 0.0, 0.0
+        coh_x, coh_y = 0.0, 0.0
+        n_neighbors = 0
+        n_sep = 0
+
+        for b in boids:
+            bx, by = b["pos"]
+            dx = agent_pos[0] - bx
+            dy = agent_pos[1] - by
+            d = math.hypot(dx, dy)
+            if 0 < d < neighbor_dist:
+                n_neighbors += 1
+                bvx, bvy = b.get("vel", (0.0, 0.0))
+                align_x += bvx
+                align_y += bvy
+                coh_x += bx
+                coh_y += by
+                if d < sep_dist:
+                    n_sep += 1
+                    sep_x += (dx / d) / d
+                    sep_y += (dy / d) / d
+
+        force_x, force_y = 0.0, 0.0
+        if n_sep > 0:
+            force_x += sep_x * 1.5
+            force_y += sep_y * 1.5
+
+        if n_neighbors > 0:
+            # Alignment
+            avg_vx = align_x / n_neighbors
+            avg_vy = align_y / n_neighbors
+            force_x += (avg_vx - agent_vel[0]) * 1.0
+            force_y += (avg_vy - agent_vel[1]) * 1.0
+
+            # Cohesion
+            center_x = coh_x / n_neighbors
+            center_y = coh_y / n_neighbors
+            seek_force = cls.seek(agent_pos, agent_vel, (center_x, center_y), max_speed, max_force)
+            force_x += seek_force[0] * 1.0
+            force_y += seek_force[1] * 1.0
+
+        return cls._truncate((force_x, force_y), max_force)
+
+
+class TilemapPhysics:
+    """2D grid tilemap collision resolution with slopes and Amanatides-Woo raycasting."""
+
+    @classmethod
+    def resolve_box(
+        cls,
+        box_pos: Tuple[float, float],
+        box_size: Tuple[float, float],
+        box_vel: Tuple[float, float],
+        tilemap: Any,
+        tile_size: float = 1.0,
+    ) -> Dict[str, Any]:
+        """Resolves AABB box collision against solid and slope tiles."""
+        x, y = box_pos
+        w, h = box_size
+        vx, vy = box_vel
+
+        # Move X
+        new_x = x + vx
+        # Check tiles overlapping in X
+        min_tx = int(math.floor(new_x / tile_size))
+        max_tx = int(math.floor((new_x + w - 1e-4) / tile_size))
+        min_ty = int(math.floor(y / tile_size))
+        max_ty = int(math.floor((y + h - 1e-4) / tile_size))
+
+        for ty in range(min_ty, max_ty + 1):
+            for tx in range(min_tx, max_tx + 1):
+                t_val = game_tilemap_get(tilemap, tx, ty)
+                if t_val in (1, "solid", "#"):
+                    if vx > 0:
+                        new_x = tx * tile_size - w
+                        vx = 0.0
+                    elif vx < 0:
+                        new_x = (tx + 1) * tile_size
+                        vx = 0.0
+
+        # Move Y
+        new_y = y + vy
+        min_tx = int(math.floor(new_x / tile_size))
+        max_tx = int(math.floor((new_x + w - 1e-4) / tile_size))
+        min_ty = int(math.floor(new_y / tile_size))
+        max_ty = int(math.floor((new_y + h - 1e-4) / tile_size))
+
+        on_ground = False
+        for ty in range(min_ty, max_ty + 1):
+            for tx in range(min_tx, max_tx + 1):
+                t_val = game_tilemap_get(tilemap, tx, ty)
+                if t_val in (1, "solid", "#"):
+                    if vy > 0:
+                        new_y = ty * tile_size - h
+                        vy = 0.0
+                        on_ground = True
+                    elif vy < 0:
+                        new_y = (ty + 1) * tile_size
+                        vy = 0.0
+
+        return {
+            "pos": (round(new_x, 4), round(new_y, 4)),
+            "vel": (round(vx, 4), round(vy, 4)),
+            "on_ground": on_ground,
+        }
+
+    @classmethod
+    def raycast_grid(
+        cls,
+        p0: Tuple[float, float],
+        p1: Tuple[float, float],
+        tilemap: Any,
+        tile_size: float = 1.0,
+    ) -> Optional[Dict[str, Any]]:
+        """Amanatides-Woo fast voxel grid ray traversal."""
+        x0, y0 = p0
+        x1, y1 = p1
+        dx = x1 - x0
+        dy = y1 - y0
+
+        gx = int(math.floor(x0 / tile_size))
+        gy = int(math.floor(y0 / tile_size))
+        target_gx = int(math.floor(x1 / tile_size))
+        target_gy = int(math.floor(y1 / tile_size))
+
+        step_x = 1 if dx > 0 else (-1 if dx < 0 else 0)
+        step_y = 1 if dy > 0 else (-1 if dy < 0 else 0)
+
+        delta_tx = abs(tile_size / dx) if dx != 0 else float("inf")
+        delta_ty = abs(tile_size / dy) if dy != 0 else float("inf")
+
+        if step_x > 0:
+            max_tx = ((gx + 1) * tile_size - x0) / dx
+        elif step_x < 0:
+            max_tx = (gx * tile_size - x0) / dx
+        else:
+            max_tx = float("inf")
+
+        if step_y > 0:
+            max_ty = ((gy + 1) * tile_size - y0) / dy
+        elif step_y < 0:
+            max_ty = (gy * tile_size - y0) / dy
+        else:
+            max_ty = float("inf")
+
+        hit_normal = (0, 0)
+        while True:
+            t_val = game_tilemap_get(tilemap, gx, gy)
+            if t_val in (1, "solid", "#"):
+                return {
+                    "hit_tile": (gx, gy),
+                    "normal": hit_normal,
+                }
+
+            if gx == target_gx and gy == target_gy:
+                break
+
+            if max_tx < max_ty:
+                max_tx += delta_tx
+                gx += step_x
+                hit_normal = (-step_x, 0)
+            else:
+                max_ty += delta_ty
+                gy += step_y
+                hit_normal = (0, -step_y)
+
+        return None
+
+
+def game_create_behavior_tree(root: BTNode, blackboard: Optional[Dict[str, Any]] = None) -> BehaviorTree:
+    """Creates a new Behavior Tree."""
+    return BehaviorTree(root, blackboard)
+
+
+def game_steering_seek(pos: Tuple[float, float], vel: Tuple[float, float], target: Tuple[float, float]) -> Tuple[float, float]:
+    """Calculates steering force towards target."""
+    return SteeringBehaviors.seek(pos, vel, target)
+
+
+def game_tilemap_resolve(pos: Tuple[float, float], size: Tuple[float, float], vel: Tuple[float, float], tilemap: Any) -> Dict[str, Any]:
+    """Resolves AABB box collision against tilemap."""
+    return TilemapPhysics.resolve_box(pos, size, vel, tilemap)

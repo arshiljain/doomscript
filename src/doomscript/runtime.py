@@ -2869,6 +2869,12 @@ from doomscript.domains.image.runtime import (
     image_otsu_threshold,
     image_bilateral_filter,
     image_hough_lines,
+    GeometricWarp,
+    MorphologicalOps,
+    ColorQuantizer,
+    image_warp_affine,
+    image_morphology,
+    image_quantize_palette,
 )
 
 from doomscript.domains.web.runtime import (
@@ -2951,6 +2957,12 @@ from doomscript.domains.audio.runtime import (
     audio_mel_spectrogram,
     audio_mfcc,
     audio_biquad_filter,
+    PolyphonicSynth,
+    YINPitchDetector,
+    ParametricEQ,
+    audio_poly_synth_render,
+    audio_yin_pitch,
+    audio_parametric_eq,
 )
 
 from doomscript.domains.finance.runtime import (
@@ -3215,6 +3227,17 @@ from doomscript.domains.game.runtime import (
     game_resolve_turn,
     game_apply_status_effect,
     execute_game_ir,
+    BehaviorTree,
+    SequenceNode,
+    SelectorNode,
+    InverterNode,
+    ActionNode,
+    ConditionNode,
+    SteeringBehaviors,
+    TilemapPhysics,
+    game_create_behavior_tree,
+    game_steering_seek,
+    game_tilemap_resolve,
 )
 
 from doomscript.domains.quantum.runtime import (
@@ -3512,6 +3535,11 @@ from doomscript.domains.metrics.runtime import (
     metrics_calculate_percentile,
     metrics_export_openmetrics,
     metrics_clear,
+    OTLPTraceExporter,
+    ExponentialDecayReservoir,
+    EWMAAnomalyDetector,
+    metrics_export_otlp_traces,
+    metrics_create_ewma_detector,
 )
 
 from doomscript.domains.spatial_audio.runtime import (
@@ -3524,6 +3552,12 @@ from doomscript.domains.spatial_audio.runtime import (
     spatial_audio_ambisonics_decode_stereo,
     spatial_audio_doppler,
     spatial_audio_schroeder_reverb,
+    HigherOrderAmbisonics,
+    AcousticRaytracer,
+    HRTFConvolution,
+    spatial_audio_hoa_encode,
+    spatial_audio_room_impulse_response,
+    spatial_audio_hrtf_binaural,
 )
 
 from doomscript.domains.dsa.runtime import (
