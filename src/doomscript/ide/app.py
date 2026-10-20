@@ -17,7 +17,7 @@ from tkinter import ttk, messagebox, filedialog
 import customtkinter as ctk
 
 from doomscript.compiler.engine import transpile, compile_to_ast, execute
-from doomscript.runtime import Record
+from doomscript.core.record import Record
 
 
 class LineNumbers(tk.Canvas):

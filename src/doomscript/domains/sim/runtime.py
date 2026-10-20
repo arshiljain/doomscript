@@ -1519,7 +1519,7 @@ def sim_jackson_network(
     return net.solve()
 
 
-from doomscript.runtime import Record
+from doomscript.core.record import Record
 
 
 class AgentBasedEpidemicSEIRModel:

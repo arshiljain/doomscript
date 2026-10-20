@@ -101,7 +101,7 @@ class OfficeDomainParser(DomainParser):
 
         # save word document <doc_var> to <path_expr>
         m_save_doc = re.match(
-            r"^save\s+(?:word\s+)?document\s+([A-Za-z_]\w*)\s+to\s+(.+)$",
+            r"^save\s+word\s+document\s+([A-Za-z_]\w*)\s+to\s+(.+)$",
             s,
             re.IGNORECASE,
         )
@@ -121,9 +121,9 @@ class OfficeDomainParser(DomainParser):
             target = m_cnt_s.group(2).strip()
             return f"set {target} to office_count_worksheets({sheet})"
 
-        # extract text from [document] <doc> into <target>
+        # extract text from [word] document <doc> into <target>
         m_ext_t = re.match(
-            r"^extract\s+text\s+from\s+(?:document\s+)?(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            r"^extract\s+text\s+from\s+(?:word\s+)?document\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )

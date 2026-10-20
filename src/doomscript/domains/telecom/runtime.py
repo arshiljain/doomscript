@@ -15,7 +15,7 @@ import math
 import random
 import struct
 from typing import Any, Dict, List, Optional, Tuple, Union
-from doomscript.runtime import Record
+from doomscript.core.record import Record
 
 
 # --- 1. Hamming(7, 4) Code ---

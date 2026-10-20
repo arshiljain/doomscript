@@ -3,7 +3,7 @@
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import math
 import random
-from doomscript.runtime import Record, ask_ai
+from doomscript.core.record import Record
 from doomscript.domains.base import DomainRuntime, DomainIR
 from doomscript.domains.agent.spec import AgentSpec, TaskSpec, TeamSpec
 
@@ -81,6 +81,7 @@ class Agent:
         if self.use_memory:
             self.history.append({"role": "user", "content": task})
 
+        from doomscript.runtime import ask_ai
         resp = ask_ai(full_prompt, model=self.model, system=system_prompt, as_json=as_json)
 
         # Record response in memory

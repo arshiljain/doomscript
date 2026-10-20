@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 import statistics
 from doomscript.taxonomy import Table, RecordList, ValueKind, classify_value, to_table
-from doomscript.runtime import Record
+from doomscript.core.record import Record
 
 
 def explain_domain(domain_name: str) -> Record:

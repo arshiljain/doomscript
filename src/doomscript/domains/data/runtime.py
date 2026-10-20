@@ -7,7 +7,7 @@ import math
 import os
 import re
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
-from doomscript.runtime import Record
+from doomscript.core.record import Record
 from doomscript.domains.base import DomainRuntime, DomainIR
 from doomscript.domains.data.expr_eval import SafeASTEvaluator, SafeEvalError, SafeEvalSecurityError
 from doomscript.domains.data.spec import (

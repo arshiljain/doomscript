@@ -3,6 +3,7 @@
 import re
 from typing import Any, Dict, List, Optional, Tuple
 from doomscript.domains.base import DomainParser
+from doomscript.domains.registry import get_domain_registry
 from doomscript.domains.image.spec import (
     ImageOpenSpec,
     ImageCreateSpec,
@@ -186,15 +187,17 @@ class ImageDomainParser(DomainParser):
 
         # save [image] <img_var> to <path> [with quality <q>]
         m_save = re.match(
-            r"^save\s+(?:image\s+)?([A-Za-z_]\w*)\s+to\s+(.+?)(?:\s+with\s+quality\s+(\d+))?$",
+            r"^save\s+(image\s+)?([A-Za-z_]\w*)\s+to\s+(.+?)(?:\s+with\s+quality\s+(\d+))?$",
             s,
             re.IGNORECASE,
         )
         if m_save:
-            img_var = m_save.group(1).strip()
-            path_expr = m_save.group(2).strip()
-            quality = m_save.group(3) or "None"
-            return f"save_image({img_var}, {path_expr}, quality={quality})"
+            has_image_kw = bool(m_save.group(1))
+            if has_image_kw or get_domain_registry().is_active("image"):
+                img_var = m_save.group(2).strip()
+                path_expr = m_save.group(3).strip()
+                quality = m_save.group(4) or "None"
+                return f"save_image({img_var}, {path_expr}, quality={quality})"
 
         # convert image <img_var> to grayscale into <target>
         m_gray = re.match(

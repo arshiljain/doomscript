@@ -52,13 +52,20 @@ def export_to_python(source: str) -> str:
     try:
         from doomscript.viz.exporter import transform_viz_ast
         py_ast, _ = transform_viz_ast(py_ast)
-    except Exception:
+    except (ImportError, ModuleNotFoundError):
         pass
+    except Exception as e:
+        from doomscript.exceptions import DoomCompilationError
+        raise DoomCompilationError(f"Visualization AST export transformation failed: {e}") from e
+
     try:
         from doomscript.domains.exporter import transform_domains_ast
         py_ast = transform_domains_ast(py_ast)
-    except Exception:
+    except (ImportError, ModuleNotFoundError):
         pass
+    except Exception as e:
+        from doomscript.exceptions import DoomCompilationError
+        raise DoomCompilationError(f"Domain AST export transformation failed: {e}") from e
 
     if is_leetcode:
         sol_body = []
@@ -141,7 +148,13 @@ def export_to_python(source: str) -> str:
     return header + code + "\n"
 
 def execute(source: Any, custom_globals: dict = None, filename: str = "<doom>") -> dict:
-    """Executes DoomScript source code or AST directly and returns the environment dict."""
+    """Executes DoomScript source code or AST directly and returns the environment dict.
+
+    Security Warning:
+        DoomScript executes in-process as native Python bytecode and is
+        NOT an isolated security sandbox. Do not execute untrusted scripts
+        under the assumption that its English syntax restricts execution capabilities.
+    """
     if isinstance(source, ast.AST):
         py_ast = source
     else:
@@ -198,6 +211,7 @@ def execute(source: Any, custom_globals: dict = None, filename: str = "<doom>") 
         "stats_median": runtime.ds_median,
         "PI": math.pi,
         "E": math.e,
+        "math": math,
         "INF": float("inf"),
         "min": min,
         "max": max,
@@ -335,10 +349,17 @@ def execute(source: Any, custom_globals: dict = None, filename: str = "<doom>") 
         "config_save": runtime.config_save,
         "benchmark_block": runtime.benchmark_block,
     }
-    for name, obj in vars(runtime).items():
-        if not name.startswith("_"):
-            exec_globals.setdefault(name, obj)
-            
+    # 1. Populate explicit core runtime exports (no raw modules or internal typing)
+    exec_globals.update(runtime.get_runtime_exports())
+
+    # 2. Populate domain runtime exports
+    from doomscript.domains.registry import get_domain_registry
+    reg = get_domain_registry()
+    for d in reg.get_active_domains():
+        exec_globals.update(reg.get_domain_exports(d.name))
+    exec_globals.update(reg.get_domain_exports())
+
+    # 3. Explicit compiler runtime helpers
     for k, v in runtime_helpers.items():
         exec_globals.setdefault(k, v)
         

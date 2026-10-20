@@ -23,7 +23,7 @@ class MLDomainParser(DomainParser):
 
         # summary of model <name> [into <target>]
         m2 = re.match(
-            r"^summary\s+of\s+(?:model\s+)?([A-Za-z_]\w*)(?:\s+into\s+([A-Za-z_]\w*))?$",
+            r"^summary\s+of\s+model\s+([A-Za-z_]\w*)(?:\s+into\s+([A-Za-z_]\w*))?$",
             line.strip(),
             re.IGNORECASE,
         )

@@ -2,7 +2,7 @@
 
 import math
 from typing import List, Tuple, Dict, Any, Optional, Union, Callable
-from doomscript.runtime import Record
+from doomscript.core.record import Record
 
 
 class Vec3:

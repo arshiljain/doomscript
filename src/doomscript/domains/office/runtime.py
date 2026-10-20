@@ -7,7 +7,7 @@ import re
 import zipfile
 from xml.sax.saxutils import escape as xml_escape
 from doomscript.domains.base import DomainRuntime, DomainIR
-from doomscript.runtime import Record
+from doomscript.core.record import Record
 from doomscript.domains.office.spec import (
     OfficeSpreadsheetSpec,
     OfficeAddRowSpec,

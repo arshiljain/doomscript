@@ -2,7 +2,7 @@
 
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 import heapq
-from doomscript.runtime import Record
+from doomscript.core.record import Record
 from doomscript.domains.base import DomainRuntime, DomainIR
 from doomscript.domains.graph.spec import (
     GraphCreateSpec,

@@ -8,7 +8,7 @@ import urllib.request
 import urllib.parse
 import struct
 from html.parser import HTMLParser
-from doomscript.runtime import Record
+from doomscript.core.record import Record
 from doomscript.domains.base import DomainRuntime, DomainIR
 from doomscript.domains.web.spec import (
     WebPageSpec,
@@ -1190,8 +1190,7 @@ class RFC6265CookieJar:
 
 
 def web_css_select(html: str, selector: str) -> List[Any]:
-    parser = DOMParser()
-    dom = parser.parse(str(html))
+    dom = CSSSelectorEngine.parse_html(str(html))
     return CSSSelectorEngine.select(dom, str(selector))
 
 

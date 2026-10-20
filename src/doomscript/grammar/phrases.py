@@ -1703,12 +1703,11 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
     in_research_mode: bool = False
 
     from doomscript.domains.registry import get_domain_registry
-    get_domain_registry().reset_active()
+    reg = get_domain_registry()
+    reg.reset_active()
 
     def _close_domain_block(b_info, at_line_idx):
         ir_spec, target_var = b_info["domain"].parser.parse_block(b_info["header"], b_info["lines"], b_info["indent"])
-        from doomscript.domains.registry import get_domain_registry
-        reg = get_domain_registry()
         spec_id = reg.store_spec(ir_spec)
         d_name = b_info["domain"].name
         emit(f"{b_info['parent_indent']}set {target_var} to execute_{d_name}_ir('{spec_id}')", b_info["header_line"])
@@ -1800,8 +1799,6 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
 
         # Check domain block header (e.g. pipeline "name" from src into target:)
         if code.rstrip().endswith(":"):
-            from doomscript.domains.registry import get_domain_registry
-            reg = get_domain_registry()
             matched_domain_block = reg.find_domain_for_block(code)
             if matched_domain_block:
                 domain_block_stack.append({
@@ -1815,16 +1812,11 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
                 continue
 
         # Check domain single-line statement (Level 1 / Level 2 inspect, clean, join, etc.)
-        from doomscript.domains.registry import get_domain_registry
-        reg = get_domain_registry()
-        matched_domain_line = reg.find_domain_for_line(code)
-        if matched_domain_line:
-            parsed_domain_code = matched_domain_line.parser.parse_inspect(code, line_idx)
-            if parsed_domain_code is None:
-                parsed_domain_code = matched_domain_line.parser.parse_operation(code, line_idx)
-            if parsed_domain_code is not None:
-                emit(f"{indent}{parsed_domain_code}", line_idx)
-                continue
+        parsed_domain_code = reg.try_parse_domain_line(code, line_idx)
+        if parsed_domain_code is not None:
+            norm_domain_code = normalize_statement_text(parsed_domain_code, scope, line_idx)
+            emit(f"{indent}{norm_domain_code}", line_idx)
+            continue
 
         # If in research mode, apply declarative research phrase normalization first
         if in_research_mode:

@@ -2,7 +2,7 @@
 
 import math
 from typing import List, Dict, Any, Tuple, Optional
-from doomscript.runtime import Record
+from doomscript.core.record import Record
 
 
 G_CONST = 6.67430e-11  # m^3 kg^-1 s^-2

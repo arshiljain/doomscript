@@ -24,7 +24,7 @@ from doomscript.domains.ml.fallback import (
     r2_score,
 )
 from doomscript.domains.data.runtime import _to_record_list
-from doomscript.runtime import Record
+from doomscript.core.record import Record
 
 
 class ModelContainer:
@@ -770,7 +770,7 @@ def ml_kmeans_clustering(data: Any, k: Any = 3, max_iter: int = 100, seed: int =
     return {"clusters": labeled_rows, "labels": labels, "centers": km.centroids}
 
 
-def ml_pca_transform(data: Any, n_components: Any = 2) -> List[Dict[str, Any]]:
+def _ml_pca_transform_direct(data: Any, n_components: Any = 2) -> List[Dict[str, Any]]:
     """Dimensionality reduction using Principal Component Analysis."""
     rows = _to_record_list(data)
     k = int(n_components)
@@ -1993,10 +1993,14 @@ def ml_pca_fit(data: List[List[float]], n_components: int = 2) -> Any:
     })
 
 
-def ml_pca_transform(model: Any, data: List[List[float]]) -> List[List[float]]:
-    """Transforms data using fitted PCA components."""
-    inst = model.instance if hasattr(model, "instance") else model
-    return inst.transform([list(r) for r in data])
+def ml_pca_transform(first: Any, second: Any = 2, n_components: Any = None) -> Any:
+    """Transforms data using PCA (either direct PCA dimensionality reduction or fitted PCA model transform)."""
+    if n_components is not None:
+        return _ml_pca_transform_direct(first, n_components)
+    if hasattr(first, "instance") or hasattr(first, "transform") or (isinstance(first, dict) and "instance" in first):
+        inst = first["instance"] if isinstance(first, dict) and "instance" in first else (first.instance if hasattr(first, "instance") else first)
+        return inst.transform([list(r) for r in second])
+    return _ml_pca_transform_direct(first, second)
 
 
 # ==============================================================================

@@ -3,7 +3,7 @@
 import math
 import random
 from typing import List, Dict, Any, Tuple, Optional
-from doomscript.runtime import Record
+from doomscript.core.record import Record
 
 
 class DHParameter:

@@ -27,29 +27,7 @@ import sys
 import statistics
 from typing import Any, Dict, List, Optional, Tuple, Callable, Union
 
-class Record(dict):
-    """
-    A dictionary that allows attribute-style access (e.g. record's field).
-    Allows player's health = 100 and player['health'] interchangeably.
-    """
-    def __getattr__(self, key):
-        try:
-            val = self[key]
-            if isinstance(val, dict) and not isinstance(val, Record):
-                val = Record(val)
-                self[key] = val
-            return val
-        except KeyError:
-            raise AttributeError(f"Record has no field '{key}'") from None
-
-    def __setattr__(self, key, value):
-        self[key] = value
-
-    def __delattr__(self, key):
-        try:
-            del self[key]
-        except KeyError:
-            raise AttributeError(f"Record has no field '{key}'") from None
+from doomscript.core.record import Record
 
 from doomscript.taxonomy import (
     Table,
@@ -4531,20 +4509,27 @@ def sim_sample_uniform(low: float, high: float, count: int = 1000) -> list:
     return [random.uniform(float(low), float(high)) for _ in range(int(count))]
 
 
-def filter_dataset(data: Any, condition: str) -> list:
+def filter_dataset(data: Any, condition: str) -> Any:
     """Filter records in a dataset using safe AST expression evaluation."""
     from doomscript.domains.data.runtime import _to_record_list
     from doomscript.domains.data.expr_eval import SafeASTEvaluator
     rows = _to_record_list(data)
     evaluator = SafeASTEvaluator()
-    return [Record(r) for r in rows if evaluator.evaluate(condition, r)]
+    filtered = [Record(r) for r in rows if evaluator.evaluate(condition, r)]
+    try:
+        import pandas as pd
+        if isinstance(data, pd.DataFrame):
+            return pd.DataFrame([dict(r) for r in filtered])
+    except Exception:
+        pass
+    return filtered
 
 
-def sort_dataset(data: Any, by_col: str, descending: bool = False) -> list:
+def sort_dataset(data: Any, by_col: str, descending: bool = False) -> Any:
     """Sort records in a dataset by a given column."""
     from doomscript.domains.data.runtime import _to_record_list
     rows = _to_record_list(data)
-    return [
+    sorted_rows = [
         Record(r)
         for r in sorted(
             rows,
@@ -4552,9 +4537,16 @@ def sort_dataset(data: Any, by_col: str, descending: bool = False) -> list:
             reverse=descending,
         )
     ]
+    try:
+        import pandas as pd
+        if isinstance(data, pd.DataFrame):
+            return pd.DataFrame([dict(r) for r in sorted_rows])
+    except Exception:
+        pass
+    return sorted_rows
 
 
-def group_dataset(data: Any, by_col: str, agg_func: str, agg_col: str) -> list:
+def group_dataset(data: Any, by_col: str, agg_func: str, agg_col: str) -> Any:
     """Group dataset by column and compute aggregate."""
     from doomscript.domains.data.runtime import _to_record_list
     rows = _to_record_list(data)
@@ -4579,6 +4571,12 @@ def group_dataset(data: Any, by_col: str, agg_func: str, agg_col: str) -> list:
         else:
             res = len(vals)
         out.append(Record({by_col: k, f"{fn}_{agg_col}": res}))
+    try:
+        import pandas as pd
+        if isinstance(data, pd.DataFrame):
+            return pd.DataFrame([dict(r) for r in out])
+    except Exception:
+        pass
     return out
 
 
@@ -4817,3 +4815,36 @@ def geo_compute_isochrone(
 ) -> Dict[str, Any]:
     """Computes reachable road nodes and convex hull isochrone polygon."""
     return IsochroneContour.compute_isochrone(origin_node, nodes, edges, max_time_minutes)
+
+
+# ===========================================================================
+# EXPLICIT RUNTIME EXPORT REGISTRY
+# ===========================================================================
+
+_EXCLUDED_MODULE_NAMES = frozenset({
+    "sys", "os", "re", "subprocess", "time", "json", "random", "sqlite3",
+    "urllib", "shutil", "threading", "csv", "math", "statistics", "ctypes",
+    "email", "smtplib", "BaseHTTPRequestHandler", "HTTPServer", "HTMLParser",
+    "ZoneInfo", "datetime", "timedelta", "date", "Path", "itertools",
+    "struct", "binascii", "configparser", "concurrent", "secrets", "hashlib",
+    "base64", "hmac", "types", "typing"
+})
+
+
+def get_runtime_exports() -> Dict[str, Any]:
+    """Returns the explicit, curated dictionary of language runtime functions and types.
+
+    Excludes standard library modules, internal parsers, and typing artifacts
+    to maintain a clean execution namespace.
+    """
+    import types
+    exports: Dict[str, Any] = {}
+    for k, v in globals().items():
+        if k.startswith("_") or k in _EXCLUDED_MODULE_NAMES:
+            continue
+        if isinstance(v, types.ModuleType):
+            continue
+        if getattr(v, "__module__", "") in ("typing", "typing_extensions"):
+            continue
+        exports[k] = v
+    return exports

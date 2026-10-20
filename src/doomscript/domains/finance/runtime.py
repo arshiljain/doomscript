@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import math
 import random
 from datetime import datetime, timedelta
-from doomscript.runtime import Record
+from doomscript.core.record import Record
 from doomscript.domains.base import DomainRuntime, DomainIR
 from doomscript.domains.finance.spec import (
     FinanceFetchSpec,
@@ -1397,7 +1397,7 @@ class MarkowitzOptimizer:
 def finance_analytical_greeks(
     S: float, K: float, T: float, r: float, sigma: float, option_type: str = "call"
 ) -> Any:
-    from doomscript.runtime import Record
+    from doomscript.core.record import Record
     res = AnalyticalGreeks.all_greeks(float(S), float(K), float(T), float(r), float(sigma), option_type)
     return Record(res)
 
@@ -1405,7 +1405,7 @@ def finance_analytical_greeks(
 def finance_binomial_price(
     S0: float, K: float, T: float, r: float, sigma: float, steps: int = 100, option_type: str = "put", is_american: bool = True
 ) -> Any:
-    from doomscript.runtime import Record
+    from doomscript.core.record import Record
     res = BinomialCoxRossRubinstein.price(float(S0), float(K), float(T), float(r), float(sigma), int(steps), option_type, bool(is_american))
     return Record(res)
 
@@ -1595,7 +1595,7 @@ def fin_vasicek_simulate(
     r0: float, a: float, b: float, sigma: float, t_years: float = 1.0, steps: int = 100
 ) -> Any:
     """Simulates Vasicek short rate path and analytical yield curve."""
-    from doomscript.runtime import Record
+    from doomscript.core.record import Record
     res = VasicekShortRateSimulator.simulate_path(r0, a, b, sigma, t_years=t_years, steps=steps)
     return Record(res)
 
@@ -1604,7 +1604,7 @@ def fin_bond_duration_convexity(
     face_value: float, coupon_rate: float, maturity_years: float, ytm: float, freq: int = 2
 ) -> Any:
     """Computes Macaulay duration, modified duration, DV01, and convexity of a coupon bond."""
-    from doomscript.runtime import Record
+    from doomscript.core.record import Record
     res = BondConvexityAndMacaulayDuration.analyze(face_value, coupon_rate, maturity_years, ytm, frequency=freq)
     return Record(res)
 
@@ -1620,7 +1620,7 @@ def fin_heston_simulate(
     steps: int = 100,
 ) -> Any:
     """Simulates Heston stochastic volatility path."""
-    from doomscript.runtime import Record
+    from doomscript.core.record import Record
     res = HestonStochasticVolatility.simulate(s0, v0, kappa, theta, xi, rho, t_years=t_years, steps=steps)
     return Record(res)
 
@@ -1816,7 +1816,7 @@ def fin_hull_white_tree(
     initial_rate: float = 0.03,
 ) -> Any:
     """Builds Hull-White trinomial interest rate tree calibrated to short rate."""
-    from doomscript.runtime import Record
+    from doomscript.core.record import Record
     return Record(HullWhiteInterestRateTree.build_tree(a=a, sigma=sigma, num_steps=num_steps, dt=dt, initial_rate=initial_rate))
 
 
@@ -1832,7 +1832,7 @@ def fin_merton_jump_diffusion(
     is_call: bool = True,
 ) -> Any:
     """Prices European option under Merton Jump-Diffusion model."""
-    from doomscript.runtime import Record
+    from doomscript.core.record import Record
     return Record(MertonJumpDiffusionModel.price(
         spot, strike, rate, volatility, jump_intensity, jump_mean, jump_vol, time_to_maturity, is_call=is_call
     ))

@@ -12,7 +12,7 @@ import re
 import hashlib
 from fractions import Fraction
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
-from doomscript.runtime import Record
+from doomscript.core.record import Record
 
 
 # Standard Atomic Weights (IUPAC standard values)
@@ -1485,9 +1485,11 @@ class LennardJonesMolecularDynamics:
         }
 
 
-def chem_balance_reaction(equation_str: str) -> Record:
+def chem_balance_reaction(reactants_or_eq: Union[str, List[str]], products: Optional[List[str]] = None) -> Any:
     """Balances chemical reaction equation using exact nullspace rational linear algebra."""
-    return Record(ChemicalStoichiometryBalancer.balance(equation_str))
+    if products is not None or isinstance(reactants_or_eq, (list, tuple)):
+        return ReactionBalancer.balance(reactants_or_eq, products or [])
+    return Record(ChemicalStoichiometryBalancer.balance(reactants_or_eq))
 
 
 def chem_lennard_jones_md(

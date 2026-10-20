@@ -14,7 +14,7 @@ from doomscript.domains.base import (
 from doomscript.domains.registry import get_domain_registry
 from doomscript.viz.spec import PlotSpec
 from doomscript.viz.builder import PlotBuilder
-from doomscript.runtime import Record
+from doomscript.core.record import Record
 
 
 # ==============================================================================
@@ -394,7 +394,7 @@ class VizDomain(DomainContract):
     """Visualization Domain Pack (Grammar of Graphics, Lets-Plot)."""
 
     name = "viz"
-    aliases = ["visualization", "graphics", "plots", "plot"]
+    aliases = ["visualization", "charts", "plots", "plot"]
     description = "Grammar of Graphics data visualization with layers, scales, themes, and facets"
     parser = VizDomainParser()
     runtime = VizRuntime()

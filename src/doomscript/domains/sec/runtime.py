@@ -15,7 +15,7 @@ import struct
 import time
 from typing import Any, Dict, List, Optional, Tuple, Set, Union
 from doomscript.domains.base import DomainRuntime, DomainIR
-from doomscript.runtime import Record
+from doomscript.core.record import Record
 
 
 # Standard English letter frequency distribution (%)
@@ -463,6 +463,14 @@ class ShamirSecretSharing:
         byte_len = (secret_int.bit_length() + 7) // 8
         return secret_int.to_bytes(max(1, byte_len), byteorder="big")
 
+    @classmethod
+    def split(cls, secret_int: int, k_threshold: int, n_shares: int) -> List[Tuple[int, int]]:
+        return cls.split_secret(int(secret_int), n=int(n_shares), k=int(k_threshold))
+
+    @classmethod
+    def combine(cls, shares: List[Tuple[int, int]]) -> int:
+        return cls.recover_secret(shares)
+
 
 class TOTPGenerator:
     """RFC 6238 Time-based One-Time Password & RFC 4226 HMAC-based One-Time Password generator."""
@@ -722,56 +730,6 @@ class TOTPAuthenticator:
 # ==============================================================================
 # SHAMIR (K, N) THRESHOLD SECRET SHARING
 # ==============================================================================
-
-class ShamirSecretSharing:
-    """(k, n) threshold secret sharing over prime field."""
-
-    PRIME = (1 << 61) - 1  # Mersenne prime 2^61 - 1
-
-    @classmethod
-    def split(cls, secret_int: int, k_threshold: int, n_shares: int) -> List[Tuple[int, int]]:
-        k = max(2, int(k_threshold))
-        n = max(k, int(n_shares))
-        secret = int(secret_int) % cls.PRIME
-
-        # Random polynomial coefficients a_1 ... a_{k-1}
-        # In stdlib, use deterministic pseudorandom derived from secret for reproducibility or random
-        import random
-        rng = random.Random(secret ^ 0x555555)
-        coeffs = [secret] + [rng.randint(1, cls.PRIME - 1) for _ in range(k - 1)]
-
-        shares = []
-        for x in range(1, n + 1):
-            y = 0
-            for idx, c in enumerate(coeffs):
-                y = (y + c * pow(x, idx, cls.PRIME)) % cls.PRIME
-            shares.append((x, y))
-
-        return shares
-
-    @classmethod
-    def combine(cls, shares: List[Tuple[int, int]]) -> int:
-        """Reconstructs secret via Lagrange interpolation at x=0."""
-        p = cls.PRIME
-        secret = 0
-
-        for j, (xj, yj) in enumerate(shares):
-            num = 1
-            den = 1
-            for m, (xm, _) in enumerate(shares):
-                if m == j:
-                    continue
-                num = (num * (-xm)) % p
-                den = (den * (xj - xm)) % p
-
-            inv_den = pow(den, p - 2, p)
-            basis = (num * inv_den) % p
-            secret = (secret + yj * basis) % p
-
-        return secret % p
-
-    split_secret = split
-    recover_secret = combine
 
 
 def sec_derive_pbkdf2(password: str, salt: str, iterations: int = 1000) -> Any:

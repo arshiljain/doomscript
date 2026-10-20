@@ -1250,7 +1250,7 @@ def image_quantize_palette(pixels_rgb: List[Tuple[int, int, int]], num_colors: i
     return ColorQuantizer.median_cut(pixels_rgb, num_colors)
 
 
-from doomscript.runtime import Record
+from doomscript.core.record import Record
 
 
 class FASTCornerAndHarrisDetector:
@@ -1408,6 +1408,20 @@ def image_detect_fast_corners(
     return Record(FASTCornerAndHarrisDetector.detect(image_matrix, threshold=threshold, min_contiguous=min_contiguous))
 
 
+class HoughResult(Record):
+    """Result object from Hough transform supporting both attribute/dict access and list iteration."""
+    def __iter__(self):
+        return iter(self.get("detected_lines", []))
+
+    def __len__(self):
+        return len(self.get("detected_lines", []))
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return self.get("detected_lines", [])[key]
+        return super().__getitem__(key)
+
+
 def image_hough_lines(
     edge_matrix: List[List[float]],
     threshold: int = 10,
@@ -1415,7 +1429,7 @@ def image_hough_lines(
     num_theta: int = 60,
 ) -> Any:
     """Detects geometric lines using polar accumulator Hough Transform."""
-    return Record(HoughTransformLineDetector.detect(edge_matrix, threshold=threshold, num_rho=num_rho, num_theta=num_theta))
+    return HoughResult(HoughTransformLineDetector.detect(edge_matrix, threshold=threshold, num_rho=num_rho, num_theta=num_theta))
 
 
 # ==============================================================================

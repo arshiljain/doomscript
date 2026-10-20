@@ -17,7 +17,7 @@ import math
 from collections import Counter
 from fractions import Fraction
 from typing import Any, Dict, List, Optional, Tuple, Union
-from doomscript.runtime import Record
+from doomscript.core.record import Record
 
 
 class ShannonEntropy:

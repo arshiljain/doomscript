@@ -10,7 +10,7 @@ import json
 import time
 from typing import Any, Dict, List, Optional, Tuple, Set, Union
 from doomscript.domains.base import DomainRuntime, DomainIR
-from doomscript.runtime import Record
+from doomscript.core.record import Record
 
 
 class ChainRuntime(DomainRuntime):

@@ -14,7 +14,7 @@ from __future__ import annotations
 import math
 import struct
 from typing import Any, Dict, List, Optional, Tuple, Union
-from doomscript.runtime import Record
+from doomscript.core.record import Record
 
 
 ColorRGB = Tuple[int, int, int]

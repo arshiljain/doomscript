@@ -3,7 +3,7 @@
 import math
 import cmath
 from typing import List, Dict, Any, Tuple, Optional, Union
-from doomscript.runtime import Record
+from doomscript.core.record import Record
 
 
 def dft(x: List[float]) -> List[complex]:

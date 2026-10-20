@@ -8,7 +8,7 @@ orbital velocities, and PID feedback controllers.
 import math
 from typing import Any, Dict, List, Optional, Tuple, Set
 from doomscript.domains.base import DomainRuntime, DomainIR
-from doomscript.runtime import Record
+from doomscript.core.record import Record
 
 
 class PhysicsRuntime(DomainRuntime):

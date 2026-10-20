@@ -1043,7 +1043,7 @@ def audio_parametric_eq(samples: List[float], bands: List[Dict[str, Any]], sampl
     return ParametricEQ.process(samples, bands, sample_rate)
 
 
-from doomscript.runtime import Record
+from doomscript.core.record import Record
 
 
 class HighOrderAmbisonics3D:
@@ -1179,7 +1179,7 @@ class DynamicRangeCompressorLimiter:
         return {
             "threshold_db": threshold_db,
             "ratio": ratio,
-            "max_gain_reduction_db": round(min_gr, 2),
+            "max_gain_reduction_db": round(abs(min_gr), 2),
             "makeup_gain_db": makeup_gain_db,
             "samples_count": len(output),
             "output_samples": output,
@@ -1621,6 +1621,7 @@ class DynamicRangeCompressorLimiter:
         return {
             "output_samples": output,
             "max_gain_reduction_db": round(max_gr_db, 2),
+            "samples_count": len(output),
             "threshold_db": threshold_db,
             "ratio": ratio,
             "makeup_gain_db": makeup_gain_db,

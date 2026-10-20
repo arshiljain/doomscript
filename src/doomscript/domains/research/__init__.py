@@ -58,7 +58,7 @@ class ResearchDomain(DomainContract):
     """Research Domain Pack (Scientific graph algorithms, Autograd, Distributions, Stats)."""
 
     name = "research"
-    aliases = ["autograd", "stats", "graph_research", "math"]
+    aliases = ["autograd", "research_stats", "graph_research", "math"]
     description = "Research mathematical toolkit, automatic differentiation, statistical distributions, and graph algorithms"
     parser = ResearchDomainParser()
     runtime = ResearchRuntime()

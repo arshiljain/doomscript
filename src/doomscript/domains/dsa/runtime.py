@@ -250,9 +250,16 @@ def run_benchmark(spec: BenchmarkSpec, scope: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def profile_memory_of_function(
-    fn_name: str, input_expr: Any, scope: Dict[str, Any]
+    fn_name: str, input_expr: Any, scope: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     """Level 2: Profiles peak and allocated memory for a single function execution."""
+    if scope is None:
+        import sys
+        caller_frame = sys._getframe(1)
+        target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
+        scope = dict(target_env)
+        if caller_frame.f_locals:
+            scope.update(caller_frame.f_locals)
     fn = scope.get(fn_name)
     if not callable(fn):
         raise ValueError(f"Function '{fn_name}' not found or not callable")
@@ -3363,7 +3370,7 @@ def dsa_counting_bloom_filter(expected_items: int = 1000, fp_rate: float = 0.01)
     return CountingBloomFilter(expected_items=expected_items, fp_rate=fp_rate)
 
 
-from doomscript.runtime import Record
+from doomscript.core.record import Record
 
 
 class FibNode:

@@ -15,7 +15,7 @@ from __future__ import annotations
 import math
 import time
 from typing import Any, Dict, List, Optional, Tuple, Union
-from doomscript.runtime import Record
+from doomscript.core.record import Record
 
 
 class Counter:
@@ -249,7 +249,14 @@ def metrics_export_openmetrics() -> str:
 
 def metrics_export_prometheus() -> str:
     """Exports all registered metrics to Prometheus exposition text."""
-    return _REGISTRY.export_prometheus()
+    res = _REGISTRY.export_prometheus()
+    if not res or not res.strip():
+        try:
+            from doomscript.runtime_extended import _METRICS
+            return _METRICS.render_prometheus()
+        except Exception:
+            pass
+    return res
 
 
 def metrics_clear() -> None:

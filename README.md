@@ -410,6 +410,15 @@ python run_corpus.py --fail-under 98
 
 ---
 
+## Execution Model & Security Boundary
+
+DoomScript is an ergonomic, human-friendly syntax layer that compiles directly into standard Python Abstract Syntax Trees (AST) and executes within the host Python runtime.
+
+> [!WARNING]
+> **Not a Security Sandbox**: DoomScript's execution engine executes in-process and is **NOT** a security sandbox. English syntax does not restrict script capabilities. Never execute untrusted or unsanitized `.doom` scripts without external operating system sandboxing (such as Docker containers, gVisor, or dedicated virtual machines).
+
+---
+
 ## License
 
 MIT License. Crafted for mortals who want clean automation in plain English.

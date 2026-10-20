@@ -6,7 +6,7 @@ import random
 from typing import Any, Callable, Dict, List, Optional, Tuple, Set, Union
 from doomscript.domains.base import DomainRuntime, DomainIR
 from doomscript.domains.opt.spec import LinearProgramSpec, SolveLPSpec
-from doomscript.runtime import Record
+from doomscript.core.record import Record
 
 
 def opt_create_linear_program(name: str = "lp") -> LinearProgramSpec:
@@ -309,14 +309,17 @@ def solve_linear_program(spec_or_name: Any, scope: Optional[Dict[str, Any]] = No
         spec = spec_or_name
     elif isinstance(spec_or_name, dict) and "_spec" in spec_or_name:
         spec = spec_or_name["_spec"]
-    elif isinstance(spec_or_name, str) and scope:
-        val = scope.get(spec_or_name)
-        if isinstance(val, LinearProgramSpec):
-            spec = val
-        elif isinstance(val, dict) and "_spec" in val:
-            spec = val["_spec"]
-        else:
-            raise ValueError(f"Linear program '{spec_or_name}' not found in scope")
+    elif isinstance(spec_or_name, str):
+        from doomscript.domains.registry import get_domain_registry
+        spec = get_domain_registry().get_spec_by_name(spec_or_name)
+        if spec is None and scope:
+            val = scope.get(spec_or_name)
+            if isinstance(val, LinearProgramSpec):
+                spec = val
+            elif isinstance(val, dict) and "_spec" in val:
+                spec = val["_spec"]
+        if spec is None:
+            raise ValueError(f"Linear program '{spec_or_name}' not found in registry or scope")
     else:
         raise TypeError(f"Cannot resolve LinearProgramSpec from {spec_or_name}")
 
@@ -2686,12 +2689,16 @@ class NelderMeadSimplexOptimizer:
         if callable(func):
             return float(func(x))
         if isinstance(func, str):
-            env = {"math": math}
-            for i, val in enumerate(x):
-                env[f"x{i}"] = val
-            env["x"] = list(x)
+            env = {f"x{i}": x[i] for i in range(len(x))}
+            if len(x) >= 1:
+                env["x"] = x[0]
+            if len(x) >= 2:
+                env["y"] = x[1]
+            if len(x) >= 3:
+                env["z"] = x[2]
+            env["math"] = math
             expr = func.replace("^", "**")
-            return float(eval(expr, env))
+            return float(eval(expr, {"__builtins__": {}}, env))
         return 0.0
 
     @classmethod
@@ -2808,12 +2815,16 @@ class SequentialQuadraticProgrammingSQP:
         if callable(func):
             return float(func(x))
         if isinstance(func, str):
-            env = {"math": math}
-            for i, val in enumerate(x):
-                env[f"x{i}"] = val
-            env["x"] = list(x)
+            env = {f"x{i}": x[i] for i in range(len(x))}
+            if len(x) >= 1:
+                env["x"] = x[0]
+            if len(x) >= 2:
+                env["y"] = x[1]
+            if len(x) >= 3:
+                env["z"] = x[2]
+            env["math"] = math
             expr = func.replace("^", "**")
-            return float(eval(expr, env))
+            return float(eval(expr, {"__builtins__": {}}, env))
         return 0.0
 
     @classmethod

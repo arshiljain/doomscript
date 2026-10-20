@@ -11,7 +11,7 @@ import re
 from typing import Any, Callable, Dict, List, Optional, Tuple, Set
 import heapq
 from doomscript.domains.base import DomainRuntime, DomainIR
-from doomscript.runtime import Record
+from doomscript.core.record import Record
 
 
 class GameRuntime(DomainRuntime):

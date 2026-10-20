@@ -2,6 +2,7 @@
 
 import ast
 import operator
+import re
 from typing import Any, Callable, Dict
 
 
@@ -65,8 +66,18 @@ class SafeASTEvaluator:
         if not expr_str or not expr_str.strip():
             raise SafeEvalError("Empty expression cannot be evaluated")
 
+        s = expr_str.strip()
+        s = re.sub(r"\bis\s+greater\s+than\s+or\s+equal\s+to\b", ">=", s, flags=re.IGNORECASE)
+        s = re.sub(r"\bis\s+less\s+than\s+or\s+equal\s+to\b", "<=", s, flags=re.IGNORECASE)
+        s = re.sub(r"\bis\s+at\s+least\b", ">=", s, flags=re.IGNORECASE)
+        s = re.sub(r"\bis\s+at\s+most\b", "<=", s, flags=re.IGNORECASE)
+        s = re.sub(r"\bis\s+greater\s+than\b", ">", s, flags=re.IGNORECASE)
+        s = re.sub(r"\bis\s+less\s+than\b", "<", s, flags=re.IGNORECASE)
+        s = re.sub(r"\bis\s+equal\s+to\b", "==", s, flags=re.IGNORECASE)
+        s = re.sub(r"\bis\s+not\b", "!=", s, flags=re.IGNORECASE)
+
         try:
-            tree = ast.parse(expr_str.strip(), mode="eval")
+            tree = ast.parse(s, mode="eval")
         except SyntaxError as e:
             raise SafeEvalError(f"Syntax error in expression '{expr_str}': {e.msg}") from e
 

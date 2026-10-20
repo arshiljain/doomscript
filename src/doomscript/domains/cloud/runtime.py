@@ -8,7 +8,7 @@ import shutil
 import time
 import bisect
 from pathlib import Path
-from doomscript.runtime import Record
+from doomscript.core.record import Record
 from doomscript.domains.base import DomainRuntime, DomainIR
 from doomscript.domains.cloud.spec import (
     CloudConnectSpec,

@@ -61,7 +61,7 @@ class MetricsDomain(DomainContract):
     """Domain contract for Metrics & Prometheus Telemetry."""
 
     name = "metrics"
-    aliases = ["telemetry", "prometheus", "observability", "stats"]
+    aliases = ["telemetry", "prometheus", "observability", "metric_stats", "kpi_stats"]
     description = "Prometheus-compatible counters, gauges, histograms, quantiles, and OpenMetrics plaintext export"
     parser = MetricsDomainParser()
     runtime = MetricsRuntime()

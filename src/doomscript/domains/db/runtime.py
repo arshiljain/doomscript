@@ -6,7 +6,7 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from doomscript.domains.base import DomainRuntime, DomainIR
 from doomscript.domains.db.spec import QuerySpec, WhereClause
 from doomscript.domains.data.runtime import _to_record_list
-from doomscript.runtime import Record
+from doomscript.core.record import Record
 
 
 class DBRuntime(DomainRuntime):

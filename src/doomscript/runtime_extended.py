@@ -43,29 +43,7 @@ import shlex
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Callable, Union
 
-class Record(dict):
-    """
-    A dictionary that allows attribute-style access (e.g. record's field).
-    Allows player's health = 100 and player['health'] interchangeably.
-    """
-    def __getattr__(self, key):
-        try:
-            val = self[key]
-            if isinstance(val, dict) and not isinstance(val, Record):
-                val = Record(val)
-                self[key] = val
-            return val
-        except KeyError:
-            raise AttributeError(f"Record has no field '{key}'") from None
-
-    def __setattr__(self, key, value):
-        self[key] = value
-
-    def __delattr__(self, key):
-        try:
-            del self[key]
-        except KeyError:
-            raise AttributeError(f"Record has no field '{key}'") from None
+from doomscript.core.record import Record
 
 
 

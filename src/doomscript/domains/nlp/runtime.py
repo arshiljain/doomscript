@@ -1485,11 +1485,44 @@ def nlp_cbow_word2vec(texts: List[str], embedding_dim: int = 16, epochs: int = 1
     return w2v
 
 
-from doomscript.runtime import Record
+from doomscript.core.record import Record
 
 
 class TextRankSummarizer:
     """Graph-based ranking model for unsupervised extractive document summarization."""
+
+    @staticmethod
+    def extract_keywords(text: str, top_n: int = 5, window_size: int = 3, max_iter: int = 30) -> List[str]:
+        words = [w.lower() for w in re.findall(r"\b[a-zA-Z]{3,}\b", str(text)) if w.lower() not in ENGLISH_STOPWORDS]
+        if not words:
+            return []
+        vocab = sorted(list(set(words)))
+        word_idx = {w: i for i, w in enumerate(vocab)}
+        n = len(vocab)
+        if n == 1:
+            return vocab
+        adj = [[0.0] * n for _ in range(n)]
+        for i in range(len(words)):
+            w1 = words[i]
+            idx1 = word_idx[w1]
+            for j in range(i + 1, min(len(words), i + window_size)):
+                w2 = words[j]
+                idx2 = word_idx[w2]
+                if idx1 != idx2:
+                    adj[idx1][idx2] += 1.0
+                    adj[idx2][idx1] += 1.0
+        d = 0.85
+        scores = [1.0 / n] * n
+        deg = [sum(adj[i]) for i in range(n)]
+        for _ in range(max_iter):
+            new_scores = [(1.0 - d) / n] * n
+            for i in range(n):
+                for j in range(n):
+                    if adj[j][i] > 0 and deg[j] > 0:
+                        new_scores[i] += d * (scores[j] * adj[j][i] / deg[j])
+            scores = new_scores
+        ranked = sorted(zip(vocab, scores), key=lambda it: it[1], reverse=True)
+        return [w for w, _ in ranked[:top_n]]
 
     @classmethod
     def segment_sentences(cls, text: str) -> List[str]:
@@ -1520,11 +1553,16 @@ class TextRankSummarizer:
     def summarize(
         cls,
         text: str,
-        num_sentences: int = 3,
+        num_sentences: Optional[int] = None,
         damping: float = 0.85,
         max_iter: int = 100,
         tol: float = 1e-4,
-    ) -> Dict[str, Any]:
+        top_n_sentences: Optional[int] = None,
+    ) -> Any:
+        if top_n_sentences is not None:
+            num_sentences = top_n_sentences
+        elif num_sentences is None:
+            num_sentences = 3
         sentences = cls.segment_sentences(text)
         n = len(sentences)
         if n == 0:
@@ -1590,6 +1628,8 @@ class TextRankSummarizer:
             for idx in ranked_indices
         ]
 
+        if top_n_sentences is not None:
+            return " ".join(top_sentences)
         return {
             "num_sentences": len(top_sentences),
             "total_sentences": n,

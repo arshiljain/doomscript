@@ -7,7 +7,7 @@ import heapq
 import re
 from collections import deque
 from doomscript.domains.base import DomainRuntime, DomainIR
-from doomscript.runtime import Record
+from doomscript.core.record import Record
 from doomscript.research.graph import (
     ResearchGraph,
     dijkstra_shortest_path as _core_dijkstra,

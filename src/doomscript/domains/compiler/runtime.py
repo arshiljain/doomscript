@@ -2,7 +2,7 @@
 
 import re
 from typing import List, Dict, Any, Optional, Union, Tuple, Callable
-from doomscript.runtime import Record
+from doomscript.core.record import Record
 
 
 class Opcode:

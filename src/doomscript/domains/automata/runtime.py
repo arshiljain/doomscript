@@ -15,7 +15,7 @@ from collections import deque
 import re
 import math
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
-from doomscript.runtime import Record
+from doomscript.core.record import Record
 
 
 # --- 1. Deterministic Finite Automaton (DFA) ---

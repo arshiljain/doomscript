@@ -2,7 +2,7 @@
 
 import math
 from typing import Any, Dict, List, Optional, Tuple, Union
-from doomscript.runtime import Record
+from doomscript.core.record import Record
 from doomscript.domains.base import DomainRuntime, DomainIR
 from doomscript.domains.geo.spec import (
     GeoPointSpec,
@@ -1490,9 +1490,23 @@ class PolygonClippingSutherlandHodgman:
         }
 
 
-def geo_vincenty_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> Any:
+def geo_vincenty_distance(*args, **kwargs) -> Any:
     """Computes high-precision WGS-84 ellipsoidal distance using Vincenty's formula."""
-    return Record(VincentyGeodesicDistance.distance(lat1, lon1, lat2, lon2))
+    if len(args) == 2 and not kwargs:
+        p1, p2 = args
+        lat1, lon1 = _extract_lat_lon(p1)
+        lat2, lon2 = _extract_lat_lon(p2)
+        res = VincentyGeodesicDistance.distance(lat1, lon1, lat2, lon2)
+        return res["distance_km"]
+    elif len(args) == 4:
+        lat1, lon1, lat2, lon2 = args
+        return Record(VincentyGeodesicDistance.distance(lat1, lon1, lat2, lon2))
+    elif len(args) == 2:
+        lat1, lon1 = _extract_lat_lon(args[0])
+        lat2, lon2 = _extract_lat_lon(args[1])
+        res = VincentyGeodesicDistance.distance(lat1, lon1, lat2, lon2)
+        return Record(res)
+    raise TypeError(f"geo_vincenty_distance expected 2 or 4 positional arguments, got {len(args)}")
 
 
 def geo_douglas_peucker(points: List[List[float]], epsilon: float) -> Any:
@@ -1694,12 +1708,20 @@ class GeohashSpatialEncoder:
         center_lon = (lon_range[0] + lon_range[1]) * 0.5
 
         return {
+            "lat": round(center_lat, 6),
+            "lon": round(center_lon, 6),
             "latitude": round(center_lat, 6),
             "longitude": round(center_lon, 6),
             "lat_min": round(lat_range[0], 6),
             "lat_max": round(lat_range[1], 6),
             "lon_min": round(lon_range[0], 6),
             "lon_max": round(lon_range[1], 6),
+            "bounds": {
+                "min_lat": round(lat_range[0], 6),
+                "max_lat": round(lat_range[1], 6),
+                "min_lon": round(lon_range[0], 6),
+                "max_lon": round(lon_range[1], 6),
+            },
         }
 
 

@@ -58,7 +58,7 @@ class RecordList(list):
         return to_table(self)
 
     def where(self, predicate: Callable[[Any], bool]) -> "RecordList":
-        from doomscript.runtime import Record
+        from doomscript.core.record import Record
         return RecordList([r for r in self if predicate(r)])
 
 
@@ -141,7 +141,7 @@ class Table:
         return cls(columns=columns, rows=rows, name=name)
 
     def to_records(self) -> RecordList:
-        from doomscript.runtime import Record
+        from doomscript.core.record import Record
         result = RecordList()
         for row in self.rows:
             rec_dict = {}
@@ -211,7 +211,7 @@ def to_table(obj: Any) -> Table:
 
 def to_records(obj: Any) -> RecordList:
     """Convert a Table or collection of dicts/records into a RecordList."""
-    from doomscript.runtime import Record
+    from doomscript.core.record import Record
     if isinstance(obj, Table):
         return obj.to_records()
     if isinstance(obj, RecordList):
@@ -237,7 +237,7 @@ def classify_value(val: Any) -> ValueKind:
         return ValueKind.SCALAR
     if isinstance(val, Table):
         return ValueKind.TABLE
-    from doomscript.runtime import Record
+    from doomscript.core.record import Record
     if isinstance(val, Record):
         return ValueKind.RECORD
     if isinstance(val, dict):

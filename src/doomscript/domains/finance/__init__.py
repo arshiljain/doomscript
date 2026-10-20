@@ -48,7 +48,7 @@ class FinanceDomain(DomainContract):
     """Quantitative Finance & Time Series domain pack."""
 
     name = "finance"
-    aliases = ["quant", "trading", "timeseries"]
+    aliases = ["quant", "trading", "financial_ts"]
     description = "Quantitative Finance & Time Series indicators and backtesting"
     parser = FinanceDomainParser()
     runtime = FinanceRuntime()

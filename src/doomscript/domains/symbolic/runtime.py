@@ -15,7 +15,7 @@ import math
 import re
 from fractions import Fraction
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
-from doomscript.runtime import Record
+from doomscript.core.record import Record
 
 
 class Expr:

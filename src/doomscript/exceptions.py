@@ -61,3 +61,13 @@ class DoomScopeError(DoomError):
 class DoomAmbiguityError(DoomError):
     """Raised when a sentence has ambiguous meaning."""
     pass
+
+
+class DoomCompilationError(DoomError):
+    """Raised when compilation or AST export transformation fails."""
+    pass
+
+
+class DoomCompilerWarning(UserWarning):
+    """Warning emitted during compilation or AST export transformations."""
+    pass

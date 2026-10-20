@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import math
 from typing import Any, Dict, List, Optional, Tuple, Union
-from doomscript.runtime import Record
+from doomscript.core.record import Record
 
 
 class TimeSeriesDifferencer:
