@@ -56,6 +56,10 @@ from doomscript.domains.sim.runtime import (
     GillespieExactSSA,
     sim_seir_epidemic,
     sim_gillespie_ssa,
+    DiscreteEventSimulationDESEngine,
+    CellularAutomataLatticeGasHydrodynamics,
+    sim_des_queue,
+    sim_lattice_gas,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.sim.exporter import SimASTExporter
@@ -223,4 +227,8 @@ __all__ = [
     "GillespieExactSSA",
     "sim_seir_epidemic",
     "sim_gillespie_ssa",
+    "DiscreteEventSimulationDESEngine",
+    "CellularAutomataLatticeGasHydrodynamics",
+    "sim_des_queue",
+    "sim_lattice_gas",
 ]

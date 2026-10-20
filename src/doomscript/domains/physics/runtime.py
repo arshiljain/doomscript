@@ -1290,4 +1290,312 @@ def physics_brachistochrone(x_end: float, y_end: float) -> Record:
     return Record(BrachistochroneCycloidCalculator.calculate(x_end, y_end))
 
 
+# ==============================================================================
+# BARNES-HUT GRAVITATIONAL N-BODY & SPECIAL RELATIVITY LORENTZ KINEMATICS
+# ==============================================================================
+
+
+class QuadTreeNode:
+    """Quadtree spatial node for Barnes-Hut hierarchical treecode."""
+
+    def __init__(self, x: float, y: float, size: float):
+        self.x = x  # Center x
+        self.y = y  # Center y
+        self.size = size  # Side length
+        self.mass = 0.0
+        self.cx = 0.0  # Center of mass x
+        self.cy = 0.0  # Center of mass y
+        self.body_idx = -1  # Body index if leaf node with single body
+        self.children: Optional[List[Optional["QuadTreeNode"]]] = None
+
+    def is_leaf(self) -> bool:
+        return self.children is None
+
+
+class BarnesHutNBodySimulation:
+    """Barnes-Hut Hierarchical O(N log N) Gravitational N-Body Simulation.
+
+    Partitions space recursively using a 2D quadtree. Calculates gravitational forces
+    by treating distant clusters as single aggregated point masses when opening angle
+    theta = size / distance < threshold. Implements Plummer softening to prevent close-encounter singularities.
+    """
+
+    @classmethod
+    def _insert(cls, node: QuadTreeNode, body_idx: int, px: float, py: float, mass: float) -> None:
+        """Inserts body into quadtree recursively."""
+        if node.mass == 0.0 and node.body_idx == -1:
+            # Empty leaf node: store body here
+            node.body_idx = body_idx
+            node.mass = mass
+            node.cx = px
+            node.cy = py
+            return
+
+        if node.is_leaf():
+            # Subdivide existing leaf
+            node.children = [None, None, None, None]
+            old_idx = node.body_idx
+            old_mass = node.mass
+            old_cx = node.cx
+            old_cy = node.cy
+            node.body_idx = -1
+
+            # Re-insert existing body into appropriate child
+            cls._insert_child(node, old_idx, old_cx, old_cy, old_mass)
+
+        # Update center of mass and total mass
+        new_mass = node.mass + mass
+        node.cx = (node.cx * node.mass + px * mass) / new_mass
+        node.cy = (node.cy * node.mass + py * mass) / new_mass
+        node.mass = new_mass
+
+        cls._insert_child(node, body_idx, px, py, mass)
+
+    @classmethod
+    def _insert_child(cls, node: QuadTreeNode, body_idx: int, px: float, py: float, mass: float) -> None:
+        quarter = node.size * 0.25
+        half = node.size * 0.5
+        # Child quadrant: 0: NW, 1: NE, 2: SW, 3: SE
+        is_east = px >= node.x
+        is_south = py >= node.y
+        q_idx = (2 if is_south else 0) + (1 if is_east else 0)
+
+        cx = node.x + (quarter if is_east else -quarter)
+        cy = node.y + (quarter if is_south else -quarter)
+
+        if node.children[q_idx] is None:
+            node.children[q_idx] = QuadTreeNode(cx, cy, half)
+
+        cls._insert(node.children[q_idx], body_idx, px, py, mass)
+
+    @classmethod
+    def _compute_force(
+        cls,
+        node: Optional[QuadTreeNode],
+        px: float,
+        py: float,
+        theta: float,
+        softening: float,
+        g_const: float,
+    ) -> Tuple[float, float, float]:
+        """Calculates force (fx, fy) and potential on particle at (px, py)."""
+        if node is None or node.mass == 0.0:
+            return 0.0, 0.0, 0.0
+
+        dx = node.cx - px
+        dy = node.cy - py
+        dist_sq = dx * dx + dy * dy
+        dist = math.sqrt(dist_sq)
+
+        if dist < 1e-6:
+            return 0.0, 0.0, 0.0
+
+        # Check multipole acceptance criterion: size / dist < theta
+        if node.is_leaf() or (node.size / dist) < theta:
+            eff_dist_sq = dist_sq + softening * softening
+            inv_dist3 = 1.0 / (eff_dist_sq * math.sqrt(eff_dist_sq))
+            f_mag = g_const * node.mass * inv_dist3
+            pot = -g_const * node.mass / math.sqrt(eff_dist_sq)
+            return f_mag * dx, f_mag * dy, pot
+
+        # Otherwise recurse into children
+        fx = 0.0
+        fy = 0.0
+        pot = 0.0
+        if node.children:
+            for child in node.children:
+                if child is not None:
+                    cfx, cfy, cpot = cls._compute_force(child, px, py, theta, softening, g_const)
+                    fx += cfx
+                    fy += cfy
+                    pot += cpot
+
+        return fx, fy, pot
+
+    @classmethod
+    def simulate(
+        cls,
+        bodies: List[Dict[str, float]],
+        theta: float = 0.5,
+        steps: int = 20,
+        dt: float = 0.01,
+        g_const: float = 1.0,
+        softening: float = 0.1,
+    ) -> Dict[str, Any]:
+        """Simulates gravitational interaction of N bodies using Barnes-Hut algorithm."""
+        n = len(bodies)
+        if n == 0:
+            return {"num_bodies": 0, "total_energy": 0.0}
+
+        masses = [b.get("m", 1.0) for b in bodies]
+        pos_x = [b.get("x", 0.0) for b in bodies]
+        pos_y = [b.get("y", 0.0) for b in bodies]
+        vel_x = [b.get("vx", 0.0) for b in bodies]
+        vel_y = [b.get("vy", 0.0) for b in bodies]
+
+        for _ in range(steps):
+            # 1. Determine bounding box
+            min_x = min(pos_x)
+            max_x = max(pos_x)
+            min_y = min(pos_y)
+            max_y = max(pos_y)
+
+            box_cx = (min_x + max_x) * 0.5
+            box_cy = (min_y + max_y) * 0.5
+            box_size = max(max_x - min_x, max_y - min_y, 1.0) * 1.2
+
+            root = QuadTreeNode(box_cx, box_cy, box_size)
+            for i in range(n):
+                cls._insert(root, i, pos_x[i], pos_y[i], masses[i])
+
+            # 2. Compute accelerations
+            acc_x = [0.0] * n
+            acc_y = [0.0] * n
+            for i in range(n):
+                fx, fy, _ = cls._compute_force(root, pos_x[i], pos_y[i], theta, softening, g_const)
+                acc_x[i] = fx
+                acc_y[i] = fy
+
+            # 3. Symplectic Leapfrog integration
+            for i in range(n):
+                vel_x[i] += acc_x[i] * dt
+                vel_y[i] += acc_y[i] * dt
+                pos_x[i] += vel_x[i] * dt
+                pos_y[i] += vel_y[i] * dt
+
+        # Energy calculation
+        tot_kin = 0.5 * sum(masses[i] * (vel_x[i]**2 + vel_y[i]**2) for i in range(n))
+        tot_pot = 0.0
+        for i in range(n):
+            for j in range(i + 1, n):
+                dx = pos_x[i] - pos_x[j]
+                dy = pos_y[i] - pos_y[j]
+                d = math.sqrt(dx * dx + dy * dy + softening * softening)
+                tot_pot -= (g_const * masses[i] * masses[j]) / d
+
+        cm_x = sum(masses[i] * pos_x[i] for i in range(n)) / sum(masses)
+        cm_y = sum(masses[i] * pos_y[i] for i in range(n)) / sum(masses)
+
+        return {
+            "kinetic_energy": round(tot_kin, 4),
+            "potential_energy": round(tot_pot, 4),
+            "total_energy": round(tot_kin + tot_pot, 4),
+            "center_of_mass": [round(cm_x, 4), round(cm_y, 4)],
+            "num_bodies": n,
+            "steps_completed": steps,
+        }
+
+
+class RelativisticLorentzKinematics:
+    """Special Relativity 4-Vector Kinematics and Lorentz Transformations.
+
+    Performs boosts of 4-position (ct, x, y, z) and 4-momentum (E/c, px, py, pz)
+    along an arbitrary 3D velocity vector v. Evaluates invariant space-time intervals,
+    proper time, invariant mass, and relativistic Doppler frequency shifts.
+    """
+
+    @classmethod
+    def boost_event(
+        cls,
+        event: List[float],
+        velocity: List[float],
+        c: float = 1.0,
+    ) -> Dict[str, Any]:
+        """Applies Lorentz boost to 4-vector [ct, x, y, z]."""
+        ct, x, y, z = event[0], event[1], event[2], event[3]
+        vx, vy, vz = velocity[0], velocity[1], velocity[2]
+
+        v_mag = math.sqrt(vx * vx + vy * vy + vz * vz)
+        beta = v_mag / c
+        if beta >= 1.0:
+            raise ValueError(f"Velocity magnitude {v_mag} exceeds or equals speed of light {c}")
+
+        gamma = 1.0 / math.sqrt(1.0 - beta * beta)
+
+        if v_mag < 1e-12:
+            return {
+                "boosted_event": [ct, x, y, z],
+                "gamma": 1.0,
+                "beta": 0.0,
+                "invariant_interval": round(ct * ct - (x * x + y * y + z * z), 6),
+            }
+
+        # Unit velocity vector
+        ux = vx / v_mag
+        uy = vy / v_mag
+        uz = vz / v_mag
+
+        # Spatial projection along velocity: r_dot_u
+        r_dot_u = x * ux + y * uy + z * uz
+
+        # Boost equations
+        # ct' = gamma * (ct - beta * r_dot_u)
+        ct_prime = gamma * (ct - beta * r_dot_u)
+
+        # r' = r + (gamma - 1)*(r_dot_u)*u - gamma*beta*ct*u
+        factor = (gamma - 1.0) * r_dot_u - gamma * beta * ct
+        x_prime = x + factor * ux
+        y_prime = y + factor * uy
+        z_prime = z + factor * uz
+
+        # Invariant interval s^2 = (ct)^2 - (x^2 + y^2 + z^2)
+        s2_orig = ct * ct - (x * x + y * y + z * z)
+        s2_boosted = ct_prime * ct_prime - (x_prime * x_prime + y_prime * y_prime + z_prime * z_prime)
+
+        return {
+            "boosted_event": [round(ct_prime, 5), round(x_prime, 5), round(y_prime, 5), round(z_prime, 5)],
+            "gamma": round(gamma, 5),
+            "beta": round(beta, 5),
+            "invariant_interval_original": round(s2_orig, 5),
+            "invariant_interval_boosted": round(s2_boosted, 5),
+            "invariance_preserved": abs(s2_orig - s2_boosted) < 1e-4,
+        }
+
+    @classmethod
+    def doppler_shift(
+        cls,
+        frequency_source_hz: float,
+        velocity_mag: float,
+        angle_rad: float = 0.0,
+        c: float = 299792458.0,
+    ) -> Dict[str, Any]:
+        """Calculates relativistic Doppler shift for electromagnetic radiation."""
+        beta = velocity_mag / c
+        if beta >= 1.0:
+            raise ValueError("Velocity exceeds speed of light")
+
+        gamma = 1.0 / math.sqrt(1.0 - beta * beta)
+        # Observed frequency f_obs = f_src / (gamma * (1 - beta * cos(theta)))
+        f_obs = frequency_source_hz / (gamma * (1.0 - beta * math.cos(angle_rad)))
+
+        return {
+            "source_frequency_hz": frequency_source_hz,
+            "observed_frequency_hz": round(f_obs, 2),
+            "frequency_shift_ratio": round(f_obs / max(1e-12, frequency_source_hz), 4),
+            "gamma": round(gamma, 4),
+            "beta": round(beta, 4),
+        }
+
+
+def physics_barnes_hut_nbody(
+    bodies: List[Dict[str, float]],
+    theta: float = 0.5,
+    steps: int = 20,
+    dt: float = 0.01,
+    g_const: float = 1.0,
+) -> Record:
+    """Simulates gravitational N-body system using Barnes-Hut hierarchical treecode."""
+    return Record(BarnesHutNBodySimulation.simulate(bodies, theta=theta, steps=steps, dt=dt, g_const=g_const))
+
+
+def physics_lorentz_transform(
+    event: List[float],
+    velocity: List[float],
+    c: float = 1.0,
+) -> Record:
+    """Applies relativistic Lorentz boost to 4-vector [ct, x, y, z]."""
+    return Record(RelativisticLorentzKinematics.boost_event(event, velocity, c=c))
+
+
+
 

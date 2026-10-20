@@ -248,6 +248,39 @@ class BioDomainParser(DomainParser):
                 seq = f'"{seq}"'
             return f"set {target} to bio_kozak_scan({seq})"
 
+        # fold rna secondary structure sequence <seq> [min loop <loop>] into <target>
+        m_fold = re.match(
+            r"^fold\s+rna\s+secondary\s+structure\s+sequence\s+(.+?)(?:\s+min\s+loop\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_fold:
+            seq = m_fold.group(1).strip()
+            loop = m_fold.group(2).strip() if m_fold.group(2) else "1"
+            target = m_fold.group(3).strip()
+            if not (seq.startswith('"') or seq.startswith("'") or seq.isidentifier()):
+                seq = f'"{seq}"'
+            return f"set {target} to bio_nussinov_rna_fold({seq}, min_loop={loop})"
+
+        # align sequences <seq1> and <seq2> with smith waterman [match <m>] [mismatch <mm>] [gap open <go>] [gap extend <ge>] into <target>
+        m_sw = re.match(
+            r"^align\s+sequences\s+(.+?)\s+and\s+(.+?)\s+with\s+smith\s+waterman(?:\s+match\s+(.+?))?(?:\s+mismatch\s+(.+?))?(?:\s+gap\s+open\s+(.+?))?(?:\s+gap\s+extend\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_sw:
+            s1, s2 = m_sw.group(1).strip(), m_sw.group(2).strip()
+            mat = m_sw.group(3).strip() if m_sw.group(3) else "2.0"
+            mismat = m_sw.group(4).strip() if m_sw.group(4) else "-1.0"
+            go = m_sw.group(5).strip() if m_sw.group(5) else "3.0"
+            ge = m_sw.group(6).strip() if m_sw.group(6) else "1.0"
+            target = m_sw.group(7).strip()
+            if not (s1.startswith('"') or s1.startswith("'") or s1.isidentifier()):
+                s1 = f'"{s1}"'
+            if not (s2.startswith('"') or s2.startswith("'") or s2.isidentifier()):
+                s2 = f'"{s2}"'
+            return f"set {target} to bio_smith_waterman_align({s1}, {s2}, match={mat}, mismatch={mismat}, gap_open={go}, gap_extend={ge})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

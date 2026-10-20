@@ -41,6 +41,9 @@ from doomscript.domains.chem.runtime import (
     ArrheniusEyringTransitionState,
     chem_oregonator_simulate,
     chem_eyring_transition_state,
+    ChemicalStoichiometryBalancer,
+    LennardJonesMolecularDynamics,
+    chem_lennard_jones_md,
 )
 from doomscript.domains.chem.parser import ChemDomainParser
 from doomscript.domains.chem.exporter import ChemASTExporter
@@ -134,4 +137,7 @@ __all__ = [
     "ArrheniusEyringTransitionState",
     "chem_oregonator_simulate",
     "chem_eyring_transition_state",
+    "ChemicalStoichiometryBalancer",
+    "LennardJonesMolecularDynamics",
+    "chem_lennard_jones_md",
 ]

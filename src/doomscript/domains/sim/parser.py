@@ -434,6 +434,32 @@ class SimDomainParser(DomainParser):
             prey, pred, mtime, target = m_ssa.group(1).strip(), m_ssa.group(2).strip(), m_ssa.group(3) or "10.0", m_ssa.group(4).strip()
             return f"set {target} to sim_gillespie_ssa(initial_prey={prey}, initial_predators={pred}, max_time={mtime})"
 
+        # simulate discrete event queue <traffic> [servers <c>] into <target>
+        m_des = re.match(
+            r"^simulate\s+discrete\s+event\s+queue\s+(.+?)(?:\s+servers\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_des:
+            traffic = m_des.group(1).strip()
+            srv = m_des.group(2).strip() if m_des.group(2) else "1"
+            target = m_des.group(3).strip()
+            return f"set {target} to sim_des_queue({traffic}, num_servers={srv})"
+
+        # simulate lattice gas hydrodynamics [width <w>] [height <h>] [steps <steps>] [density <rho>] into <target>
+        m_lga = re.match(
+            r"^simulate\s+lattice\s+gas\s+hydrodynamics(?:\s+width\s+(\d+))?(?:\s+height\s+(\d+))?(?:\s+steps\s+(\d+))?(?:\s+density\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_lga:
+            w = m_lga.group(1).strip() if m_lga.group(1) else "16"
+            h = m_lga.group(2).strip() if m_lga.group(2) else "16"
+            steps_val = m_lga.group(3).strip() if m_lga.group(3) else "30"
+            rho = m_lga.group(4).strip() if m_lga.group(4) else "0.3"
+            target = m_lga.group(5).strip()
+            return f"set {target} to sim_lattice_gas(width={w}, height={h}, steps={steps_val}, initial_density={rho})"
+
         return None
 
     def parse_block(

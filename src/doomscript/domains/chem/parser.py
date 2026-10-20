@@ -119,6 +119,32 @@ class ChemDomainParser(DomainParser):
             target = m_eyr.group(3).strip()
             return f"set {target} to chem_eyring_transition_state({temps}, {rates})"
 
+        # balance chemical reaction <eqn> into <target>
+        m_bal = re.match(
+            r"^balance\s+chemical\s+reaction\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_bal:
+            eqn = m_bal.group(1).strip()
+            target = m_bal.group(2).strip()
+            if not (eqn.startswith('"') or eqn.startswith("'") or eqn.isidentifier()):
+                eqn = f'"{eqn}"'
+            return f"set {target} to chem_balance_reaction({eqn})"
+
+        # simulate molecular dynamics lennard jones [particles <n>] [box <size>] [steps <steps>] into <target>
+        m_md = re.match(
+            r"^simulate\s+molecular\s+dynamics\s+lennard\s+jones(?:\s+particles\s+(\d+))?(?:\s+box\s+(.+?))?(?:\s+steps\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_md:
+            n_part = m_md.group(1).strip() if m_md.group(1) else "16"
+            b_size = m_md.group(2).strip() if m_md.group(2) else "6.0"
+            s_steps = m_md.group(3).strip() if m_md.group(3) else "50"
+            target = m_md.group(4).strip()
+            return f"set {target} to chem_lennard_jones_md(num_particles={n_part}, box_size={b_size}, steps={s_steps})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

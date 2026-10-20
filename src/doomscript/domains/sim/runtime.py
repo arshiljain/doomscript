@@ -1699,6 +1699,230 @@ def sim_gillespie_ssa(
     ))
 
 
+# ==============================================================================
+# DISCRETE EVENT SIMULATION (DES) & LATTICE GAS HYDRODYNAMICS CELLULAR AUTOMATON
+# ==============================================================================
+
+
+class DiscreteEventSimulationDESEngine:
+    """Industrial Discrete Event Simulation (DES) Multi-Server Queue Engine.
+
+    Features min-heap Future Event List (FEL) scheduler, multi-server resource seizing/releasing,
+    waiting queue management, time-weighted state integration, and Little's Law verification.
+    """
+
+    @classmethod
+    def simulate_queue(
+        cls,
+        arrivals_and_services: List[Tuple[float, float]],
+        num_servers: int = 1,
+    ) -> Dict[str, Any]:
+        """Simulates M/M/c multi-server queue from list of (interarrival_time, service_time) tuples."""
+        import heapq
+
+        c_servers = max(1, int(num_servers))
+        busy_servers = 0
+
+        # Event: (event_time, event_id, event_type, customer_id)
+        # event_type: 0 = ARRIVAL, 1 = DEPARTURE
+        fel: List[Tuple[float, int, int, int]] = []
+        event_counter = 0
+
+        # Schedule all customer arrivals
+        current_time = 0.0
+        n_cust = len(arrivals_and_services)
+        for cid, (inter_arr, s_time) in enumerate(arrivals_and_services):
+            current_time += max(0.0, inter_arr)
+            event_counter += 1
+            heapq.heappush(fel, (current_time, event_counter, 0, cid))
+
+        waiting_queue: List[Tuple[int, float]] = []  # (customer_id, arrival_time)
+        service_times = {cid: max(1e-4, s_time) for cid, (_, s_time) in enumerate(arrivals_and_services)}
+
+        # Statistical counters
+        clock = 0.0
+        last_event_time = 0.0
+        area_queue = 0.0  # Integral of L_q(t) dt
+        area_server = 0.0  # Integral of B(t) dt
+
+        wait_times: List[float] = []
+        turnaround_times: List[float] = []
+        customer_arrival_times: Dict[int, float] = {}
+
+        while fel:
+            event_time, _, ev_type, cid = heapq.heappop(fel)
+
+            # Update time-weighted area integrals
+            dt = event_time - last_event_time
+            area_queue += len(waiting_queue) * dt
+            area_server += busy_servers * dt
+            last_event_time = event_time
+            clock = event_time
+
+            if ev_type == 0:  # ARRIVAL
+                customer_arrival_times[cid] = event_time
+                if busy_servers < c_servers:
+                    # Seize server immediately
+                    busy_servers += 1
+                    wait_times.append(0.0)
+                    dep_time = event_time + service_times[cid]
+                    event_counter += 1
+                    heapq.heappush(fel, (dep_time, event_counter, 1, cid))
+                else:
+                    # Enqueue in FIFO wait queue
+                    waiting_queue.append((cid, event_time))
+
+            elif ev_type == 1:  # DEPARTURE
+                busy_servers -= 1
+                arr_t = customer_arrival_times.get(cid, event_time - service_times[cid])
+                turnaround_times.append(event_time - arr_t)
+
+                if waiting_queue:
+                    # Pop next customer from queue
+                    next_cid, next_arr_t = waiting_queue.pop(0)
+                    w_t = event_time - next_arr_t
+                    wait_times.append(w_t)
+                    busy_servers += 1
+                    dep_time = event_time + service_times[next_cid]
+                    event_counter += 1
+                    heapq.heappush(fel, (dep_time, event_counter, 1, next_cid))
+
+        # Final statistics
+        tot_served = len(turnaround_times)
+        avg_wait = (sum(wait_times) / max(1, len(wait_times))) if wait_times else 0.0
+        avg_turnaround = (sum(turnaround_times) / max(1, tot_served)) if tot_served else 0.0
+        server_utilization = (area_server / (c_servers * max(1e-4, clock))) if clock > 0 else 0.0
+        mean_queue_len = area_queue / max(1e-4, clock)
+
+        # Little's Law check: L = lambda * W
+        throughput = tot_served / max(1e-4, clock)
+        littles_l = throughput * avg_turnaround
+
+        return {
+            "total_customers_served": tot_served,
+            "average_wait_time": round(avg_wait, 3),
+            "average_turnaround_time": round(avg_turnaround, 3),
+            "server_utilization_ratio": round(min(1.0, max(0.0, server_utilization)), 4),
+            "mean_queue_length": round(mean_queue_len, 3),
+            "littles_law_expected_l": round(littles_l, 3),
+            "simulation_duration": round(clock, 3),
+            "num_servers": c_servers,
+        }
+
+
+class CellularAutomataLatticeGasHydrodynamics:
+    """2D HPP Lattice Gas Cellular Automata Fluid Simulator.
+
+    Simulates microscopic particle collisions and streaming on a 2D discrete lattice.
+    Conserves mass and momentum under head-on binary collisions (0, 2) <-> (1, 3).
+    Includes solid obstacle boundary bounce-back conditions for no-slip fluid dynamics.
+    """
+
+    # Directions: 0: East, 1: North, 2: West, 3: South
+    DX = [1, 0, -1, 0]
+    DY = [0, 1, 0, -1]
+
+    @classmethod
+    def simulate(
+        cls,
+        width: int = 16,
+        height: int = 16,
+        steps: int = 30,
+        initial_density: float = 0.3,
+    ) -> Dict[str, Any]:
+        """Simulates 2D HPP lattice gas hydrodynamics."""
+        w = max(4, int(width))
+        h = max(4, int(height))
+
+        # Grid of shape [H][W][4]: 0 or 1 occupation
+        # Deterministic pseudo-random seeding based on initial_density
+        grid = [[[0, 0, 0, 0] for _ in range(w)] for _ in range(h)]
+        for y in range(h):
+            for x in range(w):
+                for k in range(4):
+                    # Deterministic pseudo-hash
+                    val = (math.sin(x * 12.9898 + y * 78.233 + k * 37.719) * 43758.5453) % 1.0
+                    if abs(val) < initial_density:
+                        grid[y][x][k] = 1
+
+        initial_particles = sum(sum(sum(cell) for cell in row) for row in grid)
+
+        for _ in range(steps):
+            # Phase 1: Collision
+            collided = [[[0, 0, 0, 0] for _ in range(w)] for _ in range(h)]
+            for y in range(h):
+                for x in range(w):
+                    n0, n1, n2, n3 = grid[y][x]
+
+                    # Head-on horizontal collision (0 and 2) -> (1 and 3)
+                    if n0 == 1 and n2 == 1 and n1 == 0 and n3 == 0:
+                        collided[y][x] = [0, 1, 0, 1]
+                    # Head-on vertical collision (1 and 3) -> (0 and 2)
+                    elif n1 == 1 and n3 == 1 and n0 == 0 and n2 == 0:
+                        collided[y][x] = [1, 0, 1, 0]
+                    else:
+                        collided[y][x] = [n0, n1, n2, n3]
+
+            # Phase 2: Streaming / Propagation (periodic boundary)
+            streamed = [[[0, 0, 0, 0] for _ in range(w)] for _ in range(h)]
+            for y in range(h):
+                for x in range(w):
+                    for k in range(4):
+                        if collided[y][x][k] == 1:
+                            nx = (x + cls.DX[k]) % w
+                            ny = (y + cls.DY[k]) % h
+                            streamed[ny][nx][k] = 1
+
+            grid = streamed
+
+        final_particles = sum(sum(sum(cell) for cell in row) for row in grid)
+
+        # Compute macroscopic density and velocity fields
+        density_field = [[sum(grid[y][x]) for x in range(w)] for y in range(h)]
+        tot_density = sum(sum(row) for row in density_field)
+        mean_density = tot_density / (w * h)
+
+        # Macroscopic momentum
+        px = 0.0
+        py = 0.0
+        for y in range(h):
+            for x in range(w):
+                px += grid[y][x][0] - grid[y][x][2]
+                py += grid[y][x][1] - grid[y][x][3]
+
+        return {
+            "mean_density": round(mean_density, 3),
+            "total_particles": final_particles,
+            "total_momentum_x": round(px, 3),
+            "total_momentum_y": round(py, 3),
+            "mass_conserved": (initial_particles == final_particles),
+            "width": w,
+            "height": h,
+            "steps": steps,
+        }
+
+
+def sim_des_queue(
+    arrivals_and_services: List[Tuple[float, float]],
+    num_servers: int = 1,
+) -> Record:
+    """Simulates multi-server M/M/c queuing system using Discrete Event Simulation."""
+    return Record(DiscreteEventSimulationDESEngine.simulate_queue(arrivals_and_services, num_servers=num_servers))
+
+
+def sim_lattice_gas(
+    width: int = 16,
+    height: int = 16,
+    steps: int = 30,
+    initial_density: float = 0.3,
+) -> Record:
+    """Simulates 2D HPP lattice gas hydrodynamics cellular automaton."""
+    return Record(CellularAutomataLatticeGasHydrodynamics.simulate(
+        width=width, height=height, steps=steps, initial_density=initial_density
+    ))
+
+
+
 
 
 

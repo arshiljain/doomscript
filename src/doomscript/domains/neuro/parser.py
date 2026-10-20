@@ -148,6 +148,32 @@ class NeuroDomainParser(DomainParser):
             target = m_adex.group(3).strip()
             return f"set {target} to neuro_adex_simulate({curr}, duration_ms={dur})"
 
+        # simulate continuous attractor network [neurons <num>] [stimulus <ang>] [steps <steps>] into <target>
+        m_cann = re.match(
+            r"^simulate\s+continuous\s+attractor\s+network(?:\s+neurons\s+(\d+))?(?:\s+stimulus\s+(.+?))?(?:\s+steps\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_cann:
+            n_val = m_cann.group(1).strip() if m_cann.group(1) else "32"
+            ang = m_cann.group(2).strip() if m_cann.group(2) else "0.0"
+            steps_val = m_cann.group(3).strip() if m_cann.group(3) else "50"
+            target = m_cann.group(4).strip()
+            return f"set {target} to neuro_cann_simulate(num_neurons={n_val}, stimulus_angle={ang}, steps={steps_val})"
+
+        # recall hopfield memory for probe <probe> from patterns <pats> [max steps <steps>] into <target>
+        m_hop = re.match(
+            r"^recall\s+hopfield\s+memory\s+for\s+probe\s+(.+?)\s+from\s+patterns\s+(.+?)(?:\s+max\s+steps\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_hop:
+            probe = m_hop.group(1).strip()
+            pats = m_hop.group(2).strip()
+            steps_val = m_hop.group(3).strip() if m_hop.group(3) else "50"
+            target = m_hop.group(4).strip()
+            return f"set {target} to neuro_hopfield_recall({pats}, {probe}, max_steps={steps_val})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

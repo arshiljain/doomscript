@@ -48,6 +48,10 @@ from doomscript.domains.bio.runtime import (
     AffineGapGotohAligner,
     KozakConsensusScanner,
     bio_kozak_scan,
+    NussinovRNAFoldingDynamicProgramming,
+    SmithWatermanLocalAlignment,
+    bio_nussinov_rna_fold,
+    bio_smith_waterman_align,
 )
 from doomscript.domains.bio.parser import BioDomainParser
 from doomscript.domains.bio.exporter import BioASTExporter
@@ -162,4 +166,8 @@ __all__ = [
     "AffineGapGotohAligner",
     "KozakConsensusScanner",
     "bio_kozak_scan",
+    "NussinovRNAFoldingDynamicProgramming",
+    "SmithWatermanLocalAlignment",
+    "bio_nussinov_rna_fold",
+    "bio_smith_waterman_align",
 ]

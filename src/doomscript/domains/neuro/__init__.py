@@ -44,6 +44,10 @@ from doomscript.domains.neuro.runtime import (
     AdaptiveExponentialAdExNeuron,
     neuro_bcm_train,
     neuro_adex_simulate,
+    ContinuousAttractorNeuralNetworkCANN,
+    HopfieldNetworkAssociativeMemory,
+    neuro_cann_simulate,
+    neuro_hopfield_recall,
 )
 from doomscript.domains.neuro.parser import NeuroDomainParser
 from doomscript.domains.neuro.exporter import NeuroASTExporter
@@ -140,4 +144,8 @@ __all__ = [
     "AdaptiveExponentialAdExNeuron",
     "neuro_bcm_train",
     "neuro_adex_simulate",
+    "ContinuousAttractorNeuralNetworkCANN",
+    "HopfieldNetworkAssociativeMemory",
+    "neuro_cann_simulate",
+    "neuro_hopfield_recall",
 ]

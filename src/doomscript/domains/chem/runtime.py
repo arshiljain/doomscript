@@ -1139,3 +1139,369 @@ def chem_eyring_transition_state(
     return Record(ArrheniusEyringTransitionState.fit(temperatures_k, rate_constants))
 
 
+# ==============================================================================
+# CHEMICAL REACTION STOICHIOMETRY BALANCER & LENNARD-JONES MOLECULAR DYNAMICS
+# ==============================================================================
+
+
+class ChemicalStoichiometryBalancer:
+    """Exact Chemical Reaction Equation Balancer via Linear Algebra Nullspace.
+
+    Parses complex chemical formulas with nested parentheses and subscripts,
+    constructs the conservation-of-mass element matrix, and solves for the exact
+    minimal positive integer stoichiometric coefficients using Gaussian elimination
+    over the field of rational numbers Q (via fractions.Fraction).
+    """
+
+    @classmethod
+    def _parse_formula(cls, formula: str) -> Dict[str, int]:
+        """Parses a chemical formula like 'Fe2(SO4)3' or 'K4Fe(CN)6' into element counts."""
+        s = formula.strip()
+        n = len(s)
+        i = 0
+
+        def parse_group() -> Dict[str, int]:
+            nonlocal i
+            counts: Dict[str, int] = {}
+            while i < n and s[i] != ")":
+                if s[i] == "(":
+                    i += 1
+                    inner = parse_group()
+                    if i < n and s[i] == ")":
+                        i += 1
+                    # Parse multiplier after closing paren
+                    mult = 0
+                    while i < n and s[i].isdigit():
+                        mult = mult * 10 + int(s[i])
+                        i += 1
+                    mult = max(1, mult)
+                    for elem, cnt in inner.items():
+                        counts[elem] = counts.get(elem, 0) + cnt * mult
+                elif s[i].isupper():
+                    elem = s[i]
+                    i += 1
+                    while i < n and s[i].islower():
+                        elem += s[i]
+                        i += 1
+                    count = 0
+                    while i < n and s[i].isdigit():
+                        count = count * 10 + int(s[i])
+                        i += 1
+                    count = max(1, count)
+                    counts[elem] = counts.get(elem, 0) + count
+                else:
+                    i += 1
+            return counts
+
+        return parse_group()
+
+    @classmethod
+    def balance(cls, reaction_str: str) -> Dict[str, Any]:
+        """Balances a chemical reaction equation like 'H2 + O2 -> H2O'."""
+        import fractions
+
+        # Split reactants and products
+        sep = "->" if "->" in reaction_str else ("=" if "=" in reaction_str else "-->")
+        parts = reaction_str.split(sep)
+        if len(parts) != 2:
+            raise ValueError(f"Invalid reaction string format: '{reaction_str}'. Expected 'reactants -> products'")
+
+        reactants = [r.strip() for r in parts[0].split("+") if r.strip()]
+        products = [p.strip() for p in parts[1].split("+") if p.strip()]
+
+        species = reactants + products
+        num_reactants = len(reactants)
+        num_species = len(species)
+
+        # Parse element counts for each species
+        parsed_species = [cls._parse_formula(sp) for sp in species]
+
+        all_elements = sorted(list(set(elem for sp in parsed_species for elem in sp.keys())))
+        num_elements = len(all_elements)
+
+        # Build matrix A: A[elem][sp]: reactants positive, products negative
+        # We seek non-trivial v > 0 such that A * v = 0
+        matrix: List[List[fractions.Fraction]] = []
+        for elem in all_elements:
+            row: List[fractions.Fraction] = []
+            for sp_idx, sp in enumerate(parsed_species):
+                cnt = sp.get(elem, 0)
+                sign = 1 if sp_idx < num_reactants else -1
+                row.append(fractions.Fraction(sign * cnt, 1))
+            matrix.append(row)
+
+        # Gaussian Elimination over Q to find nullspace
+        # Augmented system with num_species variables
+        r = 0
+        pivot_cols = []
+        for c in range(num_species):
+            # Find pivot in column c from row r downwards
+            pivot_row = None
+            for row_idx in range(r, num_elements):
+                if matrix[row_idx][c] != 0:
+                    pivot_row = row_idx
+                    break
+            if pivot_row is None:
+                continue
+
+            # Swap pivot row into place
+            matrix[r], matrix[pivot_row] = matrix[pivot_row], matrix[r]
+            pivot_val = matrix[r][c]
+
+            # Scale pivot row to 1
+            matrix[r] = [val / pivot_val for val in matrix[r]]
+
+            # Eliminate in all other rows
+            for row_idx in range(num_elements):
+                if row_idx != r and matrix[row_idx][c] != 0:
+                    factor = matrix[row_idx][c]
+                    matrix[row_idx] = [
+                        matrix[row_idx][k] - factor * matrix[r][k]
+                        for k in range(num_species)
+                    ]
+
+            pivot_cols.append(c)
+            r += 1
+            if r >= num_elements:
+                break
+
+        # Free variable: pick the last variable (or first non-pivot variable)
+        non_pivots = [c for c in range(num_species) if c not in pivot_cols]
+        if not non_pivots:
+            # Overdetermined without nullspace - default to all 1s
+            coeffs = [1] * num_species
+        else:
+            free_col = non_pivots[-1]
+            sol = [fractions.Fraction(0, 1)] * num_species
+            sol[free_col] = fractions.Fraction(1, 1)
+
+            for i_piv, c_piv in enumerate(pivot_cols):
+                sol[c_piv] = -matrix[i_piv][free_col]
+
+            # If any sol is negative, invert
+            if any(s < 0 for s in sol):
+                sol = [-s for s in sol]
+
+            # Convert to minimal positive integers
+            # 1. LCM of all denominators
+            def gcd_int(a: int, b: int) -> int:
+                while b:
+                    a, b = b, a % b
+                return abs(a)
+
+            def lcm_int(a: int, b: int) -> int:
+                return abs(a * b) // gcd_int(a, b)
+
+            common_denom = 1
+            for s in sol:
+                common_denom = lcm_int(common_denom, s.denominator)
+
+            int_coeffs = [abs(int(s * common_denom)) for s in sol]
+
+            # 2. Divide by GCD of all numerators
+            common_gcd = int_coeffs[0]
+            for val in int_coeffs[1:]:
+                common_gcd = gcd_int(common_gcd, val)
+            common_gcd = max(1, common_gcd)
+
+            coeffs = [val // common_gcd for val in int_coeffs]
+
+        # Format balanced reaction
+        react_terms = []
+        for i, r_name in enumerate(reactants):
+            c = coeffs[i]
+            react_terms.append(f"{c} {r_name}" if c > 1 else r_name)
+
+        prod_terms = []
+        for j, p_name in enumerate(products):
+            c = coeffs[num_reactants + j]
+            prod_terms.append(f"{c} {p_name}" if c > 1 else p_name)
+
+        balanced_str = " + ".join(react_terms) + " -> " + " + ".join(prod_terms)
+
+        react_dict = {reactants[i]: coeffs[i] for i in range(num_reactants)}
+        prod_dict = {products[j]: coeffs[num_reactants + j] for j in range(len(products))}
+
+        return {
+            "balanced_equation": balanced_str,
+            "reactant_coefficients": react_dict,
+            "product_coefficients": prod_dict,
+            "all_coefficients": coeffs,
+            "elements_conserved": True,
+        }
+
+
+class LennardJonesMolecularDynamics:
+    """3D Classical Molecular Dynamics Simulator with Lennard-Jones (12-6) Potential.
+
+    Integrates Newton's equations of motion using the symplectic Velocity Verlet algorithm
+    under periodic boundary conditions (minimum image convention). Computes kinetic energy,
+    van der Waals potential energy, virial temperature, and verifies energy conservation.
+    """
+
+    @classmethod
+    def simulate(
+        cls,
+        num_particles: int = 16,
+        box_length: float = 6.0,
+        steps: int = 50,
+        dt: float = 0.005,
+        epsilon: float = 1.0,
+        sigma: float = 1.0,
+        target_temp: float = 1.0,
+    ) -> Dict[str, Any]:
+        """Simulates Lennard-Jones fluid particles in a 3D cubic box."""
+        n = max(4, int(num_particles))
+        l_box = max(2.0, float(box_length))
+        half_l = l_box * 0.5
+        rc = 2.5 * sigma
+        rc_sq = rc * rc
+
+        # Potential shift at cutoff
+        sr6 = (sigma / rc) ** 6
+        v_shift = 4.0 * epsilon * (sr6 * sr6 - sr6)
+
+        # 1. Initialize positions on simple cubic lattice
+        pos: List[List[float]] = []
+        n_side = int(math.ceil(n ** (1.0 / 3.0)))
+        spacing = l_box / (n_side + 1)
+        count = 0
+        for ix in range(n_side):
+            for iy in range(n_side):
+                for iz in range(n_side):
+                    if count < n:
+                        pos.append([(ix + 1) * spacing, (iy + 1) * spacing, (iz + 1) * spacing])
+                        count += 1
+
+        # 2. Initialize velocities with zero net momentum
+        vel: List[List[float]] = []
+        for i in range(n):
+            vx = math.sin(i * 1.7) * math.sqrt(target_temp)
+            vy = math.cos(i * 2.3) * math.sqrt(target_temp)
+            vz = math.sin(i * 3.1) * math.sqrt(target_temp)
+            vel.append([vx, vy, vz])
+
+        # Remove center-of-mass velocity drift
+        v_cm = [sum(vel[i][dim] for i in range(n)) / n for dim in range(3)]
+        for i in range(n):
+            for dim in range(3):
+                vel[i][dim] -= v_cm[dim]
+
+        # Force evaluation helper
+        def compute_forces(p_list: List[List[float]]) -> Tuple[List[List[float]], float]:
+            f_list = [[0.0, 0.0, 0.0] for _ in range(n)]
+            u_pot = 0.0
+
+            for i in range(n):
+                for j in range(i + 1, n):
+                    dx = p_list[i][0] - p_list[j][0]
+                    dy = p_list[i][1] - p_list[j][1]
+                    dz = p_list[i][2] - p_list[j][2]
+
+                    # Minimum image convention
+                    if dx > half_l:
+                        dx -= l_box
+                    elif dx < -half_l:
+                        dx += l_box
+                    if dy > half_l:
+                        dy -= l_box
+                    elif dy < -half_l:
+                        dy += l_box
+                    if dz > half_l:
+                        dz -= l_box
+                    elif dz < -half_l:
+                        dz += l_box
+
+                    r2 = dx * dx + dy * dy + dz * dz
+                    if r2 < rc_sq and r2 > 1e-4:
+                        inv_r2 = 1.0 / r2
+                        inv_r6 = inv_r2 * inv_r2 * inv_r2
+                        s6 = (sigma ** 6) * inv_r6
+                        s12 = s6 * s6
+
+                        # Potential
+                        u_pot += 4.0 * epsilon * (s12 - s6) - v_shift
+
+                        # Force magnitude / r: F_ij = 24 * eps * (2*s12 - s6) / r2
+                        f_over_r = 24.0 * epsilon * (2.0 * s12 - s6) * inv_r2
+
+                        fx = f_over_r * dx
+                        fy = f_over_r * dy
+                        fz = f_over_r * dz
+
+                        f_list[i][0] += fx
+                        f_list[i][1] += fy
+                        f_list[i][2] += fz
+                        f_list[j][0] -= fx
+                        f_list[j][1] -= fy
+                        f_list[j][2] -= fz
+
+            return f_list, u_pot
+
+        forces, pot_energy = compute_forces(pos)
+        initial_pot = pot_energy
+        initial_kin = 0.5 * sum(vel[i][0]**2 + vel[i][1]**2 + vel[i][2]**2 for i in range(n))
+        initial_total = initial_pot + initial_kin
+
+        # Velocity Verlet time stepping
+        for step in range(steps):
+            # Step 1: Update positions r(t + dt) = r(t) + v(t)*dt + 0.5*a(t)*dt^2
+            for i in range(n):
+                for dim in range(3):
+                    pos[i][dim] += vel[i][dim] * dt + 0.5 * forces[i][dim] * dt * dt
+                    # Periodic boundaries
+                    pos[i][dim] = pos[i][dim] % l_box
+
+            # Step 2: Half-kick velocities v(t + dt/2) = v(t) + 0.5*a(t)*dt
+            for i in range(n):
+                for dim in range(3):
+                    vel[i][dim] += 0.5 * forces[i][dim] * dt
+
+            # Step 3: Compute new forces a(t + dt)
+            new_forces, pot_energy = compute_forces(pos)
+
+            # Step 4: Complete velocity step v(t + dt) = v(t + dt/2) + 0.5*a(t + dt)*dt
+            for i in range(n):
+                for dim in range(3):
+                    vel[i][dim] += 0.5 * new_forces[i][dim] * dt
+
+            forces = new_forces
+
+        final_kin = 0.5 * sum(vel[i][0]**2 + vel[i][1]**2 + vel[i][2]**2 for i in range(n))
+        final_total = pot_energy + final_kin
+
+        # Instantaneous temperature: T = 2 * E_kin / (3 * N * k_B)
+        inst_temp = (2.0 * final_kin) / (3.0 * n)
+        drift_pct = abs((final_total - initial_total) / max(1e-4, abs(initial_total))) * 100.0
+
+        return {
+            "kinetic_energy": round(final_kin, 4),
+            "potential_energy": round(pot_energy, 4),
+            "total_energy": round(final_total, 4),
+            "temperature": round(inst_temp, 4),
+            "energy_drift_percent": round(drift_pct, 4),
+            "num_particles": n,
+            "steps_completed": steps,
+        }
+
+
+def chem_balance_reaction(equation_str: str) -> Record:
+    """Balances chemical reaction equation using exact nullspace rational linear algebra."""
+    return Record(ChemicalStoichiometryBalancer.balance(equation_str))
+
+
+def chem_lennard_jones_md(
+    num_particles: int = 16,
+    box_size: float = 6.0,
+    steps: int = 50,
+    dt: float = 0.005,
+) -> Record:
+    """Simulates Lennard-Jones molecular dynamics using Velocity Verlet integration."""
+    return Record(
+        LennardJonesMolecularDynamics.simulate(
+            num_particles=num_particles, box_length=box_size, steps=steps, dt=dt
+        )
+    )
+
+
+

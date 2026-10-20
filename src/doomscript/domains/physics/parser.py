@@ -262,6 +262,33 @@ class PhysicsDomainParser(DomainParser):
             x_end, y_end, target = m_brach.group(1).strip(), m_brach.group(2).strip(), m_brach.group(3).strip()
             return f"set {target} to physics_brachistochrone({x_end}, {y_end})"
 
+        # simulate barnes hut nbody <bodies> [theta <th>] [steps <steps>] [dt <dt>] into <target>
+        m_bh = re.match(
+            r"^simulate\s+barnes\s+hut\s+nbody\s+(.+?)(?:\s+theta\s+(.+?))?(?:\s+steps\s+(\d+))?(?:\s+dt\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_bh:
+            bods = m_bh.group(1).strip()
+            th = m_bh.group(2).strip() if m_bh.group(2) else "0.5"
+            steps_val = m_bh.group(3).strip() if m_bh.group(3) else "20"
+            dt_val = m_bh.group(4).strip() if m_bh.group(4) else "0.01"
+            target = m_bh.group(5).strip()
+            return f"set {target} to physics_barnes_hut_nbody({bods}, theta={th}, steps={steps_val}, dt={dt_val})"
+
+        # boost lorentz event <evt> with velocity <vel> [speed of light <c>] into <target>
+        m_lt = re.match(
+            r"^boost\s+lorentz\s+event\s+(.+?)\s+with\s+velocity\s+(.+?)(?:\s+speed\s+of\s+light\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_lt:
+            evt = m_lt.group(1).strip()
+            vel = m_lt.group(2).strip()
+            c_val = m_lt.group(3).strip() if m_lt.group(3) else "1.0"
+            target = m_lt.group(4).strip()
+            return f"set {target} to physics_lorentz_transform({evt}, {vel}, c={c_val})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

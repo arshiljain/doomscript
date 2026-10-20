@@ -1256,4 +1256,258 @@ def bio_kozak_scan(sequence: str) -> Record:
     return Record(KozakConsensusScanner.scan(sequence))
 
 
+# ==============================================================================
+# NUSSINOV RNA SECONDARY STRUCTURE & SMITH-WATERMAN LOCAL ALIGNMENT
+# ==============================================================================
+
+
+class NussinovRNAFoldingDynamicProgramming:
+    """Nussinov Dynamic Programming Algorithm for RNA Secondary Structure Prediction.
+
+    Finds the secondary structure that maximizes complementary base pairs (A-U, C-G, G-U wobble)
+    subject to steric constraints (minimum hairpin loop length). Reconstructs the optimal dot-bracket
+    representation via recursive backtracking over the upper-triangular scoring matrix N(i, j).
+    """
+
+    COMPLEMENTARY_PAIRS = {
+        ("A", "U"), ("U", "A"),
+        ("G", "C"), ("C", "G"),
+        ("G", "U"), ("U", "G"),  # Wobble base pairs
+        ("A", "T"), ("T", "A"),  # DNA compatibility
+    }
+
+    @classmethod
+    def fold(
+        cls,
+        sequence: str,
+        min_loop_length: int = 1,
+    ) -> Dict[str, Any]:
+        """Predicts secondary structure maximizing paired bases."""
+        seq = sequence.upper().strip()
+        n = len(seq)
+        if n == 0:
+            return {"dot_bracket": "", "base_pairs": [], "pair_count": 0, "length": 0}
+
+        # DP Matrix N[i][j]: maximum base pairs in substring seq[i..j]
+        dp = [[0] * n for _ in range(n)]
+
+        # Fill DP table by substring length
+        for length in range(min_loop_length + 2, n + 1):
+            for i in range(0, n - length + 1):
+                j = i + length - 1
+
+                # Option 1: base i is unpaired
+                max_score = dp[i + 1][j]
+
+                # Option 2: base j is unpaired
+                if dp[i][j - 1] > max_score:
+                    max_score = dp[i][j - 1]
+
+                # Option 3: base i pairs with base j (if allowed)
+                if (seq[i], seq[j]) in cls.COMPLEMENTARY_PAIRS:
+                    pair_score = (dp[i + 1][j - 1] if i + 1 <= j - 1 else 0) + 1
+                    if pair_score > max_score:
+                        max_score = pair_score
+
+                # Option 4: bifurcation between i and j (subsequences i..k and k+1..j)
+                for k in range(i + 1, j):
+                    bifurc = dp[i][k] + dp[k + 1][j]
+                    if bifurc > max_score:
+                        max_score = bifurc
+
+                dp[i][j] = max_score
+
+        # Backtrack to reconstruct paired indices
+        pairs: List[Tuple[int, int]] = []
+
+        def backtrack(i: int, j: int) -> None:
+            if i >= j or j - i <= min_loop_length:
+                return
+
+            if dp[i][j] == dp[i + 1][j]:
+                backtrack(i + 1, j)
+            elif dp[i][j] == dp[i][j - 1]:
+                backtrack(i, j - 1)
+            elif (seq[i], seq[j]) in cls.COMPLEMENTARY_PAIRS and dp[i][j] == (
+                (dp[i + 1][j - 1] if i + 1 <= j - 1 else 0) + 1
+            ):
+                pairs.append((i, j))
+                backtrack(i + 1, j - 1)
+            else:
+                for k in range(i + 1, j):
+                    if dp[i][j] == dp[i][k] + dp[k + 1][j]:
+                        backtrack(i, k)
+                        backtrack(k + 1, j)
+                        break
+
+        backtrack(0, n - 1)
+        pairs.sort()
+
+        # Build dot-bracket string
+        dot_bracket_chars = ["."] * n
+        for i_idx, j_idx in pairs:
+            dot_bracket_chars[i_idx] = "("
+            dot_bracket_chars[j_idx] = ")"
+        dot_bracket = "".join(dot_bracket_chars)
+
+        return {
+            "sequence": seq,
+            "dot_bracket": dot_bracket,
+            "base_pairs": [[p[0], p[1]] for p in pairs],
+            "pair_count": len(pairs),
+            "length": n,
+        }
+
+
+class SmithWatermanLocalAlignment:
+    """Smith-Waterman Local Sequence Alignment with Affine Gap Penalties.
+
+    Finds optimal high-scoring local alignment between two biological sequences.
+    Implements 3 DP recurrence matrices:
+    - H(i, j): maximum score ending with match/mismatch or 0 (local alignment reset)
+    - E(i, j): gap in sequence 1 (extension/opening)
+    - F(i, j): gap in sequence 2 (extension/opening)
+    """
+
+    @classmethod
+    def align(
+        cls,
+        seq1: str,
+        seq2: str,
+        match_score: float = 2.0,
+        mismatch_penalty: float = -1.0,
+        gap_open: float = 3.0,
+        gap_extend: float = 1.0,
+    ) -> Dict[str, Any]:
+        """Performs optimal local sequence alignment."""
+        s1 = seq1.upper().strip()
+        s2 = seq2.upper().strip()
+        n = len(s1)
+        m = len(s2)
+
+        if n == 0 or m == 0:
+            return {
+                "score": 0.0,
+                "aligned_seq1": "",
+                "aligned_seq2": "",
+                "start1": 0,
+                "end1": 0,
+                "start2": 0,
+                "end2": 0,
+                "identity_percent": 0.0,
+            }
+
+        neg_inf = -1e9
+        H = [[0.0] * (m + 1) for _ in range(n + 1)]
+        E = [[neg_inf] * (m + 1) for _ in range(n + 1)]
+        F = [[neg_inf] * (m + 1) for _ in range(n + 1)]
+
+        max_score = 0.0
+        max_i = 0
+        max_j = 0
+
+        for i in range(1, n + 1):
+            for j in range(1, m + 1):
+                # Gap in seq1 (E)
+                E[i][j] = max(
+                    E[i][j - 1] - gap_extend,
+                    H[i][j - 1] - (gap_open + gap_extend),
+                )
+
+                # Gap in seq2 (F)
+                F[i][j] = max(
+                    F[i - 1][j] - gap_extend,
+                    H[i - 1][j] - (gap_open + gap_extend),
+                )
+
+                # Diagonal match/mismatch
+                score_diag = match_score if s1[i - 1] == s2[j - 1] else mismatch_penalty
+                diag = H[i - 1][j - 1] + score_diag
+
+                # Local alignment floor at 0
+                h_val = max(0.0, diag, E[i][j], F[i][j])
+                H[i][j] = h_val
+
+                if h_val > max_score:
+                    max_score = h_val
+                    max_i = i
+                    max_j = j
+
+        # Traceback from (max_i, max_j) until H == 0
+        aligned1: List[str] = []
+        aligned2: List[str] = []
+        curr_i = max_i
+        curr_j = max_j
+
+        while curr_i > 0 and curr_j > 0 and H[curr_i][curr_j] > 1e-6:
+            score_diag = match_score if s1[curr_i - 1] == s2[curr_j - 1] else mismatch_penalty
+            if abs(H[curr_i][curr_j] - (H[curr_i - 1][curr_j - 1] + score_diag)) < 1e-6:
+                aligned1.append(s1[curr_i - 1])
+                aligned2.append(s2[curr_j - 1])
+                curr_i -= 1
+                curr_j -= 1
+            elif abs(H[curr_i][curr_j] - E[curr_i][curr_j]) < 1e-6:
+                aligned1.append("-")
+                aligned2.append(s2[curr_j - 1])
+                curr_j -= 1
+            elif abs(H[curr_i][curr_j] - F[curr_i][curr_j]) < 1e-6:
+                aligned1.append(s1[curr_i - 1])
+                aligned2.append("-")
+                curr_i -= 1
+            else:
+                break
+
+        aligned1.reverse()
+        aligned2.reverse()
+
+        aln_s1 = "".join(aligned1)
+        aln_s2 = "".join(aligned2)
+
+        matches = sum(1 for a, b in zip(aln_s1, aln_s2) if a == b and a != "-")
+        total_len = max(1, len(aln_s1))
+        ident_pct = (matches / total_len) * 100.0
+
+        return {
+            "score": round(max_score, 2),
+            "aligned_seq1": aln_s1,
+            "aligned_seq2": aln_s2,
+            "start1": curr_i,
+            "end1": max_i,
+            "start2": curr_j,
+            "end2": max_j,
+            "identity_percent": round(ident_pct, 1),
+            "matches_count": matches,
+        }
+
+
+def bio_nussinov_rna_fold(
+    sequence: str,
+    min_loop: int = 1,
+) -> Record:
+    """Predicts RNA secondary structure and base pairs using Nussinov algorithm."""
+    return Record(NussinovRNAFoldingDynamicProgramming.fold(sequence, min_loop_length=min_loop))
+
+
+def bio_smith_waterman_align(
+    seq1: str,
+    seq2: str,
+    match: float = 2.0,
+    mismatch: float = -1.0,
+    gap_open: float = 3.0,
+    gap_extend: float = 1.0,
+) -> Record:
+    """Performs optimal local sequence alignment via Smith-Waterman dynamic programming."""
+    return Record(
+        SmithWatermanLocalAlignment.align(
+            seq1,
+            seq2,
+            match_score=match,
+            mismatch_penalty=mismatch,
+            gap_open=gap_open,
+            gap_extend=gap_extend,
+        )
+    )
+
+
+
 

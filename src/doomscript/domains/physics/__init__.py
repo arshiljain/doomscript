@@ -51,6 +51,10 @@ from doomscript.domains.physics.runtime import (
     BrachistochroneCycloidCalculator,
     physics_symplectic_verlet,
     physics_brachistochrone,
+    BarnesHutNBodySimulation,
+    RelativisticLorentzKinematics,
+    physics_barnes_hut_nbody,
+    physics_lorentz_transform,
 )
 from doomscript.domains.physics.parser import PhysicsDomainParser
 from doomscript.domains.physics.exporter import PhysicsASTExporter
@@ -166,4 +170,8 @@ __all__ = [
     "BrachistochroneCycloidCalculator",
     "physics_symplectic_verlet",
     "physics_brachistochrone",
+    "BarnesHutNBodySimulation",
+    "RelativisticLorentzKinematics",
+    "physics_barnes_hut_nbody",
+    "physics_lorentz_transform",
 ]

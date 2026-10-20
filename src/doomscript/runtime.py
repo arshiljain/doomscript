@@ -3336,6 +3336,10 @@ from doomscript.domains.bio.runtime import (
     AffineGapGotohAligner,
     KozakConsensusScanner,
     bio_kozak_scan,
+    NussinovRNAFoldingDynamicProgramming,
+    SmithWatermanLocalAlignment,
+    bio_nussinov_rna_fold,
+    bio_smith_waterman_align,
 )
 bio_transcribe_dna = bio_transcribe
 bio_translate_rna = bio_translate
@@ -3378,6 +3382,10 @@ from doomscript.domains.physics.runtime import (
     BrachistochroneCycloidCalculator,
     physics_symplectic_verlet,
     physics_brachistochrone,
+    BarnesHutNBodySimulation,
+    RelativisticLorentzKinematics,
+    physics_barnes_hut_nbody,
+    physics_lorentz_transform,
 )
 physics_trajectory = physics_projectile_trajectory
 physics_ballistic_range = physics_projectile_range
@@ -3813,6 +3821,9 @@ from doomscript.domains.chem.runtime import (
     ArrheniusEyringTransitionState,
     chem_oregonator_simulate,
     chem_eyring_transition_state,
+    ChemicalStoichiometryBalancer,
+    LennardJonesMolecularDynamics,
+    chem_lennard_jones_md,
 )
 
 from doomscript.domains.compression.runtime import (
@@ -4011,6 +4022,10 @@ from doomscript.domains.neuro.runtime import (
     AdaptiveExponentialAdExNeuron,
     neuro_bcm_train,
     neuro_adex_simulate,
+    ContinuousAttractorNeuralNetworkCANN,
+    HopfieldNetworkAssociativeMemory,
+    neuro_cann_simulate,
+    neuro_hopfield_recall,
 )
 
 from doomscript.domains.automata.runtime import (
@@ -4246,6 +4261,10 @@ from doomscript.domains.sim.runtime import (
     GillespieExactSSA,
     sim_seir_epidemic,
     sim_gillespie_ssa,
+    DiscreteEventSimulationDESEngine,
+    CellularAutomataLatticeGasHydrodynamics,
+    sim_des_queue,
+    sim_lattice_gas,
 )
 
 from doomscript.domains.geo.runtime import (

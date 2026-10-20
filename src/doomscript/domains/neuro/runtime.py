@@ -1052,4 +1052,212 @@ def neuro_adex_simulate(
     return Record(AdaptiveExponentialAdExNeuron.simulate(current_i=current_i, duration_ms=duration_ms, dt_ms=dt_ms))
 
 
+# ==============================================================================
+# CONTINUOUS ATTRACTOR NEURAL NETWORK (CANN) & FITZHUGH-NAGUMO OSCILLATOR
+# ==============================================================================
+
+
+class ContinuousAttractorNeuralNetworkCANN:
+    """1D Continuous Attractor Neural Network (CANN) on Ring Topology.
+
+    Models continuous spatial representations, head-direction cells, and working memory.
+    Implements translation-invariant Mexican-hat recurrent interaction kernel J(theta_i, theta_j),
+    divisive normalization inhibition, and localized Gaussian bump attractor formation.
+    """
+
+    @classmethod
+    def simulate(
+        cls,
+        num_neurons: int = 32,
+        stimulus_angle: float = 0.0,
+        stimulus_strength: float = 1.5,
+        steps: int = 50,
+        dt: float = 0.1,
+        tau: float = 1.0,
+        j0: float = 4.0,
+        j_inh: float = 0.5,
+        a_width: float = 0.6,
+        k_div: float = 0.1,
+    ) -> Dict[str, Any]:
+        """Simulates ring CANN network settling into bump attractor."""
+        n = max(8, int(num_neurons))
+        angles = [-math.pi + (2.0 * math.pi * i) / n for i in range(n)]
+
+        # Recurrent weight matrix on circle
+        j_matrix = [[0.0] * n for _ in range(n)]
+        two_a_sq = 2.0 * a_width * a_width
+
+        for i in range(n):
+            for j in range(n):
+                d = abs(angles[i] - angles[j])
+                d_circ = min(d, 2.0 * math.pi - d)
+                j_matrix[i][j] = j0 * math.exp(-(d_circ * d_circ) / two_a_sq) - j_inh
+
+        # External input Gaussian bump centered at stimulus_angle
+        i_ext = [0.0] * n
+        for i in range(n):
+            d = abs(angles[i] - stimulus_angle)
+            d_circ = min(d, 2.0 * math.pi - d)
+            i_ext[i] = stimulus_strength * math.exp(-(d_circ * d_circ) / two_a_sq)
+
+        # State variables: synaptic input u and firing rate r
+        u = [0.1 * i_ext[i] for i in range(n)]
+        r = [0.0] * n
+
+        # Time stepping
+        for _ in range(steps):
+            # Divisive normalization: r_i = max(0, u_i)^2 / (1 + k * sum(max(0, u_j)^2))
+            pos_u_sq = [max(0.0, val) ** 2 for val in u]
+            denom = 1.0 + k_div * sum(pos_u_sq)
+            r = [val / denom for val in pos_u_sq]
+
+            # du/dt = (-u + J * r + I_ext) / tau
+            du = [0.0] * n
+            for i in range(n):
+                recurrent = sum(j_matrix[i][j] * r[j] for j in range(n))
+                du[i] = ((-u[i] + recurrent + i_ext[i]) / tau) * dt
+
+            for i in range(n):
+                u[i] += du[i]
+
+        # Calculate bump center of mass via circular mean
+        sin_sum = sum(r[i] * math.sin(angles[i]) for i in range(n))
+        cos_sum = sum(r[i] * math.cos(angles[i]) for i in range(n))
+        bump_center = math.atan2(sin_sum, cos_sum)
+
+        max_rate = max(r) if r else 0.0
+
+        return {
+            "bump_center_rad": round(bump_center, 4),
+            "peak_firing_rate": round(max_rate, 4),
+            "firing_rates": [round(val, 4) for val in r],
+            "neuron_angles": [round(th, 3) for th in angles],
+            "num_neurons": n,
+            "steps": steps,
+        }
+
+
+class HopfieldNetworkAssociativeMemory:
+    """Hopfield Attractor Neural Network for Content-Addressable Associative Memory.
+
+    Stores bipolar memory patterns {-1, +1}^N using outer-product Hebbian learning:
+    W = (1/N) * sum_{mu} xi^mu * (xi^mu)^T with zero diagonal (W_ii = 0).
+    Performs asynchronous/synchronous attractor state relaxation to minimize the
+    Lyapunov energy function E = -0.5 * sum_{i,j} W_ij * s_i * s_j.
+    """
+
+    @classmethod
+    def train_and_recall(
+        cls,
+        stored_patterns: List[List[int]],
+        probe_pattern: List[int],
+        max_steps: int = 50,
+    ) -> Dict[str, Any]:
+        """Recalls nearest stored pattern attractor from a noisy or partial probe."""
+        if not stored_patterns or not probe_pattern:
+            return {"recalled_pattern": [], "converged": False, "energy": 0.0}
+
+        n = len(probe_pattern)
+        num_patterns = len(stored_patterns)
+
+        # 1. Compute Hebbian synaptic weight matrix W (size N x N)
+        # Bipolar conversion: map 0 to -1 if patterns provided as binary
+        bipolar_mems = [
+            [1 if val > 0 else -1 for val in p]
+            for p in stored_patterns
+        ]
+
+        w_mat = [[0.0] * n for _ in range(n)]
+        for p in bipolar_mems:
+            for i in range(n):
+                for j in range(n):
+                    if i != j:
+                        w_mat[i][j] += p[i] * p[j]
+
+        inv_n = 1.0 / float(n)
+        for i in range(n):
+            for j in range(n):
+                w_mat[i][j] *= inv_n
+
+        # 2. Relax state s from probe
+        s = [1 if val > 0 else -1 for val in probe_pattern]
+
+        def compute_energy(state: List[int]) -> float:
+            e = 0.0
+            for i in range(n):
+                for j in range(n):
+                    e -= 0.5 * w_mat[i][j] * state[i] * state[j]
+            return round(e, 4)
+
+        initial_energy = compute_energy(s)
+        converged = False
+        steps_taken = 0
+
+        for step in range(max_steps):
+            changed = False
+            # Asynchronous state update
+            for i in range(n):
+                h_i = sum(w_mat[i][j] * s[j] for j in range(n))
+                new_s_i = 1 if h_i >= 0.0 else -1
+                if new_s_i != s[i]:
+                    s[i] = new_s_i
+                    changed = True
+
+            steps_taken = step + 1
+            if not changed:
+                converged = True
+                break
+
+        final_energy = compute_energy(s)
+
+        # Find best matching stored pattern and Hamming distance
+        best_match_idx = -1
+        min_hamming = n + 1
+        for idx, mem in enumerate(bipolar_mems):
+            h_dist = sum(1 for a, b in zip(s, mem) if a != b)
+            if h_dist < min_hamming:
+                min_hamming = h_dist
+                best_match_idx = idx
+
+        return {
+            "recalled_pattern": s,
+            "converged": converged,
+            "steps_to_converge": steps_taken,
+            "initial_energy": initial_energy,
+            "final_energy": final_energy,
+            "best_matching_pattern_index": best_match_idx,
+            "hamming_distance_to_best": min_hamming,
+            "num_neurons": n,
+            "num_patterns": num_patterns,
+        }
+
+
+def neuro_cann_simulate(
+    num_neurons: int = 32,
+    stimulus_angle: float = 0.0,
+    steps: int = 50,
+) -> Record:
+    """Simulates 1D Continuous Attractor Neural Network (CANN) bump formation."""
+    return Record(
+        ContinuousAttractorNeuralNetworkCANN.simulate(
+            num_neurons=num_neurons, stimulus_angle=stimulus_angle, steps=steps
+        )
+    )
+
+
+def neuro_hopfield_recall(
+    stored_patterns: List[List[int]],
+    probe_pattern: List[int],
+    max_steps: int = 50,
+) -> Record:
+    """Recalls stored memory pattern from probe via Hopfield attractor dynamics."""
+    return Record(
+        HopfieldNetworkAssociativeMemory.train_and_recall(
+            stored_patterns, probe_pattern, max_steps=max_steps
+        )
+    )
+
+
+
+
 
