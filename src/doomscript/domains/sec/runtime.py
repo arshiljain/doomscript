@@ -13,7 +13,7 @@ import math
 import re
 import struct
 import time
-from typing import Any, Dict, List, Optional, Tuple, Set
+from typing import Any, Dict, List, Optional, Tuple, Set, Union
 from doomscript.domains.base import DomainRuntime, DomainIR
 
 

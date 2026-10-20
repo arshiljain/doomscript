@@ -8,7 +8,7 @@ and turn-based RPG combat resolution.
 import math
 import random
 import re
-from typing import Any, Dict, List, Optional, Tuple, Set
+from typing import Any, Callable, Dict, List, Optional, Tuple, Set
 from doomscript.domains.base import DomainRuntime, DomainIR
 
 

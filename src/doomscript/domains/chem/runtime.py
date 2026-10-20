@@ -11,7 +11,7 @@ import math
 import re
 import hashlib
 from fractions import Fraction
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
 
 
 # Standard Atomic Weights (IUPAC standard values)

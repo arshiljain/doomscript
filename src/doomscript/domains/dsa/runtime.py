@@ -5,7 +5,7 @@ import random
 import time
 import tracemalloc
 import hashlib
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 from doomscript.domains.base import DomainRuntime, DomainIR
 from doomscript.domains.dsa.spec import BenchmarkSpec, ComplexityReport
 

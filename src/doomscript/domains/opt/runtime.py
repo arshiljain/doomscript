@@ -3,7 +3,7 @@
 import math
 import re
 import random
-from typing import Any, Callable, Dict, List, Optional, Tuple, Set
+from typing import Any, Callable, Dict, List, Optional, Tuple, Set, Union
 from doomscript.domains.base import DomainRuntime, DomainIR
 from doomscript.domains.opt.spec import LinearProgramSpec, SolveLPSpec
 

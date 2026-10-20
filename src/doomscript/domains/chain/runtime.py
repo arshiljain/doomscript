@@ -8,7 +8,7 @@ and EIP-55 checksum address encoding.
 import hashlib
 import json
 import time
-from typing import Any, Dict, List, Optional, Tuple, Set
+from typing import Any, Dict, List, Optional, Tuple, Set, Union
 from doomscript.domains.base import DomainRuntime, DomainIR
 
 
