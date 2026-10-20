@@ -38,6 +38,14 @@ from doomscript.domains.game.runtime import (
     game_create_behavior_tree,
     game_steering_seek,
     game_tilemap_resolve,
+    MinimaxAlphaBetaSearch,
+    JumpPointSearchGrid,
+    BoidsFlockingEngine,
+    MonteCarloTreeSearchMCTS,
+    game_minimax_search,
+    game_jps_path,
+    game_simulate_flock,
+    game_mcts_search,
 )
 from doomscript.domains.game.parser import GameDomainParser
 from doomscript.domains.game.exporter import GameASTExporter
@@ -80,6 +88,8 @@ class GameDomain(DomainContract):
     blocks = []
 
     def can_handle_line(self, line: str) -> bool:
+        if self.parser.parse_inspect(line, 0) is not None or self.parser.parse_operation(line, 0) is not None:
+            return True
         s = line.strip().lower()
         return (
             s.startswith("roll dice ")
@@ -133,4 +143,12 @@ __all__ = [
     "game_create_behavior_tree",
     "game_steering_seek",
     "game_tilemap_resolve",
+    "MinimaxAlphaBetaSearch",
+    "JumpPointSearchGrid",
+    "BoidsFlockingEngine",
+    "MonteCarloTreeSearchMCTS",
+    "game_minimax_search",
+    "game_jps_path",
+    "game_simulate_flock",
+    "game_mcts_search",
 ]

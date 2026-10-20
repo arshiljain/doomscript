@@ -9,7 +9,9 @@ import math
 import random
 import re
 from typing import Any, Callable, Dict, List, Optional, Tuple, Set
+import heapq
 from doomscript.domains.base import DomainRuntime, DomainIR
+from doomscript.runtime import Record
 
 
 class GameRuntime(DomainRuntime):
@@ -680,3 +682,665 @@ def game_steering_seek(pos: Tuple[float, float], vel: Tuple[float, float], targe
 def game_tilemap_resolve(pos: Tuple[float, float], size: Tuple[float, float], vel: Tuple[float, float], tilemap: Any) -> Dict[str, Any]:
     """Resolves AABB box collision against tilemap."""
     return TilemapPhysics.resolve_box(pos, size, vel, tilemap)
+
+
+# ==============================================================================
+# 5. ADVANCED GAME MECHANICS & AI ENGINES
+# ==============================================================================
+
+class MinimaxAlphaBetaSearch:
+    """Minimax adversarial game tree search with alpha-beta pruning."""
+
+    def __init__(self, max_depth: int = 4):
+        self.max_depth = max(1, int(max_depth))
+        self.nodes_evaluated = 0
+
+    def search(
+        self,
+        state: Any,
+        depth: Optional[int] = None,
+        is_maximizing: bool = True,
+        get_moves_fn: Optional[Callable[[Any], List[Any]]] = None,
+        apply_move_fn: Optional[Callable[[Any, Any], Any]] = None,
+        evaluate_fn: Optional[Callable[[Any], float]] = None,
+        is_terminal_fn: Optional[Callable[[Any], bool]] = None,
+    ) -> Record:
+        """Executes depth-limited alpha-beta minimax search."""
+        self.nodes_evaluated = 0
+        search_depth = self.max_depth if depth is None else int(depth)
+
+        # Default fallback helpers if working with standard grid/board dictionaries
+        if get_moves_fn is None:
+            def get_moves_fn(s: Any) -> List[Any]:
+                if isinstance(s, dict) and "legal_moves" in s:
+                    return list(s["legal_moves"])
+                if hasattr(s, "get_legal_moves"):
+                    return s.get_legal_moves()
+                return []
+
+        if apply_move_fn is None:
+            def apply_move_fn(s: Any, m: Any) -> Any:
+                if hasattr(s, "make_move"):
+                    return s.make_move(m)
+                if isinstance(s, dict):
+                    nxt = dict(s)
+                    nxt["last_move"] = m
+                    return nxt
+                return s
+
+        if evaluate_fn is None:
+            def evaluate_fn(s: Any) -> float:
+                if hasattr(s, "evaluate"):
+                    return float(s.evaluate())
+                if isinstance(s, dict):
+                    return float(s.get("score", 0.0))
+                return 0.0
+
+        if is_terminal_fn is None:
+            def is_terminal_fn(s: Any) -> bool:
+                if hasattr(s, "is_terminal"):
+                    return bool(s.is_terminal())
+                if isinstance(s, dict):
+                    return bool(s.get("is_over", False))
+                return False
+
+        def _minimax(
+            curr_state: Any,
+            curr_depth: int,
+            alpha: float,
+            beta: float,
+            maximizing: bool,
+        ) -> Tuple[float, Any]:
+            self.nodes_evaluated += 1
+
+            if curr_depth == 0 or is_terminal_fn(curr_state):
+                return evaluate_fn(curr_state), None
+
+            moves = get_moves_fn(curr_state)
+            if not moves:
+                return evaluate_fn(curr_state), None
+
+            best_move = moves[0]
+
+            if maximizing:
+                max_eval = -float("inf")
+                for move in moves:
+                    next_state = apply_move_fn(curr_state, move)
+                    eval_score, _ = _minimax(next_state, curr_depth - 1, alpha, beta, False)
+                    if eval_score > max_eval:
+                        max_eval = eval_score
+                        best_move = move
+                    alpha = max(alpha, eval_score)
+                    if beta <= alpha:
+                        break  # Beta cutoff
+                return max_eval, best_move
+            else:
+                min_eval = float("inf")
+                for move in moves:
+                    next_state = apply_move_fn(curr_state, move)
+                    eval_score, _ = _minimax(next_state, curr_depth - 1, alpha, beta, True)
+                    if eval_score < min_eval:
+                        min_eval = eval_score
+                        best_move = move
+                    beta = min(beta, eval_score)
+                    if beta <= alpha:
+                        break  # Alpha cutoff
+                return min_eval, best_move
+
+        best_score, best_mv = _minimax(
+            state,
+            search_depth,
+            -float("inf"),
+            float("inf"),
+            is_maximizing,
+        )
+
+        return Record({
+            "best_move": best_mv,
+            "best_score": round(float(best_score), 4),
+            "nodes_evaluated": self.nodes_evaluated,
+            "depth_reached": search_depth,
+        })
+
+
+class JumpPointSearchGrid:
+    """Jump Point Search (JPS) pathfinder on uniform cost 2D grids (Harabor-Grastien)."""
+
+    def __init__(self, grid: List[List[Any]], obstacle_val: Any = 1):
+        self.height = len(grid)
+        self.width = len(grid[0]) if self.height > 0 else 0
+        self.grid = grid
+        self.obstacle_val = obstacle_val
+
+    def is_walkable(self, x: int, y: int) -> bool:
+        """Checks if grid cell is inside bounds and not an obstacle."""
+        if 0 <= x < self.width and 0 <= y < self.height:
+            cell = self.grid[y][x]
+            return cell != self.obstacle_val and cell not in ("#", "solid")
+        return False
+
+    def _jump(self, x: int, y: int, dx: int, dy: int, goal_x: int, goal_y: int) -> Optional[Tuple[int, int]]:
+        """Recursively advances in direction (dx, dy) until a jump point or obstacle is reached."""
+        nx = x + dx
+        ny = y + dy
+
+        if not self.is_walkable(nx, ny):
+            return None
+
+        if nx == goal_x and ny == goal_y:
+            return (nx, ny)
+
+        # Diagonal movement
+        if dx != 0 and dy != 0:
+            # Check forced neighbors for diagonal step
+            if (self.is_walkable(nx - dx, ny + dy) and not self.is_walkable(nx - dx, ny)) or \
+               (self.is_walkable(nx + dx, ny - dy) and not self.is_walkable(nx, ny - dy)):
+                return (nx, ny)
+
+            # Check horizontal and vertical sub-branches
+            if self._jump(nx, ny, dx, 0, goal_x, goal_y) is not None or \
+               self._jump(nx, ny, 0, dy, goal_x, goal_y) is not None:
+                return (nx, ny)
+        else:
+            # Horizontal movement
+            if dx != 0:
+                if (self.is_walkable(nx + dx, ny + 1) and not self.is_walkable(nx, ny + 1)) or \
+                   (self.is_walkable(nx + dx, ny - 1) and not self.is_walkable(nx, ny - 1)):
+                    return (nx, ny)
+            # Vertical movement
+            else:
+                if (self.is_walkable(nx + 1, ny + dy) and not self.is_walkable(nx + 1, ny)) or \
+                   (self.is_walkable(nx - 1, ny + dy) and not self.is_walkable(nx - 1, ny)):
+                    return (nx, ny)
+
+        return self._jump(nx, ny, dx, dy, goal_x, goal_y)
+
+    def _pruned_neighbors(self, x: int, y: int, px: Optional[int], py: Optional[int]) -> List[Tuple[int, int, int, int]]:
+        """Returns directions (dx, dy) allowed by natural and forced neighbor pruning."""
+        dirs = []
+        if px is None or py is None:
+            # Start node: search all 8 directions
+            for dx in (-1, 0, 1):
+                for dy in (-1, 0, 1):
+                    if dx != 0 or dy != 0:
+                        dirs.append((dx, dy))
+            return [(x, y, dx, dy) for dx, dy in dirs]
+
+        dx = 1 if x > px else (-1 if x < px else 0)
+        dy = 1 if y > py else (-1 if y < py else 0)
+
+        # Diagonal step
+        if dx != 0 and dy != 0:
+            if self.is_walkable(x, y + dy):
+                dirs.append((0, dy))
+            if self.is_walkable(x + dx, y):
+                dirs.append((dx, 0))
+            if self.is_walkable(x + dx, y + dy) and (self.is_walkable(x, y + dy) or self.is_walkable(x + dx, y)):
+                dirs.append((dx, dy))
+            # Forced neighbors
+            if not self.is_walkable(x - dx, y) and self.is_walkable(x, y + dy):
+                dirs.append((-dx, dy))
+            if not self.is_walkable(x, y - dy) and self.is_walkable(x + dx, y):
+                dirs.append((dx, -dy))
+        else:
+            # Horizontal step
+            if dx != 0:
+                if self.is_walkable(x + dx, y):
+                    dirs.append((dx, 0))
+                if not self.is_walkable(x, y + 1) and self.is_walkable(x + dx, y + 1):
+                    dirs.append((dx, 1))
+                if not self.is_walkable(x, y - 1) and self.is_walkable(x + dx, y - 1):
+                    dirs.append((dx, -1))
+            # Vertical step
+            else:
+                if self.is_walkable(x, y + dy):
+                    dirs.append((0, dy))
+                if not self.is_walkable(x + 1, y) and self.is_walkable(x + 1, y + dy):
+                    dirs.append((1, dy))
+                if not self.is_walkable(x - 1, y) and self.is_walkable(x - 1, y + dy):
+                    dirs.append((-1, dy))
+
+        return [(x, y, d_x, d_y) for d_x, d_y in dirs]
+
+    def find_path(
+        self,
+        start: Tuple[int, int],
+        goal: Tuple[int, int],
+    ) -> Record:
+        """Finds path from start to goal coordinates using Jump Point Search."""
+        sx, sy = int(start[0]), int(start[1])
+        gx, gy = int(goal[0]), int(goal[1])
+
+        if not self.is_walkable(sx, sy) or not self.is_walkable(gx, gy):
+            return Record({"found": False, "path": [], "path_length": 0, "total_cost": 0.0, "jump_points": []})
+
+        if sx == gx and sy == gy:
+            return Record({"found": True, "path": [(sx, sy)], "path_length": 1, "total_cost": 0.0, "jump_points": [(sx, sy)]})
+
+        def heuristic(x1: int, y1: int, x2: int, y2: int) -> float:
+            # Octile distance
+            dx = abs(x1 - x2)
+            dy = abs(y1 - y2)
+            return (dx + dy) + (math.sqrt(2.0) - 2.0) * min(dx, dy)
+
+        # Min-heap: (f_score, counter, (x, y))
+        counter = 0
+        open_heap = []
+        heapq.heappush(open_heap, (heuristic(sx, sy, gx, gy), counter, (sx, sy)))
+
+        came_from: Dict[Tuple[int, int], Tuple[int, int]] = {}
+        g_score: Dict[Tuple[int, int], float] = {(sx, sy): 0.0}
+        closed_set: Set[Tuple[int, int]] = set()
+
+        while open_heap:
+            _, _, curr = heapq.heappop(open_heap)
+            if curr in closed_set:
+                continue
+            closed_set.add(curr)
+
+            cx, cy = curr
+            if cx == gx and cy == gy:
+                # Reconstruct jump point path
+                jp_path = [curr]
+                curr_node = curr
+                while curr_node in came_from:
+                    curr_node = came_from[curr_node]
+                    jp_path.append(curr_node)
+                jp_path.reverse()
+
+                # Expand jump points into full discrete grid coordinates
+                full_path: List[Tuple[int, int]] = [jp_path[0]]
+                for i in range(len(jp_path) - 1):
+                    p_a = jp_path[i]
+                    p_b = jp_path[i + 1]
+                    step_x = 1 if p_b[0] > p_a[0] else (-1 if p_b[0] < p_a[0] else 0)
+                    step_y = 1 if p_b[1] > p_a[1] else (-1 if p_b[1] < p_a[1] else 0)
+                    walk_x, walk_y = p_a[0], p_a[1]
+                    while (walk_x, walk_y) != p_b:
+                        walk_x += step_x
+                        walk_y += step_y
+                        full_path.append((walk_x, walk_y))
+
+                return Record({
+                    "found": True,
+                    "path": full_path,
+                    "path_length": len(full_path),
+                    "total_cost": round(g_score[curr], 4),
+                    "jump_points": jp_path,
+                })
+
+            px, py = came_from.get(curr, (None, None))
+            neighbors = self._pruned_neighbors(cx, cy, px, py)
+
+            for x, y, dx, dy in neighbors:
+                jump_pt = self._jump(x, y, dx, dy, gx, gy)
+                if jump_pt and jump_pt not in closed_set:
+                    jx, jy = jump_pt
+                    step_dist = math.hypot(jx - cx, jy - cy)
+                    tentative_g = g_score[curr] + step_dist
+
+                    if tentative_g < g_score.get(jump_pt, float("inf")):
+                        came_from[jump_pt] = curr
+                        g_score[jump_pt] = tentative_g
+                        f = tentative_g + heuristic(jx, jy, gx, gy)
+                        counter += 1
+                        heapq.heappush(open_heap, (f, counter, jump_pt))
+
+        return Record({"found": False, "path": [], "path_length": 0, "total_cost": 0.0, "jump_points": []})
+
+
+class BoidsFlockingEngine:
+    """Reynolds 2D flocking steering simulation (Separation, Alignment, Cohesion)."""
+
+    def __init__(
+        self,
+        width: float = 100.0,
+        height: float = 100.0,
+        max_speed: float = 2.0,
+        max_force: float = 0.05,
+    ):
+        self.width = float(width)
+        self.height = float(height)
+        self.max_speed = float(max_speed)
+        self.max_force = float(max_force)
+
+    def step(
+        self,
+        boids: List[Dict[str, Any]],
+        dt: float = 1.0,
+        sep_radius: float = 5.0,
+        ali_radius: float = 15.0,
+        coh_radius: float = 15.0,
+        w_sep: float = 1.5,
+        w_ali: float = 1.0,
+        w_coh: float = 1.0,
+    ) -> List[Dict[str, Any]]:
+        """Simulates one time step for a flock of boids."""
+        n = len(boids)
+        if n == 0:
+            return []
+
+        # Parse boids into working list of floats
+        coords = []
+        vels = []
+        for b in boids:
+            if isinstance(b, dict):
+                x = float(b.get("x", b.get("pos", (0, 0))[0]))
+                y = float(b.get("y", b.get("pos", (0, 0))[1]))
+                vx = float(b.get("vx", b.get("vel", (0, 0))[0]))
+                vy = float(b.get("vy", b.get("vel", (0, 0))[1]))
+            elif isinstance(b, (list, tuple)) and len(b) >= 4:
+                x, y, vx, vy = float(b[0]), float(b[1]), float(b[2]), float(b[3])
+            else:
+                x, y, vx, vy = 0.0, 0.0, 1.0, 0.0
+            coords.append([x, y])
+            vels.append([vx, vy])
+
+        new_boids = []
+
+        for i in range(n):
+            px, py = coords[i]
+            vx, vy = vels[i]
+
+            # 1. Separation
+            sep_x, sep_y = 0.0, 0.0
+            sep_count = 0
+
+            # 2. Alignment
+            ali_x, ali_y = 0.0, 0.0
+            ali_count = 0
+
+            # 3. Cohesion
+            coh_x, coh_y = 0.0, 0.0
+            coh_count = 0
+
+            for j in range(n):
+                if i == j:
+                    continue
+                ox, oy = coords[j]
+                ovx, ovy = vels[j]
+
+                dx = px - ox
+                dy = py - oy
+                dist = math.hypot(dx, dy)
+
+                if dist < 1e-6:
+                    dist = 1e-6
+
+                if dist < sep_radius:
+                    # Repulsion inversely proportional to distance
+                    sep_x += (dx / dist) / dist
+                    sep_y += (dy / dist) / dist
+                    sep_count += 1
+
+                if dist < ali_radius:
+                    ali_x += ovx
+                    ali_y += ovy
+                    ali_count += 1
+
+                if dist < coh_radius:
+                    coh_x += ox
+                    coh_y += oy
+                    coh_count += 1
+
+            fx, fy = 0.0, 0.0
+
+            # Compute steering forces
+            if sep_count > 0:
+                sep_x /= sep_count
+                sep_y /= sep_count
+                sm = math.hypot(sep_x, sep_y)
+                if sm > 0:
+                    sep_x = (sep_x / sm) * self.max_speed - vx
+                    sep_y = (sep_y / sm) * self.max_speed - vy
+                fx += sep_x * w_sep
+                fy += sep_y * w_sep
+
+            if ali_count > 0:
+                ali_x /= ali_count
+                ali_y /= ali_count
+                am = math.hypot(ali_x, ali_y)
+                if am > 0:
+                    ali_x = (ali_x / am) * self.max_speed - vx
+                    ali_y = (ali_y / am) * self.max_speed - vy
+                fx += ali_x * w_ali
+                fy += ali_y * w_ali
+
+            if coh_count > 0:
+                target_x = coh_x / coh_count
+                target_y = coh_y / coh_count
+                des_x = target_x - px
+                des_y = target_y - py
+                cm = math.hypot(des_x, des_y)
+                if cm > 0:
+                    des_x = (des_x / cm) * self.max_speed - vx
+                    des_y = (des_y / cm) * self.max_speed - vy
+                fx += des_x * w_coh
+                fy += des_y * w_coh
+
+            # Clamp steering force to max_force
+            f_mag = math.hypot(fx, fy)
+            if f_mag > self.max_force:
+                fx = (fx / f_mag) * self.max_force
+                fy = (fy / f_mag) * self.max_force
+
+            # Integrate velocity & position
+            nvx = vx + fx * dt
+            nvy = vy + fy * dt
+
+            # Clamp velocity to max_speed
+            v_mag = math.hypot(nvx, nvy)
+            if v_mag > self.max_speed:
+                nvx = (nvx / v_mag) * self.max_speed
+                nvy = (nvy / v_mag) * self.max_speed
+
+            npx = (px + nvx * dt) % self.width
+            npy = (py + nvy * dt) % self.height
+
+            new_boids.append(Record({
+                "x": round(npx, 4),
+                "y": round(npy, 4),
+                "vx": round(nvx, 4),
+                "vy": round(nvy, 4),
+                "speed": round(math.hypot(nvx, nvy), 4),
+            }))
+
+        return new_boids
+
+    def simulate(
+        self,
+        boids: List[Dict[str, Any]],
+        steps: int = 10,
+        dt: float = 1.0,
+    ) -> Record:
+        """Simulates flock over multiple time steps."""
+        curr = list(boids)
+        for _ in range(max(1, int(steps))):
+            curr = self.step(curr, dt=dt)
+
+        speeds = [float(b.speed) for b in curr]
+        avg_speed = sum(speeds) / len(speeds) if speeds else 0.0
+
+        return Record({
+            "boids": curr,
+            "count": len(curr),
+            "steps_completed": int(steps),
+            "mean_speed": round(avg_speed, 4),
+        })
+
+
+class MCTSNode:
+    """Node in Monte Carlo Tree Search."""
+
+    def __init__(self, state: Any, parent: Optional["MCTSNode"] = None, move: Any = None):
+        self.state = state
+        self.parent = parent
+        self.move = move
+        self.children: List["MCTSNode"] = []
+        self.visits = 0
+        self.wins = 0.0
+
+    def is_fully_expanded(self, legal_moves: List[Any]) -> bool:
+        return len(self.children) == len(legal_moves)
+
+    def ucb1(self, exploration_constant: float = 1.414) -> float:
+        if self.visits == 0:
+            return float("inf")
+        exploitation = self.wins / self.visits
+        exploration = exploration_constant * math.sqrt(math.log(max(1, self.parent.visits)) / self.visits)
+        return exploitation + exploration
+
+
+class MonteCarloTreeSearchMCTS:
+    """Monte Carlo Tree Search (MCTS) with UCT selection policy."""
+
+    def __init__(self, iterations: int = 500, exploration_weight: float = 1.414):
+        self.iterations = max(10, int(iterations))
+        self.exploration_weight = float(exploration_weight)
+
+    def search(
+        self,
+        initial_state: Any,
+        get_moves_fn: Callable[[Any], List[Any]],
+        apply_move_fn: Callable[[Any, Any], Any],
+        is_terminal_fn: Callable[[Any], bool],
+        evaluate_winner_fn: Callable[[Any], float],
+    ) -> Record:
+        """Executes MCTS from initial state and selects the most robust action."""
+        root = MCTSNode(initial_state)
+
+        for _ in range(self.iterations):
+            node = root
+
+            # 1. Selection
+            while node.children and not is_terminal_fn(node.state):
+                legal_moves = get_moves_fn(node.state)
+                if not node.is_fully_expanded(legal_moves):
+                    break
+                node = max(node.children, key=lambda c: c.ucb1(self.exploration_weight))
+
+            # 2. Expansion
+            if not is_terminal_fn(node.state):
+                legal_moves = get_moves_fn(node.state)
+                expanded_moves = {c.move for c in node.children}
+                unexpanded = [m for m in legal_moves if m not in expanded_moves]
+                if unexpanded:
+                    chosen_move = random.choice(unexpanded)
+                    next_state = apply_move_fn(node.state, chosen_move)
+                    child = MCTSNode(next_state, parent=node, move=chosen_move)
+                    node.children.append(child)
+                    node = child
+
+            # 3. Simulation (Rollout)
+            rollout_state = node.state
+            sim_depth = 0
+            while not is_terminal_fn(rollout_state) and sim_depth < 50:
+                moves = get_moves_fn(rollout_state)
+                if not moves:
+                    break
+                rollout_state = apply_move_fn(rollout_state, random.choice(moves))
+                sim_depth += 1
+
+            reward = evaluate_winner_fn(rollout_state)
+
+            # 4. Backpropagation
+            curr: Optional[MCTSNode] = node
+            while curr is not None:
+                curr.visits += 1
+                curr.wins += reward
+                curr = curr.parent
+
+        if not root.children:
+            moves = get_moves_fn(initial_state)
+            best_move = moves[0] if moves else None
+            return Record({
+                "best_move": best_move,
+                "visit_count": 0,
+                "win_rate": 0.0,
+                "total_simulations": self.iterations,
+            })
+
+        best_child = max(root.children, key=lambda c: c.visits)
+        win_rate = best_child.wins / max(1, best_child.visits)
+
+        return Record({
+            "best_move": best_child.move,
+            "visit_count": best_child.visits,
+            "win_rate": round(win_rate, 4),
+            "total_simulations": self.iterations,
+        })
+
+
+# --- Spoken English Game Mechanics Wrappers ---
+
+def game_minimax_search(
+    state: Any,
+    depth: int = 3,
+    maximizing: bool = True,
+) -> Record:
+    """Searches optimal adversarial move using Minimax with Alpha-Beta pruning."""
+    engine = MinimaxAlphaBetaSearch(max_depth=depth)
+    return engine.search(state, depth=depth, is_maximizing=maximizing)
+
+
+def game_jps_path(
+    grid: List[List[Any]],
+    start: Any,
+    goal: Any,
+) -> Record:
+    """Finds optimal jump point search path on 2D uniform grid."""
+    if isinstance(grid, GameTilemap):
+        raw_grid = grid.grid
+    else:
+        raw_grid = grid
+    jps = JumpPointSearchGrid(raw_grid)
+    return jps.find_path(start, goal)
+
+
+def game_simulate_flock(
+    boids: List[Any],
+    steps: int = 10,
+    width: float = 100.0,
+    height: float = 100.0,
+) -> Record:
+    """Runs Craig Reynolds Boids flocking steering behavior simulation."""
+    flock_engine = BoidsFlockingEngine(width=width, height=height)
+    return flock_engine.simulate(boids, steps=steps)
+
+
+def game_mcts_search(
+    state: Any,
+    iterations: int = 100,
+) -> Record:
+    """Executes Monte Carlo Tree Search to determine the best next move."""
+    engine = MonteCarloTreeSearchMCTS(iterations=iterations)
+
+    def get_moves(s: Any) -> List[Any]:
+        if isinstance(s, dict) and "moves" in s:
+            return list(s["moves"])
+        if isinstance(s, dict) and "legal_moves" in s:
+            return list(s["legal_moves"])
+        return [0, 1]
+
+    def apply_move(s: Any, m: Any) -> Any:
+        nxt = dict(s)
+        nxt["moves"] = [x for x in nxt.get("moves", []) if x != m]
+        nxt["history"] = nxt.get("history", []) + [m]
+        return nxt
+
+    def is_term(s: Any) -> bool:
+        return len(s.get("moves", [])) == 0
+
+    def eval_fn(s: Any) -> float:
+        # Simple heuristic on history
+        hist = s.get("history", [])
+        return 1.0 if hist and hist[-1] == 1 else 0.0
+
+    return engine.search(
+        state,
+        get_moves_fn=get_moves,
+        apply_move_fn=apply_move,
+        is_terminal_fn=is_term,
+        evaluate_winner_fn=eval_fn,
+    )
+

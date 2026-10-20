@@ -3330,6 +3330,14 @@ from doomscript.domains.game.runtime import (
     game_create_behavior_tree,
     game_steering_seek,
     game_tilemap_resolve,
+    MinimaxAlphaBetaSearch,
+    JumpPointSearchGrid,
+    BoidsFlockingEngine,
+    MonteCarloTreeSearchMCTS,
+    game_minimax_search,
+    game_jps_path,
+    game_simulate_flock,
+    game_mcts_search,
 )
 game_tilemap_create = game_create_tilemap
 game_tilemap_set = game_set_tile
@@ -3727,6 +3735,13 @@ from doomscript.domains.telecom.runtime import (
     telecom_qam_modulate,
     telecom_qam_demodulate,
     telecom_ofdm_frame,
+    ExtendedHamming84,
+    GeneralizedCRC,
+    AWGNChannelSimulator,
+    telecom_secded_encode,
+    telecom_secded_decode,
+    telecom_custom_crc,
+    telecom_awgn_simulate,
 )
 
 from doomscript.domains.neuro.runtime import (

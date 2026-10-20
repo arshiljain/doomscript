@@ -138,6 +138,55 @@ class GameDomainParser(DomainParser):
             target = m_buff.group(4).strip()
             return f"set {target} to game_apply_buff({c}, {buff}, {dur})"
 
+        # find jump point path in <grid> from <start> to <goal> into <target>
+        m_jps = re.match(
+            r"^find\s+jump\s+point\s+path\s+in\s+(.+?)\s+from\s+(.+?)\s+to\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_jps:
+            g = m_jps.group(1).strip()
+            st = m_jps.group(2).strip()
+            gl = m_jps.group(3).strip()
+            target = m_jps.group(4).strip()
+            return f"set {target} to game_jps_path({g}, {st}, {gl})"
+
+        # search best move in state <state> with depth <depth> using minimax into <target>
+        m_mini = re.match(
+            r"^search\s+best\s+move\s+in\s+state\s+(.+?)\s+with\s+depth\s+(.+?)\s+using\s+minimax\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_mini:
+            st = m_mini.group(1).strip()
+            dep = m_mini.group(2).strip()
+            target = m_mini.group(3).strip()
+            return f"set {target} to game_minimax_search({st}, depth={dep})"
+
+        # simulate flock <boids> for <steps> steps into <target>
+        m_flock = re.match(
+            r"^simulate\s+flock\s+(.+?)\s+for\s+(.+?)\s+steps\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_flock:
+            boids = m_flock.group(1).strip()
+            steps = m_flock.group(2).strip()
+            target = m_flock.group(3).strip()
+            return f"set {target} to game_simulate_flock({boids}, steps={steps})"
+
+        # run mcts on state <state> with iterations <n> into <target>
+        m_mcts = re.match(
+            r"^run\s+mcts\s+on\s+state\s+(.+?)\s+with\s+iterations\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_mcts:
+            st = m_mcts.group(1).strip()
+            iters = m_mcts.group(2).strip()
+            target = m_mcts.group(3).strip()
+            return f"set {target} to game_mcts_search({st}, iterations={iters})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

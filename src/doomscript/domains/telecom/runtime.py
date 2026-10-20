@@ -12,8 +12,10 @@ Zero external dependencies.
 from __future__ import annotations
 
 import math
+import random
 import struct
 from typing import Any, Dict, List, Optional, Tuple, Union
+from doomscript.runtime import Record
 
 
 # --- 1. Hamming(7, 4) Code ---
@@ -647,3 +649,289 @@ def telecom_qam_demodulate(symbols: List[complex], scheme: str = "QPSK") -> List
 def telecom_ofdm_frame(subcarriers: List[complex], n_fft: int = 64, cp_len: int = 16) -> List[complex]:
     """Generates time-domain OFDM frame with cyclic prefix."""
     return OFDMFramer.modulate_frame(subcarriers, n_fft, cp_len)
+
+
+# ==============================================================================
+# 5. ADVANCED FEC, SECDED, CONFIGURABLE CRC & AWGN CHANNEL
+# ==============================================================================
+
+class ExtendedHamming84:
+    """Extended Hamming(8, 4) Single-Error-Correction Double-Error-Detection (SECDED) Codec."""
+
+    @staticmethod
+    def encode_nibble(d: List[int]) -> List[int]:
+        """Encodes 4 data bits [d1, d2, d3, d4] into 8 bits with overall parity."""
+        h7 = Hamming74.encode_nibble(d)
+        overall_p = 0
+        for b in h7:
+            overall_p ^= b
+        return h7 + [overall_p]
+
+    @staticmethod
+    def decode_byte(c: List[int]) -> Record:
+        """Decodes 8 received bits, checks for single-bit correction or double-bit detection."""
+        r8 = list(c)
+        r7 = r8[:7]
+        p_overall = r8[7] if len(r8) > 7 else 0
+
+        # Calculate standard Hamming syndrome
+        s1 = r7[0] ^ r7[2] ^ r7[4] ^ r7[6]
+        s2 = r7[1] ^ r7[2] ^ r7[5] ^ r7[6]
+        s3 = r7[3] ^ r7[4] ^ r7[5] ^ r7[6]
+        syndrome = (s3 << 2) | (s2 << 1) | s1
+
+        # Calculate actual parity of all 8 bits
+        actual_parity = 0
+        for b in r8:
+            actual_parity ^= b
+
+        has_single_error = False
+        has_double_error = False
+        corrected_bit_idx = -1
+
+        if syndrome == 0 and actual_parity == 0:
+            # No error
+            pass
+        elif syndrome != 0 and actual_parity != 0:
+            # Single bit error in Hamming 7 bits -> correctable
+            has_single_error = True
+            corrected_bit_idx = syndrome - 1
+            r7[corrected_bit_idx] ^= 1
+        elif syndrome == 0 and actual_parity != 0:
+            # Single bit error in the 8th parity bit itself
+            has_single_error = True
+            corrected_bit_idx = 7
+        elif syndrome != 0 and actual_parity == 0:
+            # Double bit error -> detectable but not correctable!
+            has_double_error = True
+
+        d1 = r7[2]
+        d2 = r7[4]
+        d3 = r7[5]
+        d4 = r7[6]
+
+        return Record({
+            "data": [d1, d2, d3, d4],
+            "has_single_error": has_single_error,
+            "has_double_error": has_double_error,
+            "corrected_bit": corrected_bit_idx,
+            "is_valid": not has_double_error,
+        })
+
+    @classmethod
+    def encode_bits(cls, bits: List[int]) -> List[int]:
+        """Encodes arbitrary bitstream using extended Hamming(8,4)."""
+        padded = list(bits)
+        rem = len(padded) % 4
+        if rem != 0:
+            padded.extend([0] * (4 - rem))
+        out: List[int] = []
+        for i in range(0, len(padded), 4):
+            nibble = padded[i : i + 4]
+            out.extend(cls.encode_nibble(nibble))
+        return out
+
+    @classmethod
+    def decode_bits(cls, bits: List[int]) -> Record:
+        """Decodes 8-bit blocks and returns recovered data and error metrics."""
+        recovered_data = []
+        single_err_count = 0
+        double_err_count = 0
+
+        for i in range(0, len(bits) - 7, 8):
+            block = bits[i : i + 8]
+            res = cls.decode_byte(block)
+            recovered_data.extend(res["data"])
+            if res["has_single_error"]:
+                single_err_count += 1
+            if res["has_double_error"]:
+                double_err_count += 1
+
+        return Record({
+            "data": recovered_data,
+            "single_error_count": single_err_count,
+            "double_error_count": double_err_count,
+            "success": double_err_count == 0,
+        })
+
+
+class GeneralizedCRC:
+    """Configurable Cyclic Redundancy Check (CRC) engine with precomputed lookup table."""
+
+    def __init__(
+        self,
+        width: int = 32,
+        poly: int = 0x04C11DB7,
+        init_val: int = 0xFFFFFFFF,
+        ref_in: bool = True,
+        ref_out: bool = True,
+        xor_out: int = 0xFFFFFFFF,
+    ):
+        self.width = int(width)
+        self.poly = int(poly)
+        self.init_val = int(init_val)
+        self.ref_in = bool(ref_in)
+        self.ref_out = bool(ref_out)
+        self.xor_out = int(xor_out)
+        self.mask = (1 << self.width) - 1
+        self.table = self._generate_table()
+
+    def _reflect(self, val: int, bits: int) -> int:
+        res = 0
+        for i in range(bits):
+            if (val >> i) & 1:
+                res |= 1 << (bits - 1 - i)
+        return res
+
+    def _generate_table(self) -> List[int]:
+        """Precomputes 256-entry CRC lookup table."""
+        tbl = []
+        top_bit = 1 << (self.width - 1)
+        for b in range(256):
+            cur = self._reflect(b, 8) if self.ref_in else (b << (self.width - 8))
+            if not self.ref_in:
+                for _ in range(8):
+                    if cur & top_bit:
+                        cur = ((cur << 1) ^ self.poly) & self.mask
+                    else:
+                        cur = (cur << 1) & self.mask
+            else:
+                for _ in range(8):
+                    if cur & 1:
+                        cur = (cur >> 1) ^ self._reflect(self.poly, self.width)
+                    else:
+                        cur >>= 1
+            tbl.append(cur)
+        return tbl
+
+    def compute(self, data: Union[str, bytes, List[int]]) -> Record:
+        """Computes CRC checksum over string, bytes, or integer list."""
+        if isinstance(data, str):
+            b_data = data.encode("utf-8")
+        elif isinstance(data, (bytes, bytearray)):
+            b_data = bytes(data)
+        elif isinstance(data, list):
+            b_data = bytes(data)
+        else:
+            b_data = str(data).encode("utf-8")
+
+        crc = self.init_val & self.mask
+
+        if self.ref_in:
+            for byte in b_data:
+                idx = (crc ^ byte) & 0xFF
+                crc = (crc >> 8) ^ self.table[idx]
+        else:
+            shift = self.width - 8
+            for byte in b_data:
+                idx = ((crc >> shift) ^ byte) & 0xFF
+                crc = ((crc << 8) & self.mask) ^ self.table[idx]
+
+        if self.ref_out and not self.ref_in:
+            crc = self._reflect(crc, self.width)
+        elif not self.ref_out and self.ref_in:
+            crc = self._reflect(crc, self.width)
+
+        final_crc = (crc ^ self.xor_out) & self.mask
+        hex_digits = max(2, (self.width + 3) // 4)
+
+        return Record({
+            "crc": final_crc,
+            "hex": f"0x{final_crc:0{hex_digits}X}",
+            "bytes_processed": len(b_data),
+            "width": self.width,
+        })
+
+
+class AWGNChannelSimulator:
+    """Additive White Gaussian Noise (AWGN) channel and Bit Error Rate (BER) simulator."""
+
+    @classmethod
+    def rand_gaussian(cls, mean: float = 0.0, std: float = 1.0) -> float:
+        """Box-Muller transformation for Gaussian distribution."""
+        u1 = max(random.random(), 1e-12)
+        u2 = random.random()
+        return mean + std * math.sqrt(-2.0 * math.log(u1)) * math.cos(2.0 * math.pi * u2)
+
+    @classmethod
+    def add_noise(
+        cls,
+        symbols: List[complex],
+        snr_db: float = 10.0,
+    ) -> List[complex]:
+        """Adds complex AWGN noise to transmitted symbols corresponding to SNR in dB."""
+        # Symbol power E_s = 1.0 (assuming normalized constellation)
+        snr_linear = 10.0 ** (float(snr_db) / 10.0)
+        noise_variance = 1.0 / (2.0 * snr_linear)
+        sigma = math.sqrt(noise_variance)
+
+        noisy = []
+        for s in symbols:
+            nr = cls.rand_gaussian(0.0, sigma)
+            ni = cls.rand_gaussian(0.0, sigma)
+            noisy.append(complex(round(s.real + nr, 5), round(s.imag + ni, 5)))
+        return noisy
+
+    @classmethod
+    def simulate_transmission(
+        cls,
+        bits: List[int],
+        scheme: str = "QPSK",
+        snr_db: float = 10.0,
+    ) -> Record:
+        """Full transmission loop: modulate -> AWGN -> demodulate -> BER calculation."""
+        mod_symbols = QAMModem.modulate(bits, scheme=scheme)
+        noisy_symbols = cls.add_noise(mod_symbols, snr_db=snr_db)
+        recovered_bits = QAMModem.demodulate(noisy_symbols, scheme=scheme)
+
+        # Truncate to original bitstream length
+        rec_trimmed = recovered_bits[:len(bits)]
+        bit_errors = sum(1 for b_orig, b_rec in zip(bits, rec_trimmed) if b_orig != b_rec)
+        ber = bit_errors / max(1, len(bits))
+
+        # Calculate EVM (Error Vector Magnitude)
+        evm_num = sum(abs(ns - ms) ** 2 for ns, ms in zip(noisy_symbols, mod_symbols))
+        evm_den = sum(abs(ms) ** 2 for ms in mod_symbols)
+        evm_rms = math.sqrt(evm_num / max(1e-12, evm_den)) * 100.0
+
+        return Record({
+            "original_bits_count": len(bits),
+            "bit_errors": bit_errors,
+            "ber": round(ber, 6),
+            "evm_percent": round(evm_rms, 2),
+            "transmitted_symbols": len(mod_symbols),
+            "snr_db": float(snr_db),
+            "scheme": scheme.upper(),
+        })
+
+
+# --- Spoken English Telecom Wrappers ---
+
+def telecom_secded_encode(bits: List[int]) -> List[int]:
+    """Encodes bitstream using extended Hamming(8,4) SECDED code."""
+    return ExtendedHamming84.encode_bits(bits)
+
+
+def telecom_secded_decode(bits: List[int]) -> Record:
+    """Decodes extended Hamming(8,4) SECDED codeword with single-error correction and double-error detection."""
+    return ExtendedHamming84.decode_bits(bits)
+
+
+def telecom_custom_crc(
+    data: Any,
+    poly: int = 0x04C11DB7,
+    width: int = 32,
+) -> Record:
+    """Computes generalized CRC with specified polynomial and width."""
+    crc_eng = GeneralizedCRC(width=width, poly=poly)
+    return crc_eng.compute(data)
+
+
+def telecom_awgn_simulate(
+    bits: List[int],
+    scheme: str = "QPSK",
+    snr_db: float = 10.0,
+) -> Record:
+    """Simulates wireless link over AWGN channel and measures BER and EVM."""
+    return AWGNChannelSimulator.simulate_transmission(bits, scheme=scheme, snr_db=snr_db)
+

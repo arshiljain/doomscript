@@ -32,6 +32,13 @@ from doomscript.domains.telecom.runtime import (
     telecom_qam_modulate,
     telecom_qam_demodulate,
     telecom_ofdm_frame,
+    ExtendedHamming84,
+    GeneralizedCRC,
+    AWGNChannelSimulator,
+    telecom_secded_encode,
+    telecom_secded_decode,
+    telecom_custom_crc,
+    telecom_awgn_simulate,
 )
 from doomscript.domains.telecom.parser import TelecomDomainParser
 from doomscript.domains.telecom.exporter import TelecomASTExporter
@@ -73,11 +80,19 @@ class TelecomDomain(DomainContract):
     blocks = []
 
     def can_handle_line(self, line: str) -> bool:
+        if self.parser.parse_inspect(line, 0) is not None or self.parser.parse_operation(line, 0) is not None:
+            return True
         s = line.strip().lower()
         return (
             s.startswith("encode bits ")
             or s.startswith("decode bits ")
             or s.startswith("calculate crc32 of ")
+            or s.startswith("modulate bits ")
+            or s.startswith("demodulate symbols ")
+            or s.startswith("simulate awgn ")
+            or s.startswith("compute crc of ")
+            or s.startswith("compute custom crc of ")
+            or super().can_handle_line(line)
         )
 
     def can_handle_block(self, header: str) -> bool:
@@ -110,4 +125,11 @@ __all__ = [
     "telecom_qam_modulate",
     "telecom_qam_demodulate",
     "telecom_ofdm_frame",
+    "ExtendedHamming84",
+    "GeneralizedCRC",
+    "AWGNChannelSimulator",
+    "telecom_secded_encode",
+    "telecom_secded_decode",
+    "telecom_custom_crc",
+    "telecom_awgn_simulate",
 ]
