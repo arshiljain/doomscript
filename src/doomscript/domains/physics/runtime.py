@@ -17,6 +17,11 @@ class PhysicsRuntime(DomainRuntime):
         return None
 
 
+def physics_kinetic_energy(mass: Any, velocity: Any) -> float:
+    """Calculate kinetic energy: KE = 0.5 * m * v^2."""
+    return 0.5 * float(mass) * (float(velocity) ** 2)
+
+
 def physics_trajectory(velocity: Any, angle_deg: Any, gravity: Any = 9.81, dt: Any = 0.05) -> List[Dict[str, float]]:
     """Simulate 2D projectile trajectory without drag."""
     v0 = float(velocity)

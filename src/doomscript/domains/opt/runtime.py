@@ -8,6 +8,11 @@ from doomscript.domains.base import DomainRuntime, DomainIR
 from doomscript.domains.opt.spec import LinearProgramSpec, SolveLPSpec
 
 
+def opt_create_linear_program(name: str = "lp") -> LinearProgramSpec:
+    """Instantiates a new LinearProgramSpec."""
+    return LinearProgramSpec(name=name, sense="maximize", objective="", constraints=[])
+
+
 def parse_linear_expression(expr: str) -> Dict[str, float]:
     """Parses a linear expression string (e.g. '3 * x + 5 * y' or '2 * chairs - tables') into a variable-coefficient map."""
     clean = expr.replace(" ", "").strip()

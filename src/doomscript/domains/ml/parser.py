@@ -35,6 +35,21 @@ class MLDomainParser(DomainParser):
         return None
 
     def parse_operation(self, line: str, line_no: int) -> Optional[str]:
+        # train model on <dataset> predicting <target_col> using <algo> into <target_var>
+        m_train_spoken = re.match(
+            r"^train\s+model\s+on\s+([A-Za-z_]\w*)\s+predicting\s+[\"']?([A-Za-z_]\w*)[\"']?\s+using\s+([A-Za-z_]\w*)(?:\s+features\s+\[(.*?)\])?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_train_spoken:
+            dataset = m_train_spoken.group(1)
+            target_col = m_train_spoken.group(2)
+            algo = m_train_spoken.group(3)
+            feats_raw = m_train_spoken.group(4)
+            target_var = m_train_spoken.group(5)
+            feats_arg = f"{[f.strip().strip(chr(34)).strip(chr(39)) for f in feats_raw.split(',') if f.strip()]}" if feats_raw else "None"
+            return f'set {target_var} to train_direct_model("{algo}", {dataset}, "{target_col}", {feats_arg})'
+
         # train <algo> on <dataset> predicting <target_col> [features <f1, f2>] into <target_var>
         train_direct_m = re.match(
             r"^train\s+([A-Za-z_]\w*)\s+on\s+([A-Za-z_]\w*)\s+predicting\s+[\"']?([A-Za-z_]\w*)[\"']?(?:\s+features\s+\[(.*?)\])?\s+into\s+([A-Za-z_]\w*)$",

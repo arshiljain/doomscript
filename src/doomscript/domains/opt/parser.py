@@ -15,6 +15,16 @@ class OptDomainParser(DomainParser):
     def parse_operation(self, line: str, line_no: int) -> Optional[str]:
         s = line.strip()
 
+        # create linear program into <target>
+        m_clp = re.match(
+            r"^create\s+linear\s+program\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_clp:
+            target = m_clp.group(1).strip()
+            return f"set {target} to opt_create_linear_program()"
+
         # solve [linear program] <name> into <target>
         m_solve = re.match(
             r"^solve(?:\s+linear\s+program)?\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",

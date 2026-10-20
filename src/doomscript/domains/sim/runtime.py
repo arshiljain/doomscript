@@ -112,6 +112,16 @@ def sample_distribution(
     dist = dist_name.lower()
     samples = []
 
+    if isinstance(params, (list, tuple)):
+        if dist in ("normal", "gaussian"):
+            params = {"mean": params[0] if len(params) > 0 else 0.0, "std": params[1] if len(params) > 1 else 1.0}
+        elif dist in ("uniform", "unif"):
+            params = {"low": params[0] if len(params) > 0 else 0.0, "high": params[1] if len(params) > 1 else 1.0}
+        else:
+            params = {"rate": params[0] if len(params) > 0 else 1.0}
+    elif not isinstance(params, dict):
+        params = {}
+
     if dist in ("exponential", "exp"):
         rate = params.get("rate", 1.0)
         scale = 1.0 / rate if rate > 0 else 1.0

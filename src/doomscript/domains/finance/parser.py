@@ -354,6 +354,32 @@ class FinanceDomainParser(DomainParser):
             rets, conf, target = var_hist_m.group(1).strip(), var_hist_m.group(2).strip(), var_hist_m.group(3).strip()
             return f"set {target} to fin_var_historical({rets}, confidence={conf})"
 
+        # calculate analytical greeks for spot <spot> strike <strike> expiry <t> rate <r> vol <v> [type <type>] into <target>
+        greeks_m = re.match(
+            r"^calculate\s+(?:analytical\s+)?greeks\s+for\s+spot\s+(.+?)\s+strike\s+(.+?)\s+expiry\s+(.+?)\s+rate\s+(.+?)\s+vol\s+(.+?)(?:\s+type\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if greeks_m:
+            spot, strike, t, r, v = greeks_m.group(1).strip(), greeks_m.group(2).strip(), greeks_m.group(3).strip(), greeks_m.group(4).strip(), greeks_m.group(5).strip()
+            opt_type = greeks_m.group(6).strip() if greeks_m.group(6) else '"call"'
+            target = greeks_m.group(7).strip()
+            return f"set {target} to finance_analytical_greeks({spot}, {strike}, {t}, {r}, {v}, option_type={opt_type})"
+
+        # calculate binomial price for spot <spot> strike <strike> expiry <t> rate <r> vol <v> [steps <steps>] [type <type>] [american] into <target>
+        binom_m = re.match(
+            r"^calculate\s+binomial\s+price\s+for\s+spot\s+(.+?)\s+strike\s+(.+?)\s+expiry\s+(.+?)\s+rate\s+(.+?)\s+vol\s+(.+?)(?:\s+steps\s+(\d+))?(?:\s+type\s+([\"']?\w+[\"']?))?(?:\s+(american))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if binom_m:
+            spot, strike, t, r, v = binom_m.group(1).strip(), binom_m.group(2).strip(), binom_m.group(3).strip(), binom_m.group(4).strip(), binom_m.group(5).strip()
+            steps = binom_m.group(6).strip() if binom_m.group(6) else "100"
+            opt_type = binom_m.group(7).strip() if binom_m.group(7) else '"put"'
+            is_amer = "True" if binom_m.group(8) else "False"
+            target = binom_m.group(9).strip()
+            return f"set {target} to finance_binomial_price({spot}, {strike}, {t}, {r}, {v}, steps={steps}, option_type={opt_type}, is_american={is_amer})"
+
         return None
 
     def parse_block(

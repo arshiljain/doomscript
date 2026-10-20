@@ -264,11 +264,11 @@ class QuantumErrorCorrection:
     """Simulation of Quantum Error Correcting Codes (QECC) in pure statevector representation."""
 
     @staticmethod
-    def encode_bit_flip(alpha: complex, beta: complex) -> List[complex]:
+    def encode_bit_flip(alpha: Any, beta: Any) -> List[complex]:
         """Encodes 1 logical qubit (alpha|0> + beta|1>) into 3 physical qubits: alpha|000> + beta|111>."""
         state = [0.0 + 0.0j] * 8
-        state[0] = alpha  # |000>
-        state[7] = beta   # |111>
+        state[0] = complex(alpha)  # |000>
+        state[7] = complex(beta)   # |111>
         return state
 
     @staticmethod
@@ -504,3 +504,8 @@ class QuantumTeleportation:
             "measurement_outcomes": results,
             "perfect_fidelity_achieved": all(v["fidelity"] == 1.0 for v in results.values()),
         }
+
+
+def quantum_grover_search(num_qubits: int = 3, target: int = 0) -> Any:
+    from doomscript.runtime import Record
+    return Record(GroverSearch(int(num_qubits), int(target)).run_optimal())

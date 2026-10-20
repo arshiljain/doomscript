@@ -136,6 +136,18 @@ class QuantumDomainParser(DomainParser):
             target = m_bell.group(2).strip()
             return f"set {target} to quantum_create_bell_state({reg})"
 
+        # grover search [with] <n> qubits for target <t> into <target>
+        m_grover = re.match(
+            r"^grover\s+search\s+(?:with\s+)?(\d+)\s+qubits?\s+for\s+target\s+(\d+)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_grover:
+            n = m_grover.group(1).strip()
+            t = m_grover.group(2).strip()
+            target = m_grover.group(3).strip()
+            return f"set {target} to quantum_grover_search(num_qubits={n}, target={t})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

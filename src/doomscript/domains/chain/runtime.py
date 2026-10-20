@@ -832,3 +832,17 @@ class RaftConsensusEngine:
             self.commit_index = min(leader_commit, len(self.log))
 
         return {"term": self.current_term, "success": True, "match_index": len(self.log), "from_node": self.node_id}
+
+
+def chain_schnorr_public_key(secret_x: Any) -> int:
+    return pow(SchnorrZKProtocol.GENERATOR, int(secret_x), SchnorrZKProtocol.PRIME)
+
+
+def chain_schnorr_prove(secret_x: Any, public_y: Any = None) -> Dict[str, int]:
+    x = int(secret_x)
+    y = int(public_y) if public_y is not None else pow(SchnorrZKProtocol.GENERATOR, x, SchnorrZKProtocol.PRIME)
+    return SchnorrZKProtocol.prove(x, y)
+
+
+def chain_schnorr_verify(public_y: Any, proof: Any) -> bool:
+    return SchnorrZKProtocol.verify(int(public_y), proof)

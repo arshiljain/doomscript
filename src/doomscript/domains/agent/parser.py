@@ -79,6 +79,18 @@ class AgentDomainParser(DomainParser):
             target_var = m_agent.group(4).strip()
             return f"set {target_var} to create_agent({name_str}, {role_expr}, '', {model_expr})"
 
+        # create agent <role> [with tools <tools>] into <target>
+        m_agent_tools = re.match(
+            r"^create\s+agent\s+(.+?)(?:\s+with\s+tools\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_agent_tools and " with role " not in s.lower():
+            role_expr = m_agent_tools.group(1).strip()
+            tools_expr = m_agent_tools.group(2).strip() if m_agent_tools.group(2) else "None"
+            target_var = m_agent_tools.group(3).strip()
+            return f"set {target_var} to create_agent({role_expr}, {role_expr}, '', 'default', tools={tools_expr})"
+
         # create team <name> with agents <agent_list> into <target>
         m_team = re.match(
             r"^create\s+team\s+([A-Za-z_]\w*)\s+with\s+agents\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",

@@ -2166,6 +2166,8 @@ from doomscript.domains.db.runtime import (
     WALCrashRecovery,
     CostBasedQueryOptimizer,
     SnapshotIsolationMVCC,
+    db_wal_create,
+    db_mvcc_create,
     db_drop_index,
     db_add_column,
     db_drop_column_sqlite,
@@ -2898,6 +2900,8 @@ from doomscript.domains.web.runtime import (
     DOMElement,
     CSSSelectorEngine,
     RFC6265CookieJar,
+    web_css_select,
+    web_cookie_jar,
     web_select_all,
     web_extract_tables,
     web_parse_query_params,
@@ -2984,6 +2988,8 @@ from doomscript.domains.finance.runtime import (
     calculate_sharpe_ratio,
     backtest_strategy,
     execute_finance_ir,
+    finance_analytical_greeks,
+    finance_binomial_price,
     finance_bollinger_bands,
     finance_rsi,
     finance_macd,
@@ -3199,6 +3205,8 @@ from doomscript.domains.bio.runtime import (
     bio_fm_index_search,
     bio_neighbor_joining_tree,
 )
+bio_transcribe_dna = bio_transcribe
+bio_translate_rna = bio_translate
 
 from doomscript.domains.physics.runtime import (
     physics_projectile_trajectory,
@@ -3211,6 +3219,7 @@ from doomscript.domains.physics.runtime import (
     physics_escape_velocity,
     physics_create_pid,
     physics_update_pid,
+    physics_kinetic_energy,
     execute_physics_ir,
     BarnesHutNode,
     BarnesHutNBody,
@@ -3220,6 +3229,12 @@ from doomscript.domains.physics.runtime import (
     physics_resolve_collision,
     physics_van_der_waals_pressure,
 )
+physics_trajectory = physics_projectile_trajectory
+physics_ballistic_range = physics_projectile_range
+physics_pid_create = physics_create_pid
+physics_pid_update = physics_update_pid
+physics_aabb_collision = physics_check_aabb_collision
+physics_sat_polygon_collision = physics_check_sat_collision
 
 from doomscript.domains.sec.runtime import (
     sec_entropy,
@@ -3227,6 +3242,9 @@ from doomscript.domains.sec.runtime import (
     sec_caesar_cipher,
     sec_caesar_crack,
     sec_vigenere_cipher,
+    sec_vigenere_encode,
+    sec_vigenere_decode,
+    sec_jwt_verify,
     sec_frequency_analysis,
     sec_xor_cipher,
     sec_decode_jwt,
@@ -3239,6 +3257,8 @@ from doomscript.domains.sec.runtime import (
     TOTPGenerator,
     Secp256k1Curve,
 )
+sec_password_entropy = sec_entropy
+sec_password_audit = sec_audit_password
 
 from doomscript.domains.game.runtime import (
     game_roll_dice,
@@ -3263,6 +3283,13 @@ from doomscript.domains.game.runtime import (
     game_steering_seek,
     game_tilemap_resolve,
 )
+game_tilemap_create = game_create_tilemap
+game_tilemap_set = game_set_tile
+game_tilemap_get = game_get_tile
+game_grid_astar_path = game_astar_grid
+game_line_of_sight = game_has_line_of_sight
+game_loot_table_pick = game_weighted_choice
+game_apply_buff = game_apply_status_effect
 
 from doomscript.domains.quantum.runtime import (
     QuantumRegister,
@@ -3281,10 +3308,19 @@ from doomscript.domains.quantum.runtime import (
     QuantumErrorCorrection,
     GroverSearch,
     QuantumTeleportation,
+    quantum_grover_search,
 )
+quantum_register_create = quantum_create_register
+quantum_apply_hadamard = quantum_apply_h
+quantum_apply_pauli_x = quantum_apply_x
+quantum_apply_pauli_y = quantum_apply_y
+quantum_apply_pauli_z = quantum_apply_z
 
 from doomscript.domains.circuit.runtime import (
     circuit_ohms_law,
+    circuit_ohm_voltage,
+    circuit_ohm_current,
+    circuit_ohm_resistance,
     circuit_resistor_bands,
     circuit_voltage_divider,
     circuit_555_timer,
@@ -3319,7 +3355,14 @@ from doomscript.domains.chain.runtime import (
     PatriciaMerkleTrie,
     SchnorrZKProtocol,
     RaftConsensusEngine,
+    chain_schnorr_prove,
+    chain_schnorr_verify,
+    chain_schnorr_public_key,
 )
+chain_merkle_tree_create = chain_create_merkle_tree
+chain_merkle_root = chain_get_merkle_root
+chain_merkle_proof_verify = chain_verify_merkle_proof
+chain_mine_block = chain_mine_pow_block
 
 from doomscript.domains.math3d.runtime import (
     Vec3,
@@ -3342,6 +3385,27 @@ from doomscript.domains.math3d.runtime import (
     math3d_dual_quaternion,
     math3d_quickhull,
 )
+math3d_create_vec3 = Vec3
+from doomscript.domains.math3d import (
+    math3d_cross_product,
+    math3d_dot_product,
+    math3d_normalize_vec,
+    math3d_look_at,
+    math3d_perspective,
+    math3d_slerp,
+)
+
+from doomscript.domains.graphics.runtime import (
+    graphics_create_framebuffer,
+    graphics_create_depthbuffer,
+    graphics_draw_line,
+    graphics_draw_circle,
+    graphics_draw_rect,
+    graphics_draw_triangle,
+)
+
+from doomscript.domains.opt.runtime import opt_create_linear_program
+from doomscript.domains.net.runtime import net_format_ip
 
 from doomscript.domains.compiler.runtime import (
     Opcode,
@@ -3960,16 +4024,16 @@ def train_direct_model(
 
 # --- Cluster G: Finance, Time Series, Blockchain, Quantum & Cybersecurity Wrappers ---
 
-def finance_analytical_greeks(S: float, K: float, T: float, r: float, sigma: float, option_type: str = "call") -> Dict[str, float]:
+def finance_analytical_greeks(S: float, K: float, T: float, r: float, sigma: float, option_type: str = "call") -> Any:
     """Calculates Black-Scholes price and exact analytical Greeks (Delta, Gamma, Vega, Theta, Rho)."""
-    return AnalyticalGreeks.all_greeks(S, K, T, r, sigma, option_type=option_type)
+    return Record(AnalyticalGreeks.all_greeks(S, K, T, r, sigma, option_type=option_type))
 
 
 def finance_binomial_price(
     S0: float, K: float, T: float, r: float, sigma: float, steps: int = 100, option_type: str = "call", is_american: bool = False
-) -> Dict[str, Any]:
+) -> Any:
     """Prices European or American option using Cox-Ross-Rubinstein binomial lattice."""
-    return BinomialCoxRossRubinstein.price(S0, K, T, r, sigma, steps=steps, option_type=option_type, is_american=is_american)
+    return Record(BinomialCoxRossRubinstein.price(S0, K, T, r, sigma, steps=steps, option_type=option_type, is_american=is_american))
 
 
 def finance_optimize_markowitz(
@@ -4021,10 +4085,10 @@ def chain_schnorr_verify(
     return SchnorrZKProtocol.verify(public_y, proof, g=g, p=p, q=q)
 
 
-def quantum_grover_search(num_qubits: int, target: int) -> Dict[str, Any]:
+def quantum_grover_search(num_qubits: int, target: int) -> Any:
     """Executes Grover search algorithm to amplify target state with quadratic speedup."""
     grover = GroverSearch(num_qubits=num_qubits, target_state=target)
-    return grover.run_optimal()
+    return Record(grover.run_optimal())
 
 
 def quantum_teleport(alpha: complex, beta: complex) -> Dict[str, Any]:

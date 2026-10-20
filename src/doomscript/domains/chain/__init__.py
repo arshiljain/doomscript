@@ -82,6 +82,11 @@ class ChainDomain(DomainContract):
             or s.startswith("process transaction ")
             or s.startswith("get balance for address ")
             or s.startswith("generate checksum address from ")
+            or s.startswith("prove knowledge of secret ")
+            or s.startswith("prove schnorr secret ")
+            or s.startswith("verify proof ")
+            or s.startswith("verify schnorr proof ")
+            or super().can_handle_line(line)
         )
 
     def can_handle_block(self, header: str) -> bool:

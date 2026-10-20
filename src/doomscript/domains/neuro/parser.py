@@ -11,14 +11,17 @@ class NeuroDomainParser(DomainParser):
     def parse_line(self, line: str) -> Optional[str]:
         s = line.strip()
 
-        # create lif neuron into <target>
+        # create lif neuron [with tau <tau>] into <target>
         m_lif = re.match(
-            r"^create\s+lif\s+neuron\s+into\s+([A-Za-z_]\w*)$",
+            r"^create\s+lif\s+neuron(?:\s+with\s+tau\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )
         if m_lif:
-            target = m_lif.group(1).strip()
+            tau = m_lif.group(1).strip() if m_lif.group(1) else None
+            target = m_lif.group(2).strip()
+            if tau is not None:
+                return f"set {target} to neuro_create_lif(tau_m={tau})"
             return f"set {target} to neuro_create_lif()"
 
         # generate poisson spikes with rate <rate> duration <dur> into <target>

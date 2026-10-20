@@ -81,6 +81,8 @@ class QuantumDomain(DomainContract):
             or s.startswith("measure quantum register ")
             or s.startswith("calculate state probabilities for ")
             or s.startswith("create bell state in ")
+            or s.startswith("grover search ")
+            or super().can_handle_line(line)
         )
 
     def can_handle_block(self, header: str) -> bool:

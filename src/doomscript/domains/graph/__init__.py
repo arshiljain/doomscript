@@ -131,6 +131,7 @@ class GraphDomain(DomainContract):
         s = line.strip().lower()
         if (
             s.startswith("create graph ")
+            or s.startswith("create empty graph ")
             or s.startswith("create directed graph ")
             or s.startswith("create undirected graph ")
             or s.startswith("add node ")

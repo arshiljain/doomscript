@@ -112,6 +112,7 @@ class NetDomain(DomainContract):
             or s.startswith("allow mutating ")
             or s.startswith("block mutating ")
             or s.startswith("disallow mutating ")
+            or s.startswith("format ip ")
             or s.startswith("ping host ")
             or s.startswith("resolve dns ")
             or s.startswith("check port ")

@@ -71,6 +71,19 @@ class SimDomainParser(DomainParser):
             target = m_sw.group(4) or f"{param}_sweep"
             return f'set {target} to sweep_parameter("{sim_name}", "{param}", {values})'
 
+        # sample <count> from <dist> [with <params>] into <target>
+        m_sample_from = re.match(
+            r"^sample\s+(\d+)\s+from\s+([A-Za-z_]\w*)(?:\s+with\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_sample_from:
+            count = m_sample_from.group(1).strip()
+            dist = m_sample_from.group(2).strip()
+            params = m_sample_from.group(3).strip() if m_sample_from.group(3) else "{}"
+            target = m_sample_from.group(4).strip()
+            return f'set {target} to sample_distribution("{dist}", {params}, {count})'
+
         # sample normal with mean <m> and std <s> [count <n>] into <target>
         s_norm_m = re.match(
             r"^sample\s+normal\s+with\s+mean\s+([-\d.]+)\s+and\s+std\s+([-\d.]+)(?:\s+count\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",

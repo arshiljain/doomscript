@@ -70,16 +70,17 @@ class ImageDomainParser(DomainParser):
             return f"set {target_var} to open_image({path_expr})"
 
         # create blank image with width <w>, height <h>[, color <col>] into <target>
+        # OR create blank image of <w> by <h> [with color <col>] into <target>
         m_create = re.match(
-            r"^create\s+blank\s+image\s+with\s+width\s+(\d+)\s*(?:,|and)?\s*height\s+(\d+)(?:\s*(?:,|and)?\s*color\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            r"^create\s+blank\s+image\s+(?:with\s+width\s+(\d+)\s*(?:,|and)?\s*height\s+(\d+)|of\s+(\d+)\s+by\s+(\d+))(?:\s*(?:,|and|with)?\s*color\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )
         if m_create:
-            w = m_create.group(1)
-            h = m_create.group(2)
-            color = m_create.group(3).strip() if m_create.group(3) else '"white"'
-            target = m_create.group(4).strip()
+            w = m_create.group(1) or m_create.group(3)
+            h = m_create.group(2) or m_create.group(4)
+            color = m_create.group(5).strip() if m_create.group(5) else '"white"'
+            target = m_create.group(6).strip()
             return f"set {target} to create_blank_image({w}, {h}, color={color})"
 
         # resize [image] <img_var> by <pct> percent into <target>

@@ -201,11 +201,16 @@ class CookieJar:
 def cookie_jar_create() -> CookieJar:
     return CookieJar()
 
-def cookie_jar_set(jar: CookieJar, key: str, value: str):
-    jar.set(key, value)
+def cookie_jar_set(jar: Any, key: str, value: str):
+    if hasattr(jar, "set"):
+        jar.set(key, value)
+    elif hasattr(jar, "set_cookie"):
+        jar.set_cookie(f"{key}={value}", "http://localhost/")
 
-def cookie_jar_get(jar: CookieJar, key: str, default: str = "") -> str:
-    return jar.get(key, default)
+def cookie_jar_get(jar: Any, key: str, default: str = "") -> str:
+    if hasattr(jar, "get"):
+        return jar.get(key, default)
+    return default
 
 
 

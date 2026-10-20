@@ -125,7 +125,7 @@ class Math3DDomain(DomainContract):
     def can_handle_line(self, line: str) -> bool:
         s = line.strip().lower()
         return (
-            s.startswith("create vector3 with ")
+            s.startswith("create vector3 ")
             or s.startswith("calculate cross product of ")
             or s.startswith("calculate dot product of ")
             or s.startswith("normalize vector ")

@@ -164,8 +164,12 @@ class PlotBuilder:
     # Level 2 Kind Shortcut
     # -----------------------------------------------------------------------
 
-    def kind(self, geom_type: str, **kwargs) -> "PlotBuilder":
+    def kind(self, geom_type: str, mapping: Optional[Dict[str, Any]] = None, **kwargs) -> "PlotBuilder":
         """Configures aesthetics and adds primary layer in one call."""
+        if mapping and isinstance(mapping, dict):
+            combined = dict(mapping)
+            combined.update(kwargs)
+            kwargs = combined
         layer_params = {}
         for k, v in kwargs.items():
             k_lower = k.lower()

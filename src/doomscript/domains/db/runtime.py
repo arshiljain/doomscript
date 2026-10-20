@@ -996,3 +996,11 @@ class SnapshotIsolationMVCC:
         self.committed_txs.add(tx_id)
         del self.active_txs[tx_id]
         return True
+
+
+def db_wal_create() -> WALCrashRecovery:
+    return WALCrashRecovery()
+
+
+def db_mvcc_create() -> SnapshotIsolationMVCC:
+    return SnapshotIsolationMVCC()

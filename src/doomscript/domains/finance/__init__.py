@@ -136,6 +136,16 @@ class FinanceDomain(DomainContract):
         if ("day moving average" in s or "day sma" in s or "day ema" in s) and " into " in s:
             return True
 
+        if (
+            s.startswith("calculate analytical greeks ")
+            or s.startswith("calculate greeks ")
+            or s.startswith("calculate binomial price ")
+            or ("analytical greeks" in s and " into " in s)
+            or ("binomial price" in s and " into " in s)
+            or super().can_handle_line(line)
+        ):
+            return True
+
         return False
 
     def can_handle_block(self, header: str) -> bool:

@@ -34,8 +34,9 @@ class GameDomainParser(DomainParser):
             return f"set {target} to game_loot_table_pick({tbl})"
 
         # create tilemap with width <w> and height <h> [and default <d>] into <target>
+        # OR create 2d grid width <w> height <h> into <target>
         m_map = re.match(
-            r"^create\s+tilemap\s+with\s+width\s+(.+?)\s+and\s+height\s+(.+?)(?:\s+and\s+default\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            r"^create\s+(?:2d\s+grid|tilemap)\s+(?:with\s+)?width\s+(.+?)\s+(?:and\s+)?height\s+(.+?)(?:\s+and\s+default\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )

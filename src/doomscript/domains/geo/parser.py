@@ -47,9 +47,9 @@ class GeoDomainParser(DomainParser):
     def parse_operation(self, line: str, line_no: int) -> Optional[str]:
         s = line.strip()
 
-        # point [at] <lat>, <lon> into <target>
+        # point [at] [lat] <lat> [,] [and lon] <lon> into <target>
         m_pt = re.match(
-            r"^point(?:\s+at)?\s+([-\d.]+)\s*,\s*([-\d.]+)\s+into\s+([A-Za-z_]\w*)$",
+            r"^point(?:\s+at)?(?:\s+lat)?\s+([-\d.]+)\s*(?:,\s*|and\s+lon\s+)\s*([-\d.]+)\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )

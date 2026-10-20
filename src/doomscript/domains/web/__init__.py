@@ -166,6 +166,9 @@ class WebDomain(DomainContract):
             or s.startswith("parse content type ")
             or ("url " in s and " is valid into " in s)
             or s.startswith("generate curl command for ")
+            or s.startswith("select css ")
+            or s.startswith("create cookie jar ")
+            or super().can_handle_line(line)
         ):
             return True
 

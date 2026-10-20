@@ -132,6 +132,17 @@ class NetDomainParser(DomainParser):
             path = save_m.group(2)
             return f"save_response_content({src}, {path})"
 
+        # format ip <ip> into <target>
+        fip_m = re.match(
+            r"^format\s+ip\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if fip_m:
+            ip_val = fip_m.group(1).strip()
+            target = fip_m.group(2).strip()
+            return f"set {target} to net_format_ip({ip_val})"
+
         # ping host <host> [with timeout <to>] into <target>
         ping_m = re.match(
             r"^ping\s+host\s+(.+?)(?:\s+with\s+timeout\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",

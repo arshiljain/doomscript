@@ -71,9 +71,9 @@ class GraphDomainParser(DomainParser):
     def parse_operation(self, line: str, line_no: int) -> Optional[str]:
         s = line.strip()
 
-        # create (directed|undirected) graph into <target>
+        # create (directed|undirected|empty) graph into <target>
         m_create = re.match(
-            r"^create\s+(directed|undirected)?\s*graph\s+into\s+([A-Za-z_]\w*)$",
+            r"^create\s+(?:empty\s+)?(directed|undirected)?\s*graph\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )

@@ -516,6 +516,15 @@ def net_download_file(url: Any, target_path: Any) -> str:
     return tp
 
 
+def net_format_ip(val: Any) -> str:
+    """Formats an integer or packed IP into dotted-quad IPv4 string."""
+    try:
+        n = int(val)
+        return f"{(n >> 24) & 255}.{(n >> 16) & 255}.{(n >> 8) & 255}.{n & 255}"
+    except Exception:
+        return str(val)
+
+
 class HTTP2FrameParser:
     """RFC 7540 HTTP/2 Binary Frame Serializer and Parser."""
 

@@ -1069,16 +1069,16 @@ delta = norm.cdf(d1)
 ```doomscript
 use finance
 
-# Exact Black-Scholes analytical Greeks
-greeks = finance_analytical_greeks(100.0, 100.0, 1.0, 0.05, 0.2, option_type="call")
+# Exact Black-Scholes analytical Greeks in spoken English
+calculate analytical greeks for spot 100.0 strike 100.0 expiry 1.0 rate 0.05 vol 0.2 into greeks
 say "Call Price: ", greeks's price
 say "Delta: ", greeks's delta, " | Vega: ", greeks's vega
 
 # Multi-step Cox-Ross-Rubinstein lattice for American put
-amer_put = finance_binomial_price(80.0, 100.0, 1.0, 0.10, 0.2, steps=100, option_type="put", is_american=True)
+calculate binomial price for spot 80.0 strike 100.0 expiry 1.0 rate 0.10 vol 0.2 steps 100 type "put" american into amer_put
 say "American Put Early Exercise Value: ", amer_put's price
 ```
-> **Why DoomScript is easier:** Instant mathematical quantitative finance primitives built into the runtime without installing third-party math packages.
+> **Why DoomScript is easier:** Instant mathematical quantitative finance primitives written in plain, expressive English statements without installing third-party math packages.
 
 ---
 
@@ -1099,12 +1099,15 @@ s = (r + c * x) % q
 use chain
 
 secret_x = 987654321
-proof = chain_schnorr_prove(secret_x, public_y)
-is_valid = chain_schnorr_verify(public_y, proof)
+public_y = chain_schnorr_public_key(secret_x)
+
+# Prove and verify zero knowledge in spoken English
+prove knowledge of secret secret_x for public public_y into proof
+verify proof proof for public public_y into is_valid
 
 say "Zero-Knowledge Proof Verified: ", is_valid
 ```
-> **Why DoomScript is easier:** High-level cryptographic zero-knowledge protocols with single-line proof generation and verification.
+> **Why DoomScript is easier:** High-level cryptographic zero-knowledge protocols with single-line proof generation and verification in natural English.
 
 ---
 
@@ -1123,14 +1126,14 @@ from qiskit import QuantumCircuit
 use quantum
 
 # 3-Qubit quantum error correction
-encoded = QuantumErrorCorrection's encode_bit_flip(0.6 + 0j, 0.8 + 0j)
+encoded = QuantumErrorCorrection's encode_bit_flip(0.6, 0.8)
 corrupted = QuantumErrorCorrection's inject_error(encoded, "X", target_qubit=1)
 recovered, error_qubit = QuantumErrorCorrection's detect_and_correct_bit_flip(corrupted)
 
 say "Recovered Qubit, Error on Pin: ", error_qubit
 
 # Grover quantum database search with quadratic speedup
-search_res = quantum_grover_search(num_qubits=3, target=6)
+grover search with 3 qubits for target 6 into search_res
 say "Grover Found Target 6 with Probability: ", search_res's target_probability
 ```
 > **Why DoomScript is easier:** Statevector quantum registers, Bell states, error correcting codes, and Grover amplification work 100% out of the box in pure standard library.
@@ -1152,15 +1155,15 @@ nodes = soup.select("div#main ul > li.active")
 ```doomscript
 use web
 
-# Native CSS selector engine
-elements = web_css_select(html_text, "div#main ul > li.active")
+# Native CSS selector extraction in spoken English
+select css "div#main ul > li.active" from html html_text into elements
 for el in elements:
     say "Found Node: ", el's text
 
 # RFC 6265 Cookie Jar
-jar = web_cookie_jar()
-jar's set_cookie("session=token123; Domain=example.com; Path=/; Secure", "https://example.com/api")
-cookie_header = jar's get_cookie_header("https://example.com/api/v1", is_secure=True)
+create cookie jar into jar
+jar.set_cookie("session=token123; Domain=example.com; Path=/; Secure", "https://example.com/api")
+cookie_header = jar.get_cookie_header("https://example.com/api/v1", is_secure=True)
 say "Outgoing Cookie Header: ", cookie_header
 ```
 > **Why DoomScript is easier:** Clean, native CSS selector parsing and standard cookie state handling with zero external HTML dependencies.
@@ -1180,20 +1183,20 @@ say "Outgoing Cookie Header: ", cookie_header
 use db
 
 # ARIES Write-Ahead Logging & Crash Recovery
-wal = db_wal_create()
-wal's begin_tx(1)
-wal's write_update(1, page_id=10, old_val="A", new_val="B")
-wal's commit_tx(1)
+create wal logger into wal
+wal.begin_tx(1)
+wal.write_update(1, page_id=10, old_val="A", new_val="B")
+wal.commit_tx(1)
 
 # Snapshot Isolation Multi-Version Concurrency Control (MVCC)
-mvcc = db_mvcc_create()
-tx1 = mvcc's begin()
-tx2 = mvcc's begin()
-mvcc's write(tx2, "key", "v2")
-mvcc's commit(tx2)
+create mvcc engine into mvcc
+tx1 = mvcc.begin()
+tx2 = mvcc.begin()
+mvcc.write(tx2, "key", "v2")
+mvcc.commit(tx2)
 
 # Tx1 preserves snapshot isolation (repeatable read)
-say "Snapshot Value: ", mvcc's read(tx1, "key")
+say "Snapshot Value: ", mvcc.read(tx1, "key")
 ```
 > **Why DoomScript is easier:** Advanced distributed database primitives, ARIES crash recovery, query cost estimators, and MVCC isolation built right into DoomScript.
 

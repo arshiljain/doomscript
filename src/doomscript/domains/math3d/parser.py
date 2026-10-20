@@ -11,9 +11,9 @@ class Math3DDomainParser(DomainParser):
     def parse_line(self, line: str) -> Optional[str]:
         s = line.strip()
 
-        # create vector3 with x <x> and y <y> and z <z> into <target>
+        # create vector3 [with] x <x> [and] y <y> [and] z <z> into <target>
         m_v3 = re.match(
-            r"^create\s+vector3\s+with\s+x\s+(.+?)\s+and\s+y\s+(.+?)\s+and\s+z\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            r"^create\s+vector3\s+(?:with\s+)?(?:x\s+)?([-\d.]+)\s*(?:,|and|\s+)?\s*(?:y\s+)?([-\d.]+)\s*(?:,|and|\s+)?\s*(?:z\s+)?([-\d.]+)\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )

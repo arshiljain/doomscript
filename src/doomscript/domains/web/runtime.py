@@ -1174,3 +1174,25 @@ class RFC6265CookieJar:
             valid.append(f"{c.name}={c.value}")
 
         return "; ".join(valid)
+
+    def set(self, key: str, value: str) -> None:
+        """Convenience method for simple key-value setting."""
+        self.set_cookie(f"{key}={value}", "http://localhost/")
+
+    def get(self, key: str, default: str = "") -> str:
+        """Convenience method for simple key lookup."""
+        for c in reversed(self.cookies):
+            if c.name == key:
+                return c.value
+        return default
+
+
+
+def web_css_select(html: str, selector: str) -> List[Any]:
+    parser = DOMParser()
+    dom = parser.parse(str(html))
+    return CSSSelectorEngine.select(dom, str(selector))
+
+
+def web_cookie_jar() -> RFC6265CookieJar:
+    return RFC6265CookieJar()

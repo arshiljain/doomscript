@@ -119,6 +119,11 @@ class ResearchDomain(DomainContract):
             or s.startswith("calculate transitive reduction ")
             or s.startswith("find negative cycle ")
             or s.startswith("calculate degree distribution ")
+            or s.startswith("simulate distribution ")
+            or s.startswith("gradient of ")
+            or s.startswith("confidence interval of ")
+            or s.startswith("differentiate ")
+            or super().can_handle_line(line)
         ):
             return True
 

@@ -75,7 +75,8 @@ class OptDomain(DomainContract):
     def can_handle_line(self, line: str) -> bool:
         s = line.strip().lower()
         return (
-            s.startswith("solve linear program ")
+            s.startswith("create linear program ")
+            or s.startswith("solve linear program ")
             or s.startswith("solve ")
             or s.startswith("minimize 1d ")
             or s.startswith("grid search ")

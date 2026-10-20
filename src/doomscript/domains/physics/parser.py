@@ -11,6 +11,18 @@ class PhysicsDomainParser(DomainParser):
     def parse_line(self, line: str) -> Optional[str]:
         s = line.strip()
 
+        # calculate kinetic energy with mass <m> and velocity <v> into <target>
+        m_ke = re.match(
+            r"^calculate\s+kinetic\s+energy\s+with\s+mass\s+(.+?)\s+and\s+velocity\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_ke:
+            m = m_ke.group(1).strip()
+            v = m_ke.group(2).strip()
+            target = m_ke.group(3).strip()
+            return f"set {target} to physics_kinetic_energy({m}, {v})"
+
         # calculate trajectory with velocity <v> and angle <deg> [with gravity <g>] into <target>
         m_traj = re.match(
             r"^calculate\s+trajectory\s+with\s+velocity\s+(.+?)\s+and\s+angle\s+(.+?)(?:\s+with\s+gravity\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",

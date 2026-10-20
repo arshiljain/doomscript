@@ -115,6 +115,26 @@ class ChainDomainParser(DomainParser):
             target = m_chk.group(2).strip()
             return f"set {target} to chain_checksum_address({addr})"
 
+        # prove knowledge of secret <secret> for public <public> into <target>
+        m_schnorr_prove = re.match(
+            r"^prove\s+(?:knowledge\s+of\s+secret|schnorr\s+secret)\s+(.+?)\s+for\s+public\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_schnorr_prove:
+            sec_x, pub_y, target = m_schnorr_prove.group(1).strip(), m_schnorr_prove.group(2).strip(), m_schnorr_prove.group(3).strip()
+            return f"set {target} to chain_schnorr_prove({sec_x}, {pub_y})"
+
+        # verify schnorr proof <proof> for public <public> into <target>
+        m_schnorr_ver = re.match(
+            r"^verify\s+(?:schnorr\s+)?proof\s+(.+?)\s+for\s+public\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_schnorr_ver:
+            proof, pub_y, target = m_schnorr_ver.group(1).strip(), m_schnorr_ver.group(2).strip(), m_schnorr_ver.group(3).strip()
+            return f"set {target} to chain_schnorr_verify({pub_y}, {proof})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

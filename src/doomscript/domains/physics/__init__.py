@@ -81,7 +81,8 @@ class PhysicsDomain(DomainContract):
     def can_handle_line(self, line: str) -> bool:
         s = line.strip().lower()
         return (
-            s.startswith("calculate trajectory ")
+            s.startswith("calculate kinetic energy ")
+            or s.startswith("calculate trajectory ")
             or s.startswith("calculate ballistic range ")
             or s.startswith("calculate projectile with drag ")
             or s.startswith("check collision between aabb ")

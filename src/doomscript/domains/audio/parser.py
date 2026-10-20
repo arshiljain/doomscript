@@ -49,7 +49,7 @@ class AudioDomainParser(DomainParser):
 
         # create blank audio with duration <d> [seconds] into <target>
         m_create = re.match(
-            r"^create\s+blank\s+audio\s+with\s+duration\s+(\d+(?:\.\d+)?)(?:\s+seconds?)?\s+into\s+([A-Za-z_]\w*)$",
+            r"^create\s+blank\s+audio\s+(?:with\s+duration|of)\s+(\d+(?:\.\d+)?)(?:\s+seconds?)?\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )

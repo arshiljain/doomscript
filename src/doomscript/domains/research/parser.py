@@ -231,6 +231,18 @@ class ResearchDomainParser(DomainParser):
             target = m_deg.group(2).strip()
             return f"set {target} to research_degree_distribution({g})"
 
+        # simulate distribution <dist> with <params> into <target>
+        m_sim = re.match(
+            r"^simulate\s+distribution\s+([A-Za-z_]\w*)\s+with\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_sim:
+            dist = m_sim.group(1).strip()
+            params = m_sim.group(2).strip()
+            target = m_sim.group(3).strip()
+            return f'set {target} to sample_distribution("{dist}", {params})'
+
         # Fallback to research registry normalization for existing syntax
         from doomscript.research.registry import apply_research_normalization
         return apply_research_normalization(line)

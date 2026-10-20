@@ -1392,3 +1392,19 @@ class MarkowitzOptimizer:
                 "weights": [round(x, 4) for x in best_cand],
             })
         return frontier
+
+
+def finance_analytical_greeks(
+    S: float, K: float, T: float, r: float, sigma: float, option_type: str = "call"
+) -> Any:
+    from doomscript.runtime import Record
+    res = AnalyticalGreeks.all_greeks(float(S), float(K), float(T), float(r), float(sigma), option_type)
+    return Record(res)
+
+
+def finance_binomial_price(
+    S0: float, K: float, T: float, r: float, sigma: float, steps: int = 100, option_type: str = "put", is_american: bool = True
+) -> Any:
+    from doomscript.runtime import Record
+    res = BinomialCoxRossRubinstein.price(float(S0), float(K), float(T), float(r), float(sigma), int(steps), option_type, bool(is_american))
+    return Record(res)

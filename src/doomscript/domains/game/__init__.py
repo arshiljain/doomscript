@@ -84,7 +84,8 @@ class GameDomain(DomainContract):
         return (
             s.startswith("roll dice ")
             or s.startswith("pick from loot table ")
-            or s.startswith("create tilemap with width ")
+            or s.startswith("create tilemap ")
+            or s.startswith("create 2d grid ")
             or s.startswith("set tile at x ")
             or s.startswith("get tile at x ")
             or s.startswith("find grid path in ")
@@ -93,6 +94,7 @@ class GameDomain(DomainContract):
             or s.startswith("create combatant ")
             or s.startswith("resolve turn between ")
             or s.startswith("apply buff ")
+            or super().can_handle_line(line)
         )
 
     def can_handle_block(self, header: str) -> bool:

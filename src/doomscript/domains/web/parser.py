@@ -116,6 +116,26 @@ class WebDomainParser(DomainParser):
             target = m_dl.group(4).strip()
             return f"set {target} to download_web_media({p_var}, pattern={pat_expr}, folder={folder_expr})"
 
+        # select css <sel> from [html] <html_var> into <target>
+        m_css = re.match(
+            r"^select\s+css\s+(.+?)\s+(?:from|in)(?:\s+html)?\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_css:
+            sel, html_txt, target = m_css.group(1).strip(), m_css.group(2).strip(), m_css.group(3).strip()
+            return f"set {target} to web_css_select({html_txt}, {sel})"
+
+        # create cookie jar into <target>
+        m_jar = re.match(
+            r"^create\s+cookie\s+jar\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_jar:
+            target = m_jar.group(1).strip()
+            return f"set {target} to web_cookie_jar()"
+
         # select all <sel> in html <html_var> into <target>
         # select all <sel> [elements] in/from [html] <html_var> into <target>
         m_sel = re.match(

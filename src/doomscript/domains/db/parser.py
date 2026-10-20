@@ -36,16 +36,21 @@ class DBDomainParser(DomainParser):
 
     def parse_operation(self, line: str, line_no: int) -> Optional[str]:
         # execute sql / query db / query sql "<query>" [with <params>] [into <target>]
+        # OR query "<table_or_query>" [into <target>] / query <table_or_query> [into <target>]
         m = re.match(
-            r'^(?:execute\s+sql|query\s+(?:db|sql))\s+(?:"(.*?)"|\'(.*?)\')(?:\s+with\s+(.+?))?(?:\s+into\s+([A-Za-z_]\w*))?$',
+            r'^(?:execute\s+sql|query(?:\s+(?:db|sql))?)\s+(?:"(.*?)"|\'(.*?)\'|([A-Za-z_]\w*))(?:\s+with\s+(.+?))?(?:\s+into\s+([A-Za-z_]\w*))?$',
             line.strip(),
             re.IGNORECASE,
         )
         if m:
-            sql_str = m.group(1) if m.group(1) is not None else m.group(2)
-            params = m.group(3)
-            target = m.group(4)
-            clean_sql = sql_str.replace('"', '\\"')
+            sql_str = m.group(1) if m.group(1) is not None else (m.group(2) if m.group(2) is not None else m.group(3))
+            params = m.group(4)
+            target = m.group(5)
+            s_upper = sql_str.upper().strip()
+            if not any(k in s_upper for k in ("SELECT ", "INSERT ", "UPDATE ", "DELETE ", "CREATE ", "DROP ", "PRAGMA ")):
+                clean_sql = f"SELECT * FROM {sql_str}".replace('"', '\\"')
+            else:
+                clean_sql = sql_str.replace('"', '\\"')
             call_expr = (
                 f'execute_raw_sql("{clean_sql}", params={params})'
                 if params
@@ -54,6 +59,26 @@ class DBDomainParser(DomainParser):
             if target:
                 return f"set {target} to {call_expr}"
             return call_expr
+
+        # create wal logger into <target>
+        m_wal = re.match(
+            r"^create\s+wal\s+(?:logger|log)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_wal:
+            target = m_wal.group(1).strip()
+            return f"set {target} to db_wal_create()"
+
+        # create mvcc engine into <target>
+        m_mvcc = re.match(
+            r"^create\s+mvcc\s+(?:engine|store)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_mvcc:
+            target = m_mvcc.group(1).strip()
+            return f"set {target} to db_mvcc_create()"
 
         # insert into <table> values <expr>
         ins_m = re.match(

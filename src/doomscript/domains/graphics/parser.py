@@ -12,8 +12,9 @@ class GraphicsDomainParser(DomainParser):
         s = line.strip()
 
         # create framebuffer <w> by <h> into <target>
+        # OR create canvas width <w> height <h> into <target>
         m_fb = re.match(
-            r"^create\s+framebuffer\s+(\d+)\s+by\s+(\d+)\s+into\s+([A-Za-z_]\w*)$",
+            r"^create\s+(?:canvas|framebuffer)\s+(?:with\s+)?(?:width\s+)?(\d+)\s*(?:by|height|\*|x|\s+)\s*(\d+)\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )

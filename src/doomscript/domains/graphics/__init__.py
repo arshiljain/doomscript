@@ -73,8 +73,10 @@ class GraphicsDomain(DomainContract):
         s = line.strip().lower()
         return (
             s.startswith("create framebuffer ")
+            or s.startswith("create canvas ")
             or s.startswith("draw line on ")
             or s.startswith("draw circle on ")
+            or super().can_handle_line(line)
         )
 
     def can_handle_block(self, header: str) -> bool:
