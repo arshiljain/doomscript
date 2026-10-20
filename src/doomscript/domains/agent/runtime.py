@@ -892,16 +892,36 @@ class ReActAgent:
 
     def __init__(
         self,
-        name: str,
+        name: str = "ReActAgent",
         harness: Optional[ToolHarness] = None,
         max_iterations: int = 5,
         memory: Optional[AgentMemoryBuffer] = None,
+        tools: Optional[Dict[str, Callable]] = None,
+        max_steps: Optional[int] = None,
     ):
         self.name = name
         self.harness = harness or ToolHarness()
-        self.max_iterations = max_iterations
+        if tools:
+            for k, v in tools.items():
+                self.harness.register(k, v)
+        self.max_iterations = max_steps or max_iterations
+        self.max_steps = self.max_iterations
         self.memory = memory or AgentMemoryBuffer()
         self.trajectory: List[Dict[str, Any]] = []
+
+    def register_tool(self, name: str, fn: Callable) -> None:
+        self.harness.register(name, fn)
+
+    @property
+    def tools(self) -> Dict[str, Callable]:
+        return {k: v["fn"] for k, v in self.harness.tools.items()}
+
+    def run(
+        self,
+        task: str,
+        reasoning_policy: Optional[Callable[[str, List[Dict[str, Any]]], Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        return self.solve(task, reasoning_policy=reasoning_policy)
 
     def solve(
         self,
@@ -967,100 +987,6 @@ class ReActAgent:
         return {
             "status": "max_iterations_reached",
             "final_answer": f"Reached max iterations ({self.max_iterations}) without final answer",
-            "steps": len(self.trajectory),
-            "trajectory": self.trajectory,
-        }
-
-
-class ReActAgent:
-    """Thought-Action-Observation cognitive loop agent with state trace and tool execution."""
-
-    def __init__(
-        self,
-        name: str = "ReActAgent",
-        tools: Optional[Dict[str, Callable]] = None,
-        max_steps: int = 6,
-    ):
-        self.name = name
-        self.tools: Dict[str, Callable] = dict(tools or {})
-        self.max_steps = max_steps
-        self.trajectory: List[Dict[str, Any]] = []
-
-    def register_tool(self, name: str, fn: Callable) -> None:
-        self.tools[name] = fn
-
-    def run(
-        self,
-        task: str,
-        reasoning_policy: Optional[Callable[[str, List[Dict[str, Any]]], Dict[str, Any]]] = None,
-    ) -> Dict[str, Any]:
-        """Executes the ReAct loop until final answer is generated or max steps reached."""
-        self.trajectory.clear()
-
-        def default_policy(goal: str, traj: List[Dict[str, Any]]) -> Dict[str, Any]:
-            step_num = len(traj) + 1
-            avail = list(self.tools.keys())
-            if not avail or step_num >= self.max_steps - 1:
-                return {
-                    "thought": f"Sufficient information gathered for task: {goal}",
-                    "action": None,
-                    "final_answer": f"Resolved: {goal}",
-                }
-            chosen_tool = avail[(step_num - 1) % len(avail)]
-            return {
-                "thought": f"Step {step_num}: Querying tool '{chosen_tool}' to gather facts.",
-                "action": chosen_tool,
-                "action_input": {"query": goal},
-                "final_answer": None,
-            }
-
-        policy = reasoning_policy or default_policy
-
-        for step in range(1, self.max_steps + 1):
-            decision = policy(task, self.trajectory)
-            thought = decision.get("thought", "")
-            action = decision.get("action")
-            action_input = decision.get("action_input", {})
-            final_ans = decision.get("final_answer")
-
-            step_entry = {
-                "step": step,
-                "thought": thought,
-                "action": action,
-                "action_input": action_input,
-            }
-
-            if final_ans is not None:
-                step_entry["final_answer"] = final_ans
-                self.trajectory.append(step_entry)
-                return {
-                    "status": "success",
-                    "final_answer": final_ans,
-                    "steps": len(self.trajectory),
-                    "trajectory": self.trajectory,
-                }
-
-            # Execute tool action
-            if action in self.tools:
-                try:
-                    tool_fn = self.tools[action]
-                    if isinstance(action_input, dict):
-                        obs = tool_fn(**action_input)
-                    elif isinstance(action_input, (list, tuple)):
-                        obs = tool_fn(*action_input)
-                    else:
-                        obs = tool_fn(action_input)
-                except Exception as e:
-                    obs = f"Tool execution error: {e}"
-            else:
-                obs = f"Tool '{action}' not found"
-
-            step_entry["observation"] = obs
-            self.trajectory.append(step_entry)
-
-        return {
-            "status": "max_steps_reached",
-            "final_answer": f"Completed {self.max_steps} steps without final answer",
             "steps": len(self.trajectory),
             "trajectory": self.trajectory,
         }

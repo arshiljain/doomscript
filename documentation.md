@@ -1812,3 +1812,182 @@ say "Reverberation Processed: ", len(reverbed), " samples"
    Always place `use <domain>` at the beginning of your file so the domain parser activates and compiles with maximum efficiency.
 5. **Zero-Punctuation Formatting**:
    DoomScript's parser is designed around natural line breaks and indentations. Keep statements clean and avoid unnecessary commas or trailing semicolons.
+
+
+---
+
+## 7. Deepened Multi-Domain Algorithms & Reference (Clusters A–H)
+
+DoomScript bundles production-grade, zero-dependency implementations of essential algorithms across 8 clusters covering all 40 domains:
+
+### Cluster A: Foundational Computing & Systems
+- **`dsa`**:
+  - `FibonacciHeap`: Amortized $O(1)$ `insert` and `decrease_key`, $O(\log n)$ `extract_min` with cascading cuts.
+  - `DisjointSetUnion`: Path compression and union-by-rank with transactional checkpoints and rollback.
+  - `FenwickTree` / `FenwickTree2D`: 1D and 2D Binary Indexed Trees for $O(\log n)$ prefix sums and point updates.
+  - `BloomFilter` / `CountingBloomFilter`: Probabilistic set membership with zero false negatives and item deletion support.
+- **`graph`**:
+  - `graph_tarjan_scc`: Strongly Connected Components discovery using low-link values and traversal stack.
+  - `graph_hopcroft_karp`: Maximum Cardinality Bipartite Matching in $O(E \sqrt{V})$ via alternating BFS/DFS level graphs.
+  - `graph_eulerian_path`: Hierholzer's algorithm finding Eulerian paths and circuits in directed graphs.
+  - `graph_boruvka_mst`: Parallel-friendly Minimum Spanning Tree via connected component contractive edge contraction.
+- **`compiler`**:
+  - `LALR1Parser`: Full LR(1) item-set generation, LALR core collapsing, parsing table construction, and shift-reduce stack engine.
+  - `SSAFormBuilder`: Dominator tree computation, dominance frontiers, and $\phi$-node insertion.
+  - `ChaitinRegisterAllocator`: K-coloring of register interference graphs with Briggs/Chaitin degree reduction and spilling.
+- **`automata`**:
+  - `PushdownAutomaton`: Context-free language parser with stack configuration transitions.
+  - `MooreMealyFSM`: Finite State Machines with state-dependent (Moore) and transition-dependent (Mealy) output functions.
+  - `BuchiAutomaton`: Omega-automaton recognizing infinite $\omega$-regular words with non-empty cycle acceptance.
+- **`net`**:
+  - `TLS13ClientHelloParser`: Pure binary parser extracting TLS 1.3 ClientHello SNI extensions and supported cipher suites.
+  - `SOCKS5Protocol`: RFC 1928 proxy handshake simulation, IP/Domain address decoding, and reply packets.
+  - `CIDRPrefixTrie`: Bitwise radix trie for $O(32)$ and $O(128)$ longest prefix IP route matching.
+
+### Cluster B: Machine Learning, AI & Optimization
+- **`ml`**:
+  - `LinearSVM`: Sequential Minimal Optimization (SMO) algorithm solving dual SVM with Mercer kernels.
+  - `KMeansPlusPlus`: Arthur-Vassilvitskii $D^2$ seeding with Lloyd's clustering convergence.
+  - `TinyConvNet`: 2D Convolution, Max-Pooling, Flatten, Dense layers with backpropagation.
+  - `GradientBoostedTreesExact`: Exact greedy split search on second-order Taylor expansion loss gradients.
+- **`agent`**:
+  - `ReActAgent`: Interleaved Thought, Action, and Observation cycles with structured tool dispatching.
+  - `TreeOfThoughts`: BFS/DFS exploration of reasoning trees with heuristic node evaluation.
+  - `MultiAgentDebate`: Multi-perspective adversarial debate with judge consensus synthesis.
+- **`opt`**:
+  - `PrimalDualInteriorPoint`: Mehrotra predictor-corrector barrier method for linear programming.
+  - `BranchAndBoundMILP`: Mixed-Integer Linear Programming tree search with relaxation bounds.
+  - `AdaptiveSimulatedAnnealing`: Dynamic temperature cooling and adaptive step variance.
+- **`sim`**:
+  - `AgentBasedModel2D`: Spatial 2D toroidal multi-agent simulation with neighborhood radius interactions.
+  - `MCMCSampler`: Metropolis-Hastings Markov Chain Monte Carlo sampling from target log-density functions.
+  - `JacksonQueuingNetwork`: Closed and open multi-station queuing networks with routing transition matrices.
+- **`nlp`**:
+  - `BytePairEncoder`: Subword tokenization via iterative frequency pair merging.
+  - `HMMPOSTagger`: First-order Hidden Markov Model with Viterbi dynamic programming decoding.
+  - `Word2VecCBOW`: Continuous Bag-of-Words embeddings with negative sampling and Adam/SGD updates.
+
+### Cluster C: Mathematics, 3D & Scientific Computing
+- **`math3d`**:
+  - `Raymarcher3D`: Sphere tracing over signed distance field (SDF) CSG geometries.
+  - `DualQuaternion`: Rigid body transformations with screw linear interpolation (ScLERP).
+  - `Quickhull3D`: 3D convex hull construction using facet horizon ridge stitching.
+- **`symbolic`**:
+  - `SymbolicIntegrator`: Pattern and polynomial symbolic anti-differentiation.
+  - `TaylorSeries`: Arbitrary-order polynomial Taylor expansions around expansion point $x_0$.
+  - `ExactRationalLinearSolver`: Zero-loss Gaussian elimination using exact rational fractions.
+- **`signals`**:
+  - `STFTSpectrogram`: Short-Time Fourier Transform with overlapping Hann windows.
+  - `SavitzkyGolayFilter`: Polynomial smoothing and derivative estimation preserving high-frequency features.
+- **`research`**:
+  - `RungeKuttaFehlberg`: Adaptive step size ODE integration (RKF45) with embedded 4th/5th order error estimates.
+  - `LevenbergMarquardtOptimizer`: Damped non-linear least squares parameter fitting.
+- **`graphics`**:
+  - `BlinnPhongShader`: Specular half-vector illumination with ambient and diffuse components.
+  - `BilinearTextureMapper`: Sub-pixel texture interpolation with boundary clamp modes.
+  - `SuperSampledFrameBuffer`: SSAA anti-aliased software rasterization frame buffer.
+
+### Cluster D: Physical Sciences & Hardware
+- **`physics`**:
+  - `BarnesHutNBody`: $O(N \log N)$ gravitational and electrostatic n-body simulation using octrees.
+  - `ImpulseCollision2D`: Rigid-body momentum conservation with restitution and friction impulses.
+  - `VanDerWaalsGas`: Non-ideal real gas thermodynamic equation of state simulation.
+- **`chem`**:
+  - `MolecularGraphLayout`: 2D chemical structure force-directed coordinate generation.
+  - `MorganFingerprint`: Extended-connectivity circular fingerprints (ECFP) for chemical similarity.
+  - `ReactionKineticsSimulator`: Numerical chemical ODE rate equations under Arrhenius temperature dependence.
+- **`bio`**:
+  - `SequenceAligner`: Gotoh affine gap penalty dynamic programming (Smith-Waterman / Needleman-Wunsch).
+  - `FMIndexBWT`: Burrows-Wheeler Transform with suffix array and LF-mapping for exact genomic substring matching.
+  - `PhylogeneticTreeNJ`: Saitou-Nei Neighbor-Joining algorithm building additive phylogenetic evolutionary trees.
+- **`astronomy`**:
+  - `PlanetaryEphemeris`: Keplerian orbital elements and secular rates for inner and outer solar system bodies.
+  - `EclipsePredictor`: Solar and lunar eclipse geometry detection based on lunar nodal conjunctions.
+  - `AtmosphericRefraction`: Bennett 1982 empirical formula correcting apparent celestial altitude.
+- **`circuit`**:
+  - `ModifiedNodalAnalysis`: DC and transient circuit solver supporting resistors, capacitors, inductors, and diodes.
+  - `BodePlotAnalyzer`: Transfer function frequency response calculation (magnitude in dB and phase in degrees).
+  - `OpAmpModel`: Finite gain and bandwidth non-inverting and inverting operational amplifier model.
+
+### Cluster E: Media, Spatial & Game Systems
+- **`image`**:
+  - `GeometricWarp`: $3 \times 3$ affine homography matrix inversion and bilinear backward mapping.
+  - `MorphologicalOps`: Binary and grayscale erosion, dilation, morphological opening, and closing.
+  - `ColorQuantizer`: Median Cut color quantization with Floyd-Steinberg error diffusion dithering.
+- **`audio`**:
+  - `PolyphonicSynth`: Polyphonic synthesizer with band-limited PolyBLEP oscillators and 4-stage ADSR envelope.
+  - `YINPitchDetector`: Fundamental frequency autocorrelation difference function pitch detection.
+  - `ParametricEQ`: Audio EQ cascade of biquad second-order IIR filters (low-pass, high-pass, peaking band).
+- **`spatial_audio`**:
+  - `HigherOrderAmbisonics`: 2nd-order 9-channel ACN/N3D spherical harmonics encoding and binaural decoding.
+  - `AcousticRaytracer`: Image-source method for room impulse response (RIR) synthesis.
+  - `HRTFConvolution`: Head-Related Transfer Function spatial audio filtering.
+- **`game`**:
+  - `BehaviorTree`: Composite nodes (Sequence, Selector), Decorators (Inverter, Repeater), and leaf tasks with Blackboard memory.
+  - `SteeringBehaviors`: Craig Reynolds autonomous agent steering (Seek, Flee, Arrive, Pursue, Evade, Flocking).
+  - `TilemapPhysics`: 2D AABB tilemap collision detection, slope tiles, and grid raycasting.
+- **`metrics`**:
+  - `OTLPTraceExporter`: OpenTelemetry Protocol JSON trace span payload exporter.
+  - `ExponentialDecayReservoir`: Forward-decaying Cormode-Hadley quantile reservoir.
+  - `EWMAAnomalyDetector`: Exponentially weighted moving average with dynamic 3-sigma confidence bounds.
+
+### Cluster F: Data, Storage & Telecommunications
+- **`data`**:
+  - `RollingAggregator`: Monotonic double-ended queue sliding-window min, max, mean, and standard deviation in $O(1)$.
+  - `RelationalJoinEngine`: In-memory Hash Join, Sort-Merge Join, and Nested Loop Join with hash partitioning.
+  - `PivotTableEngine`: Multi-index grouping, pivoting, and unpivoting (melt) transformations.
+- **`office`**:
+  - `SpreadsheetFormulaEngine`: Recursive descent formula parser with dependency DAG cycle detection and dirty-cell recomputation.
+  - `CSVDialectSniffer`: Auto-detection of delimiter, quote character, and escape sequences.
+- **`cloud`**:
+  - `MultipartUploadManager`: S3-style chunked upload simulation with part numbering, SHA-256 ETag hashing, and assembly.
+  - `ContentAddressableStorage`: SHA-256 deduplicated block store with manifest indexing.
+  - `BucketLifecycleEngine`: Time-based transition and expiration policy evaluator.
+- **`compression`**:
+  - `BWTCompressor`: Burrows-Wheeler Transform + Move-To-Front (MTF) + Run-Length Encoding.
+  - `DeflateEngine`: RFC 1951 DEFLATE compressor combining LZ77 window search and canonical Huffman coding.
+  - `ByteAlignedSnappy`: Fast byte-aligned dictionary LZ-style compressor.
+- **`telecom`**:
+  - `ViterbiDecoder`: Convolutional code $(2, 1, 7)$ trellis maximum-likelihood decoder.
+  - `QAMModem`: BPSK, QPSK, 16-QAM, 64-QAM Gray-coded constellation mapper and demapper with AWGN simulation.
+  - `OFDMFramer`: Orthogonal Frequency Division Multiplexing symbol subcarrier mapping and cyclic prefix insertion.
+
+### Cluster G: Finance, Time Series & Distributed Ledgers
+- **`finance`**:
+  - `AnalyticalGreeks`: Exact Black-Scholes partial derivatives ($\Delta, \Gamma, \Theta, \mathcal{V}, \rho$).
+  - `BinomialCoxRossRubinstein`: Multi-step lattice pricing model for American call and put options with early exercise.
+  - `MarkowitzOptimizer`: Quadratic programming efficient frontier and tangency portfolio Sharpe ratio maximization.
+- **`time_series`**:
+  - `ARIMASimulator`: Autoregressive Integrated Moving Average $(p, d, q)$ data generation and parameter estimation.
+  - `DynamicTimeWarping`: Non-linear sequence alignment distance with Sakoe-Chiba band constraints.
+  - `CUSUMDetector`: Cumulative Sum statistical quality control change point detection.
+- **`chain`**:
+  - `PatriciaMerkleTrie`: Ethereum-style hex-encoded radix tree with branch, extension, and leaf nodes with Keccak-256 / SHA-256 proofs.
+  - `SchnorrZKProtocol`: Non-interactive zero-knowledge proof of discrete logarithm knowledge via Fiat-Shamir heuristic.
+  - `RaftConsensusEngine`: State machine replication simulation (leader election, log replication, commit index).
+- **`quantum`**:
+  - `QuantumErrorCorrection`: Shor 9-qubit bit/phase flip code and Steane 7-qubit CSS code syndrome measurement and recovery.
+  - `GroverSearch`: Amplitude amplification oracle and diffusion operator simulation with quadratic speedup.
+  - `QuantumTeleportation`: Bell state entanglement generation, EPR pair measurement, and quantum state reconstruction.
+- **`sec`**:
+  - `ShamirSecretSharing`: $(k, n)$ threshold secret sharing using Lagrange polynomial interpolation over prime fields.
+  - `TOTPGenerator`: Time-based and HMAC-based One-Time Passwords (RFC 6238 / RFC 4226) with drift tolerance.
+  - `Secp256k1Curve`: Elliptic Curve arithmetic (point addition, doubling, scalar multiplication) and ECDH key exchange.
+
+### Cluster H: Web, Database & Brain / Neuroscience
+- **`web`**:
+  - `CSSSelectorEngine`: Recursive DOM traversal matching tag, class (`.btn`), id (`#main`), child (`>`), descendant (` `), and attribute (`[data-x=y]`).
+  - `RFC6265CookieJar`: Multi-domain, path-scoped, secure/httponly, and expiration-aware HTTP cookie management.
+  - `RobotsTxtParser`: Robots Exclusion Protocol parser evaluating user-agent rules, disallow/allow paths, and crawl-delay directives.
+- **`db`**:
+  - `WALCrashRecovery`: ARIES-style Write-Ahead Logging with redo/undo passes and checkpointing.
+  - `CostBasedQueryOptimizer`: Estimator selecting index scan vs sequential table scan based on selectivity and page I/O costs.
+  - `SnapshotIsolationMVCC`: Multi-Version Concurrency Control with transaction read timestamps and conflict rollback.
+- **`neuro`**:
+  - `TsodyksMarkramSynapse`: Dynamic short-term depression and facilitation model with utilization and recovery time constants.
+  - `FitzHughNagumoNeuron`: Two-variable phase-plane biological excitable membrane model.
+  - `WinnerTakeAllNetwork`: Competitive lateral inhibitory neuronal population model.
+- **`geo`**:
+  - `DelaunayTriangulator`: Bowyer-Watson incremental algorithm for 2D Delaunay triangulation and Voronoi diagram dual.
+  - `WebMercatorProjection`: EPSG:3857 $\leftrightarrow$ EPSG:4326 coordinate transforms and Slippy map tile $(x, y, z)$ math.
+  - `IsochroneContour`: Breadth-first travel-time contour generator over spatial road networks.

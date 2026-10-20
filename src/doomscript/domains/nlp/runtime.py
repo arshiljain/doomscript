@@ -885,6 +885,14 @@ class HMMPOSTagger:
                 prev_t = tag
         return self
 
+    def fit(self, tagged_sentences: List[List[Tuple[str, str]]]) -> "HMMPOSTagger":
+        """Trains on custom tagged sentences, overriding heuristic defaults."""
+        self.transitions = {}
+        self.emissions = {}
+        self.start_probs = {}
+        self.tags = set()
+        return self.train(tagged_sentences)
+
     def tag(self, words: List[str]) -> List[Tuple[str, str]]:
         if not words:
             return []
@@ -1326,126 +1334,6 @@ class BytePairEncoder:
         text = "".join(tokens)
         text = text.replace("</w>", " ").strip()
         return text
-
-
-class HMMPOSTagger:
-    """Hidden Markov Model Part-of-Speech Tagger with Viterbi dynamic programming."""
-
-    def __init__(self, smoothing: float = 1e-4):
-        self.alpha = float(smoothing)
-        self.tags: List[str] = []
-        self.vocab: Set[str] = set()
-        self.transitions: Dict[str, Dict[str, float]] = {}  # P(tag2 | tag1)
-        self.emissions: Dict[str, Dict[str, float]] = {}    # P(word | tag)
-        self.start_probs: Dict[str, float] = {}
-
-    def fit(self, tagged_sentences: List[List[Tuple[str, str]]]) -> "HMMPOSTagger":
-        """
-        Trains on tagged sentences: List[List[(word, tag)]].
-        """
-        from collections import defaultdict, Counter
-        tag_counts = Counter()
-        word_counts = Counter()
-        trans_counts = defaultdict(Counter)
-        emit_counts = defaultdict(Counter)
-        start_counts = Counter()
-
-        for sent in tagged_sentences:
-            if not sent:
-                continue
-            first_w, first_t = sent[0]
-            start_counts[first_t] += 1
-
-            prev_t = None
-            for w, t in sent:
-                w_lower = str(w).lower()
-                tag_counts[t] += 1
-                word_counts[w_lower] += 1
-                emit_counts[t][w_lower] += 1
-                if prev_t is not None:
-                    trans_counts[prev_t][t] += 1
-                prev_t = t
-
-        self.tags = sorted(list(tag_counts.keys()))
-        self.vocab = set(word_counts.keys())
-        n_tags = len(self.tags)
-        n_words = len(self.vocab)
-        n_sents = max(len(tagged_sentences), 1)
-
-        # Log start probabilities
-        self.start_probs = {
-            t: math.log((start_counts[t] + self.alpha) / (n_sents + self.alpha * n_tags))
-            for t in self.tags
-        }
-
-        # Log transition probabilities: log P(t2 | t1)
-        self.transitions = {}
-        for t1 in self.tags:
-            tot = sum(trans_counts[t1].values())
-            self.transitions[t1] = {
-                t2: math.log((trans_counts[t1][t2] + self.alpha) / (tot + self.alpha * n_tags))
-                for t2 in self.tags
-            }
-
-        # Log emission probabilities: log P(w | t)
-        self.emissions = {}
-        for t in self.tags:
-            tot = sum(emit_counts[t].values())
-            self.emissions[t] = {
-                w: math.log((emit_counts[t][w] + self.alpha) / (tot + self.alpha * n_words))
-                for w in self.vocab
-            }
-            # Out-of-vocabulary fallback log prob
-            self.emissions[t]["<unk>"] = math.log(self.alpha / (tot + self.alpha * n_words))
-
-        return self
-
-    def tag(self, sentence: List[str]) -> List[Tuple[str, str]]:
-        """Predicts most probable sequence of POS tags using Viterbi decoding."""
-        if not sentence or not self.tags:
-            return []
-
-        words = [str(w).lower() for w in sentence]
-        n_words = len(words)
-        n_tags = len(self.tags)
-
-        # viterbi[t][j] = highest log prob of path leading to tag j at step t
-        viterbi = [{t: float("-inf") for t in self.tags} for _ in range(n_words)]
-        backpointer = [{t: None for t in self.tags} for _ in range(n_words)]
-
-        # Step 0: start probabilities * emission probabilities
-        w0 = words[0]
-        for t in self.tags:
-            emit_p = self.emissions[t].get(w0, self.emissions[t]["<unk>"])
-            viterbi[0][t] = self.start_probs[t] + emit_p
-
-        # Steps 1 to n_words - 1
-        for step in range(1, n_words):
-            w = words[step]
-            for t_curr in self.tags:
-                emit_p = self.emissions[t_curr].get(w, self.emissions[t_curr]["<unk>"])
-                best_prev_t = None
-                best_prob = float("-inf")
-
-                for t_prev in self.tags:
-                    p = viterbi[step - 1][t_prev] + self.transitions[t_prev][t_curr] + emit_p
-                    if p > best_prob:
-                        best_prob = p
-                        best_prev_t = t_prev
-
-                viterbi[step][t_curr] = best_prob
-                backpointer[step][t_curr] = best_prev_t
-
-        # Traceback best path
-        best_last_tag = max(self.tags, key=lambda t: viterbi[n_words - 1][t])
-        best_tags = [best_last_tag]
-
-        for step in range(n_words - 1, 0, -1):
-            prev_t = backpointer[step][best_tags[-1]]
-            best_tags.append(prev_t)
-
-        best_tags.reverse()
-        return list(zip(sentence, best_tags))
 
 
 class Word2VecCBOW:

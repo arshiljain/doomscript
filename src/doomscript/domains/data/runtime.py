@@ -1693,18 +1693,6 @@ def data_relational_join(
     return RelationalJoinEngine.join(left, right, on, how)
 
 
-def data_pivot_table(
-    records: List[Dict[str, Any]],
-    index: str,
-    columns: str,
-    values: str,
-    aggfunc: str = "sum",
-    fill_value: Any = 0.0,
-) -> Dict[str, Dict[str, Any]]:
-    """Generates multi-dimensional pivot table."""
-    return PivotTableEngine.pivot(records, index, columns, values, aggfunc, fill_value)
-
-
 def data_rolling_aggregate(series: List[float], window: int, stat: str = "mean") -> List[Optional[float]]:
     """Computes rolling window aggregate series."""
     return RollingAggregator.rolling_series(series, window, stat)

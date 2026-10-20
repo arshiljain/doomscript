@@ -26,6 +26,7 @@ Table of Contents:
  Tier 4: Modern Production Paradigms (16–20)
  Tier 5: Science, Hardware & New Frontier Megapacks (21–25)
  Tier 6: 3D Math, DSP, Chemistry & Frontier CAS (26–30)
+ Tier 7: Deepened Algorithms & Advanced Systems (31–35)
 ```
 
 ---
@@ -1047,6 +1048,154 @@ repaired, had_error = telecom_hamming74_decode(corrupted)
 say "Bitflips Repaired Successfully: ", repaired is [1, 0, 1, 1]
 ```
 > **Why DoomScript is easier:** Telecommunications error-correcting codes, Galois Field $GF(2^8)$ polynomials, and CRC-32/64 are available natively in `use telecom`.
+
+---
+
+### Tier 7: Deepened Algorithms & Advanced Systems
+
+#### Example 31: Analytical Greeks & Binomial Option Pricing
+*Computing exact Black-Scholes sensitivities and multi-step American option early exercise boundaries.*
+
+##### 🐍 Python
+```python
+# Typically requires installing scipy, numpy, and custom binomial tree loops
+import math
+from scipy.stats import norm
+d1 = (math.log(100 / 100) + (0.05 + 0.5 * 0.2**2) * 1.0) / (0.2 * math.sqrt(1.0))
+delta = norm.cdf(d1)
+```
+
+##### 🔮 DoomScript
+```doomscript
+use finance
+
+# Exact Black-Scholes analytical Greeks
+greeks = finance_analytical_greeks(100.0, 100.0, 1.0, 0.05, 0.2, option_type="call")
+say "Call Price: ", greeks's price
+say "Delta: ", greeks's delta, " | Vega: ", greeks's vega
+
+# Multi-step Cox-Ross-Rubinstein lattice for American put
+amer_put = finance_binomial_price(80.0, 100.0, 1.0, 0.10, 0.2, steps=100, option_type="put", is_american=True)
+say "American Put Early Exercise Value: ", amer_put's price
+```
+> **Why DoomScript is easier:** Instant mathematical quantitative finance primitives built into the runtime without installing third-party math packages.
+
+---
+
+#### Example 32: Non-Interactive Zero-Knowledge Proofs (Schnorr NIZK)
+*Proving knowledge of a discrete logarithm without revealing the secret key.*
+
+##### 🐍 Python
+```python
+# Writing custom big-integer modular exponentiation and Fiat-Shamir transcripts
+import hashlib
+transcript = f"{g}:{y}:{R}".encode()
+c = int(hashlib.sha256(transcript).hexdigest(), 16) % q
+s = (r + c * x) % q
+```
+
+##### 🔮 DoomScript
+```doomscript
+use chain
+
+secret_x = 987654321
+proof = chain_schnorr_prove(secret_x, public_y)
+is_valid = chain_schnorr_verify(public_y, proof)
+
+say "Zero-Knowledge Proof Verified: ", is_valid
+```
+> **Why DoomScript is easier:** High-level cryptographic zero-knowledge protocols with single-line proof generation and verification.
+
+---
+
+#### Example 33: Quantum Error Correction & Grover's Search
+*Correcting physical qubit bit-flips and executing quantum amplitude amplification.*
+
+##### 🐍 Python
+```python
+# Typically requires 'qiskit' or 'cirq' with multi-hundred-megabyte dependencies
+from qiskit import QuantumCircuit
+# Building custom circuits, transpile pipelines, and aer simulators
+```
+
+##### 🔮 DoomScript
+```doomscript
+use quantum
+
+# 3-Qubit quantum error correction
+encoded = QuantumErrorCorrection's encode_bit_flip(0.6 + 0j, 0.8 + 0j)
+corrupted = QuantumErrorCorrection's inject_error(encoded, "X", target_qubit=1)
+recovered, error_qubit = QuantumErrorCorrection's detect_and_correct_bit_flip(corrupted)
+
+say "Recovered Qubit, Error on Pin: ", error_qubit
+
+# Grover quantum database search with quadratic speedup
+search_res = quantum_grover_search(num_qubits=3, target=6)
+say "Grover Found Target 6 with Probability: ", search_res's target_probability
+```
+> **Why DoomScript is easier:** Statevector quantum registers, Bell states, error correcting codes, and Grover amplification work 100% out of the box in pure standard library.
+
+---
+
+#### Example 34: CSS Selector Querying & RFC 6265 Cookie Management
+*Selecting nested DOM nodes with CSS selectors and handling HTTP cookie state.*
+
+##### 🐍 Python
+```python
+# Requires BeautifulSoup4 / lxml and http.cookiejar setup
+from bs4 import BeautifulSoup
+soup = BeautifulSoup(html, "html.parser")
+nodes = soup.select("div#main ul > li.active")
+```
+
+##### 🔮 DoomScript
+```doomscript
+use web
+
+# Native CSS selector engine
+elements = web_css_select(html_text, "div#main ul > li.active")
+for el in elements:
+    say "Found Node: ", el's text
+
+# RFC 6265 Cookie Jar
+jar = web_cookie_jar()
+jar's set_cookie("session=token123; Domain=example.com; Path=/; Secure", "https://example.com/api")
+cookie_header = jar's get_cookie_header("https://example.com/api/v1", is_secure=True)
+say "Outgoing Cookie Header: ", cookie_header
+```
+> **Why DoomScript is easier:** Clean, native CSS selector parsing and standard cookie state handling with zero external HTML dependencies.
+
+---
+
+#### Example 35: ARIES WAL Crash Recovery & MVCC Snapshot Isolation
+*Transactional durability with Write-Ahead Logging and concurrency control.*
+
+##### 🐍 Python
+```python
+# Complex database internals requiring custom C-extensions or SQLite engine internals
+```
+
+##### 🔮 DoomScript
+```doomscript
+use db
+
+# ARIES Write-Ahead Logging & Crash Recovery
+wal = db_wal_create()
+wal's begin_tx(1)
+wal's write_update(1, page_id=10, old_val="A", new_val="B")
+wal's commit_tx(1)
+
+# Snapshot Isolation Multi-Version Concurrency Control (MVCC)
+mvcc = db_mvcc_create()
+tx1 = mvcc's begin()
+tx2 = mvcc's begin()
+mvcc's write(tx2, "key", "v2")
+mvcc's commit(tx2)
+
+# Tx1 preserves snapshot isolation (repeatable read)
+say "Snapshot Value: ", mvcc's read(tx1, "key")
+```
+> **Why DoomScript is easier:** Advanced distributed database primitives, ARIES crash recovery, query cost estimators, and MVCC isolation built right into DoomScript.
 
 ---
 
