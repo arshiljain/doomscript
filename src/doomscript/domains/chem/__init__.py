@@ -24,6 +24,13 @@ from doomscript.domains.chem.runtime import (
     chem_elemental_composition,
     chem_parse_smiles,
     chem_balance_reaction,
+    MolecularGraphLayout,
+    MorganFingerprint,
+    ReactionKineticsSimulator,
+    chem_generate_layout,
+    chem_morgan_fingerprint,
+    chem_tanimoto_similarity,
+    chem_simulate_kinetics,
 )
 from doomscript.domains.chem.parser import ChemDomainParser
 from doomscript.domains.chem.exporter import ChemASTExporter
@@ -94,4 +101,11 @@ __all__ = [
     "chem_elemental_composition",
     "chem_parse_smiles",
     "chem_balance_reaction",
+    "MolecularGraphLayout",
+    "MorganFingerprint",
+    "ReactionKineticsSimulator",
+    "chem_generate_layout",
+    "chem_morgan_fingerprint",
+    "chem_tanimoto_similarity",
+    "chem_simulate_kinetics",
 ]

@@ -26,6 +26,13 @@ from doomscript.domains.physics.runtime import (
     physics_escape_velocity,
     physics_pid_create,
     physics_pid_update,
+    BarnesHutNode,
+    BarnesHutNBody,
+    ImpulseCollision2D,
+    VanDerWaalsGas,
+    physics_barnes_hut_step,
+    physics_resolve_collision,
+    physics_van_der_waals_pressure,
 )
 from doomscript.domains.physics.parser import PhysicsDomainParser
 from doomscript.domains.physics.exporter import PhysicsASTExporter
@@ -110,4 +117,11 @@ __all__ = [
     "physics_escape_velocity",
     "physics_pid_create",
     "physics_pid_update",
+    "BarnesHutNode",
+    "BarnesHutNBody",
+    "ImpulseCollision2D",
+    "VanDerWaalsGas",
+    "physics_barnes_hut_step",
+    "physics_resolve_collision",
+    "physics_van_der_waals_pressure",
 ]

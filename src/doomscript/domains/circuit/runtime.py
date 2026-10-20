@@ -298,3 +298,393 @@ def execute_circuit_ir(spec_id: str) -> Any:
     if spec is None:
         raise ValueError(f"Unknown circuit spec: {spec_id}")
     return CircuitRuntime().execute_ir(spec, {})
+
+
+# ==============================================================================
+# Advanced Circuit Deepening: MNA Matrix Solver, Bode Analyzer & Op-Amp Models
+# ==============================================================================
+
+class ModifiedNodalAnalysis:
+    """Pure-Python Modified Nodal Analysis (MNA) linear circuit simulator."""
+
+    def __init__(self):
+        self.elements: List[Dict[str, Any]] = []
+
+    def add_resistor(self, name: str, node1: Any, node2: Any, resistance: float) -> None:
+        self.elements.append({
+            "type": "R", "name": str(name), "n1": str(node1), "n2": str(node2), "value": float(resistance)
+        })
+
+    def add_voltage_source(self, name: str, node_pos: Any, node_neg: Any, voltage: float) -> None:
+        self.elements.append({
+            "type": "V", "name": str(name), "n1": str(node_pos), "n2": str(node_neg), "value": float(voltage)
+        })
+
+    def add_current_source(self, name: str, node_pos: Any, node_neg: Any, current: float) -> None:
+        self.elements.append({
+            "type": "I", "name": str(name), "n1": str(node_pos), "n2": str(node_neg), "value": float(current)
+        })
+
+    def add_capacitor(self, name: str, node1: Any, node2: Any, capacitance: float) -> None:
+        self.elements.append({
+            "type": "C", "name": str(name), "n1": str(node1), "n2": str(node2), "value": float(capacitance)
+        })
+
+    def add_inductor(self, name: str, node1: Any, node2: Any, inductance: float) -> None:
+        self.elements.append({
+            "type": "L", "name": str(name), "n1": str(node1), "n2": str(node2), "value": float(inductance)
+        })
+
+    @staticmethod
+    def _solve_linear_system(matrix: List[List[float]], rhs: List[float]) -> List[float]:
+        n = len(matrix)
+        # Augment matrix
+        aug = [list(matrix[i]) + [rhs[i]] for i in range(n)]
+
+        for col in range(n):
+            pivot_row = max(range(col, n), key=lambda r: abs(aug[r][col]))
+            aug[col], aug[pivot_row] = aug[pivot_row], aug[col]
+            pivot = aug[col][col]
+            if abs(pivot) < 1e-14:
+                continue
+            for c in range(col, n + 1):
+                aug[col][c] /= pivot
+            for r in range(n):
+                if r != col:
+                    factor = aug[r][col]
+                    for c in range(col, n + 1):
+                        aug[r][c] -= factor * aug[col][c]
+
+        return [aug[i][n] for i in range(n)]
+
+    def solve_dc(self) -> Dict[str, Any]:
+        """Solves steady-state DC operating point using MNA matrix."""
+        # Collect non-ground nodes (ground is '0')
+        all_nodes = set()
+        v_sources = []
+        for el in self.elements:
+            if el["type"] in ("R", "V", "I"):
+                all_nodes.add(el["n1"])
+                all_nodes.add(el["n2"])
+                if el["type"] == "V":
+                    v_sources.append(el)
+
+        non_gnd_nodes = sorted([n for n in all_nodes if n not in ("0", 0)])
+        node_map = {n: i for i, n in enumerate(non_gnd_nodes)}
+        n_nodes = len(non_gnd_nodes)
+        n_v = len(v_sources)
+        dim = n_nodes + n_v
+
+        A = [[0.0] * dim for _ in range(dim)]
+        z = [0.0] * dim
+
+        # Fill G matrix for Resistors
+        for el in self.elements:
+            if el["type"] == "R":
+                r = max(1e-9, el["value"])
+                g = 1.0 / r
+                n1, n2 = el["n1"], el["n2"]
+                if n1 in node_map:
+                    i1 = node_map[n1]
+                    A[i1][i1] += g
+                if n2 in node_map:
+                    i2 = node_map[n2]
+                    A[i2][i2] += g
+                if n1 in node_map and n2 in node_map:
+                    i1, i2 = node_map[n1], node_map[n2]
+                    A[i1][i2] -= g
+                    A[i2][i1] -= g
+            elif el["type"] == "I":
+                # Current source pushes current from n1 to n2
+                i_val = el["value"]
+                n1, n2 = el["n1"], el["n2"]
+                if n1 in node_map:
+                    z[node_map[n1]] -= i_val
+                if n2 in node_map:
+                    z[node_map[n2]] += i_val
+
+        # Fill B and C for Voltage sources
+        for idx, vs in enumerate(v_sources):
+            v_idx = n_nodes + idx
+            n_pos, n_neg = vs["n1"], vs["n2"]
+            if n_pos in node_map:
+                A[node_map[n_pos]][v_idx] += 1.0
+                A[v_idx][node_map[n_pos]] += 1.0
+            if n_neg in node_map:
+                A[node_map[n_neg]][v_idx] -= 1.0
+                A[v_idx][node_map[n_neg]] -= 1.0
+            z[v_idx] = vs["value"]
+
+        sol = self._solve_linear_system(A, z)
+
+        node_voltages = {"0": 0.0}
+        for n, i in node_map.items():
+            node_voltages[n] = round(sol[i], 6)
+
+        source_currents = {}
+        for idx, vs in enumerate(v_sources):
+            source_currents[vs["name"]] = round(sol[n_nodes + idx], 6)
+
+        return {
+            "node_voltages": node_voltages,
+            "source_currents": source_currents,
+        }
+
+    def simulate_transient(self, t_stop: float, dt: float = 0.001) -> Dict[str, Any]:
+        """Performs transient companion model simulation for RLC circuits."""
+        # Companion model:
+        # C -> resistor Geq = C / dt in parallel with current source Ieq = Geq * Vprev
+        # L -> resistor Geq = dt / L in parallel with current source Ieq = Iprev
+        all_nodes = set()
+        v_sources = []
+        caps = []
+        inds = []
+        resistors = []
+
+        for el in self.elements:
+            all_nodes.add(el["n1"])
+            all_nodes.add(el["n2"])
+            if el["type"] == "V":
+                v_sources.append(el)
+            elif el["type"] == "C":
+                caps.append(el)
+            elif el["type"] == "L":
+                inds.append(el)
+            elif el["type"] == "R":
+                resistors.append(el)
+
+        non_gnd_nodes = sorted([n for n in all_nodes if n not in ("0", 0)])
+        node_map = {n: i for i, n in enumerate(non_gnd_nodes)}
+        n_nodes = len(non_gnd_nodes)
+        n_v = len(v_sources)
+        dim = n_nodes + n_v
+
+        # Static conductance matrix
+        A_static = [[0.0] * dim for _ in range(dim)]
+        for r_el in resistors:
+            g = 1.0 / max(1e-9, r_el["value"])
+            n1, n2 = r_el["n1"], r_el["n2"]
+            if n1 in node_map:
+                A_static[node_map[n1]][node_map[n1]] += g
+            if n2 in node_map:
+                A_static[node_map[n2]][node_map[n2]] += g
+            if n1 in node_map and n2 in node_map:
+                A_static[node_map[n1]][node_map[n2]] -= g
+                A_static[node_map[n2]][node_map[n1]] -= g
+
+        # Add companion conductances for C and L
+        for c_el in caps:
+            geq = c_el["value"] / dt
+            n1, n2 = c_el["n1"], c_el["n2"]
+            if n1 in node_map:
+                A_static[node_map[n1]][node_map[n1]] += geq
+            if n2 in node_map:
+                A_static[node_map[n2]][node_map[n2]] += geq
+            if n1 in node_map and n2 in node_map:
+                A_static[node_map[n1]][node_map[n2]] -= geq
+                A_static[node_map[n2]][node_map[n1]] -= geq
+
+        for l_el in inds:
+            geq = dt / max(1e-9, l_el["value"])
+            n1, n2 = l_el["n1"], l_el["n2"]
+            if n1 in node_map:
+                A_static[node_map[n1]][node_map[n1]] += geq
+            if n2 in node_map:
+                A_static[node_map[n2]][node_map[n2]] += geq
+            if n1 in node_map and n2 in node_map:
+                A_static[node_map[n1]][node_map[n2]] -= geq
+                A_static[node_map[n2]][node_map[n1]] -= geq
+
+        # Add voltage source connections
+        for idx, vs in enumerate(v_sources):
+            v_idx = n_nodes + idx
+            n_pos, n_neg = vs["n1"], vs["n2"]
+            if n_pos in node_map:
+                A_static[node_map[n_pos]][v_idx] += 1.0
+                A_static[v_idx][node_map[n_pos]] += 1.0
+            if n_neg in node_map:
+                A_static[node_map[n_neg]][v_idx] -= 1.0
+                A_static[v_idx][node_map[n_neg]] -= 1.0
+
+        # State memory
+        v_prev = {n: 0.0 for n in all_nodes}
+        i_l_prev = {l_el["name"]: 0.0 for l_el in inds}
+
+        time_points = []
+        node_trajectories = {n: [] for n in all_nodes}
+
+        t = 0.0
+        steps = int(math.ceil(t_stop / dt))
+        for _ in range(steps):
+            z = [0.0] * dim
+            # Source values
+            for idx, vs in enumerate(v_sources):
+                z[n_nodes + idx] = vs["value"]
+
+            # Companion currents for C: Ieq = (C/dt) * (v1_prev - v2_prev)
+            for c_el in caps:
+                geq = c_el["value"] / dt
+                ieq = geq * (v_prev[c_el["n1"]] - v_prev[c_el["n2"]])
+                n1, n2 = c_el["n1"], c_el["n2"]
+                if n1 in node_map:
+                    z[node_map[n1]] += ieq
+                if n2 in node_map:
+                    z[node_map[n2]] -= ieq
+
+            # Companion currents for L: Ieq = I_prev
+            for l_el in inds:
+                ieq = i_l_prev[l_el["name"]]
+                n1, n2 = l_el["n1"], l_el["n2"]
+                if n1 in node_map:
+                    z[node_map[n1]] -= ieq
+                if n2 in node_map:
+                    z[node_map[n2]] += ieq
+
+            A_copy = [list(r) for r in A_static]
+            sol = self._solve_linear_system(A_copy, z)
+
+            for n, i in node_map.items():
+                v_prev[n] = sol[i]
+            v_prev["0"] = 0.0
+
+            # Update inductor currents
+            for l_el in inds:
+                v_diff = v_prev[l_el["n1"]] - v_prev[l_el["n2"]]
+                i_l_prev[l_el["name"]] += (dt / l_el["value"]) * v_diff
+
+            t += dt
+            time_points.append(round(t, 6))
+            for n in all_nodes:
+                node_trajectories[n].append(round(v_prev[n], 6))
+
+        return {
+            "time": time_points,
+            "nodes": node_trajectories,
+        }
+
+
+class BodePlotAnalyzer:
+    """Frequency response & Bode plot analyzer for linear transfer functions H(s)."""
+
+    @staticmethod
+    def _eval_poly(coeffs: List[float], s: complex) -> complex:
+        val = 0.0 + 0.0j
+        for p, c in enumerate(coeffs):
+            val += c * (s ** p)
+        return val
+
+    @classmethod
+    def analyze(
+        cls,
+        numerator: List[float],
+        denominator: List[float],
+        f_min: float = 1.0,
+        f_max: float = 100000.0,
+        num_points: int = 50,
+    ) -> Dict[str, Any]:
+        """
+        Evaluates H(s) = P(s)/Q(s) over a logarithmic frequency sweep.
+        `numerator` and `denominator` are listed in ascending power: [a0, a1, a2, ...]
+        """
+        log_min = math.log10(max(1e-3, f_min))
+        log_max = math.log10(max(1e-2, f_max))
+        freqs = [10.0 ** (log_min + (log_max - log_min) * i / max(1, num_points - 1)) for i in range(num_points)]
+
+        magnitudes_db: List[float] = []
+        phases_deg: List[float] = []
+
+        for f in freqs:
+            w = 2.0 * math.pi * f
+            s = complex(0.0, w)
+            num_val = cls._eval_poly(numerator, s)
+            den_val = cls._eval_poly(denominator, s)
+
+            if abs(den_val) < 1e-15:
+                h = 1e6
+            else:
+                h = num_val / den_val
+
+            mag = abs(h)
+            mag_db = 20.0 * math.log10(max(1e-9, mag))
+            phase = math.degrees(math.atan2(h.imag, h.real))
+
+            magnitudes_db.append(round(mag_db, 3))
+            phases_deg.append(round(phase, 2))
+
+        # Find 3dB cutoff frequency (relative to DC or peak)
+        ref_mag = magnitudes_db[0]
+        cutoff_hz = None
+        for i, m in enumerate(magnitudes_db):
+            if m <= ref_mag - 3.0:
+                cutoff_hz = round(freqs[i], 2)
+                break
+
+        return {
+            "frequencies_hz": [round(f, 2) for f in freqs],
+            "magnitude_db": magnitudes_db,
+            "phase_deg": phases_deg,
+            "cutoff_3db_hz": cutoff_hz,
+            "dc_gain_db": round(magnitudes_db[0], 2),
+        }
+
+
+class OpAmpModel:
+    """Operational amplifier model with finite gain, input/output impedance and saturation."""
+
+    def __init__(
+        self,
+        gain_ol: float = 100000.0,
+        v_sat_pos: float = 15.0,
+        v_sat_neg: float = -15.0,
+        slew_rate_v_us: float = 1.0,
+        r_in: float = 1e6,
+        r_out: float = 75.0,
+    ):
+        self.gain_ol = float(gain_ol)
+        self.v_sat_pos = float(v_sat_pos)
+        self.v_sat_neg = float(v_sat_neg)
+        self.slew_rate_v_s = float(slew_rate_v_us) * 1e6
+        self.r_in = float(r_in)
+        self.r_out = float(r_out)
+
+    def amplify(self, v_plus: float, v_minus: float) -> float:
+        """Computes instantaneous amplified output with rail clipping."""
+        diff = float(v_plus) - float(v_minus)
+        v_out_ideal = self.gain_ol * diff
+        return max(self.v_sat_neg, min(self.v_sat_pos, v_out_ideal))
+
+    def step_transient(self, v_plus: float, v_minus: float, current_v_out: float, dt: float) -> float:
+        """Updates output considering slew-rate limiting."""
+        target_v = self.amplify(v_plus, v_minus)
+        max_delta = self.slew_rate_v_s * dt
+        diff = target_v - current_v_out
+        if abs(diff) <= max_delta:
+            new_v = target_v
+        else:
+            new_v = current_v_out + math.copysign(max_delta, diff)
+        return max(self.v_sat_neg, min(self.v_sat_pos, new_v))
+
+
+def circuit_mna_dc_solve(elements: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Solves DC circuit node voltages and source currents via MNA."""
+    sim = ModifiedNodalAnalysis()
+    for el in elements:
+        t = el.get("type", "R").upper()
+        if t == "R":
+            sim.add_resistor(el["name"], el["n1"], el["n2"], el["value"])
+        elif t == "V":
+            sim.add_voltage_source(el["name"], el["n1"], el["n2"], el["value"])
+        elif t == "I":
+            sim.add_current_source(el["name"], el["n1"], el["n2"], el["value"])
+    return sim.solve_dc()
+
+
+def circuit_bode_plot(num: List[float], den: List[float], f_min: float = 1.0, f_max: float = 100000.0) -> Dict[str, Any]:
+    """Calculates frequency response Bode plot."""
+    return BodePlotAnalyzer.analyze(num, den, f_min, f_max)
+
+
+def circuit_opamp_amplify(v_plus: float, v_minus: float, gain: float = 100000.0, v_sat: float = 15.0) -> float:
+    """Simulates operational amplifier differential gain with rails."""
+    op = OpAmpModel(gain_ol=gain, v_sat_pos=v_sat, v_sat_neg=-v_sat)
+    return op.amplify(v_plus, v_minus)

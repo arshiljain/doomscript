@@ -23,6 +23,13 @@ from doomscript.domains.astronomy.runtime import (
     astronomy_kepler_orbit,
     astronomy_eq_to_horiz,
     astronomy_hohmann_transfer,
+    PlanetaryEphemeris,
+    EclipsePredictor,
+    AtmosphericRefraction,
+    astronomy_planet_position,
+    astronomy_planet_geocentric,
+    astronomy_predict_eclipse,
+    astronomy_atmospheric_refraction,
 )
 from doomscript.domains.astronomy.parser import AstronomyDomainParser
 from doomscript.domains.astronomy.exporter import AstronomyASTExporter
@@ -85,4 +92,11 @@ __all__ = [
     "astronomy_kepler_orbit",
     "astronomy_eq_to_horiz",
     "astronomy_hohmann_transfer",
+    "PlanetaryEphemeris",
+    "EclipsePredictor",
+    "AtmosphericRefraction",
+    "astronomy_planet_position",
+    "astronomy_planet_geocentric",
+    "astronomy_predict_eclipse",
+    "astronomy_atmospheric_refraction",
 ]

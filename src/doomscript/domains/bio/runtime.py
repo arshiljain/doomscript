@@ -296,3 +296,278 @@ def execute_bio_ir(spec_id: str) -> Any:
     if spec is None:
         raise ValueError(f"Unknown bio spec: {spec_id}")
     return BioRuntime().execute_ir(spec, {})
+
+
+# ==============================================================================
+# Advanced Bio Deepening: Affine Sequence Alignment, FM-Index & Neighbor-Joining
+# ==============================================================================
+
+class SequenceAligner:
+    """Needleman-Wunsch & Smith-Waterman alignment with Gotoh affine gap penalties."""
+
+    @classmethod
+    def align_global(
+        cls,
+        seq1: str,
+        seq2: str,
+        match: int = 2,
+        mismatch: int = -1,
+        gap_open: int = -3,
+        gap_extend: int = -1,
+    ) -> Dict[str, Any]:
+        """
+        Global Gotoh affine gap alignment: gap_cost(k) = gap_open + (k - 1) * gap_extend.
+        """
+        s1 = str(seq1).upper().strip()
+        s2 = str(seq2).upper().strip()
+        n, m = len(s1), len(s2)
+
+        NEG_INF = -1000000000
+
+        # M: match/mismatch matrix, Ix: gap in seq1, Iy: gap in seq2
+        M = [[0] * (m + 1) for _ in range(n + 1)]
+        Ix = [[NEG_INF] * (m + 1) for _ in range(n + 1)]
+        Iy = [[NEG_INF] * (m + 1) for _ in range(n + 1)]
+
+        for i in range(1, n + 1):
+            M[i][0] = gap_open + (i - 1) * gap_extend
+            Ix[i][0] = gap_open + (i - 1) * gap_extend
+        for j in range(1, m + 1):
+            M[0][j] = gap_open + (j - 1) * gap_extend
+            Iy[0][j] = gap_open + (j - 1) * gap_extend
+
+        for i in range(1, n + 1):
+            for j in range(1, m + 1):
+                # Update Ix (gap in s1, extension of gap or opening from M/Iy)
+                Ix[i][j] = max(
+                    M[i - 1][j] + gap_open,
+                    Ix[i - 1][j] + gap_extend,
+                )
+                # Update Iy (gap in s2)
+                Iy[i][j] = max(
+                    M[i][j - 1] + gap_open,
+                    Iy[i][j - 1] + gap_extend,
+                )
+                # Update M
+                score_diag = match if s1[i - 1] == s2[j - 1] else mismatch
+                M[i][j] = max(
+                    M[i - 1][j - 1] + score_diag,
+                    Ix[i][j],
+                    Iy[i][j],
+                )
+
+        # Traceback
+        align1, align2 = [], []
+        i, j = n, m
+        state = "M"
+
+        final_score = max(M[n][m], Ix[n][m], Iy[n][m])
+        if final_score == Ix[n][m]:
+            state = "Ix"
+        elif final_score == Iy[n][m]:
+            state = "Iy"
+
+        while i > 0 or j > 0:
+            if state == "Ix":
+                align1.append(s1[i - 1])
+                align2.append("-")
+                if i > 1 and Ix[i][j] == Ix[i - 1][j] + gap_extend:
+                    state = "Ix"
+                else:
+                    state = "M"
+                i -= 1
+            elif state == "Iy":
+                align1.append("-")
+                align2.append(s2[j - 1])
+                if j > 1 and Iy[i][j] == Iy[i][j - 1] + gap_extend:
+                    state = "Iy"
+                else:
+                    state = "M"
+                j -= 1
+            else:
+                score_diag = match if i > 0 and j > 0 and s1[i - 1] == s2[j - 1] else mismatch
+                if i > 0 and j > 0 and M[i][j] == M[i - 1][j - 1] + score_diag:
+                    align1.append(s1[i - 1])
+                    align2.append(s2[j - 1])
+                    i -= 1
+                    j -= 1
+                elif M[i][j] == Ix[i][j]:
+                    state = "Ix"
+                elif M[i][j] == Iy[i][j]:
+                    state = "Iy"
+                else:
+                    if i > 0:
+                        align1.append(s1[i - 1])
+                        align2.append("-")
+                        i -= 1
+                    else:
+                        align1.append("-")
+                        align2.append(s2[j - 1])
+                        j -= 1
+
+        a1 = "".join(reversed(align1))
+        a2 = "".join(reversed(align2))
+        matches = sum(1 for c1, c2 in zip(a1, a2) if c1 == c2 and c1 != "-")
+        gaps = sum(1 for c1, c2 in zip(a1, a2) if c1 == "-" or c2 == "-")
+        mismatches = len(a1) - matches - gaps
+        identity = round((matches / max(1, len(a1))) * 100.0, 2)
+
+        return {
+            "score": final_score,
+            "alignment1": a1,
+            "alignment2": a2,
+            "matches": matches,
+            "mismatches": mismatches,
+            "gaps": gaps,
+            "identity_percent": identity,
+        }
+
+
+class FMIndexBWT:
+    """Exact substring and genomic read search via Burrows-Wheeler Transform & LF-mapping."""
+
+    SENTINEL = "$"
+
+    def __init__(self, text: str):
+        self.original_text = text
+        t = text + self.SENTINEL
+        self.n = len(t)
+
+        # Suffix array
+        suffixes = sorted([(t[i:], i) for i in range(self.n)])
+        self.suffix_array = [idx for _, idx in suffixes]
+
+        # BWT string
+        bwt_chars = [t[(self.suffix_array[i] - 1) % self.n] for i in range(self.n)]
+        self.bwt = "".join(bwt_chars)
+
+        # Alphabet and C-table
+        alphabet = sorted(list(set(self.bwt)))
+        char_counts = {c: self.bwt.count(c) for c in alphabet}
+
+        self.C: Dict[str, int] = {}
+        total = 0
+        for c in alphabet:
+            self.C[c] = total
+            total += char_counts[c]
+
+        # Occ-table (occurrence of char in BWT prefix)
+        self.occ: Dict[str, List[int]] = {c: [0] * (self.n + 1) for c in alphabet}
+        for i, char in enumerate(self.bwt):
+            for c in alphabet:
+                self.occ[c][i + 1] = self.occ[c][i] + (1 if char == c else 0)
+
+    def count(self, pattern: str) -> int:
+        """Returns number of occurrences of pattern in text in O(|pattern|) time."""
+        if not pattern:
+            return 0
+        l, r = 0, self.n - 1
+        for char in reversed(pattern):
+            if char not in self.C:
+                return 0
+            l = self.C[char] + self.occ[char][l]
+            r = self.C[char] + self.occ[char][r + 1] - 1
+            if l > r:
+                return 0
+        return r - l + 1
+
+    def locate(self, pattern: str) -> List[int]:
+        """Returns sorted start positions of pattern occurrences."""
+        if not pattern:
+            return []
+        l, r = 0, self.n - 1
+        for char in reversed(pattern):
+            if char not in self.C:
+                return []
+            l = self.C[char] + self.occ[char][l]
+            r = self.C[char] + self.occ[char][r + 1] - 1
+            if l > r:
+                return []
+        positions = [self.suffix_array[i] for i in range(l, r + 1)]
+        return sorted(positions)
+
+
+class PhylogeneticTreeNJ:
+    """Neighbor-Joining unrooted phylogenetic tree reconstruction from distance matrices."""
+
+    @classmethod
+    def build_tree(cls, taxa: List[str], distance_matrix: Dict[str, Dict[str, float]]) -> Dict[str, Any]:
+        """
+        Constructs phylogenetic tree using Saitou-Nei Neighbor-Joining algorithm.
+        Returns Newick string and hierarchical tree representation.
+        """
+        active_nodes = list(taxa)
+        d = {u: {v: float(distance_matrix[u][v]) for v in taxa} for u in taxa}
+        node_names = {t: t for t in taxa}
+
+        while len(active_nodes) > 2:
+            n = len(active_nodes)
+
+            # Net divergence r_i = sum_k(D_ik) / (n - 2)
+            r = {}
+            for u in active_nodes:
+                r[u] = sum(d[u][k] for k in active_nodes if k != u) / (n - 2)
+
+            # Find pair (i, j) that minimizes Q_ij = (n - 2)*D_ij - sum_k D_ik - sum_k D_jk
+            best_q = float("inf")
+            best_pair = (active_nodes[0], active_nodes[1])
+
+            for i in range(n):
+                u = active_nodes[i]
+                for j in range(i + 1, n):
+                    v = active_nodes[j]
+                    q_val = (n - 2) * d[u][v] - sum(d[u][k] for k in active_nodes) - sum(d[v][k] for k in active_nodes)
+                    if q_val < best_q:
+                        best_q = q_val
+                        best_pair = (u, v)
+
+            u, v = best_pair
+            # Limb lengths to new joint ancestor
+            dist_uv = d[u][v]
+            limb_u = max(0.0, 0.5 * dist_uv + 0.5 * (r[u] - r[v]))
+            limb_v = max(0.0, dist_uv - limb_u)
+
+            new_node_id = f"({node_names[u]}:{round(limb_u, 4)},{node_names[v]}:{round(limb_v, 4)})"
+            node_names[new_node_id] = new_node_id
+
+            # Distance to other nodes: d(new, k) = 0.5 * (d(u, k) + d(v, k) - d(u, v))
+            d[new_node_id] = {new_node_id: 0.0}
+            for k in active_nodes:
+                if k != u and k != v:
+                    d_new_k = 0.5 * (d[u][k] + d[v][k] - dist_uv)
+                    d[new_node_id][k] = d_new_k
+                    d[k][new_node_id] = d_new_k
+
+            active_nodes.remove(u)
+            active_nodes.remove(v)
+            active_nodes.append(new_node_id)
+
+        # Final 2 nodes
+        u, v = active_nodes[0], active_nodes[1]
+        final_dist = d[u][v]
+        newick = f"({node_names[u]}:{round(final_dist, 4)},{node_names[v]});"
+
+        return {
+            "newick": newick,
+            "root": newick,
+        }
+
+
+def bio_affine_align(seq1: str, seq2: str, match: int = 2, mismatch: int = -1, gap_open: int = -3, gap_extend: int = -1) -> Dict[str, Any]:
+    """Performs Gotoh global alignment with affine gap penalty."""
+    return SequenceAligner.align_global(seq1, seq2, match, mismatch, gap_open, gap_extend)
+
+
+def bio_fm_index_search(text: str, pattern: str) -> Dict[str, Any]:
+    """Builds FM-index and searches pattern occurrences."""
+    idx = FMIndexBWT(text)
+    return {
+        "count": idx.count(pattern),
+        "positions": idx.locate(pattern),
+        "bwt": idx.bwt,
+    }
+
+
+def bio_neighbor_joining_tree(taxa: List[str], distance_matrix: Dict[str, Dict[str, float]]) -> Dict[str, Any]:
+    """Reconstructs phylogenetic tree from distance matrix using Neighbor-Joining."""
+    return PhylogeneticTreeNJ.build_tree(taxa, distance_matrix)

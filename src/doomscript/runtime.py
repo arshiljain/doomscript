@@ -3159,6 +3159,12 @@ from doomscript.domains.bio.runtime import (
     bio_smith_waterman,
     bio_parse_fasta,
     execute_bio_ir,
+    SequenceAligner,
+    FMIndexBWT,
+    PhylogeneticTreeNJ,
+    bio_affine_align,
+    bio_fm_index_search,
+    bio_neighbor_joining_tree,
 )
 
 from doomscript.domains.physics.runtime import (
@@ -3173,6 +3179,13 @@ from doomscript.domains.physics.runtime import (
     physics_create_pid,
     physics_update_pid,
     execute_physics_ir,
+    BarnesHutNode,
+    BarnesHutNBody,
+    ImpulseCollision2D,
+    VanDerWaalsGas,
+    physics_barnes_hut_step,
+    physics_resolve_collision,
+    physics_van_der_waals_pressure,
 )
 
 from doomscript.domains.sec.runtime import (
@@ -3232,6 +3245,12 @@ from doomscript.domains.circuit.runtime import (
     circuit_set_pin,
     circuit_read_pin,
     execute_circuit_ir,
+    ModifiedNodalAnalysis,
+    BodePlotAnalyzer,
+    OpAmpModel,
+    circuit_mna_dc_solve,
+    circuit_bode_plot,
+    circuit_opamp_amplify,
 )
 
 from doomscript.domains.chain.runtime import (
@@ -3327,6 +3346,13 @@ from doomscript.domains.astronomy.runtime import (
     astronomy_kepler_orbit,
     astronomy_eq_to_horiz,
     astronomy_hohmann_transfer,
+    PlanetaryEphemeris,
+    EclipsePredictor,
+    AtmosphericRefraction,
+    astronomy_planet_position,
+    astronomy_planet_geocentric,
+    astronomy_predict_eclipse,
+    astronomy_atmospheric_refraction,
 )
 
 from doomscript.domains.chem.runtime import (
@@ -3341,6 +3367,13 @@ from doomscript.domains.chem.runtime import (
     chem_elemental_composition,
     chem_parse_smiles,
     chem_balance_reaction,
+    MolecularGraphLayout,
+    MorganFingerprint,
+    ReactionKineticsSimulator,
+    chem_generate_layout,
+    chem_morgan_fingerprint,
+    chem_tanimoto_similarity,
+    chem_simulate_kinetics,
 )
 
 from doomscript.domains.compression.runtime import (

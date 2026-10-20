@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import math
 import re
+import hashlib
 from fractions import Fraction
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
@@ -180,6 +181,12 @@ class MoleculeGraph:
         self.bonds.append(Bond(u, v, order))
         self.atoms[u].neighbors.append(v)
         self.atoms[v].neighbors.append(u)
+
+    def get_neighbors(self, atom_id: int) -> List[int]:
+        """Returns list of neighboring atom IDs."""
+        if atom_id in self.atoms:
+            return list(self.atoms[atom_id].neighbors)
+        return []
 
     def find_rings(self) -> List[List[int]]:
         """Finds elementary cycles (rings) in the molecular graph."""
@@ -480,3 +487,337 @@ def chem_parse_smiles(smiles: str) -> Dict[str, Any]:
 def chem_balance_reaction(reactants: List[str], products: List[str]) -> Dict[str, Any]:
     """Balances a chemical reaction using exact stoichiometric nullspace."""
     return ReactionBalancer.balance(reactants, products)
+
+
+# ==============================================================================
+# Advanced Chem Deepening: 2D Force Layout, Morgan Fingerprints & Kinetics
+# ==============================================================================
+
+class MolecularGraphLayout:
+    """Kamada-Kawai 2D force-directed layout coordinator for molecular structures."""
+
+    @classmethod
+    def layout_from_graph(
+        cls,
+        molecule: Union[MoleculeGraph, Dict[str, Any]],
+        ideal_bond_len: float = 1.5,
+        iterations: int = 80,
+    ) -> Dict[int, Tuple[float, float]]:
+        """
+        Computes 2D coordinates for each atom minimizing graph theoretic path stress.
+        """
+        if isinstance(molecule, MoleculeGraph):
+            atom_ids = sorted(list(molecule.atoms.keys()))
+            adj: Dict[int, List[int]] = {i: [] for i in atom_ids}
+            for b in molecule.bonds:
+                adj[b.u].append(b.v)
+                adj[b.v].append(b.u)
+        else:
+            atoms_data = molecule.get("atoms", [])
+            atom_ids = [a["id"] if isinstance(a, dict) else int(a) for a in atoms_data]
+            adj = {i: [] for i in atom_ids}
+            for b in molecule.get("bonds", []):
+                u, v = b.get("u"), b.get("v")
+                if u in adj and v in adj:
+                    adj[u].append(v)
+                    adj[v].append(u)
+
+        n = len(atom_ids)
+        if n == 0:
+            return {}
+        if n == 1:
+            return {atom_ids[0]: (0.0, 0.0)}
+
+        # All-Pairs Shortest Path (BFS)
+        dist_matrix: Dict[Tuple[int, int], float] = {}
+        for src in atom_ids:
+            visited = {src: 0}
+            queue = [src]
+            while queue:
+                curr = queue.pop(0)
+                d = visited[curr]
+                for nbr in adj[curr]:
+                    if nbr not in visited:
+                        visited[nbr] = d + 1
+                        queue.append(nbr)
+            for dst in atom_ids:
+                dist_matrix[(src, dst)] = float(visited.get(dst, n * 2))
+
+        # Target spring lengths and spring constants
+        K0 = 1.0
+        L_target: Dict[Tuple[int, int], float] = {}
+        k_spring: Dict[Tuple[int, int], float] = {}
+        for i in atom_ids:
+            for j in atom_ids:
+                if i != j:
+                    d_graph = dist_matrix[(i, j)]
+                    L_target[(i, j)] = ideal_bond_len * d_graph
+                    k_spring[(i, j)] = K0 / (d_graph * d_graph)
+
+        # Initial circular layout
+        radius = ideal_bond_len * (n / (2.0 * math.pi))
+        pos: Dict[int, List[float]] = {}
+        for idx, a_id in enumerate(atom_ids):
+            angle = (2.0 * math.pi * idx) / n
+            pos[a_id] = [radius * math.cos(angle), radius * math.sin(angle)]
+
+        # Gradient descent with adaptive step
+        step_size = 0.1
+        for _ in range(iterations):
+            max_grad = 0.0
+            grad: Dict[int, List[float]] = {i: [0.0, 0.0] for i in atom_ids}
+            for i in atom_ids:
+                xi, yi = pos[i][0], pos[i][1]
+                for j in atom_ids:
+                    if i == j:
+                        continue
+                    xj, yj = pos[j][0], pos[j][1]
+                    dx = xi - xj
+                    dy = yi - yj
+                    euclid = math.hypot(dx, dy) + 1e-6
+                    l_ij = L_target[(i, j)]
+                    k_ij = k_spring[(i, j)]
+
+                    # dE/dxi = k_ij * (dx - l_ij * dx / euclid)
+                    factor = k_ij * (1.0 - l_ij / euclid)
+                    grad[i][0] += factor * dx
+                    grad[i][1] += factor * dy
+
+                g_norm = math.hypot(grad[i][0], grad[i][1])
+                if g_norm > max_grad:
+                    max_grad = g_norm
+
+            for i in atom_ids:
+                pos[i][0] -= step_size * grad[i][0]
+                pos[i][1] -= step_size * grad[i][1]
+
+            if max_grad < 1e-4:
+                break
+
+        # Center layout
+        mean_x = sum(pos[i][0] for i in atom_ids) / n
+        mean_y = sum(pos[i][1] for i in atom_ids) / n
+
+        return {i: (round(pos[i][0] - mean_x, 4), round(pos[i][1] - mean_y, 4)) for i in atom_ids}
+
+
+class MorganFingerprint:
+    """Circular chemical graph fingerprints (ECFP4) and Tanimoto similarity."""
+
+    @staticmethod
+    def _atom_invariant(atom: Atom, molecule: MoleculeGraph) -> int:
+        """Computes initial atom invariant integer."""
+        # 1. Atomic Number
+        z = 6
+        elem = atom.symbol.capitalize()
+        # Find Z approximately from common elements
+        z_map = {"H": 1, "He": 2, "C": 6, "N": 7, "O": 8, "F": 9, "P": 15, "S": 16, "Cl": 17, "Br": 35, "I": 53}
+        z = z_map.get(elem, 6)
+
+        # 2. Number of heavy neighbors
+        heavy_deg = len(molecule.get_neighbors(atom.atom_id))
+
+        # 3. Formal charge
+        charge = atom.charge
+
+        # 4. Aromaticity
+        aromatic = 1 if atom.is_aromatic else 0
+
+        # Combine bits into integer hash
+        return (z & 0xFF) | ((heavy_deg & 0x0F) << 8) | (((charge + 8) & 0x0F) << 12) | (aromatic << 16)
+
+    @classmethod
+    def generate(
+        cls,
+        molecule: Union[str, MoleculeGraph],
+        radius: int = 2,
+        n_bits: int = 1024,
+    ) -> List[int]:
+        """
+        Generates circular Morgan fingerprint bit indices for a SMILES string or MoleculeGraph.
+        """
+        if isinstance(molecule, str):
+            g = SMILESParser.parse(molecule)
+        else:
+            g = molecule
+
+        if not g.atoms:
+            return []
+
+        # Step 0: Invariants
+        atom_hashes: Dict[int, int] = {
+            a_id: cls._atom_invariant(atom, g) for a_id, atom in g.atoms.items()
+        }
+
+        all_features: Set[int] = set(atom_hashes.values())
+
+        # Step 1..radius: Circular neighborhood hashing
+        for r in range(1, radius + 1):
+            next_hashes: Dict[int, int] = {}
+            for a_id, current_hash in atom_hashes.items():
+                nbrs = g.get_neighbors(a_id)
+                nbr_features = []
+                for n_id in nbrs:
+                    b_order = 1
+                    for b in g.bonds:
+                        if (b.u == a_id and b.v == n_id) or (b.u == n_id and b.v == a_id):
+                            b_order = b.order
+                            break
+                    nbr_features.append((b_order, atom_hashes[n_id]))
+
+                nbr_features.sort()
+                token = f"{current_hash}:" + ",".join(f"{bo}:{nh}" for bo, nh in nbr_features)
+                h = int(hashlib.sha256(token.encode("utf-8")).hexdigest()[:8], 16)
+                next_hashes[a_id] = h
+                all_features.add(h)
+
+            atom_hashes = next_hashes
+
+        # Fold into bit vector indices
+        bit_indices = sorted(list({f % n_bits for f in all_features}))
+        return bit_indices
+
+    @staticmethod
+    def tanimoto_similarity(fp1: Sequence[int], fp2: Sequence[int]) -> float:
+        """Calculates Tanimoto / Jaccard similarity coefficient |A and B| / |A or B|."""
+        s1 = set(fp1)
+        s2 = set(fp2)
+        if not s1 and not s2:
+            return 1.0
+        inter = len(s1.intersection(s2))
+        union = len(s1.union(s2))
+        return round(float(inter) / float(union), 6) if union > 0 else 0.0
+
+
+class ReactionKineticsSimulator:
+    """Chemical reaction network kinetics simulator for multi-species rate equations."""
+
+    @classmethod
+    def simulate(
+        cls,
+        initial_concentrations: Dict[str, float],
+        reactions: List[Dict[str, Any]],
+        t_span: Tuple[float, float],
+        dt: float = 0.01,
+        num_points: int = 50,
+    ) -> Dict[str, Any]:
+        """
+        Numerically integrates multi-species kinetic differential equations.
+        `reactions` format:
+        [
+            {"reactants": {"A": 1, "B": 1}, "products": {"C": 1}, "k_f": 0.5, "k_r": 0.02},
+            ...
+        ]
+        """
+        species = sorted(list(initial_concentrations.keys()))
+        t0, t_end = t_span
+        total_time = max(1e-6, t_end - t0)
+
+        # Ensure all reaction species are in dictionary
+        for rxn in reactions:
+            for r in rxn.get("reactants", {}):
+                if r not in initial_concentrations:
+                    species.append(r)
+            for p in rxn.get("products", {}):
+                if p not in initial_concentrations:
+                    species.append(p)
+        species = sorted(list(set(species)))
+
+        current_conc = {s: float(initial_concentrations.get(s, 0.0)) for s in species}
+
+        def _derivatives(conc: Dict[str, float]) -> Dict[str, float]:
+            d_dt = {s: 0.0 for s in species}
+            for rxn in reactions:
+                kf = float(rxn.get("k_f", 0.0))
+                kr = float(rxn.get("k_r", 0.0))
+                reactants = rxn.get("reactants", {})
+                products = rxn.get("products", {})
+
+                # Forward rate v_f = kf * prod(conc[r]^stoich)
+                rate_f = kf
+                for r, stoich in reactants.items():
+                    rate_f *= max(0.0, conc.get(r, 0.0)) ** stoich
+
+                # Reverse rate v_r = kr * prod(conc[p]^stoich)
+                rate_r = kr
+                for p, stoich in products.items():
+                    rate_r *= max(0.0, conc.get(p, 0.0)) ** stoich
+
+                net_rate = rate_f - rate_r
+
+                # d[S]/dt = net_rate * (product_stoich - reactant_stoich)
+                for r, stoich in reactants.items():
+                    d_dt[r] -= stoich * net_rate
+                for p, stoich in products.items():
+                    d_dt[p] += stoich * net_rate
+            return d_dt
+
+        # RK4 Integration
+        t = t0
+        time_history: List[float] = [round(t, 4)]
+        conc_history: Dict[str, List[float]] = {s: [round(current_conc[s], 6)] for s in species}
+
+        save_interval = total_time / max(1, num_points)
+        next_save = t + save_interval
+
+        steps = int(math.ceil(total_time / dt))
+        actual_dt = total_time / max(1, steps)
+
+        for _ in range(steps):
+            # k1
+            d1 = _derivatives(current_conc)
+            # k2
+            c2 = {s: max(0.0, current_conc[s] + 0.5 * actual_dt * d1[s]) for s in species}
+            d2 = _derivatives(c2)
+            # k3
+            c3 = {s: max(0.0, current_conc[s] + 0.5 * actual_dt * d2[s]) for s in species}
+            d3 = _derivatives(c3)
+            # k4
+            c4 = {s: max(0.0, current_conc[s] + actual_dt * d3[s]) for s in species}
+            d4 = _derivatives(c4)
+
+            # Update concentrations
+            for s in species:
+                delta = (actual_dt / 6.0) * (d1[s] + 2.0 * d2[s] + 2.0 * d3[s] + d4[s])
+                current_conc[s] = max(0.0, current_conc[s] + delta)
+
+            t += actual_dt
+
+            if t >= next_save - 1e-9 or _ == steps - 1:
+                time_history.append(round(t, 4))
+                for s in species:
+                    conc_history[s].append(round(current_conc[s], 6))
+                next_save += save_interval
+
+        return {
+            "time": time_history,
+            "concentrations": conc_history,
+            "final": {s: round(current_conc[s], 6) for s in species},
+        }
+
+
+def chem_generate_layout(molecule: Union[str, MoleculeGraph, Dict[str, Any]]) -> Dict[Any, Tuple[float, float]]:
+    """Generates 2D force-directed layout coordinates for a chemical structure."""
+    if isinstance(molecule, str):
+        molecule = SMILESParser.parse(molecule)
+    return MolecularGraphLayout.layout_from_graph(molecule)
+
+
+def chem_morgan_fingerprint(smiles_or_mol: Union[str, MoleculeGraph], radius: int = 2, n_bits: int = 1024) -> List[int]:
+    """Generates Morgan / ECFP4 fingerprint bit indices."""
+    return MorganFingerprint.generate(smiles_or_mol, radius, n_bits)
+
+
+def chem_tanimoto_similarity(fp1: Sequence[int], fp2: Sequence[int]) -> float:
+    """Calculates Tanimoto similarity between two molecular fingerprints."""
+    return MorganFingerprint.tanimoto_similarity(fp1, fp2)
+
+
+def chem_simulate_kinetics(
+    initial: Dict[str, float],
+    reactions: List[Dict[str, Any]],
+    t_span: Tuple[float, float],
+    dt: float = 0.01,
+) -> Dict[str, Any]:
+    """Simulates chemical reaction network kinetics."""
+    return ReactionKineticsSimulator.simulate(initial, reactions, t_span, dt)

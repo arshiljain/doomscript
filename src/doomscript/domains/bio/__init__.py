@@ -26,6 +26,12 @@ from doomscript.domains.bio.runtime import (
     bio_needleman_wunsch,
     bio_smith_waterman,
     bio_parse_fasta,
+    SequenceAligner,
+    FMIndexBWT,
+    PhylogeneticTreeNJ,
+    bio_affine_align,
+    bio_fm_index_search,
+    bio_neighbor_joining_tree,
 )
 from doomscript.domains.bio.parser import BioDomainParser
 from doomscript.domains.bio.exporter import BioASTExporter
@@ -113,4 +119,10 @@ __all__ = [
     "bio_needleman_wunsch",
     "bio_smith_waterman",
     "bio_parse_fasta",
+    "SequenceAligner",
+    "FMIndexBWT",
+    "PhylogeneticTreeNJ",
+    "bio_affine_align",
+    "bio_fm_index_search",
+    "bio_neighbor_joining_tree",
 ]

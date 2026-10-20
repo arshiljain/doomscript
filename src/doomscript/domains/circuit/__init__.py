@@ -28,6 +28,12 @@ from doomscript.domains.circuit.runtime import (
     circuit_pwm_duty_cycle,
     circuit_gpio_set,
     circuit_gpio_read,
+    ModifiedNodalAnalysis,
+    BodePlotAnalyzer,
+    OpAmpModel,
+    circuit_mna_dc_solve,
+    circuit_bode_plot,
+    circuit_opamp_amplify,
 )
 from doomscript.domains.circuit.parser import CircuitDomainParser
 from doomscript.domains.circuit.exporter import CircuitASTExporter
@@ -109,4 +115,10 @@ __all__ = [
     "circuit_pwm_duty_cycle",
     "circuit_gpio_set",
     "circuit_gpio_read",
+    "ModifiedNodalAnalysis",
+    "BodePlotAnalyzer",
+    "OpAmpModel",
+    "circuit_mna_dc_solve",
+    "circuit_bode_plot",
+    "circuit_opamp_amplify",
 ]
