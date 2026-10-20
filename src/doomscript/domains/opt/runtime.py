@@ -2,6 +2,7 @@
 
 import math
 import re
+import random
 from typing import Any, Callable, Dict, List, Optional, Tuple, Set
 from doomscript.domains.base import DomainRuntime, DomainIR
 from doomscript.domains.opt.spec import LinearProgramSpec, SolveLPSpec
@@ -1540,6 +1541,375 @@ def opt_hungarian_algorithm(cost_matrix: List[List[float]]) -> Dict[str, Any]:
         "row_to_col": ans,
         "total_cost": round(total_cost, 6),
     }
+
+
+class PrimalDualInteriorPoint:
+    """Predictor-Corrector Primal-Dual Interior Point solver for Linear Programming."""
+
+    def __init__(self, max_iter: int = 50, tol: float = 1e-6):
+        self.max_iter = max_iter
+        self.tol = tol
+
+    def solve(
+        self,
+        c: List[float],
+        A: List[List[float]],
+        b: List[float],
+    ) -> Dict[str, Any]:
+        """
+        Solves standard LP: min c^T x  s.t.  A x = b, x >= 0.
+        Uses pure-Python Gaussian elimination for linear Newton system.
+        """
+        m = len(A)  # number of constraints
+        n = len(c)  # number of variables
+
+        # Strictly positive initial point
+        x = [1.0] * n
+        s = [1.0] * n
+        y = [0.0] * m
+
+        def solve_linear_system(M_mat: List[List[float]], rhs: List[float]) -> Optional[List[float]]:
+            """Solves M * z = rhs using Gaussian elimination with partial pivoting."""
+            dim = len(M_mat)
+            aug = [list(M_mat[r]) + [rhs[r]] for r in range(dim)]
+
+            for col in range(dim):
+                pivot_row = max(range(col, dim), key=lambda r: abs(aug[r][col]))
+                if abs(aug[pivot_row][col]) < 1e-12:
+                    return None
+                aug[col], aug[pivot_row] = aug[pivot_row], aug[col]
+
+                pivot = aug[col][col]
+                for c_idx in range(col, dim + 1):
+                    aug[col][c_idx] /= pivot
+
+                for r in range(dim):
+                    if r != col:
+                        factor = aug[r][col]
+                        for c_idx in range(col, dim + 1):
+                            aug[r][c_idx] -= factor * aug[col][c_idx]
+
+            return [aug[r][dim] for r in range(dim)]
+
+        for it in range(self.max_iter):
+            # Compute residuals
+            # r_p = b - A * x
+            r_p = [b[i] - sum(A[i][j] * x[j] for j in range(n)) for i in range(m)]
+            # r_d = c - A^T * y - s
+            r_d = [c[j] - sum(A[i][j] * y[i] for i in range(m)) - s[j] for j in range(n)]
+
+            primal_res_norm = math.sqrt(sum(v ** 2 for v in r_p))
+            dual_res_norm = math.sqrt(sum(v ** 2 for v in r_d))
+            mu = sum(x[j] * s[j] for j in range(n)) / n
+
+            if primal_res_norm < self.tol and dual_res_norm < self.tol and mu < self.tol:
+                break
+
+            # Normal equations for dy:
+            # (A * X * S^{-1} * A^T) dy = r_p + A * S^{-1} * (X r_d - mu * e)
+            sigma = 0.2
+            # D = X * S^{-1}
+            d = [x[j] / s[j] for j in range(n)]
+
+            M = [[0.0] * m for _ in range(m)]
+            for i in range(m):
+                for k in range(m):
+                    M[i][k] = sum(A[i][j] * d[j] * A[k][j] for j in range(n))
+
+            rhs_dy = [0.0] * m
+            for i in range(m):
+                term_s = sum(
+                    A[i][j] * (x[j] * r_d[j] - (x[j] * s[j] - sigma * mu)) / s[j]
+                    for j in range(n)
+                )
+                rhs_dy[i] = r_p[i] + term_s
+
+            dy = solve_linear_system(M, rhs_dy)
+            if dy is None:
+                # Regularization fallback
+                for i in range(m):
+                    M[i][i] += 1e-4
+                dy = solve_linear_system(M, rhs_dy)
+                if dy is None:
+                    break
+
+            # Backsolve dx and ds
+            # ds = r_d - A^T dy
+            ds = [r_d[j] - sum(A[i][j] * dy[i] for i in range(m)) for j in range(n)]
+            # dx = (sigma * mu - X * S - X * ds) / S
+            dx = [(sigma * mu - x[j] * s[j] - x[j] * ds[j]) / s[j] for j in range(n)]
+
+            # Step sizes to maintain x > 0 and s > 0
+            alpha_p = 1.0
+            for j in range(n):
+                if dx[j] < 0:
+                    alpha_p = min(alpha_p, -0.995 * x[j] / dx[j])
+
+            alpha_d = 1.0
+            for j in range(n):
+                if ds[j] < 0:
+                    alpha_d = min(alpha_d, -0.995 * s[j] / ds[j])
+
+            step_size = min(alpha_p, alpha_d)
+            for j in range(n):
+                x[j] += step_size * dx[j]
+                s[j] += step_size * ds[j]
+            for i in range(m):
+                y[i] += step_size * dy[i]
+
+        obj_val = sum(c[j] * x[j] for j in range(n))
+        return {
+            "optimal_x": [round(val, 6) for val in x],
+            "objective_value": round(obj_val, 6),
+            "iterations": it + 1,
+            "duality_gap": round(mu, 8),
+            "converged": mu < self.tol,
+        }
+
+
+def opt_simplex_solve(c: List[float], A_ub: List[List[float]], b_ub: List[float], maximize: bool = True) -> Dict[str, Any]:
+    """Solves LP max/min c^T x s.t. A_ub x <= b_ub, x >= 0 via SimplexSolver."""
+    var_names = [f"x{i}" for i in range(len(c))]
+    sense = "maximize" if maximize else "minimize"
+    obj_dict = {f"x{i}": float(c[i]) for i in range(len(c))}
+    constraints = []
+    for row, rhs in zip(A_ub, b_ub):
+        c_map = {f"x{i}": float(row[i]) for i in range(len(row)) if abs(row[i]) > 1e-12}
+        constraints.append((c_map, "<=", float(rhs)))
+
+    solver = SimplexSolver(sense, obj_dict, constraints)
+    res = solver.solve()
+    if res.get("status") in ("optimal", "bounded", "solved"):
+        sol_map = res.get("variables", {})
+        sol_vec = [float(sol_map.get(f"x{i}", 0.0)) for i in range(len(c))]
+        return {
+            "success": True,
+            "solution": sol_vec,
+            "objective_value": float(res.get("optimal_value", 0.0)),
+        }
+    return {"success": False, "solution": [], "objective_value": 0.0}
+
+
+class BranchAndBoundMILP:
+    """Branch and Bound solver for Mixed-Integer Linear Programs (MILP)."""
+
+    def __init__(self, max_nodes: int = 500, tol: float = 1e-4):
+        self.max_nodes = max_nodes
+        self.tol = tol
+
+    def solve(
+        self,
+        c: List[float],
+        A_ub: List[List[float]],
+        b_ub: List[float],
+        integer_indices: Optional[List[int]] = None,
+        maximize: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        Solves: max c^T x  s.t.  A_ub x <= b_ub, x >= 0, x_i in Z for i in integer_indices.
+        """
+        n_vars = len(c)
+        int_vars = set(integer_indices if integer_indices is not None else range(n_vars))
+        obj_mult = 1.0 if maximize else -1.0
+        c_eff = [val * obj_mult for val in c]
+
+        # Use dual simplex relaxation solver from opt runtime
+        from doomscript.domains.opt.runtime import opt_simplex_solve
+
+        best_obj = float("-inf")
+        best_x: Optional[List[float]] = None
+        nodes_explored = 0
+
+        # Stack of subproblems: (additional_constraints)
+        # constraint: (var_idx, op '<=' or '>=', bound_val)
+        stack: List[List[Tuple[int, str, float]]] = [[]]
+
+        while stack and nodes_explored < self.max_nodes:
+            nodes_explored += 1
+            curr_bounds = stack.pop()
+
+            # Build augmented LP problem
+            A_curr = [list(row) for row in A_ub]
+            b_curr = list(b_ub)
+
+            for v_idx, op, bnd in curr_bounds:
+                row = [0.0] * n_vars
+                if op == "<=":
+                    row[v_idx] = 1.0
+                    A_curr.append(row)
+                    b_curr.append(bnd)
+                elif op == ">=":
+                    row[v_idx] = -1.0
+                    A_curr.append(row)
+                    b_curr.append(-bnd)
+
+            # Solve LP relaxation: max c_eff^T x  s.t.  A_curr x <= b_curr
+            lp_res = opt_simplex_solve(c_eff, A_curr, b_curr, maximize=True)
+            if not lp_res.get("success", False):
+                # Infeasible or unbounded branch -> prune
+                continue
+
+            rel_obj = lp_res["objective_value"]
+            rel_x = lp_res["solution"]
+
+            # Bound prune: if relaxation cannot beat best integer solution
+            if rel_obj <= best_obj + self.tol:
+                continue
+
+            # Check integrality of int_vars
+            fractional_var = None
+            max_frac_dist = 0.0
+            for idx in int_vars:
+                val = rel_x[idx]
+                dist = abs(val - round(val))
+                if dist > self.tol:
+                    if dist > max_frac_dist:
+                        max_frac_dist = dist
+                        fractional_var = idx
+
+            if fractional_var is None:
+                # All integer variables are integer! Candidate found.
+                if rel_obj > best_obj:
+                    best_obj = rel_obj
+                    best_x = [round(val, 6) for val in rel_x]
+            else:
+                # Branch on fractional_var
+                v_val = rel_x[fractional_var]
+                floor_bnd = math.floor(v_val)
+                ceil_bnd = math.ceil(v_val)
+
+                branch_left = list(curr_bounds) + [(fractional_var, "<=", float(floor_bnd))]
+                branch_right = list(curr_bounds) + [(fractional_var, ">=", float(ceil_bnd))]
+
+                stack.append(branch_left)
+                stack.append(branch_right)
+
+        final_obj = (best_obj if maximize else -best_obj) if best_x is not None else None
+        return {
+            "success": best_x is not None,
+            "solution": best_x,
+            "objective_value": round(final_obj, 6) if final_obj is not None else None,
+            "nodes_explored": nodes_explored,
+            "maximize": maximize,
+        }
+
+
+class AdaptiveSimulatedAnnealing:
+    """Adaptive Simulated Annealing (ASA) with dynamic temperature and step size scaling."""
+
+    def __init__(
+        self,
+        t_init: float = 100.0,
+        t_min: float = 1e-4,
+        alpha: float = 0.95,
+        max_iter: int = 1000,
+        seed: Optional[int] = 42,
+    ):
+        self.t_init = float(t_init)
+        self.t_min = float(t_min)
+        self.alpha = float(alpha)
+        self.max_iter = int(max_iter)
+        self.seed = seed
+
+    def minimize(
+        self,
+        cost_func: Callable[[List[float]], float],
+        bounds: List[Tuple[float, float]],
+        x0: Optional[List[float]] = None,
+    ) -> Dict[str, Any]:
+        """Minimizes cost_func within coordinate bounds using adaptive annealing."""
+        if self.seed is not None:
+            random.seed(self.seed)
+
+        n_dims = len(bounds)
+        if x0 is not None:
+            curr_x = list(x0)
+        else:
+            curr_x = [random.uniform(b[0], b[1]) for b in bounds]
+
+        curr_cost = cost_func(curr_x)
+        best_x = list(curr_x)
+        best_cost = curr_cost
+
+        T = self.t_init
+        step_scale = 1.0
+        accepted_moves = 0
+        total_moves = 0
+
+        for it in range(self.max_iter):
+            if T < self.t_min:
+                break
+
+            # Propose candidate
+            cand_x = []
+            for i in range(n_dims):
+                span = (bounds[i][1] - bounds[i][0]) * 0.1 * step_scale
+                delta = random.uniform(-span, span)
+                new_val = min(bounds[i][1], max(bounds[i][0], curr_x[i] + delta))
+                cand_x.append(new_val)
+
+            cand_cost = cost_func(cand_x)
+            d_cost = cand_cost - curr_cost
+
+            # Metropolis acceptance criterion
+            total_moves += 1
+            if d_cost < 0 or random.random() < math.exp(-d_cost / max(T, 1e-9)):
+                curr_x = cand_x
+                curr_cost = cand_cost
+                accepted_moves += 1
+
+                if curr_cost < best_cost:
+                    best_x = list(curr_x)
+                    best_cost = curr_cost
+
+            # Dynamic step scale adaptation (every 20 steps)
+            if total_moves % 20 == 0:
+                acc_ratio = accepted_moves / 20.0
+                accepted_moves = 0
+                if acc_ratio > 0.5:
+                    step_scale = min(2.0, step_scale * 1.1)
+                elif acc_ratio < 0.2:
+                    step_scale = max(0.1, step_scale * 0.9)
+
+            # Cool temperature
+            T *= self.alpha
+
+        return {
+            "optimal_x": [round(val, 6) for val in best_x],
+            "optimal_cost": round(best_cost, 6),
+            "iterations": total_moves,
+            "final_temperature": round(T, 8),
+        }
+
+
+def opt_solve_interior_point(c: List[float], A: List[List[float]], b: List[float]) -> Dict[str, Any]:
+    """Solves LP min c^T x s.t. Ax = b, x >= 0 via Primal-Dual Interior Point."""
+    solver = PrimalDualInteriorPoint()
+    return solver.solve(c, A, b)
+
+
+def opt_branch_and_bound_milp(
+    c: List[float],
+    A_ub: List[List[float]],
+    b_ub: List[float],
+    integer_indices: Optional[List[int]] = None,
+    maximize: bool = True,
+) -> Dict[str, Any]:
+    """Solves Mixed-Integer Linear Program using Branch and Bound."""
+    milp = BranchAndBoundMILP()
+    return milp.solve(c, A_ub, b_ub, integer_indices, maximize=maximize)
+
+
+def opt_adaptive_simulated_annealing(
+    cost_func: Callable[[List[float]], float],
+    bounds: List[Tuple[float, float]],
+    x0: Optional[List[float]] = None,
+    max_iter: int = 500,
+) -> Dict[str, Any]:
+    """Runs adaptive simulated annealing optimizer."""
+    asa = AdaptiveSimulatedAnnealing(max_iter=max_iter)
+    return asa.minimize(cost_func, bounds, x0=x0)
+
 
 
 

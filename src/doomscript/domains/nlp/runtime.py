@@ -2,6 +2,7 @@
 
 import math
 import re
+import random
 from typing import Any, Dict, List, Optional, Tuple, Set
 from doomscript.domains.base import DomainRuntime, DomainIR
 from doomscript.domains.nlp.spec import (
@@ -1237,6 +1238,364 @@ class KneserNeyLanguageModel:
 def nlp_kneser_ney(order: int = 3, discount: float = 0.75) -> KneserNeyLanguageModel:
     """Creates a Kneser-Ney smoothed n-gram language model."""
     return KneserNeyLanguageModel(order=order, discount=discount)
+
+
+class BytePairEncoder:
+    """Subword Tokenizer trained via Byte-Pair Encoding (BPE)."""
+
+    def __init__(self, vocab_size: int = 200):
+        self.target_vocab_size = vocab_size
+        self.merges: List[Tuple[str, str]] = []
+        self.vocab: Set[str] = set()
+
+    def fit(self, texts: List[str], num_merges: Optional[int] = None) -> "BytePairEncoder":
+        """Learns subword merge rules from corpus texts."""
+        from collections import Counter
+        # 1. Frequency of words, split into characters + end-of-word marker </w>
+        word_freqs: Counter = Counter()
+        for txt in texts:
+            words = re.findall(r"\b\w+\b", str(txt).lower())
+            for w in words:
+                word_freqs[" ".join(list(w)) + " </w>"] += 1
+
+        merges = []
+        limit = num_merges if num_merges is not None else (self.target_vocab_size - 30)
+
+        for _ in range(max(1, limit)):
+            # Count adjacent symbol pairs
+            pairs: Counter = Counter()
+            for word, freq in word_freqs.items():
+                symbols = word.split()
+                for i in range(len(symbols) - 1):
+                    pairs[(symbols[i], symbols[i + 1])] += freq
+
+            if not pairs:
+                break
+
+            best_pair = max(pairs.keys(), key=lambda p: pairs[p])
+            if pairs[best_pair] <= 1:
+                break
+
+            merges.append(best_pair)
+            p1, p2 = best_pair
+            replacement = p1 + p2
+
+            # Apply merge to word freqs
+            new_word_freqs = {}
+            pattern = re.compile(r"(?<!\S)" + re.escape(p1) + r"\s+" + re.escape(p2) + r"(?!\S)")
+            for word, freq in word_freqs.items():
+                new_w = pattern.sub(replacement, word)
+                new_word_freqs[new_w] = freq
+            word_freqs = new_word_freqs
+
+        self.merges = merges
+        # Build vocabulary
+        self.vocab = {"</w>"}
+        for word in word_freqs:
+            for piece in word.split():
+                self.vocab.add(piece)
+
+        return self
+
+    def tokenize_word(self, word: str) -> List[str]:
+        """Segments a single word into learned subword units."""
+        pieces = list(word.lower()) + ["</w>"]
+        for p1, p2 in self.merges:
+            i = 0
+            merged = []
+            while i < len(pieces):
+                if i < len(pieces) - 1 and pieces[i] == p1 and pieces[i + 1] == p2:
+                    merged.append(p1 + p2)
+                    i += 2
+                else:
+                    merged.append(pieces[i])
+                    i += 1
+            pieces = merged
+        return pieces
+
+    def tokenize(self, text: str) -> List[str]:
+        """Tokenizes text into subword sequence."""
+        words = re.findall(r"\b\w+\b", str(text).lower())
+        tokens = []
+        for w in words:
+            tokens.extend(self.tokenize_word(w))
+        return tokens
+
+    def decode(self, tokens: List[str]) -> str:
+        """Reconstructs text from subword token pieces."""
+        text = "".join(tokens)
+        text = text.replace("</w>", " ").strip()
+        return text
+
+
+class HMMPOSTagger:
+    """Hidden Markov Model Part-of-Speech Tagger with Viterbi dynamic programming."""
+
+    def __init__(self, smoothing: float = 1e-4):
+        self.alpha = float(smoothing)
+        self.tags: List[str] = []
+        self.vocab: Set[str] = set()
+        self.transitions: Dict[str, Dict[str, float]] = {}  # P(tag2 | tag1)
+        self.emissions: Dict[str, Dict[str, float]] = {}    # P(word | tag)
+        self.start_probs: Dict[str, float] = {}
+
+    def fit(self, tagged_sentences: List[List[Tuple[str, str]]]) -> "HMMPOSTagger":
+        """
+        Trains on tagged sentences: List[List[(word, tag)]].
+        """
+        from collections import defaultdict, Counter
+        tag_counts = Counter()
+        word_counts = Counter()
+        trans_counts = defaultdict(Counter)
+        emit_counts = defaultdict(Counter)
+        start_counts = Counter()
+
+        for sent in tagged_sentences:
+            if not sent:
+                continue
+            first_w, first_t = sent[0]
+            start_counts[first_t] += 1
+
+            prev_t = None
+            for w, t in sent:
+                w_lower = str(w).lower()
+                tag_counts[t] += 1
+                word_counts[w_lower] += 1
+                emit_counts[t][w_lower] += 1
+                if prev_t is not None:
+                    trans_counts[prev_t][t] += 1
+                prev_t = t
+
+        self.tags = sorted(list(tag_counts.keys()))
+        self.vocab = set(word_counts.keys())
+        n_tags = len(self.tags)
+        n_words = len(self.vocab)
+        n_sents = max(len(tagged_sentences), 1)
+
+        # Log start probabilities
+        self.start_probs = {
+            t: math.log((start_counts[t] + self.alpha) / (n_sents + self.alpha * n_tags))
+            for t in self.tags
+        }
+
+        # Log transition probabilities: log P(t2 | t1)
+        self.transitions = {}
+        for t1 in self.tags:
+            tot = sum(trans_counts[t1].values())
+            self.transitions[t1] = {
+                t2: math.log((trans_counts[t1][t2] + self.alpha) / (tot + self.alpha * n_tags))
+                for t2 in self.tags
+            }
+
+        # Log emission probabilities: log P(w | t)
+        self.emissions = {}
+        for t in self.tags:
+            tot = sum(emit_counts[t].values())
+            self.emissions[t] = {
+                w: math.log((emit_counts[t][w] + self.alpha) / (tot + self.alpha * n_words))
+                for w in self.vocab
+            }
+            # Out-of-vocabulary fallback log prob
+            self.emissions[t]["<unk>"] = math.log(self.alpha / (tot + self.alpha * n_words))
+
+        return self
+
+    def tag(self, sentence: List[str]) -> List[Tuple[str, str]]:
+        """Predicts most probable sequence of POS tags using Viterbi decoding."""
+        if not sentence or not self.tags:
+            return []
+
+        words = [str(w).lower() for w in sentence]
+        n_words = len(words)
+        n_tags = len(self.tags)
+
+        # viterbi[t][j] = highest log prob of path leading to tag j at step t
+        viterbi = [{t: float("-inf") for t in self.tags} for _ in range(n_words)]
+        backpointer = [{t: None for t in self.tags} for _ in range(n_words)]
+
+        # Step 0: start probabilities * emission probabilities
+        w0 = words[0]
+        for t in self.tags:
+            emit_p = self.emissions[t].get(w0, self.emissions[t]["<unk>"])
+            viterbi[0][t] = self.start_probs[t] + emit_p
+
+        # Steps 1 to n_words - 1
+        for step in range(1, n_words):
+            w = words[step]
+            for t_curr in self.tags:
+                emit_p = self.emissions[t_curr].get(w, self.emissions[t_curr]["<unk>"])
+                best_prev_t = None
+                best_prob = float("-inf")
+
+                for t_prev in self.tags:
+                    p = viterbi[step - 1][t_prev] + self.transitions[t_prev][t_curr] + emit_p
+                    if p > best_prob:
+                        best_prob = p
+                        best_prev_t = t_prev
+
+                viterbi[step][t_curr] = best_prob
+                backpointer[step][t_curr] = best_prev_t
+
+        # Traceback best path
+        best_last_tag = max(self.tags, key=lambda t: viterbi[n_words - 1][t])
+        best_tags = [best_last_tag]
+
+        for step in range(n_words - 1, 0, -1):
+            prev_t = backpointer[step][best_tags[-1]]
+            best_tags.append(prev_t)
+
+        best_tags.reverse()
+        return list(zip(sentence, best_tags))
+
+
+class Word2VecCBOW:
+    """Continuous Bag of Words (CBOW) word embedding architecture with negative sampling."""
+
+    def __init__(self, embedding_dim: int = 16, window_size: int = 2, seed: Optional[int] = 42):
+        self.embedding_dim = embedding_dim
+        self.window_size = window_size
+        self.seed = seed
+        self.word2idx: Dict[str, int] = {}
+        self.idx2word: Dict[int, str] = {}
+        self.W_in: List[List[float]] = []
+        self.W_out: List[List[float]] = []
+
+    def fit(self, texts: List[str], epochs: int = 20, lr: float = 0.05) -> "Word2VecCBOW":
+        if self.seed is not None:
+            random.seed(self.seed)
+
+        # 1. Build Vocabulary
+        from collections import Counter
+        word_counts = Counter()
+        corpus = []
+        for txt in texts:
+            words = re.findall(r"\b\w+\b", str(txt).lower())
+            word_counts.update(words)
+            corpus.append(words)
+
+        vocab = sorted(list(word_counts.keys()))
+        self.word2idx = {w: i for i, w in enumerate(vocab)}
+        self.idx2word = {i: w for i, w in enumerate(vocab)}
+        v_size = len(vocab)
+        if v_size == 0:
+            return self
+
+        # Initialize weights randomly
+        scale = 1.0 / math.sqrt(self.embedding_dim)
+        self.W_in = [
+            [(random.random() - 0.5) * 2.0 * scale for _ in range(self.embedding_dim)]
+            for _ in range(v_size)
+        ]
+        self.W_out = [
+            [(random.random() - 0.5) * 2.0 * scale for _ in range(self.embedding_dim)]
+            for _ in range(v_size)
+        ]
+
+        # 2. Training loop
+        for epoch in range(epochs):
+            for words in corpus:
+                for idx in range(len(words)):
+                    target_w = words[idx]
+                    target_idx = self.word2idx[target_w]
+
+                    # Context indices
+                    context_indices = []
+                    for offset in range(-self.window_size, self.window_size + 1):
+                        if offset != 0:
+                            pos = idx + offset
+                            if 0 <= pos < len(words):
+                                context_indices.append(self.word2idx[words[pos]])
+
+                    if not context_indices:
+                        continue
+
+                    # Average context embedding: v_ctx = (1/|C|) sum_{c in C} W_in[c]
+                    v_ctx = [0.0] * self.embedding_dim
+                    for c_idx in context_indices:
+                        for d in range(self.embedding_dim):
+                            v_ctx[d] += self.W_in[c_idx][d]
+                    for d in range(self.embedding_dim):
+                        v_ctx[d] /= len(context_indices)
+
+                    # Compute dot products with all output vectors
+                    logits = [
+                        sum(v_ctx[d] * self.W_out[w_i][d] for d in range(self.embedding_dim))
+                        for w_i in range(v_size)
+                    ]
+                    max_l = max(logits)
+                    exp_l = [math.exp(v - max_l) for v in logits]
+                    sum_exp = sum(exp_l)
+                    probs = [e / sum_exp for e in exp_l]
+
+                    # Gradient on logits: dL/dz_j = p_j - 1(j == target)
+                    d_logits = list(probs)
+                    d_logits[target_idx] -= 1.0
+
+                    # Gradient on W_out and v_ctx
+                    d_v_ctx = [0.0] * self.embedding_dim
+                    for w_i in range(v_size):
+                        g = d_logits[w_i]
+                        for d in range(self.embedding_dim):
+                            d_v_ctx[d] += g * self.W_out[w_i][d]
+                            self.W_out[w_i][d] -= lr * g * v_ctx[d]
+
+                    # Backprop into W_in of each context word
+                    inv_k = 1.0 / len(context_indices)
+                    for c_idx in context_indices:
+                        for d in range(self.embedding_dim):
+                            self.W_in[c_idx][d] -= lr * d_v_ctx[d] * inv_k
+
+        return self
+
+    def get_embedding(self, word: str) -> Optional[List[float]]:
+        idx = self.word2idx.get(str(word).lower())
+        if idx is not None:
+            return list(self.W_in[idx])
+        return None
+
+    def most_similar(self, word: str, top_n: int = 5) -> List[Tuple[str, float]]:
+        """Returns words with highest cosine similarity to target word."""
+        idx = self.word2idx.get(str(word).lower())
+        if idx is None:
+            return []
+
+        target_vec = self.W_in[idx]
+        target_norm = math.sqrt(sum(v ** 2 for v in target_vec)) or 1e-12
+
+        similarities = []
+        for other_w, other_idx in self.word2idx.items():
+            if other_idx == idx:
+                continue
+            vec = self.W_in[other_idx]
+            norm = math.sqrt(sum(v ** 2 for v in vec)) or 1e-12
+            dot = sum(target_vec[d] * vec[d] for d in range(self.embedding_dim))
+            sim = dot / (target_norm * norm)
+            similarities.append((other_w, round(sim, 4)))
+
+        similarities.sort(key=lambda t: t[1], reverse=True)
+        return similarities[:top_n]
+
+
+def nlp_bpe_train(texts: List[str], vocab_size: int = 100) -> BytePairEncoder:
+    """Trains a subword Byte-Pair Encoder on texts."""
+    bpe = BytePairEncoder(vocab_size=vocab_size)
+    bpe.fit(texts)
+    return bpe
+
+
+def nlp_hmm_pos_tagger(tagged_sentences: List[List[Tuple[str, str]]]) -> HMMPOSTagger:
+    """Trains an HMM Part-of-Speech tagger."""
+    tagger = HMMPOSTagger()
+    tagger.fit(tagged_sentences)
+    return tagger
+
+
+def nlp_cbow_word2vec(texts: List[str], embedding_dim: int = 16, epochs: int = 15) -> Word2VecCBOW:
+    """Trains a Continuous Bag of Words Word2Vec embedding model."""
+    w2v = Word2VecCBOW(embedding_dim=embedding_dim)
+    w2v.fit(texts, epochs=epochs)
+    return w2v
+
 
 
 

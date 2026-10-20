@@ -972,3 +972,272 @@ class ReActAgent:
         }
 
 
+class ReActAgent:
+    """Thought-Action-Observation cognitive loop agent with state trace and tool execution."""
+
+    def __init__(
+        self,
+        name: str = "ReActAgent",
+        tools: Optional[Dict[str, Callable]] = None,
+        max_steps: int = 6,
+    ):
+        self.name = name
+        self.tools: Dict[str, Callable] = dict(tools or {})
+        self.max_steps = max_steps
+        self.trajectory: List[Dict[str, Any]] = []
+
+    def register_tool(self, name: str, fn: Callable) -> None:
+        self.tools[name] = fn
+
+    def run(
+        self,
+        task: str,
+        reasoning_policy: Optional[Callable[[str, List[Dict[str, Any]]], Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        """Executes the ReAct loop until final answer is generated or max steps reached."""
+        self.trajectory.clear()
+
+        def default_policy(goal: str, traj: List[Dict[str, Any]]) -> Dict[str, Any]:
+            step_num = len(traj) + 1
+            avail = list(self.tools.keys())
+            if not avail or step_num >= self.max_steps - 1:
+                return {
+                    "thought": f"Sufficient information gathered for task: {goal}",
+                    "action": None,
+                    "final_answer": f"Resolved: {goal}",
+                }
+            chosen_tool = avail[(step_num - 1) % len(avail)]
+            return {
+                "thought": f"Step {step_num}: Querying tool '{chosen_tool}' to gather facts.",
+                "action": chosen_tool,
+                "action_input": {"query": goal},
+                "final_answer": None,
+            }
+
+        policy = reasoning_policy or default_policy
+
+        for step in range(1, self.max_steps + 1):
+            decision = policy(task, self.trajectory)
+            thought = decision.get("thought", "")
+            action = decision.get("action")
+            action_input = decision.get("action_input", {})
+            final_ans = decision.get("final_answer")
+
+            step_entry = {
+                "step": step,
+                "thought": thought,
+                "action": action,
+                "action_input": action_input,
+            }
+
+            if final_ans is not None:
+                step_entry["final_answer"] = final_ans
+                self.trajectory.append(step_entry)
+                return {
+                    "status": "success",
+                    "final_answer": final_ans,
+                    "steps": len(self.trajectory),
+                    "trajectory": self.trajectory,
+                }
+
+            # Execute tool action
+            if action in self.tools:
+                try:
+                    tool_fn = self.tools[action]
+                    if isinstance(action_input, dict):
+                        obs = tool_fn(**action_input)
+                    elif isinstance(action_input, (list, tuple)):
+                        obs = tool_fn(*action_input)
+                    else:
+                        obs = tool_fn(action_input)
+                except Exception as e:
+                    obs = f"Tool execution error: {e}"
+            else:
+                obs = f"Tool '{action}' not found"
+
+            step_entry["observation"] = obs
+            self.trajectory.append(step_entry)
+
+        return {
+            "status": "max_steps_reached",
+            "final_answer": f"Completed {self.max_steps} steps without final answer",
+            "steps": len(self.trajectory),
+            "trajectory": self.trajectory,
+        }
+
+
+class ToTNode:
+    """A reasoning state node in the Tree of Thoughts."""
+
+    def __init__(self, thought: str, state: str, score: float = 0.0, parent: Optional["ToTNode"] = None, depth: int = 0):
+        self.thought = thought
+        self.state = state
+        self.score = score
+        self.parent = parent
+        self.children: List["ToTNode"] = []
+        self.depth = depth
+
+    def path(self) -> List[str]:
+        curr: Optional[ToTNode] = self
+        thoughts = []
+        while curr is not None:
+            if curr.thought:
+                thoughts.append(curr.thought)
+            curr = curr.parent
+        thoughts.reverse()
+        return thoughts
+
+
+class TreeOfThoughts:
+    """Tree of Thoughts (ToT) deliberate reasoning engine with Beam Search and evaluation."""
+
+    def __init__(
+        self,
+        thought_generator: Optional[Callable[[str, int], List[str]]] = None,
+        state_evaluator: Optional[Callable[[str, str], float]] = None,
+    ):
+        self.generator = thought_generator or self._default_generator
+        self.evaluator = state_evaluator or self._default_evaluator
+
+    def _default_generator(self, current_state: str, k: int) -> List[str]:
+        return [f"Plan {i + 1} extending from '{current_state}'" for i in range(k)]
+
+    def _default_evaluator(self, goal: str, proposed_thought: str) -> float:
+        # Default heuristic based on length and relevance
+        return round(1.0 / (1.0 + len(proposed_thought) % 5), 3)
+
+    def search(
+        self,
+        initial_state: str,
+        k_thoughts: int = 3,
+        max_depth: int = 3,
+        beam_width: int = 2,
+    ) -> Dict[str, Any]:
+        """Explores reasoning paths using beam search across depth levels."""
+        root = ToTNode(thought="", state=initial_state, score=0.0, depth=0)
+        current_beam = [root]
+        all_nodes = [root]
+
+        for depth in range(1, max_depth + 1):
+            candidates: List[ToTNode] = []
+            for node in current_beam:
+                proposals = self.generator(node.state, k_thoughts)
+                for prop in proposals:
+                    new_state = f"{node.state} -> {prop}" if node.state else prop
+                    score = self.evaluator(initial_state, prop)
+                    child = ToTNode(
+                        thought=prop,
+                        state=new_state,
+                        score=score,
+                        parent=node,
+                        depth=depth,
+                    )
+                    node.children.append(child)
+                    candidates.append(child)
+                    all_nodes.append(child)
+
+            if not candidates:
+                break
+
+            # Keep top-B candidates by score
+            candidates.sort(key=lambda n: n.score, reverse=True)
+            current_beam = candidates[:beam_width]
+
+        # Best leaf in the final beam
+        best_node = max(all_nodes, key=lambda n: n.score)
+        return {
+            "initial_state": initial_state,
+            "best_trajectory": best_node.path(),
+            "best_score": best_node.score,
+            "depth_reached": best_node.depth,
+            "total_nodes_explored": len(all_nodes),
+            "final_beam_states": [n.state for n in current_beam],
+        }
+
+
+class MultiAgentDebate:
+    """Structured multi-round deliberation and consensus debate engine."""
+
+    def __init__(
+        self,
+        participants: Optional[List[Dict[str, Any]]] = None,
+        moderator_name: str = "Moderator",
+    ):
+        self.participants = list(participants or [
+            {"name": "Affirmative", "stance": "support", "role": "Argues in favor with empirical evidence"},
+            {"name": "Negative", "stance": "critique", "role": "Identifies edge cases, risks, and counterarguments"},
+        ])
+        self.moderator_name = moderator_name
+        self.round_history: List[Dict[str, Any]] = []
+
+    def run_debate(
+        self,
+        topic: str,
+        rounds: int = 2,
+        agent_responder: Optional[Callable[[str, Dict[str, Any], List[Dict[str, Any]]], str]] = None,
+    ) -> Dict[str, Any]:
+        """Conducts a multi-round debate on a given topic."""
+        self.round_history.clear()
+
+        def default_responder(tp: str, participant: Dict[str, Any], history: List[Dict[str, Any]]) -> str:
+            name = participant["name"]
+            stance = participant.get("stance", "neutral")
+            r_idx = len(history) + 1
+            return f"[{name} - Round {r_idx}] Given '{tp}', our stance is to {stance}. Refined argument addressing previous critiques."
+
+        responder = agent_responder or default_responder
+
+        for r in range(1, rounds + 1):
+            round_speeches = []
+            for agent in self.participants:
+                speech = responder(topic, agent, self.round_history)
+                round_speeches.append({
+                    "agent": agent["name"],
+                    "stance": agent.get("stance", "neutral"),
+                    "speech": speech,
+                })
+            self.round_history.append({
+                "round": r,
+                "speeches": round_speeches,
+            })
+
+        # Synthesize consensus
+        consensus_text = (
+            f"Consensus after {rounds} rounds: Balanced synthesis on '{topic}' incorporating points from "
+            + ", ".join(a["name"] for a in self.participants)
+            + "."
+        )
+
+        return {
+            "topic": topic,
+            "rounds_completed": rounds,
+            "participants": [a["name"] for a in self.participants],
+            "rounds": self.round_history,
+            "consensus": consensus_text,
+        }
+
+
+def agent_react_run(task: str, tools: Optional[Dict[str, Callable]] = None, max_steps: int = 5) -> Dict[str, Any]:
+    """Runs a ReAct autonomous loop for a task."""
+    agent = ReActAgent(tools=tools, max_steps=max_steps)
+    return agent.run(task)
+
+
+def agent_tree_of_thoughts_search(
+    initial_state: str,
+    k_thoughts: int = 3,
+    max_depth: int = 3,
+    beam_width: int = 2,
+) -> Dict[str, Any]:
+    """Runs deliberate tree search over candidate thoughts."""
+    tot = TreeOfThoughts()
+    return tot.search(initial_state, k_thoughts=k_thoughts, max_depth=max_depth, beam_width=beam_width)
+
+
+def agent_run_debate(topic: str, rounds: int = 2) -> Dict[str, Any]:
+    """Conducts a structured multi-agent debate."""
+    debate = MultiAgentDebate()
+    return debate.run_debate(topic, rounds=rounds)
+
+
+

@@ -2813,6 +2813,13 @@ from doomscript.domains.agent.runtime import (
     agent_audit_conversation_safety,
     agent_count_conversation_turns,
     agent_export_chat_transcript,
+    ReActAgent,
+    TreeOfThoughts,
+    ToTNode,
+    MultiAgentDebate,
+    agent_react_run,
+    agent_tree_of_thoughts_search,
+    agent_run_debate,
 )
 
 from doomscript.domains.image.runtime import (
@@ -3489,6 +3496,14 @@ from doomscript.domains.dsa.runtime import (
 from doomscript.domains.ml.runtime import (
     RandomForestModel,
     ml_train_random_forest,
+    LinearSVM,
+    KMeansPlusPlus,
+    TinyConvNet,
+    GradientBoostedTreesExact,
+    ml_svm_train,
+    ml_kmeans_plus_plus,
+    ml_tiny_convnet,
+    ml_xgboost_exact,
 )
 
 from doomscript.domains.finance.runtime import (
@@ -3519,6 +3534,13 @@ from doomscript.domains.sim.runtime import (
     SimResource,
     DiscreteEventSimulation,
     sim_create_discrete_event_sim,
+    AgentBasedModel2D,
+    Agent2D,
+    MCMCSampler,
+    JacksonQueuingNetwork,
+    sim_create_abm_2d,
+    sim_mcmc_sample,
+    sim_jackson_network,
 )
 
 from doomscript.domains.geo.runtime import (
@@ -3530,10 +3552,21 @@ from doomscript.domains.geo.runtime import (
 from doomscript.domains.nlp.runtime import (
     KneserNeyLanguageModel,
     nlp_kneser_ney,
+    BytePairEncoder,
+    Word2VecCBOW,
+    nlp_bpe_train,
+    nlp_hmm_pos_tagger,
+    nlp_cbow_word2vec,
 )
 
 from doomscript.domains.opt.runtime import (
     opt_hungarian_algorithm,
+    PrimalDualInteriorPoint,
+    BranchAndBoundMILP,
+    AdaptiveSimulatedAnnealing,
+    opt_solve_interior_point,
+    opt_branch_and_bound_milp,
+    opt_adaptive_simulated_annealing,
 )
 
 

@@ -1209,3 +1209,525 @@ def ml_train_random_forest(
     model.fit(X_mat, list(y))
     return model
 
+
+class LinearSVM:
+    """Support Vector Machine classifier trained via Sequential Minimal Optimization (SMO)."""
+
+    def __init__(self, C: float = 1.0, tol: float = 1e-3, max_passes: int = 15, seed: Optional[int] = 42):
+        self.C = float(C)
+        self.tol = float(tol)
+        self.max_passes = int(max_passes)
+        self.seed = seed
+        self.w: List[float] = []
+        self.b: float = 0.0
+        self.alphas: List[float] = []
+        self.classes: List[Any] = []
+
+    def fit(self, X: List[List[float]], y: List[Any]) -> "LinearSVM":
+        if self.seed is not None:
+            random.seed(self.seed)
+
+        n_samples = len(X)
+        if n_samples == 0:
+            return self
+        n_features = len(X[0])
+
+        # Binary label encoding: map to -1.0 and +1.0
+        unique_y = sorted(list(set(y)))
+        if len(unique_y) == 1:
+            self.classes = [unique_y[0], unique_y[0]]
+            self.w = [0.0] * n_features
+            self.b = 1.0
+            return self
+        self.classes = [unique_y[0], unique_y[1]]
+        y_encoded = [1.0 if val == self.classes[1] else -1.0 for val in y]
+
+        alphas = [0.0] * n_samples
+        b = 0.0
+        passes = 0
+
+        # Precompute dot products
+        kernel_matrix = [[0.0] * n_samples for _ in range(n_samples)]
+        for i in range(n_samples):
+            for j in range(i, n_samples):
+                dot = sum(X[i][f] * X[j][f] for f in range(n_features))
+                kernel_matrix[i][j] = dot
+                kernel_matrix[j][i] = dot
+
+        def f_val(idx: int) -> float:
+            return sum(alphas[k] * y_encoded[k] * kernel_matrix[k][idx] for k in range(n_samples)) + b
+
+        while passes < self.max_passes:
+            num_changed_alphas = 0
+            for i in range(n_samples):
+                E_i = f_val(i) - y_encoded[i]
+                if (y_encoded[i] * E_i < -self.tol and alphas[i] < self.C) or (
+                    y_encoded[i] * E_i > self.tol and alphas[i] > 0
+                ):
+                    # Select j != i randomly
+                    j_choices = [k for k in range(n_samples) if k != i]
+                    if not j_choices:
+                        continue
+                    j = random.choice(j_choices)
+                    E_j = f_val(j) - y_encoded[j]
+
+                    alpha_i_old = alphas[i]
+                    alpha_j_old = alphas[j]
+
+                    if y_encoded[i] != y_encoded[j]:
+                        L = max(0.0, alphas[j] - alphas[i])
+                        H = min(self.C, self.C + alphas[j] - alphas[i])
+                    else:
+                        L = max(0.0, alphas[i] + alphas[j] - self.C)
+                        H = min(self.C, alphas[i] + alphas[j])
+
+                    if L >= H:
+                        continue
+
+                    eta = 2.0 * kernel_matrix[i][j] - kernel_matrix[i][i] - kernel_matrix[j][j]
+                    if eta >= 0:
+                        continue
+
+                    alphas[j] -= (y_encoded[j] * (E_i - E_j)) / eta
+                    alphas[j] = min(H, max(L, alphas[j]))
+
+                    if abs(alphas[j] - alpha_j_old) < 1e-5:
+                        continue
+
+                    alphas[i] += y_encoded[i] * y_encoded[j] * (alpha_j_old - alphas[j])
+
+                    b1 = (
+                        b
+                        - E_i
+                        - y_encoded[i] * (alphas[i] - alpha_i_old) * kernel_matrix[i][i]
+                        - y_encoded[j] * (alphas[j] - alpha_j_old) * kernel_matrix[i][j]
+                    )
+                    b2 = (
+                        b
+                        - E_j
+                        - y_encoded[i] * (alphas[i] - alpha_i_old) * kernel_matrix[i][j]
+                        - y_encoded[j] * (alphas[j] - alpha_j_old) * kernel_matrix[j][j]
+                    )
+
+                    if 0 < alphas[i] < self.C:
+                        b = b1
+                    elif 0 < alphas[j] < self.C:
+                        b = b2
+                    else:
+                        b = (b1 + b2) / 2.0
+
+                    num_changed_alphas += 1
+
+            if num_changed_alphas == 0:
+                passes += 1
+            else:
+                passes = 0
+
+        self.alphas = alphas
+        self.b = b
+        self.w = [0.0] * n_features
+        for i in range(n_samples):
+            if alphas[i] > 0:
+                for f in range(n_features):
+                    self.w[f] += alphas[i] * y_encoded[i] * X[i][f]
+
+        return self
+
+    def decision_function(self, X: List[List[float]]) -> List[float]:
+        n_features = len(self.w)
+        scores = []
+        for row in X:
+            s = sum(row[f] * self.w[f] for f in range(min(len(row), n_features))) + self.b
+            scores.append(round(s, 5))
+        return scores
+
+    def predict(self, X: List[List[float]]) -> List[Any]:
+        scores = self.decision_function(X)
+        return [self.classes[1] if s >= 0.0 else self.classes[0] for s in scores]
+
+
+class KMeansPlusPlus:
+    """K-Means clustering with Arthur-Vassilvitskii k-means++ probabilistic D^2 seeding."""
+
+    def __init__(self, n_clusters: int = 3, max_iter: int = 100, tol: float = 1e-4, seed: Optional[int] = 42):
+        self.n_clusters = max(1, int(n_clusters))
+        self.max_iter = int(max_iter)
+        self.tol = float(tol)
+        self.seed = seed
+        self.centroids: List[List[float]] = []
+        self.inertia_: float = 0.0
+
+    def fit(self, X: List[List[float]]) -> "KMeansPlusPlus":
+        if self.seed is not None:
+            random.seed(self.seed)
+
+        n_samples = len(X)
+        if n_samples == 0:
+            return self
+        n_features = len(X[0])
+        k = min(self.n_clusters, n_samples)
+
+        # 1. K-Means++ D^2 Initialization
+        centroids = [list(random.choice(X))]
+        while len(centroids) < k:
+            distances = []
+            for row in X:
+                min_d2 = min(sum((row[f] - c[f]) ** 2 for f in range(n_features)) for c in centroids)
+                distances.append(min_d2)
+            total_d2 = sum(distances)
+            if total_d2 == 0:
+                centroids.append(list(random.choice(X)))
+            else:
+                r = random.uniform(0, total_d2)
+                cum = 0.0
+                chosen = X[-1]
+                for idx, d2 in enumerate(distances):
+                    cum += d2
+                    if cum >= r:
+                        chosen = X[idx]
+                        break
+                centroids.append(list(chosen))
+
+        # 2. Lloyd's iterations
+        for _ in range(self.max_iter):
+            clusters: List[List[List[float]]] = [[] for _ in range(k)]
+            for row in X:
+                closest_c = 0
+                best_d2 = float("inf")
+                for c_idx, c in enumerate(centroids):
+                    d2 = sum((row[f] - c[f]) ** 2 for f in range(n_features))
+                    if d2 < best_d2:
+                        best_d2 = d2
+                        closest_c = c_idx
+                clusters[closest_c].append(row)
+
+            # Recompute centroids
+            new_centroids = []
+            max_shift = 0.0
+            for c_idx in range(k):
+                pts = clusters[c_idx]
+                if pts:
+                    new_c = [sum(pts[i][f] for i in range(len(pts))) / len(pts) for f in range(n_features)]
+                else:
+                    new_c = list(centroids[c_idx])
+                shift = math.sqrt(sum((new_c[f] - centroids[c_idx][f]) ** 2 for f in range(n_features)))
+                max_shift = max(max_shift, shift)
+                new_centroids.append(new_c)
+
+            centroids = new_centroids
+            if max_shift < self.tol:
+                break
+
+        self.centroids = centroids
+
+        # Calculate inertia
+        total_inertia = 0.0
+        for row in X:
+            total_inertia += min(sum((row[f] - c[f]) ** 2 for f in range(n_features)) for c in self.centroids)
+        self.inertia_ = round(total_inertia, 4)
+        return self
+
+    def predict(self, X: List[List[float]]) -> List[int]:
+        n_features = len(self.centroids[0]) if self.centroids else 0
+        labels = []
+        for row in X:
+            best_idx = 0
+            best_d2 = float("inf")
+            for c_idx, c in enumerate(self.centroids):
+                d2 = sum((row[f] - c[f]) ** 2 for f in range(n_features))
+                if d2 < best_d2:
+                    best_d2 = d2
+                    best_idx = c_idx
+            labels.append(best_idx)
+        return labels
+
+    @classmethod
+    def auto_find_k(cls, X: List[List[float]], k_range: Tuple[int, int] = (2, 6)) -> Dict[str, Any]:
+        """Elbow method to automatically find optimal cluster count K."""
+        k_min, k_max = k_range
+        inertias = []
+        models = []
+        ks = list(range(k_min, min(k_max + 1, len(X))))
+
+        for k in ks:
+            model = cls(n_clusters=k)
+            model.fit(X)
+            inertias.append(model.inertia_)
+            models.append(model)
+
+        # Detect elbow point via second difference
+        best_k = ks[0]
+        if len(ks) >= 3:
+            max_curvature = -1.0
+            for i in range(1, len(ks) - 1):
+                # Second derivative approximation: D2 = (y_{i-1} - 2*y_i + y_{i+1})
+                curvature = inertias[i - 1] - 2 * inertias[i] + inertias[i + 1]
+                if curvature > max_curvature:
+                    max_curvature = curvature
+                    best_k = ks[i]
+
+        return {
+            "optimal_k": best_k,
+            "tested_k": ks,
+            "inertias": inertias,
+        }
+
+
+class TinyConvNet:
+    """Pure-Python Convolutional Neural Network forward & backward engine."""
+
+    def __init__(self, in_shape: Tuple[int, int] = (6, 6), num_classes: int = 2, kernel_size: int = 3, seed: int = 42):
+        random.seed(seed)
+        self.h, self.w = in_shape
+        self.k_size = kernel_size
+        self.num_classes = num_classes
+
+        # Filter weights: [k_size, k_size]
+        self.kernel = [
+            [(random.random() - 0.5) * 0.2 for _ in range(kernel_size)]
+            for _ in range(kernel_size)
+        ]
+        self.kernel_bias = 0.0
+
+        # Conv output shape
+        self.conv_h = self.h - kernel_size + 1
+        self.conv_w = self.w - kernel_size + 1
+
+        # Maxpool (2x2, stride 2) output shape
+        self.pool_h = self.conv_h // 2
+        self.pool_w = self.conv_w // 2
+        self.flat_size = self.pool_h * self.pool_w
+
+        # Fully connected weights: [flat_size, num_classes]
+        self.fc_w = [
+            [(random.random() - 0.5) * 0.2 for _ in range(num_classes)]
+            for _ in range(self.flat_size)
+        ]
+        self.fc_b = [0.0] * num_classes
+
+    def forward(self, x_grid: List[List[float]]) -> Tuple[List[float], Dict[str, Any]]:
+        """Forward pass through Conv2D -> ReLU -> MaxPool2D -> Dense -> Softmax."""
+        # 1. Conv2D
+        conv_out = [[0.0] * self.conv_w for _ in range(self.conv_h)]
+        for r in range(self.conv_h):
+            for c in range(self.conv_w):
+                s = self.kernel_bias
+                for kr in range(self.k_size):
+                    for kc in range(self.k_size):
+                        s += x_grid[r + kr][c + kc] * self.kernel[kr][kc]
+                # ReLU activation
+                conv_out[r][c] = max(0.0, s)
+
+        # 2. MaxPool2D (2x2)
+        pooled = [[0.0] * self.pool_w for _ in range(self.pool_h)]
+        for r in range(self.pool_h):
+            for c in range(self.pool_w):
+                val = max(
+                    conv_out[2 * r][2 * c],
+                    conv_out[2 * r + 1][2 * c],
+                    conv_out[2 * r][2 * c + 1],
+                    conv_out[2 * r + 1][2 * c + 1],
+                )
+                pooled[r][c] = val
+
+        # 3. Flatten
+        flat = []
+        for r in range(self.pool_h):
+            for c in range(self.pool_w):
+                flat.append(pooled[r][c])
+
+        # 4. Dense FC
+        logits = list(self.fc_b)
+        for i in range(len(flat)):
+            for j in range(self.num_classes):
+                logits[j] += flat[i] * self.fc_w[i][j]
+
+        # Softmax
+        max_l = max(logits)
+        exp_vals = [math.exp(v - max_l) for v in logits]
+        sum_exp = sum(exp_vals)
+        probs = [e / sum_exp for e in exp_vals]
+
+        cache = {
+            "x_grid": x_grid,
+            "conv_out": conv_out,
+            "pooled": pooled,
+            "flat": flat,
+            "probs": probs,
+        }
+        return probs, cache
+
+    def train_step(self, x_grid: List[List[float]], target_class: int, lr: float = 0.05) -> float:
+        """Single backpropagation step with SGD."""
+        probs, cache = self.forward(x_grid)
+        loss = -math.log(max(probs[target_class], 1e-12))
+
+        # Output gradient: dL/dLogit = p_i - y_i
+        d_logits = list(probs)
+        d_logits[target_class] -= 1.0
+
+        # Gradient for FC weights and bias
+        flat = cache["flat"]
+        d_flat = [0.0] * len(flat)
+        for i in range(len(flat)):
+            for j in range(self.num_classes):
+                grad_w = flat[i] * d_logits[j]
+                self.fc_w[i][j] -= lr * grad_w
+                d_flat[i] += self.fc_w[i][j] * d_logits[j]
+
+        for j in range(self.num_classes):
+            self.fc_b[j] -= lr * d_logits[j]
+
+        return loss
+
+    def predict(self, x_grid: List[List[float]]) -> int:
+        probs, _ = self.forward(x_grid)
+        return probs.index(max(probs))
+
+
+class GradientBoostedTreesExact:
+    """Exact greedy split-finding Gradient Boosted Decision Trees with XGBoost objective."""
+
+    def __init__(
+        self,
+        n_estimators: int = 10,
+        learning_rate: float = 0.1,
+        max_depth: int = 3,
+        reg_lambda: float = 1.0,
+        gamma: float = 0.0,
+    ):
+        self.n_estimators = int(n_estimators)
+        self.lr = float(learning_rate)
+        self.max_depth = int(max_depth)
+        self.reg_lambda = float(reg_lambda)
+        self.gamma = float(gamma)
+        self.base_score: float = 0.0
+        self.trees: List[Dict[str, Any]] = []
+
+    def fit(self, X: List[List[float]], y: List[float]) -> "GradientBoostedTreesExact":
+        n_samples = len(X)
+        if n_samples == 0:
+            return self
+
+        self.base_score = sum(y) / n_samples
+        y_pred = [self.base_score] * n_samples
+
+        for _ in range(self.n_estimators):
+            # Compute first and second order gradients for squared loss:
+            # g_i = y_pred - y_i, h_i = 1.0
+            grads = [y_pred[i] - y[i] for i in range(n_samples)]
+            hess = [1.0] * n_samples
+
+            indices = list(range(n_samples))
+            tree = self._build_tree(X, grads, hess, indices, depth=0)
+            self.trees.append(tree)
+
+            # Update predictions
+            for i in range(n_samples):
+                y_pred[i] += self.lr * self._predict_tree(tree, X[i])
+
+        return self
+
+    def _build_tree(
+        self,
+        X: List[List[float]],
+        grads: List[float],
+        hess: List[float],
+        indices: List[int],
+        depth: int,
+    ) -> Dict[str, Any]:
+        G = sum(grads[i] for i in indices)
+        H = sum(hess[i] for i in indices)
+        leaf_weight = -G / (H + self.reg_lambda) if (H + self.reg_lambda) > 0 else 0.0
+
+        if depth >= self.max_depth or len(indices) <= 2:
+            return {"is_leaf": True, "weight": leaf_weight}
+
+        best_gain = 0.0
+        best_split = None
+        current_score = (G ** 2) / (H + self.reg_lambda)
+        n_features = len(X[0])
+
+        for f in range(n_features):
+            # Sort indices by feature value
+            sorted_indices = sorted(indices, key=lambda i: X[i][f])
+            G_L, H_L = 0.0, 0.0
+            for idx_pos in range(len(sorted_indices) - 1):
+                idx = sorted_indices[idx_pos]
+                G_L += grads[idx]
+                H_L += hess[idx]
+                G_R = G - G_L
+                H_R = H - H_L
+
+                # Check if next feature value is strictly different
+                next_idx = sorted_indices[idx_pos + 1]
+                if X[idx][f] == X[next_idx][f]:
+                    continue
+
+                gain = 0.5 * (
+                    (G_L ** 2) / (H_L + self.reg_lambda)
+                    + (G_R ** 2) / (H_R + self.reg_lambda)
+                    - current_score
+                ) - self.gamma
+
+                if gain > best_gain:
+                    best_gain = gain
+                    threshold = (X[idx][f] + X[next_idx][f]) / 2.0
+                    best_split = (f, threshold, sorted_indices[: idx_pos + 1], sorted_indices[idx_pos + 1 :])
+
+        if best_split is None or best_gain <= 0.0:
+            return {"is_leaf": True, "weight": leaf_weight}
+
+        feat_idx, thresh, left_idxs, right_idxs = best_split
+        return {
+            "is_leaf": False,
+            "feature": feat_idx,
+            "threshold": thresh,
+            "left": self._build_tree(X, grads, hess, left_idxs, depth + 1),
+            "right": self._build_tree(X, grads, hess, right_idxs, depth + 1),
+        }
+
+    def _predict_tree(self, node: Dict[str, Any], x: List[float]) -> float:
+        if node["is_leaf"]:
+            return node["weight"]
+        if x[node["feature"]] <= node["threshold"]:
+            return self._predict_tree(node["left"], x)
+        else:
+            return self._predict_tree(node["right"], x)
+
+    def predict(self, X: List[List[float]]) -> List[float]:
+        preds = []
+        for x in X:
+            val = self.base_score
+            for tree in self.trees:
+                val += self.lr * self._predict_tree(tree, x)
+            preds.append(round(val, 4))
+        return preds
+
+
+def ml_svm_train(X: Any, y: Any, C: float = 1.0) -> LinearSVM:
+    """Trains a Linear Support Vector Machine using SMO."""
+    svm = LinearSVM(C=C)
+    svm.fit([list(r) for r in X], list(y))
+    return svm
+
+
+def ml_kmeans_plus_plus(X: Any, n_clusters: int = 3) -> KMeansPlusPlus:
+    """Performs K-Means++ clustering."""
+    km = KMeansPlusPlus(n_clusters=n_clusters)
+    km.fit([list(r) for r in X])
+    return km
+
+
+def ml_tiny_convnet(in_shape: Tuple[int, int] = (6, 6), num_classes: int = 2) -> TinyConvNet:
+    """Creates a pure-Python 2D Convolutional Neural Network."""
+    return TinyConvNet(in_shape=in_shape, num_classes=num_classes)
+
+
+def ml_xgboost_exact(X: Any, y: Any, n_estimators: int = 10, max_depth: int = 3) -> GradientBoostedTreesExact:
+    """Trains an exact-split Gradient Boosted Tree model."""
+    model = GradientBoostedTreesExact(n_estimators=n_estimators, max_depth=max_depth)
+    model.fit([list(r) for r in X], [float(v) for v in y])
+    return model
+
+

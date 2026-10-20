@@ -38,6 +38,12 @@ from doomscript.domains.opt.runtime import (
     opt_genetic_algorithm,
     opt_particle_swarm,
     opt_nelder_mead,
+    PrimalDualInteriorPoint,
+    BranchAndBoundMILP,
+    AdaptiveSimulatedAnnealing,
+    opt_solve_interior_point,
+    opt_branch_and_bound_milp,
+    opt_adaptive_simulated_annealing,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.opt.exporter import OptASTExporter
@@ -155,4 +161,10 @@ __all__ = [
     "opt_genetic_algorithm",
     "opt_particle_swarm",
     "opt_nelder_mead",
+    "PrimalDualInteriorPoint",
+    "BranchAndBoundMILP",
+    "AdaptiveSimulatedAnnealing",
+    "opt_solve_interior_point",
+    "opt_branch_and_bound_milp",
+    "opt_adaptive_simulated_annealing",
 ]

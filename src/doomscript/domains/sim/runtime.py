@@ -1185,4 +1185,329 @@ def sim_create_discrete_event_sim() -> DiscreteEventSimulation:
     return DiscreteEventSimulation()
 
 
+class Agent2D:
+    """An individual autonomous mobile agent in 2D space."""
+
+    def __init__(self, agent_id: int, x: float, y: float, vx: float = 0.0, vy: float = 0.0, state: str = "S"):
+        self.id = agent_id
+        self.x = float(x)
+        self.y = float(y)
+        self.vx = float(vx)
+        self.vy = float(vy)
+        self.state = state  # e.g. "S", "I", "R"
+        self.infection_time = 0
+
+
+class AgentBasedModel2D:
+    """2D Toroidal spatial agent-based simulation for collective behavior and epidemic dynamics."""
+
+    def __init__(
+        self,
+        width: float = 100.0,
+        height: float = 100.0,
+        num_agents: int = 50,
+        sensory_radius: float = 10.0,
+        seed: Optional[int] = 42,
+    ):
+        self.width = float(width)
+        self.height = float(height)
+        self.sensory_radius = float(sensory_radius)
+        if seed is not None:
+            random.seed(seed)
+
+        self.agents: List[Agent2D] = []
+        for i in range(num_agents):
+            x = random.uniform(0, self.width)
+            y = random.uniform(0, self.height)
+            vx = random.uniform(-1.0, 1.0)
+            vy = random.uniform(-1.0, 1.0)
+            # Default first agent infected
+            state = "I" if i == 0 else "S"
+            self.agents.append(Agent2D(i, x, y, vx, vy, state=state))
+
+        self.beta = 0.3  # Infection transmission probability
+        self.gamma = 0.05  # Recovery probability
+        self.time_step = 0
+
+    def step(self) -> Dict[str, int]:
+        """Advances simulation by one discrete time step."""
+        self.time_step += 1
+        n = len(self.agents)
+
+        # 1. Toroidal distance helper
+        def tor_dist(a1: Agent2D, a2: Agent2D) -> Tuple[float, float, float]:
+            dx = a2.x - a1.x
+            dy = a2.y - a1.y
+            if dx > self.width / 2:
+                dx -= self.width
+            elif dx < -self.width / 2:
+                dx += self.width
+            if dy > self.height / 2:
+                dy -= self.height
+            elif dy < -self.height / 2:
+                dy += self.height
+            dist = math.sqrt(dx * dx + dy * dy)
+            return dist, dx, dy
+
+        # 2. Flocking & Interaction forces
+        for i in range(n):
+            a = self.agents[i]
+            neighbors = []
+            for j in range(n):
+                if i != j:
+                    d, dx, dy = tor_dist(a, self.agents[j])
+                    if d < self.sensory_radius:
+                        neighbors.append((self.agents[j], d, dx, dy))
+
+            if neighbors:
+                # Alignment & Cohesion
+                avg_vx = sum(nbr[0].vx for nbr in neighbors) / len(neighbors)
+                avg_vy = sum(nbr[0].vy for nbr in neighbors) / len(neighbors)
+                a.vx = a.vx * 0.9 + avg_vx * 0.1
+                a.vy = a.vy * 0.9 + avg_vy * 0.1
+
+                # Separation if too close (< 3.0)
+                for nbr, d, dx, dy in neighbors:
+                    if d < 3.0 and d > 0.001:
+                        a.vx -= (dx / d) * 0.2
+                        a.vy -= (dy / d) * 0.2
+
+            # Clamp velocity
+            v_mag = math.sqrt(a.vx ** 2 + a.vy ** 2)
+            if v_mag > 2.0:
+                a.vx = (a.vx / v_mag) * 2.0
+                a.vy = (a.vy / v_mag) * 2.0
+
+            # Move and wrap coordinates
+            a.x = (a.x + a.vx) % self.width
+            a.y = (a.y + a.vy) % self.height
+
+        # 3. SIR Epidemic spread
+        new_states = [a.state for a in self.agents]
+        for i in range(n):
+            a = self.agents[i]
+            if a.state == "I":
+                # Check transmission to susceptible neighbors
+                for j in range(n):
+                    if i != j and self.agents[j].state == "S":
+                        d, _, _ = tor_dist(a, self.agents[j])
+                        if d < 5.0 and random.random() < self.beta:
+                            new_states[j] = "I"
+
+                # Check recovery
+                if random.random() < self.gamma:
+                    new_states[i] = "R"
+
+        for i in range(n):
+            self.agents[i].state = new_states[i]
+
+        counts = {"S": 0, "I": 0, "R": 0}
+        for a in self.agents:
+            counts[a.state] = counts.get(a.state, 0) + 1
+
+        return counts
+
+    def run(self, steps: int = 50) -> Dict[str, Any]:
+        """Runs the ABM simulation for a given number of steps."""
+        history = []
+        for _ in range(steps):
+            counts = self.step()
+            history.append(counts)
+
+        return {
+            "steps": steps,
+            "final_counts": history[-1] if history else {},
+            "history": history,
+            "total_agents": len(self.agents),
+        }
+
+
+class MCMCSampler:
+    """Metropolis-Hastings Markov Chain Monte Carlo sampler with diagnostics."""
+
+    def __init__(self, seed: Optional[int] = 42):
+        if seed is not None:
+            random.seed(seed)
+
+    def sample(
+        self,
+        log_pdf: Callable[[List[float]], float],
+        x0: List[float],
+        n_samples: int = 1000,
+        proposal_std: float = 0.5,
+        burn_in: int = 200,
+        thinning: int = 2,
+    ) -> Dict[str, Any]:
+        """Generates samples from target log-density using Gaussian random walk Metropolis-Hastings."""
+        dim = len(x0)
+        curr_x = list(x0)
+        curr_log_p = log_pdf(curr_x)
+
+        samples: List[List[float]] = []
+        accepted = 0
+        total_proposals = 0
+
+        # Box-Muller Gaussian random variable generator
+        def rand_normal(mean: float = 0.0, std: float = 1.0) -> float:
+            u1 = max(random.random(), 1e-12)
+            u2 = random.random()
+            z = math.sqrt(-2.0 * math.log(u1)) * math.cos(2.0 * math.pi * u2)
+            return mean + z * std
+
+        total_steps = burn_in + n_samples * thinning
+
+        for step in range(total_steps):
+            # Propose candidate: x' ~ N(x, proposal_std^2 * I)
+            cand_x = [rand_normal(curr_x[d], proposal_std) for d in range(dim)]
+            cand_log_p = log_pdf(cand_x)
+
+            log_alpha = cand_log_p - curr_log_p
+            total_proposals += 1
+
+            if log_alpha >= 0.0 or math.log(max(random.random(), 1e-12)) < log_alpha:
+                curr_x = cand_x
+                curr_log_p = cand_log_p
+                accepted += 1
+
+            if step >= burn_in and (step - burn_in) % thinning == 0:
+                samples.append([round(v, 6) for v in curr_x])
+
+        acceptance_rate = accepted / max(total_proposals, 1)
+
+        # Compute empirical mean and standard deviation per dimension
+        means = []
+        stds = []
+        for d in range(dim):
+            vals = [s[d] for s in samples]
+            m = sum(vals) / len(vals) if vals else 0.0
+            var = sum((v - m) ** 2 for v in vals) / len(vals) if len(vals) > 1 else 0.0
+            means.append(round(m, 4))
+            stds.append(round(math.sqrt(var), 4))
+
+        return {
+            "samples": samples,
+            "n_samples": len(samples),
+            "acceptance_rate": round(acceptance_rate, 4),
+            "means": means,
+            "stds": stds,
+            "dim": dim,
+        }
+
+
+class JacksonQueuingNetwork:
+    """Solves open Jackson Queueing Networks using traffic flow balance equations."""
+
+    def __init__(
+        self,
+        arrival_rates: List[float],
+        service_rates: List[float],
+        routing_matrix: List[List[float]],
+        num_servers: Optional[List[int]] = None,
+    ):
+        self.gamma = [float(v) for v in arrival_rates]
+        self.mu = [float(v) for v in service_rates]
+        self.P = [[float(v) for v in row] for row in routing_matrix]
+        self.m = len(self.gamma)
+        self.servers = list(num_servers or [1] * self.m)
+
+    def solve(self) -> Dict[str, Any]:
+        """
+        Solves traffic equations: lambda_i = gamma_i + sum_j (lambda_j * P_{ji})
+        Equivalent to (I - P^T) * lambda = gamma.
+        """
+        # Form matrix M = I - P^T
+        M = [[0.0] * self.m for _ in range(self.m)]
+        for i in range(self.m):
+            for j in range(self.m):
+                M[i][j] = (1.0 if i == j else 0.0) - self.P[j][i]
+
+        # Solve M * lambda = gamma using Gaussian elimination
+        aug = [list(M[i]) + [self.gamma[i]] for i in range(self.m)]
+        for col in range(self.m):
+            pivot_row = max(range(col, self.m), key=lambda r: abs(aug[r][col]))
+            if abs(aug[pivot_row][col]) < 1e-12:
+                raise ValueError("Singular traffic equations matrix in Jackson Network")
+            aug[col], aug[pivot_row] = aug[pivot_row], aug[col]
+
+            pivot = aug[col][col]
+            for c_idx in range(col, self.m + 1):
+                aug[col][c_idx] /= pivot
+
+            for r in range(self.m):
+                if r != col:
+                    factor = aug[r][col]
+                    for c_idx in range(col, self.m + 1):
+                        aug[r][c_idx] -= factor * aug[col][c_idx]
+
+        lambdas = [aug[r][self.m] for r in range(self.m)]
+
+        # Compute queue metrics
+        stations = []
+        is_stable = True
+        total_L = 0.0
+
+        for i in range(self.m):
+            lam = lambdas[i]
+            mu = self.mu[i]
+            c = self.servers[i]
+            rho = lam / (c * mu) if (c * mu) > 0 else 1.0
+
+            if rho >= 1.0:
+                is_stable = False
+                L_i = float("inf")
+                W_i = float("inf")
+            else:
+                # Single server M/M/1 approximation: L = rho / (1 - rho)
+                L_i = rho / (1.0 - rho)
+                W_i = L_i / lam if lam > 0 else 0.0
+                total_L += L_i
+
+            stations.append({
+                "station_id": i,
+                "arrival_rate": round(lam, 4),
+                "service_rate": mu,
+                "utilization": round(rho, 4),
+                "mean_queue_length": round(L_i, 4) if L_i != float("inf") else None,
+                "mean_waiting_time": round(W_i, 4) if W_i != float("inf") else None,
+            })
+
+        total_gamma = sum(self.gamma)
+        total_W = total_L / total_gamma if (total_gamma > 0 and is_stable) else None
+
+        return {
+            "is_stable": is_stable,
+            "stations": stations,
+            "total_arrival_rate": round(total_gamma, 4),
+            "total_mean_customers": round(total_L, 4) if is_stable else None,
+            "total_mean_response_time": round(total_W, 4) if total_W is not None else None,
+        }
+
+
+def sim_create_abm_2d(width: float = 100.0, height: float = 100.0, num_agents: int = 50) -> AgentBasedModel2D:
+    """Instantiates a 2D Agent-Based Model."""
+    return AgentBasedModel2D(width=width, height=height, num_agents=num_agents)
+
+
+def sim_mcmc_sample(
+    log_pdf: Callable[[List[float]], float],
+    x0: List[float],
+    n_samples: int = 500,
+    proposal_std: float = 0.5,
+) -> Dict[str, Any]:
+    """Generates samples using Metropolis-Hastings MCMC."""
+    sampler = MCMCSampler()
+    return sampler.sample(log_pdf, x0, n_samples=n_samples, proposal_std=proposal_std)
+
+
+def sim_jackson_network(
+    arrival_rates: List[float],
+    service_rates: List[float],
+    routing_matrix: List[List[float]],
+) -> Dict[str, Any]:
+    """Solves an open Jackson Queuing Network."""
+    net = JacksonQueuingNetwork(arrival_rates, service_rates, routing_matrix)
+    return net.solve()
+
+
+
 

@@ -22,6 +22,14 @@ from doomscript.domains.ml.runtime import (
     ml_train_isolation_forest,
     RandomForestModel,
     ml_train_random_forest,
+    LinearSVM,
+    KMeansPlusPlus,
+    TinyConvNet,
+    GradientBoostedTreesExact,
+    ml_svm_train,
+    ml_kmeans_plus_plus,
+    ml_tiny_convnet,
+    ml_xgboost_exact,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.ml.exporter import MLASTExporter
@@ -172,5 +180,13 @@ __all__ = [
     "ml_train_isolation_forest",
     "RandomForestModel",
     "ml_train_random_forest",
+    "LinearSVM",
+    "KMeansPlusPlus",
+    "TinyConvNet",
+    "GradientBoostedTreesExact",
+    "ml_svm_train",
+    "ml_kmeans_plus_plus",
+    "ml_tiny_convnet",
+    "ml_xgboost_exact",
 ]
 

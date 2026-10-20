@@ -44,6 +44,12 @@ from doomscript.domains.agent.runtime import (
     ToolHarness,
     AgentMemoryBuffer,
     ReActAgent,
+    TreeOfThoughts,
+    ToTNode,
+    MultiAgentDebate,
+    agent_react_run,
+    agent_tree_of_thoughts_search,
+    agent_run_debate,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.agent.exporter import AgentASTExporter
@@ -207,4 +213,10 @@ __all__ = [
     "ToolHarness",
     "AgentMemoryBuffer",
     "ReActAgent",
+    "TreeOfThoughts",
+    "ToTNode",
+    "MultiAgentDebate",
+    "agent_react_run",
+    "agent_tree_of_thoughts_search",
+    "agent_run_debate",
 ]

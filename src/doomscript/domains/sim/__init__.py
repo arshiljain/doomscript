@@ -45,6 +45,13 @@ from doomscript.domains.sim.runtime import (
     SimResource,
     DiscreteEventSimulation,
     sim_create_discrete_event_sim,
+    AgentBasedModel2D,
+    Agent2D,
+    MCMCSampler,
+    JacksonQueuingNetwork,
+    sim_create_abm_2d,
+    sim_mcmc_sample,
+    sim_jackson_network,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.sim.exporter import SimASTExporter
@@ -199,4 +206,11 @@ __all__ = [
     "SimResource",
     "DiscreteEventSimulation",
     "sim_create_discrete_event_sim",
+    "AgentBasedModel2D",
+    "Agent2D",
+    "MCMCSampler",
+    "JacksonQueuingNetwork",
+    "sim_create_abm_2d",
+    "sim_mcmc_sample",
+    "sim_jackson_network",
 ]

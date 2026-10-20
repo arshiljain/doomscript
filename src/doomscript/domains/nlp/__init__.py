@@ -23,6 +23,11 @@ from doomscript.domains.nlp.runtime import (
     HMMPOSTagger,
     Word2VecSimple,
     TextRankSummarizer,
+    BytePairEncoder,
+    Word2VecCBOW,
+    nlp_bpe_train,
+    nlp_hmm_pos_tagger,
+    nlp_cbow_word2vec,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.nlp.exporter import NLPASTExporter
@@ -191,5 +196,10 @@ __all__ = [
     "TextRankSummarizer",
     "KneserNeyLanguageModel",
     "nlp_kneser_ney",
+    "BytePairEncoder",
+    "Word2VecCBOW",
+    "nlp_bpe_train",
+    "nlp_hmm_pos_tagger",
+    "nlp_cbow_word2vec",
 ]
 
