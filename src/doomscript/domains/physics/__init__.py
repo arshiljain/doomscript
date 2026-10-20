@@ -39,6 +39,14 @@ from doomscript.domains.physics.runtime import (
     physics_simulate_cloth,
     physics_rigid_body_3d,
     physics_simulate_sph,
+    ElectromagneticFieldSolver,
+    ThermodynamicCyclesEngine,
+    RelativisticKinematicsLorentz,
+    physics_biot_savart_loop,
+    physics_lorentz_force,
+    physics_carnot_cycle,
+    physics_otto_cycle,
+    physics_lorentz_factor,
 )
 from doomscript.domains.physics.parser import PhysicsDomainParser
 from doomscript.domains.physics.exporter import PhysicsASTExporter
@@ -142,4 +150,12 @@ __all__ = [
     "physics_simulate_cloth",
     "physics_rigid_body_3d",
     "physics_simulate_sph",
+    "ElectromagneticFieldSolver",
+    "ThermodynamicCyclesEngine",
+    "RelativisticKinematicsLorentz",
+    "physics_biot_savart_loop",
+    "physics_lorentz_force",
+    "physics_carnot_cycle",
+    "physics_otto_cycle",
+    "physics_lorentz_factor",
 ]

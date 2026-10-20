@@ -39,6 +39,10 @@ from doomscript.domains.astronomy.runtime import (
     astronomy_calculate_bi_elliptic,
     astronomy_precession_j2000_to_date,
     astronomy_calculate_rise_set,
+    LambertTargetingSolver,
+    LagrangePointsCalculator,
+    astronomy_lambert_solve,
+    astronomy_lagrange_points,
 )
 from doomscript.domains.astronomy.parser import AstronomyDomainParser
 from doomscript.domains.astronomy.exporter import AstronomyASTExporter
@@ -123,4 +127,8 @@ __all__ = [
     "astronomy_calculate_bi_elliptic",
     "astronomy_precession_j2000_to_date",
     "astronomy_calculate_rise_set",
+    "LambertTargetingSolver",
+    "LagrangePointsCalculator",
+    "astronomy_lambert_solve",
+    "astronomy_lagrange_points",
 ]

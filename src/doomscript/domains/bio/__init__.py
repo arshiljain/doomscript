@@ -38,6 +38,13 @@ from doomscript.domains.bio.runtime import (
     bio_predict_rna_structure,
     bio_digest_dna,
     bio_calculate_cai,
+    PhylogeneticTreeUPGMA,
+    BurrowsWheelerTransformBWT,
+    HiddenMarkovModelCpGIslandFinder,
+    bio_upgma_tree,
+    bio_bwt_transform,
+    bio_bwt_count,
+    bio_find_cpg_islands,
 )
 from doomscript.domains.bio.parser import BioDomainParser
 from doomscript.domains.bio.exporter import BioASTExporter
@@ -142,4 +149,11 @@ __all__ = [
     "bio_predict_rna_structure",
     "bio_digest_dna",
     "bio_calculate_cai",
+    "PhylogeneticTreeUPGMA",
+    "BurrowsWheelerTransformBWT",
+    "HiddenMarkovModelCpGIslandFinder",
+    "bio_upgma_tree",
+    "bio_bwt_transform",
+    "bio_bwt_count",
+    "bio_find_cpg_islands",
 ]

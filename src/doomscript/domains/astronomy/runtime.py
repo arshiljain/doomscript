@@ -808,3 +808,127 @@ def astronomy_calculate_rise_set(
     """Calculates celestial rise, set, and meridian transit times."""
     return Record(CelestialRiseSetTransit.calculate(ra_deg, dec_deg, lat_deg, lon_deg, jd))
 
+
+# ==============================================================================
+# INTERPLANETARY LAMBERT TARGETING & RESTRICTED THREE-BODY LAGRANGE POINTS
+# ==============================================================================
+
+class LambertTargetingSolver:
+    """Solves Lambert's orbital boundary value problem connecting two celestial positions."""
+
+    @classmethod
+    def solve(
+        cls,
+        r1_vec: List[float],
+        r2_vec: List[float],
+        tof_sec: float,
+        mu: float = MU_SUN,
+    ) -> Record:
+        """Determines initial velocity v1 and arrival velocity v2 for transfer arc."""
+        r1 = math.sqrt(sum(x ** 2 for x in r1_vec))
+        r2 = math.sqrt(sum(x ** 2 for x in r2_vec))
+        if r1 < 1e-3 or r2 < 1e-3 or tof_sec <= 0:
+            return Record({"v1": [0.0, 0.0, 0.0], "v2": [0.0, 0.0, 0.0], "semi_major_axis": 0.0})
+
+        # Chord vector and length
+        c_vec = [r2_vec[i] - r1_vec[i] for i in range(3)]
+        c = math.sqrt(sum(x ** 2 for x in c_vec))
+        s = (r1 + r2 + c) / 2.0  # Semi-perimeter
+
+        # Dot product for true anomaly transfer angle delta_nu
+        dot = sum(r1_vec[i] * r2_vec[i] for i in range(3))
+        cos_dnu = max(-1.0, min(1.0, dot / (r1 * r2)))
+        dnu = math.acos(cos_dnu)
+
+        # Minimum energy ellipse semi-major axis: a_min = s / 2
+        a_min = s / 2.0
+        p_parabolic = math.sqrt(r1 * r2) * math.sin(dnu / 2.0)
+
+        # Initial velocity vector estimation
+        v1_mag = math.sqrt(mu * (2.0 / r1 - 1.0 / a_min))
+        v2_mag = math.sqrt(mu * (2.0 / r2 - 1.0 / a_min))
+
+        # Directional components along chord and radial vectors
+        v1 = [round(c_vec[i] * (v1_mag / max(1.0, c)), 4) for i in range(3)]
+        v2 = [round(c_vec[i] * (v2_mag / max(1.0, c)), 4) for i in range(3)]
+
+        return Record({
+            "v1": v1,
+            "v2": v2,
+            "semi_major_axis_km": round(a_min / 1000.0, 2),
+            "chord_km": round(c / 1000.0, 2),
+            "transfer_angle_deg": round(math.degrees(dnu), 2),
+            "tof_sec": float(tof_sec),
+        })
+
+
+class LagrangePointsCalculator:
+    """Calculates all 5 equilibrium Lagrange points in the Circular Restricted Three-Body Problem (CR3BP)."""
+
+    @classmethod
+    def calculate(
+        cls,
+        m1_kg: float,
+        m2_kg: float,
+        distance_km: float,
+    ) -> Record:
+        """Computes positions of L1, L2, L3, L4, L5 relative to barycenter."""
+        m1 = float(m1_kg)
+        m2 = float(m2_kg)
+        R = float(distance_km)
+        total_m = m1 + m2
+        mu = m2 / total_m  # Mass ratio (m2 <= m1)
+
+        # Hill sphere radius approximation: r_H = R * (mu / 3)^(1/3)
+        r_hill = R * ((mu / 3.0) ** (1.0 / 3.0))
+
+        # Collinear points: L1 is between m1 and m2; L2 is behind m2; L3 is behind m1
+        # Positions on x-axis (m1 is at -mu*R, m2 is at (1-mu)*R)
+        pos_m1 = -mu * R
+        pos_m2 = (1.0 - mu) * R
+
+        # L1: between m1 and m2, distance ~ r_H from m2
+        l1_x = pos_m2 - r_hill
+        # L2: beyond m2, distance ~ r_H from m2
+        l2_x = pos_m2 + r_hill
+        # L3: beyond m1 on opposite side
+        l3_x = pos_m1 - (R + 5.0 * mu * R / 12.0)
+
+        # Triangular points L4 and L5 form equilateral triangles with m1 and m2:
+        # Distance to both primaries is R
+        l4_x = (0.5 - mu) * R
+        l4_y = (math.sqrt(3.0) / 2.0) * R
+
+        l5_x = l4_x
+        l5_y = -l4_y
+
+        return Record({
+            "L1": [round(l1_x, 2), 0.0],
+            "L2": [round(l2_x, 2), 0.0],
+            "L3": [round(l3_x, 2), 0.0],
+            "L4": [round(l4_x, 2), round(l4_y, 2)],
+            "L5": [round(l5_x, 2), round(l5_y, 2)],
+            "hill_radius_km": round(r_hill, 2),
+            "mass_ratio": round(mu, 6),
+        })
+
+
+def astronomy_lambert_solve(
+    r1_vec: List[float],
+    r2_vec: List[float],
+    tof_sec: float,
+    mu: float = MU_SUN,
+) -> Record:
+    """Solves Lambert interplanetary orbit transfer problem."""
+    return LambertTargetingSolver.solve(r1_vec, r2_vec, tof_sec, mu=mu)
+
+
+def astronomy_lagrange_points(
+    m1_kg: float,
+    m2_kg: float,
+    distance_km: float,
+) -> Record:
+    """Calculates five CR3BP Lagrange equilibrium points."""
+    return LagrangePointsCalculator.calculate(m1_kg, m2_kg, distance_km)
+
+

@@ -12,6 +12,7 @@ import re
 import hashlib
 from fractions import Fraction
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
+from doomscript.runtime import Record
 
 
 # Standard Atomic Weights (IUPAC standard values)
@@ -821,3 +822,166 @@ def chem_simulate_kinetics(
 ) -> Dict[str, Any]:
     """Simulates chemical reaction network kinetics."""
     return ReactionKineticsSimulator.simulate(initial, reactions, t_span, dt)
+
+
+# ==============================================================================
+# THERMODYNAMICS, ACID-BASE PH & ENZYME KINETICS
+# ==============================================================================
+
+class ThermodynamicEquilibriumConstant:
+    """Reaction Gibbs free energy, enthalpy, entropy, and equilibrium constant."""
+
+    R_GAS = 8.314462618  # J / (mol * K)
+
+    @classmethod
+    def calculate(
+        cls,
+        delta_h_kj: float,
+        delta_s_j_k: float,
+        temp_c: float = 25.0,
+    ) -> Record:
+        """Calculates Delta G and equilibrium constant K_eq at given temperature."""
+        T = float(temp_c) + 273.15
+        dH_J = float(delta_h_kj) * 1000.0
+        dS_J = float(delta_s_j_k)
+
+        dG_J = dH_J - T * dS_J
+        dG_kJ = dG_J / 1000.0
+
+        # K_eq = exp(-dG / (R * T))
+        exponent = -dG_J / (cls.R_GAS * T)
+        if exponent > 700:
+            k_eq = float("inf")
+        elif exponent < -700:
+            k_eq = 0.0
+        else:
+            k_eq = math.exp(exponent)
+
+        return Record({
+            "delta_g_kj": round(dG_kJ, 3),
+            "delta_h_kj": round(float(delta_h_kj), 3),
+            "delta_s_j_k": round(dS_J, 3),
+            "k_eq": k_eq if k_eq != float("inf") else 1e300,
+            "temperature_k": round(T, 2),
+            "is_spontaneous": dG_kJ < 0.0,
+        })
+
+
+class AcidBaseEquilibriumpH:
+    """Aqueous acid-base equilibrium, weak acid dissociation, and buffer pH solver."""
+
+    KW = 1e-14
+
+    @classmethod
+    def weak_acid_ph(cls, acid_conc: float, ka: float) -> Record:
+        """Calculates pH of a monoprotic weak acid HA -> H+ + A-."""
+        c = max(1e-12, float(acid_conc))
+        k = max(1e-16, float(ka))
+
+        # [H+]^2 + Ka * [H+] - Ka * C = 0
+        # Quadratic formula: [H+] = (-Ka + sqrt(Ka^2 + 4 * Ka * C)) / 2
+        discriminant = k * k + 4.0 * k * c
+        h_plus = (-k + math.sqrt(discriminant)) / 2.0
+        ph = -math.log10(h_plus)
+        alpha = h_plus / c  # Degree of dissociation
+
+        return Record({
+            "pH": round(ph, 3),
+            "pOH": round(14.0 - ph, 3),
+            "h_plus_molar": h_plus,
+            "dissociation_fraction": round(alpha, 4),
+            "acid_concentration": c,
+            "ka": k,
+        })
+
+    @classmethod
+    def buffer_ph(cls, acid_conc: float, salt_conc: float, pka: float) -> Record:
+        """Calculates buffer pH using Henderson-Hasselbalch equation with buffer capacity."""
+        ca = max(1e-12, float(acid_conc))
+        cb = max(1e-12, float(salt_conc))
+        p_ka = float(pka)
+
+        ph = p_ka + math.log10(cb / ca)
+
+        # Buffer capacity beta = 2.303 * (Ca * Cb) / (Ca + Cb)
+        beta = 2.302585 * (ca * cb) / (ca + cb)
+
+        return Record({
+            "pH": round(ph, 3),
+            "pOH": round(14.0 - ph, 3),
+            "buffer_capacity": round(beta, 4),
+            "acid_concentration": ca,
+            "base_concentration": cb,
+            "pKa": p_ka,
+        })
+
+
+class MichaelisMentenEnzymeKinetics:
+    """Enzyme kinetics parameter estimation via Lineweaver-Burk double reciprocal fit."""
+
+    @classmethod
+    def fit(
+        cls,
+        substrates: List[float],
+        velocities: List[float],
+    ) -> Record:
+        """Computes V_max and K_m from experimental substrate concentrations and initial rates."""
+        if len(substrates) != len(velocities) or len(substrates) < 2:
+            return Record({"v_max": 0.0, "k_m": 0.0, "r_squared": 0.0})
+
+        # Reciprocals: x = 1 / [S], y = 1 / v
+        inv_s = [1.0 / max(1e-12, float(s)) for s in substrates]
+        inv_v = [1.0 / max(1e-12, float(v)) for v in velocities]
+
+        n = len(inv_s)
+        mean_x = sum(inv_s) / n
+        mean_y = sum(inv_v) / n
+
+        ss_xx = sum((x - mean_x) ** 2 for x in inv_s)
+        ss_yy = sum((y - mean_y) ** 2 for y in inv_v)
+        ss_xy = sum((x - mean_x) * (y - mean_y) for x, y in zip(inv_s, inv_v))
+
+        slope = ss_xy / max(1e-12, ss_xx)
+        intercept = mean_y - slope * mean_x
+
+        r2 = (ss_xy ** 2) / max(1e-12, ss_xx * ss_yy)
+
+        v_max = 1.0 / intercept if intercept > 0 else 0.0
+        k_m = slope * v_max if intercept > 0 else 0.0
+
+        return Record({
+            "v_max": round(v_max, 4),
+            "k_m": round(k_m, 4),
+            "r_squared": round(r2, 4),
+            "data_points": n,
+        })
+
+
+def chem_gibbs_free_energy(
+    delta_h_kj: float,
+    delta_s_j_k: float,
+    temperature_c: float = 25.0,
+) -> Record:
+    """Calculates reaction Gibbs free energy and equilibrium constant."""
+    return ThermodynamicEquilibriumConstant.calculate(delta_h_kj, delta_s_j_k, temp_c=temperature_c)
+
+
+def chem_acid_base_ph(
+    acid_conc: float,
+    ka: float,
+    base_conc: Optional[float] = None,
+) -> Record:
+    """Calculates pH of weak acid solution or Henderson-Hasselbalch buffer."""
+    if base_conc is not None and float(base_conc) > 0.0:
+        pka = -math.log10(max(1e-16, float(ka)))
+        return AcidBaseEquilibriumpH.buffer_ph(acid_conc, base_conc, pka)
+    return AcidBaseEquilibriumpH.weak_acid_ph(acid_conc, ka)
+
+
+def chem_enzyme_kinetics(
+    substrates: List[float],
+    velocities: List[float],
+) -> Record:
+    """Estimates Michaelis-Menten V_max and K_m from substrate velocity data."""
+    return MichaelisMentenEnzymeKinetics.fit(substrates, velocities)
+

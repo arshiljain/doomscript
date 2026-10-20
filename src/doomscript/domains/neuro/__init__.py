@@ -34,6 +34,12 @@ from doomscript.domains.neuro.runtime import (
     neuro_simulate_wilson_cowan,
     neuro_analyze_eeg_bands,
     neuro_compute_psth,
+    SpikeTrainCrossCorrelogram,
+    LiquidStateMachineLSM,
+    FitzHughNagumoSimulator,
+    neuro_simulate_fitzhugh_nagumo,
+    neuro_spike_cross_correlation,
+    neuro_simulate_lsm,
 )
 from doomscript.domains.neuro.parser import NeuroDomainParser
 from doomscript.domains.neuro.exporter import NeuroASTExporter
@@ -120,4 +126,10 @@ __all__ = [
     "neuro_simulate_wilson_cowan",
     "neuro_analyze_eeg_bands",
     "neuro_compute_psth",
+    "SpikeTrainCrossCorrelogram",
+    "LiquidStateMachineLSM",
+    "FitzHughNagumoSimulator",
+    "neuro_simulate_fitzhugh_nagumo",
+    "neuro_spike_cross_correlation",
+    "neuro_simulate_lsm",
 ]

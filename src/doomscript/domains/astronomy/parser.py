@@ -78,6 +78,26 @@ class AstronomyDomainParser(DomainParser):
             target = m_rs.group(6).strip()
             return f"set {target} to astronomy_calculate_rise_set({ra}, {dec}, {lat}, {lon}, {jd})"
 
+        # solve lambert transfer from <r1> to <r2> with tof <tof> into <target>
+        m_lamb = re.match(
+            r"^solve\s+lambert\s+transfer\s+from\s+(.+?)\s+to\s+(.+?)\s+with\s+tof\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_lamb:
+            r1, r2, tof, target = m_lamb.group(1).strip(), m_lamb.group(2).strip(), m_lamb.group(3).strip(), m_lamb.group(4).strip()
+            return f"set {target} to astronomy_lambert_solve({r1}, {r2}, {tof})"
+
+        # calculate lagrange points for mass1 <m1> and mass2 <m2> at distance <dist> into <target>
+        m_lag = re.match(
+            r"^calculate\s+lagrange\s+points\s+for\s+mass1\s+(.+?)\s+and\s+mass2\s+(.+?)\s+at\s+distance\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_lag:
+            m1, m2, dist, target = m_lag.group(1).strip(), m_lag.group(2).strip(), m_lag.group(3).strip(), m_lag.group(4).strip()
+            return f"set {target} to astronomy_lagrange_points({m1}, {m2}, {dist})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

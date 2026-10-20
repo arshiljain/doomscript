@@ -3239,6 +3239,13 @@ from doomscript.domains.bio.runtime import (
     bio_predict_rna_structure,
     bio_digest_dna,
     bio_calculate_cai,
+    PhylogeneticTreeUPGMA,
+    BurrowsWheelerTransformBWT,
+    HiddenMarkovModelCpGIslandFinder,
+    bio_upgma_tree,
+    bio_bwt_transform,
+    bio_bwt_count,
+    bio_find_cpg_islands,
 )
 bio_transcribe_dna = bio_transcribe
 bio_translate_rna = bio_translate
@@ -3269,6 +3276,14 @@ from doomscript.domains.physics.runtime import (
     physics_simulate_cloth,
     physics_rigid_body_3d,
     physics_simulate_sph,
+    ElectromagneticFieldSolver,
+    ThermodynamicCyclesEngine,
+    RelativisticKinematicsLorentz,
+    physics_biot_savart_loop,
+    physics_lorentz_force,
+    physics_carnot_cycle,
+    physics_otto_cycle,
+    physics_lorentz_factor,
 )
 physics_trajectory = physics_projectile_trajectory
 physics_ballistic_range = physics_projectile_range
@@ -3603,6 +3618,10 @@ from doomscript.domains.astronomy.runtime import (
     astronomy_calculate_bi_elliptic,
     astronomy_precession_j2000_to_date,
     astronomy_calculate_rise_set,
+    LambertTargetingSolver,
+    LagrangePointsCalculator,
+    astronomy_lambert_solve,
+    astronomy_lagrange_points,
 )
 
 from doomscript.domains.chem.runtime import (
@@ -3624,6 +3643,12 @@ from doomscript.domains.chem.runtime import (
     chem_morgan_fingerprint,
     chem_tanimoto_similarity,
     chem_simulate_kinetics,
+    ThermodynamicEquilibriumConstant,
+    AcidBaseEquilibriumpH,
+    MichaelisMentenEnzymeKinetics,
+    chem_gibbs_free_energy,
+    chem_acid_base_ph,
+    chem_enzyme_kinetics,
 )
 
 from doomscript.domains.compression.runtime import (
@@ -3776,6 +3801,12 @@ from doomscript.domains.neuro.runtime import (
     neuro_simulate_wilson_cowan,
     neuro_analyze_eeg_bands,
     neuro_compute_psth,
+    SpikeTrainCrossCorrelogram,
+    LiquidStateMachineLSM,
+    FitzHughNagumoSimulator,
+    neuro_simulate_fitzhugh_nagumo,
+    neuro_spike_cross_correlation,
+    neuro_simulate_lsm,
 )
 
 from doomscript.domains.automata.runtime import (

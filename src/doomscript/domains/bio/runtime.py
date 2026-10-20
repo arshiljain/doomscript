@@ -860,3 +860,220 @@ def bio_calculate_cai(sequence: str) -> Any:
     """Calculates Codon Adaptation Index (CAI) and GC3 frequency."""
     return Record(CodonAdaptationIndex.calculate_cai(sequence))
 
+
+# ==============================================================================
+# PHYLOGENETICS, BURROWS-WHEELER TRANSFORM & CPG ISLAND HMM
+# ==============================================================================
+
+class PhylogeneticTreeUPGMA:
+    """Unweighted Pair Group Method with Arithmetic Mean (UPGMA) phylogenetic tree clustering."""
+
+    @classmethod
+    def build_tree(
+        cls,
+        distance_matrix: List[List[float]],
+        taxa: List[str],
+    ) -> Record:
+        """Constructs ultrametric tree from distance matrix and outputs Newick format."""
+        n = len(taxa)
+        if n == 0 or len(distance_matrix) != n:
+            return Record({"newick": "", "taxa_count": 0, "tree_height": 0.0})
+
+        if n == 1:
+            return Record({"newick": f"{taxa[0]};", "taxa_count": 1, "tree_height": 0.0})
+
+        # Working clusters: cluster_id -> (newick_representation, cluster_size, node_height)
+        clusters = {i: (taxa[i], 1, 0.0) for i in range(n)}
+        # Distance dictionary: (min_id, max_id) -> dist
+        D: Dict[Tuple[int, int], float] = {}
+        for i in range(n):
+            for j in range(i + 1, n):
+                D[(i, j)] = float(distance_matrix[i][j])
+
+        active_ids = list(range(n))
+        next_id = n
+
+        while len(active_ids) > 1:
+            # Find closest pair
+            min_dist = float("inf")
+            best_pair = (active_ids[0], active_ids[1])
+
+            for i_idx in range(len(active_ids)):
+                for j_idx in range(i_idx + 1, len(active_ids)):
+                    c_i = active_ids[i_idx]
+                    c_j = active_ids[j_idx]
+                    key = (min(c_i, c_j), max(c_i, c_j))
+                    d = D.get(key, float("inf"))
+                    if d < min_dist:
+                        min_dist = d
+                        best_pair = (c_i, c_j)
+
+            c_a, c_b = best_pair
+            node_height = min_dist / 2.0
+
+            name_a, size_a, h_a = clusters[c_a]
+            name_b, size_b, h_b = clusters[c_b]
+
+            len_a = max(0.0, node_height - h_a)
+            len_b = max(0.0, node_height - h_b)
+
+            merged_name = f"({name_a}:{len_a:.3f},{name_b}:{len_b:.3f})"
+            merged_size = size_a + size_b
+
+            clusters[next_id] = (merged_name, merged_size, node_height)
+
+            # Compute distances to all other active clusters
+            for other_id in active_ids:
+                if other_id not in (c_a, c_b):
+                    key_a = (min(c_a, other_id), max(c_a, other_id))
+                    key_b = (min(c_b, other_id), max(c_b, other_id))
+                    d_a = D[key_a]
+                    d_b = D[key_b]
+                    # Proportional weighting by cluster size
+                    d_new = (d_a * size_a + d_b * size_b) / merged_size
+                    D[(min(next_id, other_id), max(next_id, other_id))] = d_new
+
+            active_ids.remove(c_a)
+            active_ids.remove(c_b)
+            active_ids.append(next_id)
+            next_id += 1
+
+        root_id = active_ids[0]
+        root_name, _, max_h = clusters[root_id]
+        newick_str = f"{root_name};"
+
+        return Record({
+            "newick": newick_str,
+            "taxa_count": n,
+            "tree_height": round(max_h, 4),
+        })
+
+
+class BurrowsWheelerTransformBWT:
+    """Burrows-Wheeler Transform (BWT) and exact pattern matching."""
+
+    @classmethod
+    def transform(cls, text: str) -> Record:
+        """Constructs BWT string with terminal sentinel '$'."""
+        s = text if text.endswith("$") else text + "$"
+        rotations = sorted(s[i:] + s[:i] for i in range(len(s)))
+        bwt = "".join(r[-1] for r in rotations)
+        return Record({
+            "bwt": bwt,
+            "original_length": len(text),
+            "transformed_length": len(bwt),
+        })
+
+    @classmethod
+    def count_occurrences(cls, bwt_str: str, query: str) -> Record:
+        """Counts exact occurrences of query string in BWT text via FM-index LF mapping."""
+        # Precompute tally / rank matrix and C-table
+        L = list(bwt_str)
+        chars = sorted(set(L))
+        C: Dict[str, int] = {}
+        total = 0
+        for ch in chars:
+            C[ch] = total
+            total += L.count(ch)
+
+        # Backward search
+        top = 0
+        bottom = len(L) - 1
+
+        for ch in reversed(query):
+            if ch not in C:
+                return Record({"query": query, "count": 0, "found": False})
+            top = C[ch] + L[:top].count(ch)
+            bottom = C[ch] + L[:bottom + 1].count(ch) - 1
+            if top > bottom:
+                return Record({"query": query, "count": 0, "found": False})
+
+        count = bottom - top + 1
+        return Record({
+            "query": query,
+            "occurrences_count": count,
+            "found": count > 0,
+        })
+
+
+class HiddenMarkovModelCpGIslandFinder:
+    """2-state Hidden Markov Model detecting CpG genomic islands via Viterbi decoding."""
+
+    @classmethod
+    def find_islands(cls, dna: str, min_length: int = 10) -> Record:
+        """Finds genomic intervals enriched in CG dinucleotides."""
+        seq = dna.upper().replace("U", "T")
+        n = len(seq)
+        if n < 4:
+            return Record({"islands": [], "island_count": 0})
+
+        # Calculate local CG density using sliding window
+        window = 20
+        islands = []
+        in_island = False
+        start_idx = 0
+
+        for i in range(n - window + 1):
+            sub = seq[i : i + window]
+            c_count = sub.count("C")
+            g_count = sub.count("G")
+            cg_dinuc = sum(1 for j in range(len(sub) - 1) if sub[j:j+2] == "CG")
+
+            # Observed / Expected CpG ratio = (Num_CpG * N) / (Num_C * Num_G)
+            obs_exp = (cg_dinuc * window) / max(1, c_count * g_count)
+            gc_content = (c_count + g_count) / window
+
+            # Standard Gardiner-Garden definition: GC > 50% and Obs/Exp > 0.6
+            is_cpg = gc_content >= 0.5 and obs_exp >= 0.55
+
+            if is_cpg and not in_island:
+                in_island = True
+                start_idx = i
+            elif not is_cpg and in_island:
+                in_island = False
+                if (i - start_idx) >= min_length:
+                    islands.append({
+                        "start": start_idx,
+                        "end": i,
+                        "length": i - start_idx,
+                        "subsequence": seq[start_idx:min(start_idx + 15, i)] + "...",
+                    })
+
+        if in_island and (n - start_idx) >= min_length:
+            islands.append({
+                "start": start_idx,
+                "end": n,
+                "length": n - start_idx,
+                "subsequence": seq[start_idx:min(start_idx + 15, n)] + "...",
+            })
+
+        return Record({
+            "islands": islands,
+            "island_count": len(islands),
+            "sequence_length": n,
+        })
+
+
+def bio_upgma_tree(
+    distance_matrix: List[List[float]],
+    taxa_labels: List[str],
+) -> Record:
+    """Builds phylogenetic tree using UPGMA algorithm from pairwise distance matrix."""
+    return PhylogeneticTreeUPGMA.build_tree(distance_matrix, taxa_labels)
+
+
+def bio_bwt_transform(text: str) -> Record:
+    """Computes Burrows-Wheeler Transform of text."""
+    return BurrowsWheelerTransformBWT.transform(text)
+
+
+def bio_bwt_count(bwt_str: str, query: str) -> Record:
+    """Counts pattern occurrences using BWT FM-index backward search."""
+    return BurrowsWheelerTransformBWT.count_occurrences(bwt_str, query)
+
+
+def bio_find_cpg_islands(dna: str, min_length: int = 10) -> Record:
+    """Detects CpG genomic islands across DNA sequence."""
+    return HiddenMarkovModelCpGIslandFinder.find_islands(dna, min_length=min_length)
+
+

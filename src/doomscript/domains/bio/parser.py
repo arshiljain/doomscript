@@ -173,6 +173,52 @@ class BioDomainParser(DomainParser):
             target = m_cai.group(2).strip()
             return f"set {target} to bio_calculate_cai({seq})"
 
+        # build upgma tree from distances <matrix> and taxa <taxa> into <target>
+        m_tree = re.match(
+            r"^build\s+upgma\s+tree\s+from\s+distances\s+(.+?)\s+and\s+taxa\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_tree:
+            mat, taxa, target = m_tree.group(1).strip(), m_tree.group(2).strip(), m_tree.group(3).strip()
+            return f"set {target} to bio_upgma_tree({mat}, {taxa})"
+
+        # compute bwt of sequence <text> into <target>
+        m_bwt = re.match(
+            r"^compute\s+bwt\s+of\s+sequence\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_bwt:
+            txt, target = m_bwt.group(1).strip(), m_bwt.group(2).strip()
+            if not (txt.startswith('"') or txt.startswith("'") or txt.isidentifier()):
+                txt = f'"{txt}"'
+            return f"set {target} to bio_bwt_transform({txt})"
+
+        # count occurrences of <pattern> in bwt <bwt> into <target>
+        m_bwt_cnt = re.match(
+            r"^count\s+occurrences\s+of\s+(.+?)\s+in\s+bwt\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_bwt_cnt:
+            pat, bwt_val, target = m_bwt_cnt.group(1).strip(), m_bwt_cnt.group(2).strip(), m_bwt_cnt.group(3).strip()
+            if not (pat.startswith('"') or pat.startswith("'") or pat.isidentifier()):
+                pat = f'"{pat}"'
+            return f"set {target} to bio_bwt_count({bwt_val}, {pat})"
+
+        # find cpg islands in sequence <seq> into <target>
+        m_cpg = re.match(
+            r"^find\s+cpg\s+islands\s+in\s+sequence\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_cpg:
+            seq, target = m_cpg.group(1).strip(), m_cpg.group(2).strip()
+            if not (seq.startswith('"') or seq.startswith("'") or seq.isidentifier()):
+                seq = f'"{seq}"'
+            return f"set {target} to bio_find_cpg_islands({seq})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

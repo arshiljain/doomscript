@@ -190,6 +190,56 @@ class PhysicsDomainParser(DomainParser):
             target = m_sph.group(3).strip()
             return f"set {target} to physics_simulate_sph({n}, {steps})"
 
+        # calculate biot savart field for current <i> and radius <r> at distance <z> into <target>
+        m_bs = re.match(
+            r"^calculate\s+biot\s+savart\s+field\s+for\s+current\s+(.+?)\s+and\s+radius\s+(.+?)\s+at\s+distance\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_bs:
+            cur, rad, z, target = m_bs.group(1).strip(), m_bs.group(2).strip(), m_bs.group(3).strip(), m_bs.group(4).strip()
+            return f"set {target} to physics_biot_savart_loop({cur}, {rad}, {z})"
+
+        # calculate lorentz force for charge <q> velocity <v> efield <e> bfield <b> into <target>
+        m_lf = re.match(
+            r"^calculate\s+lorentz\s+force\s+for\s+charge\s+(.+?)\s+velocity\s+(.+?)\s+efield\s+(.+?)\s+bfield\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_lf:
+            q, v, e, b, target = m_lf.group(1).strip(), m_lf.group(2).strip(), m_lf.group(3).strip(), m_lf.group(4).strip(), m_lf.group(5).strip()
+            return f"set {target} to physics_lorentz_force({q}, {v}, {e}, {b})"
+
+        # calculate carnot efficiency for thot <th> and tcold <tc> with heat <q> into <target>
+        m_carnot = re.match(
+            r"^calculate\s+carnot\s+efficiency\s+for\s+thot\s+(.+?)\s+and\s+tcold\s+(.+?)\s+with\s+heat\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_carnot:
+            th, tc, q, target = m_carnot.group(1).strip(), m_carnot.group(2).strip(), m_carnot.group(3).strip(), m_carnot.group(4).strip()
+            return f"set {target} to physics_carnot_cycle({th}, {tc}, {q})"
+
+        # calculate otto efficiency for compression <r> with heat <q> into <target>
+        m_otto = re.match(
+            r"^calculate\s+otto\s+efficiency\s+for\s+compression\s+(.+?)\s+with\s+heat\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_otto:
+            r, q, target = m_otto.group(1).strip(), m_otto.group(2).strip(), m_otto.group(3).strip()
+            return f"set {target} to physics_otto_cycle({r}, {q})"
+
+        # calculate lorentz factor for velocity <v> into <target>
+        m_lor = re.match(
+            r"^calculate\s+lorentz\s+factor\s+for\s+velocity\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_lor:
+            v, target = m_lor.group(1).strip(), m_lor.group(2).strip()
+            return f"set {target} to physics_lorentz_factor({v})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

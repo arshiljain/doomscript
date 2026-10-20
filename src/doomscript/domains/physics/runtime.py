@@ -1005,3 +1005,165 @@ def physics_simulate_sph(num_particles: int = 20, steps: int = 20) -> Any:
     sph = FluidSPH(num_particles=num_particles)
     return Record(sph.simulate(steps=steps))
 
+
+# ==============================================================================
+# ELECTROMAGNETISM, THERMODYNAMIC CYCLES & RELATIVISTIC KINEMATICS
+# ==============================================================================
+
+class ElectromagneticFieldSolver:
+    """Calculates electromagnetic fields, Biot-Savart magnetic fields, and Lorentz forces."""
+
+    MU_0 = 1.25663706212e-6  # Vacuum permeability H/m
+    EPSILON_0 = 8.8541878128e-12  # Vacuum permittivity F/m
+    SPEED_OF_LIGHT = 299792458.0  # m/s
+
+    @classmethod
+    def biot_savart_circular_loop(
+        cls,
+        current_a: float,
+        radius_m: float,
+        z_axis_m: float,
+    ) -> Record:
+        """Magnetic field on the axis of a circular current loop: B_z = (mu_0 * I * R^2) / (2 * (R^2 + z^2)^(3/2))."""
+        I = float(current_a)
+        R = max(1e-6, float(radius_m))
+        z = float(z_axis_m)
+
+        denominator = 2.0 * ((R ** 2 + z ** 2) ** 1.5)
+        b_z = (cls.MU_0 * I * (R ** 2)) / denominator
+
+        return Record({
+            "B_tesla": round(b_z, 9),
+            "B_gauss": round(b_z * 10000.0, 5),
+            "current_a": I,
+            "radius_m": R,
+            "z_distance_m": z,
+        })
+
+    @classmethod
+    def lorentz_force(
+        cls,
+        charge_c: float,
+        velocity_m_s: List[float],
+        e_field_v_m: List[float],
+        b_field_tesla: List[float],
+    ) -> Record:
+        """Lorentz force vector F = q * (E + v x B)."""
+        q = float(charge_c)
+        vx, vy, vz = float(velocity_m_s[0]), float(velocity_m_s[1]), float(velocity_m_s[2])
+        ex, ey, ez = float(e_field_v_m[0]), float(e_field_v_m[1]), float(e_field_v_m[2])
+        bx, by, bz = float(b_field_tesla[0]), float(b_field_tesla[1]), float(b_field_tesla[2])
+
+        # Cross product: v x B
+        v_cross_b_x = vy * bz - vz * by
+        v_cross_b_y = vz * bx - vx * bz
+        v_cross_b_z = vx * by - vy * bx
+
+        fx = q * (ex + v_cross_b_x)
+        fy = q * (ey + v_cross_b_y)
+        fz = q * (ez + v_cross_b_z)
+        f_mag = math.sqrt(fx * fx + fy * fy + fz * fz)
+
+        return Record({
+            "force_vector": [round(fx, 6), round(fy, 6), round(fz, 6)],
+            "force_magnitude_n": round(f_mag, 6),
+            "charge_c": q,
+        })
+
+
+class ThermodynamicCyclesEngine:
+    """Calculates thermal efficiencies and PV work for classical thermodynamic power cycles."""
+
+    @classmethod
+    def carnot_cycle(cls, t_hot_k: float, t_cold_k: float, q_in_kj: float) -> Record:
+        """Carnot ideal cycle maximum theoretical efficiency: eta = 1 - T_c / T_h."""
+        th = max(1.0, float(t_hot_k))
+        tc = max(0.1, min(th - 0.1, float(t_cold_k)))
+        qin = max(0.0, float(q_in_kj))
+
+        eta = 1.0 - (tc / th)
+        w_net = qin * eta
+        q_out = qin - w_net
+
+        return Record({
+            "thermal_efficiency": round(eta, 4),
+            "efficiency_percent": round(eta * 100.0, 2),
+            "net_work_kj": round(w_net, 2),
+            "heat_rejected_kj": round(q_out, 2),
+            "t_hot_k": th,
+            "t_cold_k": tc,
+        })
+
+    @classmethod
+    def otto_cycle(cls, compression_ratio: float, q_in_kj: float, gamma: float = 1.4) -> Record:
+        """Four-stroke spark-ignition internal combustion engine Otto cycle: eta = 1 - 1 / r^(gamma - 1)."""
+        r = max(1.1, float(compression_ratio))
+        qin = max(0.0, float(q_in_kj))
+        g = float(gamma)
+
+        eta = 1.0 - (1.0 / (r ** (g - 1.0)))
+        w_net = qin * eta
+
+        return Record({
+            "thermal_efficiency": round(eta, 4),
+            "efficiency_percent": round(eta * 100.0, 2),
+            "net_work_kj": round(w_net, 2),
+            "compression_ratio": r,
+            "heat_input_kj": qin,
+        })
+
+
+class RelativisticKinematicsLorentz:
+    """Special Relativity Lorentz transformations, time dilation, and mass-energy equivalence."""
+
+    SPEED_OF_LIGHT = 299792458.0  # m/s
+
+    @classmethod
+    def lorentz_factor(cls, velocity_m_s: float) -> Record:
+        """Calculates Lorentz factor gamma = 1 / sqrt(1 - (v/c)^2)."""
+        v = abs(float(velocity_m_s))
+        c = cls.SPEED_OF_LIGHT
+        if v >= c:
+            v = c * (1.0 - 1e-12)
+
+        beta = v / c
+        gamma = 1.0 / math.sqrt(1.0 - beta ** 2)
+
+        return Record({
+            "gamma": round(gamma, 6),
+            "beta": round(beta, 6),
+            "velocity_m_s": v,
+            "fraction_speed_of_light": round(beta, 4),
+        })
+
+
+def physics_biot_savart_loop(current_a: float, radius_m: float, z_dist_m: float) -> Record:
+    """Calculates magnetic field from circular current loop."""
+    return ElectromagneticFieldSolver.biot_savart_circular_loop(current_a, radius_m, z_dist_m)
+
+
+def physics_lorentz_force(
+    charge_c: float,
+    velocity: List[float],
+    e_field: List[float],
+    b_field: List[float],
+) -> Record:
+    """Calculates 3D electromagnetic Lorentz force vector."""
+    return ElectromagneticFieldSolver.lorentz_force(charge_c, velocity, e_field, b_field)
+
+
+def physics_carnot_cycle(t_hot_k: float, t_cold_k: float, q_in_kj: float) -> Record:
+    """Calculates Carnot cycle thermal efficiency and work."""
+    return ThermodynamicCyclesEngine.carnot_cycle(t_hot_k, t_cold_k, q_in_kj)
+
+
+def physics_otto_cycle(compression_ratio: float, q_in_kj: float) -> Record:
+    """Calculates Otto cycle thermal efficiency and net work."""
+    return ThermodynamicCyclesEngine.otto_cycle(compression_ratio, q_in_kj)
+
+
+def physics_lorentz_factor(velocity_m_s: float) -> Record:
+    """Calculates relativistic Lorentz gamma factor."""
+    return RelativisticKinematicsLorentz.lorentz_factor(velocity_m_s)
+
+

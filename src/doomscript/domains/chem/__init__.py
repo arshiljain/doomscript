@@ -31,6 +31,12 @@ from doomscript.domains.chem.runtime import (
     chem_morgan_fingerprint,
     chem_tanimoto_similarity,
     chem_simulate_kinetics,
+    ThermodynamicEquilibriumConstant,
+    AcidBaseEquilibriumpH,
+    MichaelisMentenEnzymeKinetics,
+    chem_gibbs_free_energy,
+    chem_acid_base_ph,
+    chem_enzyme_kinetics,
 )
 from doomscript.domains.chem.parser import ChemDomainParser
 from doomscript.domains.chem.exporter import ChemASTExporter
@@ -72,11 +78,17 @@ class ChemDomain(DomainContract):
     blocks = []
 
     def can_handle_line(self, line: str) -> bool:
+        if self.parser.parse_inspect(line, 0) is not None or self.parser.parse_operation(line, 0) is not None:
+            return True
         s = line.strip().lower()
         return (
             s.startswith("calculate molecular weight of ")
             or s.startswith("parse smiles ")
             or s.startswith("balance reaction ")
+            or s.startswith("calculate gibbs free energy ")
+            or s.startswith("calculate ph of ")
+            or s.startswith("calculate enzyme kinetics ")
+            or super().can_handle_line(line)
         )
 
     def can_handle_block(self, header: str) -> bool:
@@ -108,4 +120,10 @@ __all__ = [
     "chem_morgan_fingerprint",
     "chem_tanimoto_similarity",
     "chem_simulate_kinetics",
+    "ThermodynamicEquilibriumConstant",
+    "AcidBaseEquilibriumpH",
+    "MichaelisMentenEnzymeKinetics",
+    "chem_gibbs_free_energy",
+    "chem_acid_base_ph",
+    "chem_enzyme_kinetics",
 ]

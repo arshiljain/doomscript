@@ -88,6 +88,42 @@ class NeuroDomainParser(DomainParser):
             target = m_psth.group(4).strip()
             return f"set {target} to neuro_compute_psth({trials}, {dur}, {bw})"
 
+        # simulate fitzhugh nagumo with current <i> [duration <dur>] into <target>
+        m_fhn = re.match(
+            r"^simulate\s+fitzhugh\s+nagumo\s+with\s+current\s+(.+?)(?:\s+duration\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_fhn:
+            curr = m_fhn.group(1).strip()
+            dur = m_fhn.group(2).strip() if m_fhn.group(2) else "100.0"
+            target = m_fhn.group(3).strip()
+            return f"set {target} to neuro_simulate_fitzhugh_nagumo({curr}, duration_ms={dur})"
+
+        # correlate spike trains <t1> and <t2> [max lag <lag>] into <target>
+        m_corr = re.match(
+            r"^correlate\s+spike\s+trains\s+(.+?)\s+and\s+(.+?)(?:\s+max\s+lag\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_corr:
+            t1 = m_corr.group(1).strip()
+            t2 = m_corr.group(2).strip()
+            lag = m_corr.group(3).strip() if m_corr.group(3) else "50.0"
+            target = m_corr.group(4).strip()
+            return f"set {target} to neuro_spike_cross_correlation({t1}, {t2}, max_lag_ms={lag})"
+
+        # simulate liquid state machine with inputs <inputs> into <target>
+        m_lsm = re.match(
+            r"^simulate\s+liquid\s+state\s+machine\s+with\s+inputs\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_lsm:
+            inps = m_lsm.group(1).strip()
+            target = m_lsm.group(2).strip()
+            return f"set {target} to neuro_simulate_lsm({inps})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

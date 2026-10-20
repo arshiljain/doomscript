@@ -728,3 +728,213 @@ def neuro_analyze_eeg_bands(signal: List[float], sample_rate: int = 250) -> Any:
 def neuro_compute_psth(trials: List[List[float]], duration_ms: float, bin_width_ms: float = 10.0) -> Any:
     return Record(PSTHAnalyzer.compute(trials, duration_ms, bin_width_ms))
 
+
+# ==============================================================================
+# FITZHUGH-NAGUMO DYNAMICS, SPIKE CROSS-CORRELOGRAM & LIQUID STATE MACHINE
+# ==============================================================================
+
+class FitzHughNagumoSimulator:
+    """FitzHugh-Nagumo 2D excitable membrane model for action potential bifurcation."""
+
+    def __init__(
+        self,
+        a: float = 0.7,
+        b: float = 0.8,
+        tau: float = 0.08,
+    ):
+        self.a = float(a)
+        self.b = float(b)
+        self.tau = float(tau)
+
+    def simulate(
+        self,
+        current_i: float = 0.5,
+        duration_ms: float = 100.0,
+        dt_ms: float = 0.2,
+    ) -> Record:
+        """Integrates FitzHugh-Nagumo equations using 4th-order Runge-Kutta."""
+        n_steps = max(10, int(duration_ms / dt_ms))
+        v = -1.0
+        w = -0.5
+        I_ext = float(current_i)
+
+        v_trace = []
+        w_trace = []
+        spike_count = 0
+        in_spike = False
+
+        for _ in range(n_steps):
+            # dv/dt = v - v^3 / 3 - w + I
+            # dw/dt = tau * (v + a - b * w)
+            dv = (v - (v ** 3) / 3.0 - w + I_ext) * dt_ms
+            dw = (self.tau * (v + self.a - self.b * w)) * dt_ms
+
+            v += dv
+            w += dw
+
+            if v > 1.0 and not in_spike:
+                in_spike = True
+                spike_count += 1
+            elif v < 0.0:
+                in_spike = False
+
+            v_trace.append(round(v, 4))
+            w_trace.append(round(w, 4))
+
+        return Record({
+            "v_trace": v_trace[::max(1, len(v_trace) // 50)],
+            "final_v": round(v, 4),
+            "final_w": round(w, 4),
+            "spike_count": spike_count,
+            "duration_ms": duration_ms,
+            "is_oscillating": spike_count > 1,
+        })
+
+
+class SpikeTrainCrossCorrelogram:
+    """Computes cross-correlation latency histogram between two discrete spike trains."""
+
+    @classmethod
+    def compute(
+        cls,
+        train1_ms: List[float],
+        train2_ms: List[float],
+        max_lag_ms: float = 50.0,
+        bin_width_ms: float = 2.0,
+    ) -> Record:
+        """Evaluates pairwise spike timing differences: delta = t2 - t1."""
+        max_lag = float(max_lag_ms)
+        bin_w = max(0.1, float(bin_width_ms))
+        num_bins = int(2.0 * max_lag / bin_w)
+        counts = [0] * num_bins
+        bin_edges = [-max_lag + i * bin_w for i in range(num_bins)]
+
+        for t1 in train1_ms:
+            for t2 in train2_ms:
+                dt = t2 - t1
+                if -max_lag <= dt < max_lag:
+                    b_idx = int((dt + max_lag) // bin_w)
+                    if 0 <= b_idx < num_bins:
+                        counts[b_idx] += 1
+
+        total_coincidences = sum(counts)
+        max_count = max(counts) if counts else 0
+        peak_idx = counts.index(max_count) if max_count > 0 else 0
+        peak_lag = bin_edges[peak_idx]
+
+        # Mean and standard deviation across bins
+        mean_c = total_coincidences / max(1, num_bins)
+        var_c = sum((c - mean_c) ** 2 for c in counts) / max(1, num_bins)
+        z_score = (max_count - mean_c) / math.sqrt(max(1e-6, var_c))
+
+        return Record({
+            "bin_edges_ms": [round(b, 2) for b in bin_edges],
+            "counts": counts,
+            "total_coincidences": total_coincidences,
+            "peak_lag_ms": round(peak_lag, 2),
+            "synchrony_z_score": round(z_score, 3),
+        })
+
+
+class LiquidStateMachineLSM:
+    """Reservoir computing with recurrent spiking leaky integrate-and-fire neural network."""
+
+    def __init__(
+        self,
+        num_neurons: int = 20,
+        connection_prob: float = 0.2,
+    ):
+        self.num_neurons = max(5, int(num_neurons))
+        random.seed(42)
+
+        # Initialize internal sparse weight matrix W
+        self.weights = [[0.0] * self.num_neurons for _ in range(self.num_neurons)]
+        for i in range(self.num_neurons):
+            for j in range(self.num_neurons):
+                if i != j and random.random() < connection_prob:
+                    self.weights[i][j] = round(random.uniform(-0.5, 0.8), 3)
+
+        self.voltages = [-65.0] * self.num_neurons
+        self.v_rest = -65.0
+        self.v_thresh = -50.0
+        self.v_reset = -70.0
+        self.decay = 0.9
+
+    def step(self, input_currents: List[float]) -> List[bool]:
+        """Advances liquid network state by one time step."""
+        spikes = [False] * self.num_neurons
+        new_v = [self.v_rest] * self.num_neurons
+
+        for i in range(self.num_neurons):
+            # Synaptic current from previous spikes
+            syn_input = input_currents[i] if i < len(input_currents) else 0.0
+            for j in range(self.num_neurons):
+                if self.voltages[j] >= self.v_thresh:
+                    syn_input += self.weights[j][i] * 10.0
+
+            # Leaky integration
+            v = self.v_rest + (self.voltages[i] - self.v_rest) * self.decay + syn_input
+            if v >= self.v_thresh:
+                spikes[i] = True
+                new_v[i] = self.v_reset
+            else:
+                new_v[i] = v
+
+        self.voltages = new_v
+        return spikes
+
+    def simulate(
+        self,
+        inputs: List[List[float]],
+    ) -> Record:
+        """Simulates liquid network over multiple steps and returns spiking activity."""
+        total_spikes = 0
+        spike_raster = []
+
+        for inp in inputs:
+            spks = self.step(inp)
+            total_spikes += sum(1 for s in spks if s)
+            spike_raster.append([1 if s else 0 for s in spks])
+
+        mean_rate = total_spikes / max(1, len(inputs) * self.num_neurons)
+
+        return Record({
+            "num_neurons": self.num_neurons,
+            "steps_simulated": len(inputs),
+            "total_spikes": total_spikes,
+            "mean_firing_rate": round(mean_rate, 4),
+            "final_voltages": [round(v, 2) for v in self.voltages[:5]],
+        })
+
+
+def neuro_simulate_fitzhugh_nagumo(
+    current_i: float = 0.5,
+    duration_ms: float = 100.0,
+    dt_ms: float = 0.2,
+) -> Record:
+    """Simulates 2D FitzHugh-Nagumo excitable neural oscillator."""
+    fhn = FitzHughNagumoSimulator()
+    return fhn.simulate(current_i=current_i, duration_ms=duration_ms, dt_ms=dt_ms)
+
+
+def neuro_spike_cross_correlation(
+    train1_ms: List[float],
+    train2_ms: List[float],
+    max_lag_ms: float = 50.0,
+    bin_width_ms: float = 2.0,
+) -> Record:
+    """Calculates cross-correlogram latency between two neuronal spike trains."""
+    return SpikeTrainCrossCorrelogram.compute(
+        train1_ms, train2_ms, max_lag_ms=max_lag_ms, bin_width_ms=bin_width_ms
+    )
+
+
+def neuro_simulate_lsm(
+    input_series: List[List[float]],
+    num_neurons: int = 20,
+) -> Record:
+    """Simulates Liquid State Machine spiking reservoir network."""
+    lsm = LiquidStateMachineLSM(num_neurons=num_neurons)
+    return lsm.simulate(input_series)
+
+
