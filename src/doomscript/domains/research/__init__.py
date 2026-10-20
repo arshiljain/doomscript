@@ -34,6 +34,12 @@ from doomscript.domains.research.runtime import (
     BibTeXEngine,
     CitationNetwork,
     AcademicLiteratureSynthesizer,
+    SVDDecomposition,
+    RungeKuttaFehlberg,
+    LevenbergMarquardt,
+    research_svd,
+    research_rkf45_solve,
+    research_levenberg_marquardt,
 )
 
 
@@ -154,4 +160,10 @@ __all__ = [
     "BibTeXEngine",
     "CitationNetwork",
     "AcademicLiteratureSynthesizer",
+    "SVDDecomposition",
+    "RungeKuttaFehlberg",
+    "LevenbergMarquardt",
+    "research_svd",
+    "research_rkf45_solve",
+    "research_levenberg_marquardt",
 ]

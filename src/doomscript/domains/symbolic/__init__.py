@@ -30,6 +30,12 @@ from doomscript.domains.symbolic.runtime import (
     symbolic_simplify,
     symbolic_eval,
     symbolic_poly_gcd,
+    SymbolicIntegrator,
+    TaylorSeries,
+    ExactRationalLinearSolver,
+    symbolic_integrate,
+    symbolic_taylor_series,
+    symbolic_solve_rational_linear,
 )
 from doomscript.domains.symbolic.parser import SymbolicDomainParser
 from doomscript.domains.symbolic.exporter import SymbolicASTExporter
@@ -106,4 +112,10 @@ __all__ = [
     "symbolic_simplify",
     "symbolic_eval",
     "symbolic_poly_gcd",
+    "SymbolicIntegrator",
+    "TaylorSeries",
+    "ExactRationalLinearSolver",
+    "symbolic_integrate",
+    "symbolic_taylor_series",
+    "symbolic_solve_rational_linear",
 ]

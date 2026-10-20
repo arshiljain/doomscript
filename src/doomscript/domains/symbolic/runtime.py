@@ -679,3 +679,233 @@ def symbolic_eval(expr: Union[str, Expr], subs: Dict[str, float]) -> float:
 def symbolic_poly_gcd(p1: List[float], p2: List[float]) -> List[float]:
     """Computes monic Euclidean polynomial GCD."""
     return PolyOps.poly_gcd(p1, p2)
+
+
+class SymbolicIntegrator:
+    """Exact analytical and numerical integration for symbolic expressions."""
+
+    def __init__(self):
+        pass
+
+    @classmethod
+    def integrate_polynomial(cls, coeffs: List[float]) -> List[float]:
+        """
+        Integrates a polynomial given in standard form: c_n x^n + ... + c_1 x + c_0.
+        Returns integrated polynomial coefficients with constant of integration 0.0.
+        """
+        n = len(coeffs)
+        if n == 0:
+            return [0.0]
+        integrated = []
+        for i, c in enumerate(coeffs):
+            power = n - i
+            integrated.append(round(c / power, 6))
+        integrated.append(0.0)  # Constant term + C
+        return integrated
+
+    @classmethod
+    def definite_integral_poly(cls, coeffs: List[float], a: float, b: float) -> float:
+        """Evaluates definite integral of a polynomial from a to b."""
+        integ = cls.integrate_polynomial(coeffs)
+        deg = len(integ) - 1
+
+        def eval_at(x: float) -> float:
+            val = 0.0
+            for i, c in enumerate(integ):
+                p = deg - i
+                val += c * (x ** p)
+            return val
+
+        return round(eval_at(b) - eval_at(a), 6)
+
+    @classmethod
+    def integrate_term(cls, term_str: str, var: str = "x") -> str:
+        """
+        Integrates common single mathematical terms:
+        - 'x^n' -> '(1/(n+1))*x^(n+1)'
+        - 'c' -> 'c*x'
+        - 'e^(a*x)' -> '(1/a)*e^(a*x)'
+        - 'cos(a*x)' -> '(1/a)*sin(a*x)'
+        - 'sin(a*x)' -> '(-1/a)*cos(a*x)'
+        """
+        s = term_str.strip().lower()
+        if s == var:
+            return f"(0.5 * {var}^2)"
+        if s == f"sin({var})":
+            return f"-cos({var})"
+        if s == f"cos({var})":
+            return f"sin({var})"
+        if s == f"exp({var})" or s == f"e^{var}":
+            return f"exp({var})"
+
+        # Check for x^n
+        m = re.match(rf"^{var}\^(\d+)$", s)
+        if m:
+            n = int(m.group(1))
+            return f"({round(1.0 / (n + 1), 4)} * {var}^{n + 1})"
+
+        # Check for constant number
+        try:
+            val = float(s)
+            return f"({val} * {var})"
+        except ValueError:
+            pass
+
+        return f"Integral({term_str}, {var})"
+
+
+class TaylorSeries:
+    """Computes Taylor / Maclaurin series expansions of mathematical expressions."""
+
+    def __init__(self, expr: Union[str, Expr], var: str = "x", x0: float = 0.0):
+        self.var = var
+        self.x0 = float(x0)
+        if isinstance(expr, str):
+            self.expr = symbolic_parse(expr)
+        else:
+            self.expr = expr
+
+    def expand(self, order: int = 4) -> Dict[str, Any]:
+        """
+        Generates Taylor polynomial terms up to degree 'order'.
+        T_n(x) = sum_{k=0}^n (f^(k)(x0) / k!) * (x - x0)^k
+        """
+        terms = []
+        coefficients = []
+        curr_deriv = self.expr
+
+        for k in range(order + 1):
+            fact = math.factorial(k)
+            # Evaluate derivative at x0
+            try:
+                deriv_val = curr_deriv.eval({self.var: self.x0})
+            except Exception:
+                deriv_val = 0.0
+
+            coeff = deriv_val / fact
+            coefficients.append(round(coeff, 6))
+
+            if abs(coeff) > 1e-9:
+                if k == 0:
+                    terms.append(f"{coeff:.4f}")
+                elif k == 1:
+                    if self.x0 == 0.0:
+                        terms.append(f"{coeff:.4f}*{self.var}")
+                    else:
+                        terms.append(f"{coeff:.4f}*({self.var} - {self.x0})")
+                else:
+                    if self.x0 == 0.0:
+                        terms.append(f"{coeff:.4f}*{self.var}^{k}")
+                    else:
+                        terms.append(f"{coeff:.4f}*({self.var} - {self.x0})^{k}")
+
+            curr_deriv = curr_deriv.diff(self.var).simplify()
+
+        polynomial_str = " + ".join(terms) if terms else "0.0"
+        return {
+            "order": order,
+            "center": self.x0,
+            "coefficients": coefficients,
+            "polynomial": polynomial_str,
+        }
+
+
+class ExactRationalLinearSolver:
+    """Exact rational arithmetic linear solver using fractions.Fraction."""
+
+    def __init__(self):
+        pass
+
+    @classmethod
+    def solve(cls, A: List[List[Union[int, float, str, Fraction]]], b: List[Union[int, float, str, Fraction]]) -> Dict[str, Any]:
+        """Solves A x = b exactly over Q."""
+        m = len(A)
+        n = len(A[0]) if m > 0 else 0
+        if m != n:
+            raise ValueError("Matrix A must be square for exact unique linear solver")
+
+        # Convert to Fraction matrix
+        aug = [
+            [Fraction(A[r][c]) for c in range(n)] + [Fraction(b[r])]
+            for r in range(m)
+        ]
+
+        # Gaussian elimination
+        for col in range(n):
+            pivot_row = None
+            for r in range(col, m):
+                if aug[r][col] != 0:
+                    pivot_row = r
+                    break
+
+            if pivot_row is None:
+                return {"success": False, "solution": [], "error": "Singular matrix"}
+
+            aug[col], aug[pivot_row] = aug[pivot_row], aug[col]
+            pivot = aug[col][col]
+
+            for c in range(col, n + 1):
+                aug[col][c] /= pivot
+
+            for r in range(m):
+                if r != col and aug[r][col] != 0:
+                    factor = aug[r][col]
+                    for c in range(col, n + 1):
+                        aug[r][c] -= factor * aug[col][c]
+
+        solution = [aug[r][n] for r in range(n)]
+        return {
+            "success": True,
+            "solution": [f"{s.numerator}/{s.denominator}" if s.denominator != 1 else str(s.numerator) for s in solution],
+            "solution_floats": [float(s) for s in solution],
+        }
+
+    @classmethod
+    def determinant(cls, A: List[List[Union[int, float, str, Fraction]]]) -> Fraction:
+        """Calculates exact determinant of square matrix A over Q."""
+        n = len(A)
+        M = [[Fraction(A[r][c]) for c in range(n)] for r in range(n)]
+        det = Fraction(1, 1)
+
+        for col in range(n):
+            pivot_row = None
+            for r in range(col, n):
+                if M[r][col] != 0:
+                    pivot_row = r
+                    break
+            if pivot_row is None:
+                return Fraction(0, 1)
+
+            if pivot_row != col:
+                M[col], M[pivot_row] = M[pivot_row], M[col]
+                det = -det
+
+            pivot = M[col][col]
+            det *= pivot
+
+            for r in range(col + 1, n):
+                if M[r][col] != 0:
+                    factor = M[r][col] / pivot
+                    for c in range(col, n):
+                        M[r][c] -= factor * M[col][c]
+
+        return det
+
+
+def symbolic_integrate(coeffs: List[float], a: Optional[float] = None, b: Optional[float] = None) -> Any:
+    """Analytically integrates a polynomial or computes its definite integral."""
+    if a is not None and b is not None:
+        return SymbolicIntegrator.definite_integral_poly(coeffs, a, b)
+    return SymbolicIntegrator.integrate_polynomial(coeffs)
+
+
+def symbolic_taylor_series(expr: Union[str, Expr], var: str = "x", x0: float = 0.0, order: int = 4) -> Dict[str, Any]:
+    """Generates order-N Taylor expansion of symbolic expression."""
+    ts = TaylorSeries(expr, var=var, x0=x0)
+    return ts.expand(order)
+
+
+def symbolic_solve_rational_linear(A: List[List[Any]], b: List[Any]) -> Dict[str, Any]:
+    """Solves A x = b over exact rational fractions."""
+    return ExactRationalLinearSolver.solve(A, b)
+

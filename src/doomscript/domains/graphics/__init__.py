@@ -23,6 +23,12 @@ from doomscript.domains.graphics.runtime import (
     graphics_draw_circle,
     graphics_draw_rect,
     graphics_draw_triangle,
+    BlinnPhongShader,
+    BilinearTextureMapper,
+    SuperSampledFrameBuffer,
+    graphics_blinn_phong,
+    graphics_sample_bilinear,
+    graphics_supersampled_framebuffer,
 )
 from doomscript.domains.graphics.parser import GraphicsDomainParser
 from doomscript.domains.graphics.exporter import GraphicsASTExporter
@@ -92,4 +98,10 @@ __all__ = [
     "graphics_draw_circle",
     "graphics_draw_rect",
     "graphics_draw_triangle",
+    "BlinnPhongShader",
+    "BilinearTextureMapper",
+    "SuperSampledFrameBuffer",
+    "graphics_blinn_phong",
+    "graphics_sample_bilinear",
+    "graphics_supersampled_framebuffer",
 ]

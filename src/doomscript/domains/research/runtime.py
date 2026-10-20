@@ -1,6 +1,7 @@
 """Runtime execution engine for Research & Scientific Graph Algorithms."""
 
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+import math
 import hashlib
 import heapq
 import re
@@ -674,4 +675,319 @@ class AcademicLiteratureSynthesizer:
 
         results.sort(key=lambda x: x["score"], reverse=True)
         return results[:top_k]
+
+
+class SVDDecomposition:
+    """Pure-Python Singular Value Decomposition (SVD): A = U * Sigma * V^T."""
+
+    def __init__(self, max_sweeps: int = 40, tol: float = 1e-9):
+        self.max_sweeps = max_sweeps
+        self.tol = tol
+
+    def decompose(self, A_mat: List[List[float]]) -> Dict[str, Any]:
+        """
+        Computes thin SVD using Hestenes one-sided Jacobi rotations on A.
+        A (m x n) = U (m x n) * diag(sigma) * V^T (n x n).
+        """
+        import math
+        m = len(A_mat)
+        n = len(A_mat[0]) if m > 0 else 0
+        if m == 0 or n == 0:
+            return {"U": [], "singular_values": [], "Vt": []}
+
+        # Initialize B = copy of A (m x n), V = I_n (n x n)
+        B = [[float(A_mat[r][c]) for c in range(n)] for r in range(m)]
+        V = [[1.0 if r == c else 0.0 for c in range(n)] for r in range(n)]
+
+        # Hestenes Jacobi sweeps
+        for sweep in range(self.max_sweeps):
+            max_offdiag = 0.0
+            for i in range(n):
+                for j in range(i + 1, n):
+                    # Compute dot products: a = B_i . B_i, b = B_j . B_j, c = B_i . B_j
+                    alpha = sum(B[r][i] * B[r][i] for r in range(m))
+                    beta = sum(B[r][j] * B[r][j] for r in range(m))
+                    gamma = sum(B[r][i] * B[r][j] for r in range(m))
+
+                    max_offdiag = max(max_offdiag, abs(gamma) / (math.sqrt(alpha * beta) or 1.0))
+
+                    if abs(gamma) < self.tol * math.sqrt(alpha * beta):
+                        continue
+
+                    # Jacobi rotation angle
+                    zeta = (beta - alpha) / (2.0 * gamma)
+                    t = math.copysign(1.0 / (abs(zeta) + math.sqrt(1.0 + zeta ** 2)), zeta)
+                    cs = 1.0 / math.sqrt(1.0 + t ** 2)
+                    sn = cs * t
+
+                    # Rotate columns i and j of B
+                    for r in range(m):
+                        bi = B[r][i]
+                        bj = B[r][j]
+                        B[r][i] = cs * bi - sn * bj
+                        B[r][j] = sn * bi + cs * bj
+
+                    # Rotate columns i and j of V
+                    for r in range(n):
+                        vi = V[r][i]
+                        vj = V[r][j]
+                        V[r][i] = cs * vi - sn * vj
+                        V[r][j] = sn * vi + cs * vj
+
+            if max_offdiag < self.tol:
+                break
+
+        # Singular values are norms of columns of B
+        sigmas = []
+        for c in range(n):
+            norm = math.sqrt(sum(B[r][c] ** 2 for r in range(m)))
+            sigmas.append(norm)
+
+        # Sort singular values in descending order
+        indices = sorted(range(n), key=lambda i: sigmas[i], reverse=True)
+        sorted_sigmas = [round(sigmas[i], 6) for i in indices]
+
+        # Normalized U matrix: U_i = B_i / sigma_i
+        U = [[0.0] * n for _ in range(m)]
+        for rank_idx, orig_i in enumerate(indices):
+            s = sigmas[orig_i]
+            for r in range(m):
+                U[r][rank_idx] = round(B[r][orig_i] / s, 6) if s > 1e-12 else 0.0
+
+        # Transpose of V: Vt (n x n)
+        Vt = [[round(V[r][orig_c], 6) for r in range(n)] for orig_c in indices]
+
+        return {
+            "U": U,
+            "singular_values": sorted_sigmas,
+            "Vt": Vt,
+            "rank": sum(1 for s in sorted_sigmas if s > 1e-6),
+        }
+
+
+class RungeKuttaFehlberg:
+    """Adaptive step-size RKF45 Numerical Integrator for Systems of Ordinary Differential Equations."""
+
+    def __init__(self, tol: float = 1e-5, h_min: float = 1e-6, h_max: float = 0.5):
+        self.tol = tol
+        self.h_min = h_min
+        self.h_max = h_max
+
+    def solve(
+        self,
+        ode_func: Callable[[float, List[float]], List[float]],
+        y0: List[float],
+        t_span: Tuple[float, float],
+        initial_step: float = 0.05,
+    ) -> Dict[str, Any]:
+        """
+        Solves dy/dt = f(t, y) from t_span[0] to t_span[1] with adaptive step size.
+        """
+        t0, t_end = t_span
+        t = t0
+        y = list(y0)
+        h = max(self.h_min, min(self.h_max, initial_step))
+        dim = len(y)
+
+        t_points = [t]
+        y_trajectories = [[round(v, 6) for v in y]]
+
+        while t < t_end - 1e-12:
+            if t + h > t_end:
+                h = t_end - t
+
+            # Butcher Tableau for RKF45
+            k1 = ode_func(t, y)
+
+            y_k2 = [y[i] + h * (1.0 / 4.0) * k1[i] for i in range(dim)]
+            k2 = ode_func(t + h * (1.0 / 4.0), y_k2)
+
+            y_k3 = [y[i] + h * ((3.0 / 32.0) * k1[i] + (9.0 / 32.0) * k2[i]) for i in range(dim)]
+            k3 = ode_func(t + h * (3.0 / 8.0), y_k3)
+
+            y_k4 = [
+                y[i] + h * ((1932.0 / 2197.0) * k1[i] - (7200.0 / 2197.0) * k2[i] + (7296.0 / 2197.0) * k3[i])
+                for i in range(dim)
+            ]
+            k4 = ode_func(t + h * (12.0 / 13.0), y_k4)
+
+            y_k5 = [
+                y[i] + h * (
+                    (439.0 / 216.0) * k1[i] - 8.0 * k2[i] + (3680.0 / 513.0) * k3[i] - (845.0 / 4104.0) * k4[i]
+                )
+                for i in range(dim)
+            ]
+            k5 = ode_func(t + h, y_k5)
+
+            y_k6 = [
+                y[i] + h * (
+                    -(8.0 / 27.0) * k1[i] + 2.0 * k2[i] - (3544.0 / 2565.0) * k3[i]
+                    + (1859.0 / 4104.0) * k4[i] - (11.0 / 40.0) * k5[i]
+                )
+                for i in range(dim)
+            ]
+            k6 = ode_func(t + h * 0.5, y_k6)
+
+            # 4th-order estimate
+            y4 = [
+                y[i] + h * (
+                    (25.0 / 216.0) * k1[i] + (1408.0 / 2565.0) * k3[i] + (2197.0 / 4104.0) * k4[i] - (1.0 / 5.0) * k5[i]
+                )
+                for i in range(dim)
+            ]
+
+            # 5th-order estimate
+            y5 = [
+                y[i] + h * (
+                    (16.0 / 135.0) * k1[i] + (6656.0 / 12825.0) * k3[i] + (28561.0 / 56430.0) * k4[i]
+                    - (9.0 / 50.0) * k5[i] + (2.0 / 55.0) * k6[i]
+                )
+                for i in range(dim)
+            ]
+
+            # Truncation error
+            err = math.sqrt(sum((y5[i] - y4[i]) ** 2 for i in range(dim)))
+
+            # Step adaptation
+            if err <= self.tol or h <= self.h_min:
+                t += h
+                y = y5
+                t_points.append(round(t, 6))
+                y_trajectories.append([round(v, 6) for v in y])
+                scale = 0.84 * ((self.tol / (err + 1e-12)) ** 0.25) if err > 0 else 1.5
+                h = max(self.h_min, min(self.h_max, h * min(max(scale, 0.2), 2.0)))
+            else:
+                scale = 0.84 * ((self.tol / err) ** 0.25)
+                h = max(self.h_min, h * max(scale, 0.1))
+
+        return {
+            "t": t_points,
+            "y": y_trajectories,
+            "final_y": y_trajectories[-1],
+            "num_steps": len(t_points) - 1,
+        }
+
+
+class LevenbergMarquardt:
+    """Non-linear least squares parameter optimization via damped Gauss-Newton."""
+
+    def __init__(self, max_iter: int = 100, tol: float = 1e-6, lambda_init: float = 0.01):
+        self.max_iter = max_iter
+        self.tol = tol
+        self.lambda_init = lambda_init
+
+    def fit(
+        self,
+        model_func: Callable[[float, List[float]], float],
+        x_data: List[float],
+        y_data: List[float],
+        p0: List[float],
+    ) -> Dict[str, Any]:
+        """
+        Fits parameters p to minimize sum of squared residuals: sum (y_data[i] - model_func(x_data[i], p))^2.
+        """
+        p = [float(v) for v in p0]
+        n_params = len(p)
+        n_pts = len(x_data)
+        lam = self.lambda_init
+
+        def residuals(params: List[float]) -> List[float]:
+            return [y_data[i] - model_func(x_data[i], params) for i in range(n_pts)]
+
+        def cost(r_vec: List[float]) -> float:
+            return sum(r ** 2 for r in r_vec)
+
+        r = residuals(p)
+        current_cost = cost(r)
+
+        for it in range(self.max_iter):
+            # Numerical Jacobian J (n_pts x n_params)
+            eps = 1e-6
+            J = [[0.0] * n_params for _ in range(n_pts)]
+            for j in range(n_params):
+                p_plus = list(p)
+                p_plus[j] += eps
+                r_plus = residuals(p_plus)
+                for i in range(n_pts):
+                    J[i][j] = -(r_plus[i] - r[i]) / eps
+
+            # J^T * J and J^T * r
+            JTJ = [[sum(J[i][r_idx] * J[i][c_idx] for i in range(n_pts)) for c_idx in range(n_params)] for r_idx in range(n_params)]
+            JTr = [sum(J[i][r_idx] * r[i] for i in range(n_pts)) for r_idx in range(n_params)]
+
+            # Damping: JTJ + lam * diag(JTJ)
+            A = [[JTJ[r_idx][c_idx] + (lam * JTJ[r_idx][c_idx] if r_idx == c_idx else 0.0) for c_idx in range(n_params)] for r_idx in range(n_params)]
+
+            # Solve A * dp = JTr via Gaussian elimination
+            aug = [list(A[r_idx]) + [JTr[r_idx]] for r_idx in range(n_params)]
+            singular = False
+            for col in range(n_params):
+                piv = max(range(col, n_params), key=lambda r_idx: abs(aug[r_idx][col]))
+                if abs(aug[piv][col]) < 1e-12:
+                    singular = True
+                    break
+                aug[col], aug[piv] = aug[piv], aug[col]
+                pv = aug[col][col]
+                for c_idx in range(col, n_params + 1):
+                    aug[col][c_idx] /= pv
+                for r_idx in range(n_params):
+                    if r_idx != col:
+                        factor = aug[r_idx][col]
+                        for c_idx in range(col, n_params + 1):
+                            aug[r_idx][c_idx] -= factor * aug[col][c_idx]
+
+            if singular:
+                lam *= 10.0
+                continue
+
+            dp = [aug[r_idx][n_params] for r_idx in range(n_params)]
+            p_cand = [p[i] + dp[i] for i in range(n_params)]
+            r_cand = residuals(p_cand)
+            cand_cost = cost(r_cand)
+
+            if cand_cost < current_cost:
+                # Accept step, decrease damping
+                p = p_cand
+                r = r_cand
+                current_cost = cand_cost
+                lam = max(1e-7, lam * 0.1)
+                if sum(abs(v) for v in dp) < self.tol:
+                    break
+            else:
+                # Reject step, increase damping
+                lam = min(1e7, lam * 10.0)
+
+        return {
+            "optimal_params": [round(val, 6) for val in p],
+            "final_cost": round(current_cost, 6),
+            "iterations": it + 1,
+        }
+
+
+def research_svd(matrix: List[List[float]]) -> Dict[str, Any]:
+    """Computes Singular Value Decomposition of a matrix."""
+    svd = SVDDecomposition()
+    return svd.decompose(matrix)
+
+
+def research_rkf45_solve(
+    ode_func: Callable[[float, List[float]], List[float]],
+    y0: List[float],
+    t_span: Tuple[float, float],
+) -> Dict[str, Any]:
+    """Solves differential equation using adaptive RKF45."""
+    rkf = RungeKuttaFehlberg()
+    return rkf.solve(ode_func, y0, t_span)
+
+
+def research_levenberg_marquardt(
+    model_func: Callable[[float, List[float]], float],
+    x_data: List[float],
+    y_data: List[float],
+    p0: List[float],
+) -> Dict[str, Any]:
+    """Fits non-linear model parameters via Levenberg-Marquardt algorithm."""
+    lm = LevenbergMarquardt()
+    return lm.fit(model_func, x_data, y_data, p0)
+
 

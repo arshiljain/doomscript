@@ -231,3 +231,153 @@ def signals_hilbert(signal: List[float]) -> Dict[str, Any]:
 
 def signals_find_peaks(signal: List[float], min_height: Optional[float] = None, min_distance: int = 1) -> List[Dict[str, Any]]:
     return SignalAnalytics.find_peaks(signal, min_height, min_distance)
+
+
+class STFTSpectrogram:
+    """Short-Time Fourier Transform (STFT) and Spectrogram computer."""
+
+    @staticmethod
+    def get_window(window_type: str, n: int) -> List[float]:
+        wt = window_type.lower()
+        if wt == "hann":
+            return [0.5 * (1.0 - math.cos(2.0 * math.pi * i / (n - 1))) for i in range(n)]
+        elif wt == "hamming":
+            return [0.54 - 0.46 * math.cos(2.0 * math.pi * i / (n - 1)) for i in range(n)]
+        elif wt == "blackman":
+            return [
+                0.42 - 0.5 * math.cos(2.0 * math.pi * i / (n - 1)) + 0.08 * math.cos(4.0 * math.pi * i / (n - 1))
+                for i in range(n)
+            ]
+        else:  # rectangular
+            return [1.0] * n
+
+    @classmethod
+    def compute(
+        cls,
+        signal: List[float],
+        frame_size: int = 64,
+        hop_size: int = 32,
+        window: str = "hann",
+    ) -> Dict[str, Any]:
+        """Computes STFT magnitude and power spectrogram."""
+        w = cls.get_window(window, frame_size)
+        num_frames = (len(signal) - frame_size) // hop_size + 1
+        if num_frames <= 0:
+            return {"frames": [], "spectrogram": [], "frequencies": []}
+
+        spectrogram = []
+        magnitudes = []
+
+        for f_idx in range(num_frames):
+            start = f_idx * hop_size
+            frame = [signal[start + i] * w[i] for i in range(frame_size)]
+
+            # DFT
+            X = dft(frame)
+            half = frame_size // 2 + 1
+            mag_frame = [abs(c) for c in X[:half]]
+            power_frame = [round((m ** 2) / frame_size, 5) for m in mag_frame]
+
+            magnitudes.append(mag_frame)
+            spectrogram.append(power_frame)
+
+        return {
+            "num_frames": num_frames,
+            "num_bins": frame_size // 2 + 1,
+            "spectrogram": spectrogram,
+            "magnitudes": magnitudes,
+        }
+
+
+class SavitzkyGolayFilter:
+    """Savitzky-Golay polynomial smoothing and differentiation filter with exact boundary interpolation."""
+
+    @staticmethod
+    def _compute_weights(window_length: int, poly_order: int, t0: float = 0.0, deriv_order: int = 0) -> List[float]:
+        """Computes convolution weights for offset t0 via Vandermonde pseudo-inverse."""
+        m = (window_length - 1) // 2
+        order = poly_order + 1
+        rows = window_length
+
+        A = [[(i - m) ** j for j in range(order)] for i in range(rows)]
+        ATA = [[sum(A[i][r] * A[i][c] for i in range(rows)) for c in range(order)] for r in range(order)]
+
+        aug = [list(ATA[r]) + [1.0 if r == c else 0.0 for c in range(order)] for r in range(order)]
+        for col in range(order):
+            pivot_row = max(range(col, order), key=lambda r: abs(aug[r][col]))
+            aug[col], aug[pivot_row] = aug[pivot_row], aug[col]
+            pivot = aug[col][col]
+            if abs(pivot) < 1e-12:
+                continue
+            for c in range(col, 2 * order):
+                aug[col][c] /= pivot
+            for r in range(order):
+                if r != col:
+                    factor = aug[r][col]
+                    for c in range(col, 2 * order):
+                        aug[r][c] -= factor * aug[col][c]
+
+        ATA_inv = [aug[r][order:] for r in range(order)]
+        Pinv = [[sum(ATA_inv[j][k] * A[p][k] for k in range(order)) for p in range(rows)] for j in range(order)]
+
+        weights = [0.0] * rows
+        for p in range(rows):
+            w = sum(
+                (math.factorial(j) / math.factorial(j - deriv_order)) * (t0 ** (j - deriv_order)) * Pinv[j][p]
+                for j in range(deriv_order, order)
+            )
+            weights[p] = round(w, 8)
+        return weights
+
+    @classmethod
+    def filter(
+        cls,
+        signal: List[float],
+        window_length: int = 7,
+        poly_order: int = 2,
+        deriv: int = 0,
+    ) -> List[float]:
+        """Applies Savitzky-Golay filter to signal using boundary polynomial extrapolation."""
+        n = len(signal)
+        if window_length % 2 == 0:
+            window_length += 1
+        if window_length > n:
+            window_length = n if n % 2 != 0 else n - 1
+        if window_length < 3:
+            return list(signal)
+
+        poly_order = min(poly_order, window_length - 1)
+        m = (window_length - 1) // 2
+
+        center_weights = cls._compute_weights(window_length, poly_order, 0.0, deriv)
+
+        filtered = []
+        for i in range(n):
+            if i < m:
+                # Left boundary
+                weights = cls._compute_weights(window_length, poly_order, float(i - m), deriv)
+                window = signal[:window_length]
+                val = sum(x * w for x, w in zip(window, weights))
+            elif i >= n - m:
+                # Right boundary
+                weights = cls._compute_weights(window_length, poly_order, float(i - (n - 1 - m)), deriv)
+                window = signal[n - window_length:]
+                val = sum(x * w for x, w in zip(window, weights))
+            else:
+                # Central window
+                window = signal[i - m : i - m + window_length]
+                val = sum(x * w for x, w in zip(window, center_weights))
+            filtered.append(round(val, 6))
+
+        return filtered
+
+
+def signals_stft(signal: List[float], frame_size: int = 64, hop_size: int = 32) -> Dict[str, Any]:
+    """Computes Short-Time Fourier Transform power spectrogram."""
+    return STFTSpectrogram.compute(signal, frame_size, hop_size)
+
+
+def signals_savitzky_golay(signal: List[float], window_length: int = 7, poly_order: int = 2, deriv: int = 0) -> List[float]:
+    """Applies Savitzky-Golay polynomial smoothing or differentiation."""
+    return SavitzkyGolayFilter.filter(signal, window_length, poly_order, deriv)
+

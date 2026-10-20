@@ -25,6 +25,10 @@ from doomscript.domains.signals.runtime import (
     signals_butterworth_filter,
     signals_hilbert,
     signals_find_peaks,
+    STFTSpectrogram,
+    SavitzkyGolayFilter,
+    signals_stft,
+    signals_savitzky_golay,
 )
 from doomscript.domains.signals.parser import SignalsDomainParser
 from doomscript.domains.signals.exporter import SignalsASTExporter
@@ -99,4 +103,8 @@ __all__ = [
     "signals_butterworth_filter",
     "signals_hilbert",
     "signals_find_peaks",
+    "STFTSpectrogram",
+    "SavitzkyGolayFilter",
+    "signals_stft",
+    "signals_savitzky_golay",
 ]

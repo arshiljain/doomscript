@@ -28,6 +28,12 @@ from doomscript.domains.math3d.runtime import (
     math3d_sdf_smooth_union,
     math3d_sdf_normal,
     math3d_raymarch,
+    Raymarcher3D,
+    DualQuaternion,
+    Quickhull3D,
+    math3d_raymarcher_render,
+    math3d_dual_quaternion,
+    math3d_quickhull,
 )
 from doomscript.domains.math3d.parser import Math3DDomainParser
 from doomscript.domains.math3d.exporter import Math3DASTExporter
@@ -160,4 +166,10 @@ __all__ = [
     "math3d_sdf_smooth_union",
     "math3d_sdf_normal",
     "math3d_raymarch",
+    "Raymarcher3D",
+    "DualQuaternion",
+    "Quickhull3D",
+    "math3d_raymarcher_render",
+    "math3d_dual_quaternion",
+    "math3d_quickhull",
 ]

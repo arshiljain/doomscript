@@ -3138,6 +3138,12 @@ from doomscript.domains.research.runtime import (
     research_transitive_reduction,
     research_find_negative_cycle,
     research_degree_distribution,
+    SVDDecomposition,
+    RungeKuttaFehlberg,
+    LevenbergMarquardt,
+    research_svd,
+    research_rkf45_solve,
+    research_levenberg_marquardt,
 )
 
 from doomscript.domains.bio.runtime import (
@@ -3257,6 +3263,12 @@ from doomscript.domains.math3d.runtime import (
     math3d_sdf_smooth_union,
     math3d_sdf_normal,
     math3d_raymarch,
+    Raymarcher3D,
+    DualQuaternion,
+    Quickhull3D,
+    math3d_raymarcher_render,
+    math3d_dual_quaternion,
+    math3d_quickhull,
 )
 
 from doomscript.domains.compiler.runtime import (
@@ -3300,6 +3312,10 @@ from doomscript.domains.signals.runtime import (
     signals_butterworth_filter,
     signals_hilbert,
     signals_find_peaks,
+    STFTSpectrogram,
+    SavitzkyGolayFilter,
+    signals_stft,
+    signals_savitzky_golay,
 )
 
 from doomscript.domains.astronomy.runtime import (
@@ -3375,6 +3391,12 @@ from doomscript.domains.symbolic.runtime import (
     symbolic_simplify,
     symbolic_eval,
     symbolic_poly_gcd,
+    SymbolicIntegrator,
+    TaylorSeries,
+    ExactRationalLinearSolver,
+    symbolic_integrate,
+    symbolic_taylor_series,
+    symbolic_solve_rational_linear,
 )
 
 from doomscript.domains.graphics.runtime import (
@@ -3388,6 +3410,12 @@ from doomscript.domains.graphics.runtime import (
     graphics_draw_circle,
     graphics_draw_rect,
     graphics_draw_triangle,
+    BlinnPhongShader,
+    BilinearTextureMapper,
+    SuperSampledFrameBuffer,
+    graphics_blinn_phong,
+    graphics_sample_bilinear,
+    graphics_supersampled_framebuffer,
 )
 
 from doomscript.domains.telecom.runtime import (

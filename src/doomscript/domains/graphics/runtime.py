@@ -318,3 +318,166 @@ def graphics_draw_triangle(
 ) -> None:
     """Draws a 3D triangle with Z-buffer and Gouraud color shading."""
     Rasterizer3D.draw_triangle(fb, zb, v0, v1, v2, c0, c1, c2)
+
+
+class BlinnPhongShader:
+    """Blinn-Phong lighting calculation for 3D fragments."""
+
+    def __init__(
+        self,
+        ambient_light: Tuple[float, float, float] = (0.2, 0.2, 0.2),
+        light_color: Tuple[float, float, float] = (1.0, 1.0, 1.0),
+        light_pos: Tuple[float, float, float] = (5.0, 10.0, -5.0),
+        camera_pos: Tuple[float, float, float] = (0.0, 0.0, -5.0),
+    ):
+        self.ambient_light = ambient_light
+        self.light_color = light_color
+        self.light_pos = light_pos
+        self.camera_pos = camera_pos
+
+    def shade_fragment(
+        self,
+        frag_pos: Tuple[float, float, float],
+        frag_normal: Tuple[float, float, float],
+        diffuse_color: Tuple[float, float, float],
+        specular_color: Tuple[float, float, float] = (1.0, 1.0, 1.0),
+        shininess: float = 32.0,
+        ka: float = 1.0,
+        kd: float = 0.8,
+        ks: float = 0.5,
+    ) -> Tuple[int, int, int]:
+        """Calculates shaded RGB color in range [0, 255]."""
+        # Vectors: N, L, V, H
+        def norm(v: Tuple[float, float, float]) -> Tuple[float, float, float]:
+            l = math.sqrt(v[0] ** 2 + v[1] ** 2 + v[2] ** 2) or 1.0
+            return (v[0] / l, v[1] / l, v[2] / l)
+
+        def dot(v1: Tuple[float, float, float], v2: Tuple[float, float, float]) -> float:
+            return v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2]
+
+        N = norm(frag_normal)
+        L = norm((self.light_pos[0] - frag_pos[0], self.light_pos[1] - frag_pos[1], self.light_pos[2] - frag_pos[2]))
+        V = norm((self.camera_pos[0] - frag_pos[0], self.camera_pos[1] - frag_pos[1], self.camera_pos[2] - frag_pos[2]))
+        H = norm((L[0] + V[0], L[1] + V[1], L[2] + V[2]))
+
+        # Ambient
+        I_amb = [ka * self.ambient_light[i] * diffuse_color[i] for i in range(3)]
+
+        # Diffuse Lambertian
+        n_dot_l = max(0.0, dot(N, L))
+        I_diff = [kd * n_dot_l * self.light_color[i] * diffuse_color[i] for i in range(3)]
+
+        # Specular Blinn-Phong
+        n_dot_h = max(0.0, dot(N, H))
+        spec_factor = (n_dot_h ** shininess) if n_dot_l > 0 else 0.0
+        I_spec = [ks * spec_factor * self.light_color[i] * specular_color[i] for i in range(3)]
+
+        total_r = min(255, max(0, int((I_amb[0] + I_diff[0] + I_spec[0]) * 255)))
+        total_g = min(255, max(0, int((I_amb[1] + I_diff[1] + I_spec[1]) * 255)))
+        total_b = min(255, max(0, int((I_amb[2] + I_diff[2] + I_spec[2]) * 255)))
+
+        return (total_r, total_g, total_b)
+
+
+class BilinearTextureMapper:
+    """Texture buffer supporting bilinear 4-tap UV filtering."""
+
+    def __init__(self, width: int, height: int, pixels: Optional[List[Tuple[int, int, int]]] = None):
+        self.width = width
+        self.height = height
+        self.pixels = list(pixels or [(255, 255, 255)] * (width * height))
+
+    def sample(self, u: float, v: float) -> Tuple[int, int, int]:
+        """Samples texture with bilinear interpolation for coordinates u, v in [0, 1]."""
+        u_clamped = max(0.0, min(1.0, float(u)))
+        v_clamped = max(0.0, min(1.0, float(v)))
+
+        gx = u_clamped * (self.width - 1)
+        gy = v_clamped * (self.height - 1)
+
+        x0 = int(math.floor(gx))
+        x1 = min(self.width - 1, x0 + 1)
+        y0 = int(math.floor(gy))
+        y1 = min(self.height - 1, y0 + 1)
+
+        s = gx - x0
+        t = gy - y0
+
+        c00 = self.pixels[y0 * self.width + x0]
+        c10 = self.pixels[y0 * self.width + x1]
+        c01 = self.pixels[y1 * self.width + x0]
+        c11 = self.pixels[y1 * self.width + x1]
+
+        r = int(round((1 - s) * (1 - t) * c00[0] + s * (1 - t) * c10[0] + (1 - s) * t * c01[0] + s * t * c11[0]))
+        g = int(round((1 - s) * (1 - t) * c00[1] + s * (1 - t) * c10[1] + (1 - s) * t * c01[1] + s * t * c11[1]))
+        b = int(round((1 - s) * (1 - t) * c00[2] + s * (1 - t) * c10[2] + (1 - s) * t * c01[2] + s * t * c11[2]))
+
+        return (min(255, max(0, r)), min(255, max(0, g)), min(255, max(0, b)))
+
+
+class SuperSampledFrameBuffer:
+    """Supersampling Anti-Aliasing (SSAA) framebuffer with 2x2 or 4x4 sub-pixel downsampler."""
+
+    def __init__(self, target_width: int, target_height: int, scale: int = 2):
+        self.target_width = target_width
+        self.target_height = target_height
+        self.scale = max(2, int(scale))
+        self.render_width = target_width * self.scale
+        self.render_height = target_height * self.scale
+        self.fb = FrameBuffer(self.render_width, self.render_height)
+
+    def set_subpixel(self, x: int, y: int, color: Tuple[int, int, int]) -> None:
+        self.fb.set_pixel(x, y, color)
+
+    def downsample(self) -> FrameBuffer:
+        """Averages subpixels down to target dimensions."""
+        output_fb = FrameBuffer(self.target_width, self.target_height)
+        s2 = self.scale * self.scale
+
+        for ty in range(self.target_height):
+            for tx in range(self.target_width):
+                total_r = 0
+                total_g = 0
+                total_b = 0
+                total_a = 0
+
+                for sy in range(self.scale):
+                    for sx in range(self.scale):
+                        rx = tx * self.scale + sx
+                        ry = ty * self.scale + sy
+                        pixel = self.fb.get_pixel(rx, ry)
+                        total_r += pixel[0]
+                        total_g += pixel[1]
+                        total_b += pixel[2]
+                        total_a += pixel[3]
+
+                avg_pixel = (
+                    int(total_r / s2),
+                    int(total_g / s2),
+                    int(total_b / s2),
+                    int(total_a / s2),
+                )
+                output_fb.set_pixel(tx, ty, avg_pixel)
+
+        return output_fb
+
+
+def graphics_blinn_phong(
+    frag_pos: Tuple[float, float, float],
+    frag_normal: Tuple[float, float, float],
+    diffuse_color: Tuple[float, float, float],
+) -> Tuple[int, int, int]:
+    """Calculates Blinn-Phong shading on a 3D surface fragment."""
+    shader = BlinnPhongShader()
+    return shader.shade_fragment(frag_pos, frag_normal, diffuse_color)
+
+
+def graphics_sample_bilinear(tex: BilinearTextureMapper, u: float, v: float) -> Tuple[int, int, int]:
+    """Samples texture using 4-tap bilinear interpolation."""
+    return tex.sample(u, v)
+
+
+def graphics_supersampled_framebuffer(width: int, height: int, scale: int = 2) -> SuperSampledFrameBuffer:
+    """Creates a high-resolution SSAA FrameBuffer."""
+    return SuperSampledFrameBuffer(width, height, scale)
+
