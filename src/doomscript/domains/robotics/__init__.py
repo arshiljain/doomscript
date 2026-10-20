@@ -39,6 +39,10 @@ from doomscript.domains.robotics.runtime import (
     robotics_pure_pursuit,
     robotics_stewart_platform_ik,
     robotics_trapezoidal_profile,
+    DubinsCarShortestPath,
+    OccupancyGridMap2D,
+    robotics_dubins_path,
+    robotics_occupancy_grid_update,
 )
 from doomscript.domains.robotics.parser import RoboticsDomainParser
 from doomscript.domains.robotics.exporter import RoboticsASTExporter
@@ -109,4 +113,8 @@ __all__ = [
     "robotics_inverse_kinematics_2link",
     "robotics_cubic_trajectory",
     "robotics_create_ekf",
+    "DubinsCarShortestPath",
+    "OccupancyGridMap2D",
+    "robotics_dubins_path",
+    "robotics_occupancy_grid_update",
 ]

@@ -119,6 +119,49 @@ class SignalsDomainParser(DomainParser):
             target = m_sg.group(4).strip()
             return f"set {target} to signals_savitzky_golay({sig}, window_length={win}, poly_order={order})"
 
+        # filter measurements <z> using kalman with transition <F> and observation <H> and process noise <Q> and measurement noise <R> into <target>
+        m_kf = re.match(
+            r"^filter\s+measurements\s+(.+?)\s+using\s+kalman\s+with\s+transition\s+(.+?)\s+and\s+observation\s+(.+?)\s+and\s+process\s+noise\s+(.+?)\s+and\s+measurement\s+noise\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_kf:
+            z, F, H, Q, R, target = (
+                m_kf.group(1).strip(),
+                m_kf.group(2).strip(),
+                m_kf.group(3).strip(),
+                m_kf.group(4).strip(),
+                m_kf.group(5).strip(),
+                m_kf.group(6).strip(),
+            )
+            return f"set {target} to signals_kalman_filter({z}, {F}, {H}, {Q}, {R})"
+
+        # apply butterworth lowpass filter to <sig> with cutoff <cut> [order <ord>] [rate <rate>] into <target>
+        m_bw = re.match(
+            r"^apply\s+butterworth\s+lowpass\s+filter\s+to\s+(.+?)\s+with\s+cutoff\s+(.+?)(?:\s+order\s+(.+?))?(?:\s+rate\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_bw:
+            sig = m_bw.group(1).strip()
+            cut = m_bw.group(2).strip()
+            order = m_bw.group(3).strip() if m_bw.group(3) else "4"
+            rate = m_bw.group(4).strip() if m_bw.group(4) else "1000.0"
+            target = m_bw.group(5).strip()
+            return f"set {target} to signals_butterworth_lowpass({sig}, cutoff_hz={cut}, order={order}, sample_rate={rate})"
+
+        # decompose signal <sig> into imfs [max <n>] into <target>
+        m_emd = re.match(
+            r"^decompose\s+signal\s+(.+?)\s+into\s+imfs(?:\s+max\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_emd:
+            sig = m_emd.group(1).strip()
+            max_imfs = m_emd.group(2).strip() if m_emd.group(2) else "4"
+            target = m_emd.group(3).strip()
+            return f"set {target} to signals_emd_decompose({sig}, max_imfs={max_imfs})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

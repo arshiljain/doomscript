@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import math
 from typing import Any, Dict, List, Optional, Tuple, Union
+from doomscript.runtime import Record
 
 
 class BinauralPanner:
@@ -590,4 +591,135 @@ def spatial_audio_distance_attenuate(
 ) -> List[float]:
     """Applies distance attenuation and atmospheric air damping."""
     return AtmosphericAttenuation.apply(signal, distance, ref_distance=ref_distance, rolloff_factor=rolloff)
+
+
+# ==============================================================================
+# SHOEBOX ROOM ACOUSTICS & IMPULSE CONVOLUTION
+# ==============================================================================
+
+class RoomImageSourceEarlyReflections:
+    """Image Source Method (Allen & Berkley) for early room reflection acoustics."""
+
+    SPEED_OF_SOUND = 343.0  # m/s
+
+    @classmethod
+    def compute(
+        cls,
+        room_dims: List[float],
+        source_pos: List[float],
+        receiver_pos: List[float],
+        absorption: float = 0.2,
+        max_order: int = 2,
+    ) -> Record:
+        """Calculates discrete acoustic reflection paths up to max reflection order."""
+        Lx, Ly, Lz = float(room_dims[0]), float(room_dims[1]), float(room_dims[2])
+        xs, ys, zs = float(source_pos[0]), float(source_pos[1]), float(source_pos[2])
+        xr, yr, zr = float(receiver_pos[0]), float(receiver_pos[1]), float(receiver_pos[2])
+        alpha = max(0.01, min(0.99, float(absorption)))
+        refl_coeff = math.sqrt(1.0 - alpha)
+        order = max(1, int(max_order))
+
+        # Direct path
+        d_direct = math.sqrt((xs - xr) ** 2 + (ys - yr) ** 2 + (zs - zr) ** 2)
+        tau_direct = d_direct / cls.SPEED_OF_SOUND
+
+        arrivals = []
+
+        # Iterate 3D image source grid: n_x, n_y, n_z in [-order, order]
+        for nx in range(-order, order + 1):
+            for ny in range(-order, order + 1):
+                for nz in range(-order, order + 1):
+                    # Image source coordinates
+                    im_x = (2 * nx * Lx + xs) if (nx % 2 == 0) else (2 * nx * Lx + (2 * Lx - xs))
+                    im_y = (2 * ny * Ly + ys) if (ny % 2 == 0) else (2 * ny * Ly + (2 * Ly - ys))
+                    im_z = (2 * nz * Lz + zs) if (nz % 2 == 0) else (2 * nz * Lz + (2 * Lz - zs))
+
+                    dist = math.sqrt((im_x - xr) ** 2 + (im_y - yr) ** 2 + (im_z - zr) ** 2)
+                    delay_sec = dist / cls.SPEED_OF_SOUND
+                    reflections = abs(nx) + abs(ny) + abs(nz)
+
+                    if reflections > order:
+                        continue
+
+                    amplitude = (refl_coeff ** reflections) / max(0.1, dist)
+
+                    arrivals.append({
+                        "order": reflections,
+                        "delay_ms": round(delay_sec * 1000.0, 3),
+                        "distance_m": round(dist, 4),
+                        "amplitude": round(amplitude, 6),
+                    })
+
+        # Sort arrivals by arrival time
+        arrivals.sort(key=lambda a: a["delay_ms"])
+
+        # Sabine reverberation time approximation: RT60 = 0.161 * V / A
+        volume = Lx * Ly * Lz
+        total_surface = 2.0 * (Lx * Ly + Ly * Lz + Lx * Lz)
+        total_absorption = total_surface * alpha
+        rt60_sabine = 0.161 * volume / max(1e-3, total_absorption)
+
+        return Record({
+            "reflections_count": len(arrivals),
+            "direct_sound_delay_ms": round(tau_direct * 1000.0, 3),
+            "early_arrivals": arrivals[:20],
+            "rt60_sabine_sec": round(rt60_sabine, 4),
+            "room_volume_m3": round(volume, 2),
+        })
+
+
+class ConvolveImpulseResponse:
+    """Time-domain overlap-add FIR impulse response convolver."""
+
+    @classmethod
+    def convolve(
+        cls,
+        signal: List[float],
+        ir: List[float],
+    ) -> Record:
+        """Convolves discrete audio signal with acoustic impulse response."""
+        n = len(signal)
+        m = len(ir)
+        if n == 0 or m == 0:
+            return Record({"convolved": [], "length": 0, "peak_amplitude": 0.0})
+
+        out_len = n + m - 1
+        out = [0.0] * out_len
+
+        for i in range(n):
+            si = signal[i]
+            if abs(si) < 1e-12:
+                continue
+            for j in range(m):
+                out[i + j] += si * ir[j]
+
+        peak = max(abs(v) for v in out) if out else 0.0
+
+        return Record({
+            "convolved": [round(v, 6) for v in out],
+            "num_samples": out_len,
+            "peak_amplitude": round(peak, 6),
+        })
+
+
+def spatial_audio_early_reflections(
+    room_dims: List[float],
+    source_pos: List[float],
+    receiver_pos: List[float],
+    absorption: float = 0.2,
+    max_order: int = 2,
+) -> Record:
+    """Calculates image-source room acoustic reflections."""
+    return RoomImageSourceEarlyReflections.compute(
+        room_dims, source_pos, receiver_pos, absorption=absorption, max_order=max_order
+    )
+
+
+def spatial_audio_convolve_ir(
+    signal: List[float],
+    ir: List[float],
+) -> Record:
+    """Convolves audio signal with impulse response."""
+    return ConvolveImpulseResponse.convolve(signal, ir)
+
 

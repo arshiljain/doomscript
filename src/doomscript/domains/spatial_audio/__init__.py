@@ -32,6 +32,10 @@ from doomscript.domains.spatial_audio.runtime import (
     spatial_audio_hrtf_binaural,
     spatial_audio_vbap_2d,
     spatial_audio_distance_attenuate,
+    RoomImageSourceEarlyReflections,
+    ConvolveImpulseResponse,
+    spatial_audio_early_reflections,
+    spatial_audio_convolve_ir,
 )
 from doomscript.domains.spatial_audio.parser import SpatialAudioDomainParser
 from doomscript.domains.spatial_audio.exporter import SpatialAudioASTExporter
@@ -108,4 +112,10 @@ __all__ = [
     "spatial_audio_hoa_encode",
     "spatial_audio_room_impulse_response",
     "spatial_audio_hrtf_binaural",
+    "spatial_audio_vbap_2d",
+    "spatial_audio_distance_attenuate",
+    "RoomImageSourceEarlyReflections",
+    "ConvolveImpulseResponse",
+    "spatial_audio_early_reflections",
+    "spatial_audio_convolve_ir",
 ]

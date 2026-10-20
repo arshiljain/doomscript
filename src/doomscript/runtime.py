@@ -3539,6 +3539,10 @@ from doomscript.domains.robotics.runtime import (
     robotics_pure_pursuit,
     robotics_stewart_platform_ik,
     robotics_trapezoidal_profile,
+    DubinsCarShortestPath,
+    OccupancyGridMap2D,
+    robotics_dubins_path,
+    robotics_occupancy_grid_update,
 )
 
 from doomscript.domains.signals.runtime import (
@@ -3566,6 +3570,12 @@ from doomscript.domains.signals.runtime import (
     signals_cross_correlation,
     signals_detect_pitch,
     signals_lomb_scargle,
+    KalmanFilterEstimator,
+    ButterworthIIRFilter,
+    EmpiricalModeDecompositionEMD,
+    signals_kalman_filter,
+    signals_butterworth_lowpass,
+    signals_emd_decompose,
 )
 
 from doomscript.domains.astronomy.runtime import (
@@ -3840,6 +3850,10 @@ from doomscript.domains.spatial_audio.runtime import (
     spatial_audio_hrtf_binaural,
     spatial_audio_vbap_2d,
     spatial_audio_distance_attenuate,
+    RoomImageSourceEarlyReflections,
+    ConvolveImpulseResponse,
+    spatial_audio_early_reflections,
+    spatial_audio_convolve_ir,
 )
 
 from doomscript.domains.dsa.runtime import (

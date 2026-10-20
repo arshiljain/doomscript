@@ -762,3 +762,348 @@ def signals_lomb_scargle(t: List[float], y: List[float], frequencies: List[float
     return Record(LombScarglePeriodogram.compute(t, y, frequencies))
 
 
+# ==============================================================================
+# ADVANCED DSP: MULTIVARIATE KALMAN FILTER, BUTTERWORTH IIR & EMD
+# ==============================================================================
+
+def _matrix_mul(A: List[List[float]], B: List[List[float]]) -> List[List[float]]:
+    rows_A = len(A)
+    cols_A = len(A[0]) if rows_A > 0 else 0
+    rows_B = len(B)
+    cols_B = len(B[0]) if rows_B > 0 else 0
+    if cols_A != rows_B:
+        raise ValueError(f"Incompatible matrix dimensions: {rows_A}x{cols_A} and {rows_B}x{cols_B}")
+    C = [[0.0] * cols_B for _ in range(rows_A)]
+    for i in range(rows_A):
+        for k in range(cols_A):
+            aik = A[i][k]
+            for j in range(cols_B):
+                C[i][j] += aik * B[k][j]
+    return C
+
+
+def _matrix_transpose(A: List[List[float]]) -> List[List[float]]:
+    if not A or not A[0]:
+        return []
+    return [[A[r][c] for r in range(len(A))] for c in range(len(A[0]))]
+
+
+def _matrix_add(A: List[List[float]], B: List[List[float]]) -> List[List[float]]:
+    return [[A[r][c] + B[r][c] for c in range(len(A[0]))] for r in range(len(A))]
+
+
+def _matrix_sub(A: List[List[float]], B: List[List[float]]) -> List[List[float]]:
+    return [[A[r][c] - B[r][c] for c in range(len(A[0]))] for r in range(len(A))]
+
+
+def _matrix_inv(A: List[List[float]]) -> List[List[float]]:
+    n = len(A)
+    aug = [list(A[i]) + [1.0 if i == j else 0.0 for j in range(n)] for i in range(n)]
+    for col in range(n):
+        pivot_row = max(range(col, n), key=lambda r: abs(aug[r][col]))
+        if abs(aug[pivot_row][col]) < 1e-12:
+            # Fallback ridge regularization
+            aug[col][col] += 1e-6
+            pivot_row = col
+        aug[col], aug[pivot_row] = aug[pivot_row], aug[col]
+        pivot = aug[col][col]
+        for c in range(col, 2 * n):
+            aug[col][c] /= pivot
+        for r in range(n):
+            if r != col:
+                factor = aug[r][col]
+                for c in range(col, 2 * n):
+                    aug[r][c] -= factor * aug[col][c]
+    return [[aug[i][j + n] for j in range(n)] for i in range(n)]
+
+
+class KalmanFilterEstimator:
+    """Discrete-time linear Kalman Filter for state estimation and tracking."""
+
+    def __init__(
+        self,
+        F: List[List[float]],
+        H: List[List[float]],
+        Q: List[List[float]],
+        R: List[List[float]],
+        x0: Optional[List[float]] = None,
+        P0: Optional[List[List[float]]] = None,
+    ):
+        self.F = [[float(v) for v in row] for row in F]
+        self.H = [[float(v) for v in row] for row in H]
+        self.Q = [[float(v) for v in row] for row in Q]
+        self.R = [[float(v) for v in row] for row in R]
+        self.dim_x = len(self.F)
+        self.dim_z = len(self.H)
+
+        if x0 is not None:
+            self.x = [[float(v)] for v in x0]
+        else:
+            self.x = [[0.0] for _ in range(self.dim_x)]
+
+        if P0 is not None:
+            self.P = [[float(v) for v in row] for row in P0]
+        else:
+            self.P = [[1.0 if i == j else 0.0 for j in range(self.dim_x)] for i in range(self.dim_x)]
+
+    def filter(self, measurements: List[Any]) -> Record:
+        """Executes full Kalman filtering over observation sequence."""
+        filtered_states: List[List[float]] = []
+        covariances: List[List[List[float]]] = []
+        innovations: List[List[float]] = []
+
+        I = [[1.0 if i == j else 0.0 for j in range(self.dim_x)] for i in range(self.dim_x)]
+        F_T = _matrix_transpose(self.F)
+        H_T = _matrix_transpose(self.H)
+
+        for z_raw in measurements:
+            if isinstance(z_raw, (int, float)):
+                z = [[float(z_raw)]]
+            elif isinstance(z_raw, list):
+                z = [[float(v)] for v in z_raw]
+            else:
+                z = [[0.0]]
+
+            # 1. Prediction step:
+            # x_pred = F * x
+            x_pred = _matrix_mul(self.F, self.x)
+            # P_pred = F * P * F^T + Q
+            P_pred = _matrix_add(_matrix_mul(_matrix_mul(self.F, self.P), F_T), self.Q)
+
+            # 2. Measurement update step:
+            # y = z - H * x_pred (Innovation)
+            y = _matrix_sub(z, _matrix_mul(self.H, x_pred))
+            innovations.append([round(y[i][0], 4) for i in range(len(y))])
+
+            # S = H * P_pred * H^T + R (Innovation covariance)
+            S = _matrix_add(_matrix_mul(_matrix_mul(self.H, P_pred), H_T), self.R)
+            S_inv = _matrix_inv(S)
+
+            # K = P_pred * H^T * S^-1 (Kalman Gain)
+            K = _matrix_mul(_matrix_mul(P_pred, H_T), S_inv)
+
+            # x = x_pred + K * y
+            self.x = _matrix_add(x_pred, _matrix_mul(K, y))
+
+            # P = (I - K * H) * P_pred
+            self.P = _matrix_mul(_matrix_sub(I, _matrix_mul(K, self.H)), P_pred)
+
+            curr_state = [round(self.x[i][0], 4) for i in range(self.dim_x)]
+            filtered_states.append(curr_state)
+            covariances.append([[round(self.P[r][c], 4) for c in range(self.dim_x)] for r in range(self.dim_x)])
+
+        final_st = filtered_states[-1] if filtered_states else [0.0] * self.dim_x
+
+        return Record({
+            "filtered_states": filtered_states,
+            "final_state": final_st,
+            "covariances": covariances,
+            "innovations": innovations,
+            "num_steps": len(filtered_states),
+        })
+
+
+class ButterworthIIRFilter:
+    """N-th Order Digital Butterworth Filter with Bilinear Transform and Biquad SOS."""
+
+    @classmethod
+    def design_lowpass(
+        cls,
+        cutoff_hz: float,
+        order: int = 4,
+        sample_rate: float = 1000.0,
+    ) -> List[Tuple[List[float], List[float]]]:
+        """Calculates cascaded biquad section coefficients [b0, b1, b2], [a0, a1, a2]."""
+        n = max(1, int(order))
+        fs = float(sample_rate)
+        fc = max(1e-3, min(float(cutoff_hz), fs * 0.499))
+
+        # Bilinear transform frequency pre-warping
+        omega_p = 2.0 * fs * math.tan(math.pi * fc / fs)
+
+        sections = []
+        num_pairs = n // 2
+
+        for k in range(num_pairs):
+            theta = math.pi * (2 * k + 1) / (2 * n)
+            # Analog s-domain pole pair: s^2 + 2*cos(theta)*omega_p*s + omega_p^2
+            alpha = 2.0 * math.cos(theta) * omega_p
+            beta = omega_p * omega_p
+
+            # Substitute s = 2*fs * (1 - z^-1)/(1 + z^-1)
+            # Let c = 2 * fs
+            c = 2.0 * fs
+            c2 = c * c
+
+            a0 = c2 + alpha * c + beta
+            a1 = 2.0 * (beta - c2)
+            a2 = c2 - alpha * c + beta
+
+            b0 = beta
+            b1 = 2.0 * beta
+            b2 = beta
+
+            # Normalize by a0
+            sec_b = [b0 / a0, b1 / a0, b2 / a0]
+            sec_a = [1.0, a1 / a0, a2 / a0]
+            sections.append((sec_b, sec_a))
+
+        if n % 2 == 1:
+            # Single 1st-order real pole
+            # s + omega_p -> c*(1 - z^-1)/(1 + z^-1) + omega_p
+            c = 2.0 * fs
+            a0 = c + omega_p
+            a1 = omega_p - c
+            b0 = omega_p
+            b1 = omega_p
+            sections.append(([b0 / a0, b1 / a0, 0.0], [1.0, a1 / a0, 0.0]))
+
+        return sections
+
+    @classmethod
+    def apply(
+        cls,
+        signal: List[float],
+        cutoff_hz: float,
+        order: int = 4,
+        sample_rate: float = 1000.0,
+    ) -> List[float]:
+        """Filters input signal with cascaded direct-form II transposed biquads."""
+        sections = cls.design_lowpass(cutoff_hz, order, sample_rate)
+        curr = list(signal)
+
+        for b, a in sections:
+            b0, b1, b2 = b
+            _, a1, a2 = a
+            out = []
+            s1 = 0.0
+            s2 = 0.0
+            for x in curr:
+                y = b0 * x + s1
+                s1 = b1 * x - a1 * y + s2
+                s2 = b2 * x - a2 * y
+                out.append(round(y, 6))
+            curr = out
+
+        return curr
+
+
+class EmpiricalModeDecompositionEMD:
+    """Empirical Mode Decomposition (EMD) sifting algorithm for non-stationary signals."""
+
+    @classmethod
+    def _find_extrema(cls, x: List[float]) -> Tuple[List[int], List[int]]:
+        maxima = []
+        minima = []
+        n = len(x)
+        for i in range(1, n - 1):
+            if x[i] >= x[i - 1] and x[i] >= x[i + 1] and (x[i] > x[i - 1] or x[i] > x[i + 1]):
+                maxima.append(i)
+            elif x[i] <= x[i - 1] and x[i] <= x[i + 1] and (x[i] < x[i - 1] or x[i] < x[i + 1]):
+                minima.append(i)
+        return maxima, minima
+
+    @classmethod
+    def _interpolate_envelope(cls, indices: List[int], values: List[float], n: int) -> List[float]:
+        """Piecewise linear envelope interpolation with flat boundary extrapolation."""
+        if not indices:
+            return [0.0] * n
+        if len(indices) == 1:
+            return [values[indices[0]]] * n
+
+        env = [0.0] * n
+        # Flat start
+        first_idx = indices[0]
+        first_val = values[first_idx]
+        for i in range(first_idx):
+            env[i] = first_val
+
+        # Linear segments
+        for k in range(len(indices) - 1):
+            i0, i1 = indices[k], indices[k + 1]
+            v0, v1 = values[i0], values[i1]
+            span = i1 - i0
+            for i in range(i0, i1):
+                t = (i - i0) / span
+                env[i] = v0 + t * (v1 - v0)
+
+        # Flat end
+        last_idx = indices[-1]
+        last_val = values[last_idx]
+        for i in range(last_idx, n):
+            env[i] = last_val
+
+        return env
+
+    @classmethod
+    def decompose(
+        cls,
+        signal: List[float],
+        max_imfs: int = 4,
+        max_siftings: int = 10,
+    ) -> Record:
+        """Decomposes signal into Intrinsic Mode Functions (IMFs) and residual trend."""
+        n = len(signal)
+        residue = [float(v) for v in signal]
+        imfs: List[List[float]] = []
+
+        for _ in range(max_imfs):
+            h = list(residue)
+            for _ in range(max_siftings):
+                maxima, minima = cls._find_extrema(h)
+                if len(maxima) < 2 or len(minima) < 2:
+                    break
+                upper_env = cls._interpolate_envelope(maxima, h, n)
+                lower_env = cls._interpolate_envelope(minima, h, n)
+                mean_env = [(upper_env[i] + lower_env[i]) * 0.5 for i in range(n)]
+                h = [h[i] - mean_env[i] for i in range(n)]
+
+            maxima, minima = cls._find_extrema(h)
+            if len(maxima) + len(minima) < 3:
+                break
+
+            imf = [round(v, 6) for v in h]
+            imfs.append(imf)
+            residue = [residue[i] - imf[i] for i in range(n)]
+
+        return Record({
+            "imfs": imfs,
+            "residue": [round(v, 6) for v in residue],
+            "num_imfs": len(imfs),
+            "original_length": n,
+        })
+
+
+def signals_kalman_filter(
+    measurements: List[Any],
+    F: List[List[float]],
+    H: List[List[float]],
+    Q: List[List[float]],
+    R: List[List[float]],
+    x0: Optional[List[float]] = None,
+    P0: Optional[List[List[float]]] = None,
+) -> Record:
+    """Applies discrete Kalman filter to measurement series."""
+    kf = KalmanFilterEstimator(F, H, Q, R, x0=x0, P0=P0)
+    return kf.filter(measurements)
+
+
+def signals_butterworth_lowpass(
+    signal: List[float],
+    cutoff_hz: float,
+    order: int = 4,
+    sample_rate: float = 1000.0,
+) -> List[float]:
+    """Filters signal with Butterworth IIR lowpass filter."""
+    return ButterworthIIRFilter.apply(signal, cutoff_hz, order=order, sample_rate=sample_rate)
+
+
+def signals_emd_decompose(
+    signal: List[float],
+    max_imfs: int = 4,
+) -> Record:
+    """Decomposes signal into Intrinsic Mode Functions (IMFs)."""
+    return EmpiricalModeDecompositionEMD.decompose(signal, max_imfs=max_imfs)
+
+
+

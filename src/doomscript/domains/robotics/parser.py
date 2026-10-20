@@ -134,6 +134,26 @@ class RoboticsDomainParser(DomainParser):
             d, v, a, target = m_trap.group(1).strip(), m_trap.group(2).strip(), m_trap.group(3).strip(), m_trap.group(4).strip()
             return f"set {target} to robotics_trapezoidal_profile({d}, {v}, {a})"
 
+        # calculate dubins path from <start> to <goal> with radius <r> into <target>
+        m_dub = re.match(
+            r"^calculate\s+dubins\s+path\s+from\s+(.+?)\s+to\s+(.+?)\s+with\s+radius\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_dub:
+            st, gl, rad, target = m_dub.group(1).strip(), m_dub.group(2).strip(), m_dub.group(3).strip(), m_dub.group(4).strip()
+            return f"set {target} to robotics_dubins_path({st}, {gl}, turning_radius={rad})"
+
+        # update occupancy grid with pose <pose> and scan ranges <ranges> into <target>
+        m_occ = re.match(
+            r"^update\s+occupancy\s+grid\s+with\s+pose\s+(.+?)\s+and\s+scan\s+ranges\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_occ:
+            pose, rngs, target = m_occ.group(1).strip(), m_occ.group(2).strip(), m_occ.group(3).strip()
+            return f"set {target} to robotics_occupancy_grid_update({pose}, {rngs})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

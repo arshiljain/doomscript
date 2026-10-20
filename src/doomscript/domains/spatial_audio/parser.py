@@ -111,6 +111,26 @@ class SpatialAudioDomainParser(DomainParser):
             target = m_att.group(5).strip()
             return f"set {target} to spatial_audio_distance_attenuate({sig}, {dist}, ref_distance={ref}, rolloff={ro})"
 
+        # calculate early reflections in room <dims> from source <src> to receiver <rec> into <target>
+        m_refl = re.match(
+            r"^calculate\s+early\s+reflections\s+in\s+room\s+(.+?)\s+from\s+source\s+(.+?)\s+to\s+receiver\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_refl:
+            dims, src, rec, target = m_refl.group(1).strip(), m_refl.group(2).strip(), m_refl.group(3).strip(), m_refl.group(4).strip()
+            return f"set {target} to spatial_audio_early_reflections({dims}, {src}, {rec})"
+
+        # convolve audio <sig> with impulse response <ir> into <target>
+        m_conv = re.match(
+            r"^convolve\s+audio\s+(.+?)\s+with\s+impulse\s+response\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_conv:
+            sig, ir, target = m_conv.group(1).strip(), m_conv.group(2).strip(), m_conv.group(3).strip()
+            return f"set {target} to spatial_audio_convolve_ir({sig}, {ir})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

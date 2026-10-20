@@ -39,6 +39,12 @@ from doomscript.domains.signals.runtime import (
     signals_cross_correlation,
     signals_detect_pitch,
     signals_lomb_scargle,
+    KalmanFilterEstimator,
+    ButterworthIIRFilter,
+    EmpiricalModeDecompositionEMD,
+    signals_kalman_filter,
+    signals_butterworth_lowpass,
+    signals_emd_decompose,
 )
 from doomscript.domains.signals.parser import SignalsDomainParser
 from doomscript.domains.signals.exporter import SignalsASTExporter
@@ -119,4 +125,10 @@ __all__ = [
     "SavitzkyGolayFilter",
     "signals_stft",
     "signals_savitzky_golay",
+    "KalmanFilterEstimator",
+    "ButterworthIIRFilter",
+    "EmpiricalModeDecompositionEMD",
+    "signals_kalman_filter",
+    "signals_butterworth_lowpass",
+    "signals_emd_decompose",
 ]

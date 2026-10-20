@@ -782,3 +782,281 @@ def robotics_trapezoidal_profile(distance: float, max_v: float, max_a: float) ->
     prof = TrapezoidalVelocityProfile(max_v, max_a)
     return Record(prof.plan(distance))
 
+
+# ==============================================================================
+# DUBINS NON-HOLONOMIC TRAJECTORY PLANNING & OCCUPANCY GRID MAPPING
+# ==============================================================================
+
+def _mod2pi(theta: float) -> float:
+    return theta - 2.0 * math.pi * math.floor(theta / (2.0 * math.pi))
+
+
+class DubinsCarShortestPath:
+    """Exact analytical Dubins path generator for non-holonomic vehicles with minimum turning radius."""
+
+    @classmethod
+    def _lsl(cls, alpha: float, beta: float, d: float) -> Tuple[bool, float, float, float]:
+        ca, sa = math.cos(alpha), math.sin(alpha)
+        cb, sb = math.cos(beta), math.sin(beta)
+        tmp = 2.0 + d * d - (2.0 * (ca * cb + sa * sb - d * (sa - sb)))
+        if tmp < 0:
+            return False, 0.0, 0.0, 0.0
+        theta = math.atan2(cb - ca, d + sa - sb)
+        t = _mod2pi(-alpha + theta)
+        p = math.sqrt(max(0.0, tmp))
+        q = _mod2pi(beta - theta)
+        return True, t, p, q
+
+    @classmethod
+    def _rsr(cls, alpha: float, beta: float, d: float) -> Tuple[bool, float, float, float]:
+        ca, sa = math.cos(alpha), math.sin(alpha)
+        cb, sb = math.cos(beta), math.sin(beta)
+        tmp = 2.0 + d * d - (2.0 * (ca * cb + sa * sb - d * (sb - sa)))
+        if tmp < 0:
+            return False, 0.0, 0.0, 0.0
+        theta = math.atan2(ca - cb, d - sa + sb)
+        t = _mod2pi(alpha - theta)
+        p = math.sqrt(max(0.0, tmp))
+        q = _mod2pi(-beta + theta)
+        return True, t, p, q
+
+    @classmethod
+    def _lsr(cls, alpha: float, beta: float, d: float) -> Tuple[bool, float, float, float]:
+        ca, sa = math.cos(alpha), math.sin(alpha)
+        cb, sb = math.cos(beta), math.sin(beta)
+        tmp = -2.0 + d * d + (2.0 * (ca * cb + sa * sb + d * (sa + sb)))
+        if tmp < 0:
+            return False, 0.0, 0.0, 0.0
+        p = math.sqrt(max(0.0, tmp))
+        theta = math.atan2(-ca - cb, d + sa + sb) - math.atan2(-2.0, p)
+        t = _mod2pi(-alpha + theta)
+        q = _mod2pi(-_mod2pi(beta) + theta)
+        return True, t, p, q
+
+    @classmethod
+    def _rsl(cls, alpha: float, beta: float, d: float) -> Tuple[bool, float, float, float]:
+        ca, sa = math.cos(alpha), math.sin(alpha)
+        cb, sb = math.cos(beta), math.sin(beta)
+        tmp = d * d - 2.0 + (2.0 * (ca * cb + sa * sb - d * (sa + sb)))
+        if tmp < 0:
+            return False, 0.0, 0.0, 0.0
+        p = math.sqrt(max(0.0, tmp))
+        theta = math.atan2(ca + cb, d - sa - sb) - math.atan2(2.0, p)
+        t = _mod2pi(alpha - theta)
+        q = _mod2pi(beta - theta)
+        return True, t, p, q
+
+    @classmethod
+    def plan(
+        cls,
+        start: Tuple[float, float, float],
+        goal: Tuple[float, float, float],
+        turning_radius: float = 1.0,
+        step_size: float = 0.2,
+    ) -> Record:
+        """Finds minimum length Dubins path connecting start and goal poses (x, y, heading_rad)."""
+        x1, y1, th1 = float(start[0]), float(start[1]), float(start[2])
+        x2, y2, th2 = float(goal[0]), float(goal[1]), float(goal[2])
+        R = max(0.01, float(turning_radius))
+
+        dx = x2 - x1
+        dy = y2 - y1
+        D = math.hypot(dx, dy)
+        d = D / R
+
+        # Angle of line of sight
+        theta_los = math.atan2(dy, dx)
+        alpha = _mod2pi(th1 - theta_los)
+        beta = _mod2pi(th2 - theta_los)
+
+        planners = [
+            ("LSL", cls._lsl),
+            ("RSR", cls._rsr),
+            ("LSR", cls._lsr),
+            ("RSL", cls._rsl),
+        ]
+
+        best_cost = float("inf")
+        best_type = "LSL"
+        best_lengths = (0.0, 0.0, 0.0)
+
+        for name, solver in planners:
+            ok, t, p, q = solver(alpha, beta, d)
+            if ok:
+                cost = (t + p + q) * R
+                if cost < best_cost:
+                    best_cost = cost
+                    best_type = name
+                    best_lengths = (t * R, p * R, q * R)
+
+        # Generate interpolated waypoint trajectory
+        waypoints = [[round(x1, 4), round(y1, 4), round(th1, 4)]]
+        curr_x, curr_y, curr_th = x1, y1, th1
+
+        def _step_segment(seg_type: str, seg_len: float):
+            nonlocal curr_x, curr_y, curr_th
+            n_pts = max(1, int(seg_len / step_size))
+            dt = seg_len / n_pts
+            for _ in range(n_pts):
+                if seg_type == "L":
+                    curr_th += dt / R
+                    curr_x += dt * math.cos(curr_th)
+                    curr_y += dt * math.sin(curr_th)
+                elif seg_type == "R":
+                    curr_th -= dt / R
+                    curr_x += dt * math.cos(curr_th)
+                    curr_y += dt * math.sin(curr_th)
+                else:  # 'S'
+                    curr_x += dt * math.cos(curr_th)
+                    curr_y += dt * math.sin(curr_th)
+                waypoints.append([round(curr_x, 4), round(curr_y, 4), round(curr_th, 4)])
+
+        _step_segment(best_type[0], best_lengths[0])
+        _step_segment(best_type[1], best_lengths[1])
+        _step_segment(best_type[2], best_lengths[2])
+
+        return Record({
+            "path_type": best_type,
+            "total_length": round(best_cost, 4),
+            "segment_lengths": [round(l, 4) for l in best_lengths],
+            "waypoints": waypoints,
+            "waypoints_count": len(waypoints),
+            "turning_radius": R,
+        })
+
+
+class OccupancyGridMap2D:
+    """2D Log-Odds Occupancy Grid Mapping with Bresenham Ray-Casting."""
+
+    def __init__(
+        self,
+        width: int = 50,
+        height: int = 50,
+        resolution: float = 0.2,
+        prob_occ: float = 0.85,
+        prob_free: float = 0.35,
+    ):
+        self.width = max(5, int(width))
+        self.height = max(5, int(height))
+        self.resolution = float(resolution)
+
+        # Log odds: l = log(p / (1 - p))
+        self.l_occ = math.log(prob_occ / (1.0 - prob_occ))
+        self.l_free = math.log(prob_free / (1.0 - prob_free))
+        self.log_odds = [[0.0 for _ in range(self.width)] for _ in range(self.height)]
+
+    def _world_to_grid(self, x: float, y: float) -> Tuple[int, int]:
+        gx = int(round(x / self.resolution)) + self.width // 2
+        gy = int(round(y / self.resolution)) + self.height // 2
+        return gx, gy
+
+    def _bresenham(self, x0: int, y0: int, x1: int, y1: int) -> List[Tuple[int, int]]:
+        """Bresenham's line algorithm returning grid points along ray."""
+        points = []
+        dx = abs(x1 - x0)
+        dy = abs(y1 - y0)
+        sx = 1 if x0 < x1 else -1
+        sy = 1 if y0 < y1 else -1
+        err = dx - dy
+
+        curr_x, curr_y = x0, y0
+        while True:
+            points.append((curr_x, curr_y))
+            if curr_x == x1 and curr_y == y1:
+                break
+            e2 = 2 * err
+            if e2 > -dy:
+                err -= dy
+                curr_x += sx
+            if e2 < dx:
+                err += dx
+                curr_y += sy
+        return points
+
+    def update_scan(
+        self,
+        robot_pose: Tuple[float, float, float],
+        scan_ranges: List[float],
+        angle_min: float = -math.pi / 2,
+        angle_max: float = math.pi / 2,
+        max_range: float = 10.0,
+    ) -> Record:
+        """Updates log-odds grid given robot pose (x, y, heading) and lidar beam distance array."""
+        rx, ry, rth = float(robot_pose[0]), float(robot_pose[1]), float(robot_pose[2])
+        rgx, rgy = self._world_to_grid(rx, ry)
+
+        n_beams = len(scan_ranges)
+        if n_beams == 0:
+            return Record({"occupied_count": 0, "free_count": 0, "entropy": 0.0})
+
+        angle_step = (angle_max - angle_min) / max(1, n_beams - 1)
+
+        for i, dist in enumerate(scan_ranges):
+            beam_angle = rth + angle_min + i * angle_step
+            hit = dist < max_range
+            effective_dist = dist if hit else max_range
+
+            hit_x = rx + effective_dist * math.cos(beam_angle)
+            hit_y = ry + effective_dist * math.sin(beam_angle)
+            hgx, hgy = self._world_to_grid(hit_x, hit_y)
+
+            # Trace ray
+            line_cells = self._bresenham(rgx, rgy, hgx, hgy)
+            # Free cells along line
+            for cx, cy in line_cells[:-1]:
+                if 0 <= cx < self.width and 0 <= cy < self.height:
+                    self.log_odds[cy][cx] = max(-10.0, self.log_odds[cy][cx] + self.l_free)
+
+            # Hit cell at end if valid detection
+            if hit and line_cells:
+                end_x, end_y = line_cells[-1]
+                if 0 <= end_x < self.width and 0 <= end_y < self.height:
+                    self.log_odds[end_y][end_x] = min(10.0, self.log_odds[end_y][end_x] + self.l_occ)
+
+        # Count occupied, free, and compute map Shannon entropy
+        occupied_count = 0
+        free_count = 0
+        entropy = 0.0
+
+        for y in range(self.height):
+            for x in range(self.width):
+                lo = self.log_odds[y][x]
+                p = 1.0 / (1.0 + math.exp(-lo))
+                if p > 0.7:
+                    occupied_count += 1
+                elif p < 0.3:
+                    free_count += 1
+                p_c = max(1e-6, min(1.0 - 1e-6, p))
+                entropy -= (p_c * math.log(p_c) + (1.0 - p_c) * math.log(1.0 - p_c))
+
+        return Record({
+            "occupied_count": occupied_count,
+            "free_count": free_count,
+            "total_cells": self.width * self.height,
+            "entropy": round(entropy, 4),
+            "resolution": self.resolution,
+        })
+
+
+def robotics_dubins_path(
+    start: Tuple[float, float, float],
+    goal: Tuple[float, float, float],
+    turning_radius: float = 1.0,
+    step_size: float = 0.2,
+) -> Record:
+    """Calculates non-holonomic shortest Dubins path between start and goal poses."""
+    return DubinsCarShortestPath.plan(start, goal, turning_radius=turning_radius, step_size=step_size)
+
+
+def robotics_occupancy_grid_update(
+    robot_pose: Tuple[float, float, float],
+    scan_ranges: List[float],
+    width: int = 40,
+    height: int = 40,
+    resolution: float = 0.2,
+) -> Record:
+    """Updates 2D log-odds occupancy grid map from lidar sensor ranges."""
+    grid_map = OccupancyGridMap2D(width=width, height=height, resolution=resolution)
+    return grid_map.update_scan(robot_pose, scan_ranges)
+
+
