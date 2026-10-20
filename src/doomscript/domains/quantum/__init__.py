@@ -27,6 +27,9 @@ from doomscript.domains.quantum.runtime import (
     quantum_measure_all,
     quantum_state_probabilities,
     quantum_create_bell_state,
+    QuantumErrorCorrection,
+    GroverSearch,
+    QuantumTeleportation,
 )
 from doomscript.domains.quantum.parser import QuantumDomainParser
 from doomscript.domains.quantum.exporter import QuantumASTExporter
@@ -105,4 +108,7 @@ __all__ = [
     "quantum_measure_all",
     "quantum_state_probabilities",
     "quantum_create_bell_state",
+    "QuantumErrorCorrection",
+    "GroverSearch",
+    "QuantumTeleportation",
 ]

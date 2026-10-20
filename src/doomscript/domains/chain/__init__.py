@@ -26,6 +26,9 @@ from doomscript.domains.chain.runtime import (
     chain_process_tx,
     chain_get_balance,
     chain_checksum_address,
+    PatriciaMerkleTrie,
+    SchnorrZKProtocol,
+    RaftConsensusEngine,
 )
 from doomscript.domains.chain.parser import ChainDomainParser
 from doomscript.domains.chain.exporter import ChainASTExporter
@@ -105,4 +108,7 @@ __all__ = [
     "chain_process_tx",
     "chain_get_balance",
     "chain_checksum_address",
+    "PatriciaMerkleTrie",
+    "SchnorrZKProtocol",
+    "RaftConsensusEngine",
 ]

@@ -22,6 +22,9 @@ from doomscript.domains.time_series.runtime import (
     time_series_pacf,
     time_series_holt_winters,
     time_series_difference,
+    ARIMASimulator,
+    DynamicTimeWarping,
+    CUSUMDetector,
 )
 from doomscript.domains.time_series.parser import TimeSeriesDomainParser
 from doomscript.domains.time_series.exporter import TimeSeriesASTExporter
@@ -90,4 +93,7 @@ __all__ = [
     "time_series_pacf",
     "time_series_holt_winters",
     "time_series_difference",
+    "ARIMASimulator",
+    "DynamicTimeWarping",
+    "CUSUMDetector",
 ]

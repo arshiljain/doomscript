@@ -11,6 +11,8 @@ import hmac
 import json
 import math
 import re
+import struct
+import time
 from typing import Any, Dict, List, Optional, Tuple, Set
 from doomscript.domains.base import DomainRuntime, DomainIR
 
@@ -382,3 +384,258 @@ def execute_sec_ir(spec_id: str) -> Any:
     if spec is None:
         raise ValueError(f"Unknown sec spec: {spec_id}")
     return SecRuntime().execute_ir(spec, {})
+
+
+# --- Deepened Cybersecurity: Shamir Secret Sharing, TOTP & Secp256k1 Curve ---
+
+class ShamirSecretSharing:
+    """Shamir's (k, n) Threshold Secret Sharing scheme using Lagrange polynomial interpolation over GF(p)."""
+
+    # 256-bit prime modulus
+    PRIME = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F
+
+    @classmethod
+    def split_secret(cls, secret: int, n: int, k: int) -> List[Tuple[int, int]]:
+        """Splits integer secret into n shares such that any k shares can reconstruct it."""
+        import random
+        if k > n:
+            raise ValueError("Threshold k cannot exceed total shares n")
+        if secret >= cls.PRIME or secret < 0:
+            raise ValueError("Secret must be non-negative and less than field prime")
+
+        # Coefficients for polynomial P(x) = secret + a1*x + ... + a_{k-1}*x^{k-1}
+        coeffs = [secret] + [random.randint(1, cls.PRIME - 1) for _ in range(k - 1)]
+
+        shares = []
+        for x in range(1, n + 1):
+            y = 0
+            x_pow = 1
+            for coeff in coeffs:
+                y = (y + coeff * x_pow) % cls.PRIME
+                x_pow = (x_pow * x) % cls.PRIME
+            shares.append((x, y))
+
+        return shares
+
+    @classmethod
+    def recover_secret(cls, shares: List[Tuple[int, int]]) -> int:
+        """Recovers secret from k or more shares using Lagrange basis polynomials at x = 0."""
+        k = len(shares)
+        if k == 0:
+            raise ValueError("At least one share required")
+
+        p = cls.PRIME
+        secret = 0
+
+        for j in range(k):
+            xj, yj = shares[j]
+            # Calculate Lagrange basis polynomial l_j(0) = product_{m != j} (-xm) / (xj - xm) mod p
+            numerator = 1
+            denominator = 1
+            for m in range(k):
+                if m == j:
+                    continue
+                xm, _ = shares[m]
+                numerator = (numerator * (-xm)) % p
+                denominator = (denominator * (xj - xm)) % p
+
+            # Modular inverse using Fermat's Little Theorem: pow(den, p - 2, p)
+            inv_den = pow(denominator % p, p - 2, p)
+            basis = (numerator * inv_den) % p
+            secret = (secret + yj * basis) % p
+
+        return secret
+
+    @classmethod
+    def split_bytes(cls, secret_data: bytes, n: int, k: int) -> List[Tuple[int, str]]:
+        """Encodes arbitrary bytes into hex shares using Shamir threshold scheme."""
+        secret_int = int.from_bytes(secret_data, byteorder="big")
+        int_shares = cls.split_secret(secret_int, n, k)
+        return [(x, hex(y)) for x, y in int_shares]
+
+    @classmethod
+    def recover_bytes(cls, shares: List[Tuple[int, str]]) -> bytes:
+        """Recovers raw bytes from hex shares."""
+        int_shares = [(x, int(y, 16)) for x, y in shares]
+        secret_int = cls.recover_secret(int_shares)
+        # Convert integer to bytes
+        byte_len = (secret_int.bit_length() + 7) // 8
+        return secret_int.to_bytes(max(1, byte_len), byteorder="big")
+
+
+class TOTPGenerator:
+    """RFC 6238 Time-based One-Time Password & RFC 4226 HMAC-based One-Time Password generator."""
+
+    _BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+
+    @classmethod
+    def _base32_decode(cls, s: str) -> bytes:
+        """Pure-Python standard Base32 decoding without third-party libraries."""
+        clean = s.upper().replace("=", "").strip()
+        binary_str = ""
+        for char in clean:
+            val = cls._BASE32_ALPHABET.find(char)
+            if val == -1:
+                continue
+            binary_str += f"{val:05b}"
+
+        # Group into 8-bit bytes
+        byte_arr = bytearray()
+        for i in range(0, len(binary_str) - (len(binary_str) % 8), 8):
+            byte_arr.append(int(binary_str[i:i + 8], 2))
+        return bytes(byte_arr)
+
+    @classmethod
+    def generate_hotp(cls, secret_bytes: bytes, counter: int, digits: int = 6) -> str:
+        """Generates RFC 4226 HMAC-SHA1 counter-based OTP."""
+        # 8-byte big-endian counter
+        msg = struct.pack(">Q", counter)
+        h = hmac.new(secret_bytes, msg, hashlib.sha1).digest()
+
+        # Dynamic truncation (RFC 4226 section 5.4)
+        offset = h[-1] & 0x0F
+        binary = (
+            ((h[offset] & 0x7F) << 24)
+            | ((h[offset + 1] & 0xFF) << 16)
+            | ((h[offset + 2] & 0xFF) << 8)
+            | (h[offset + 3] & 0xFF)
+        )
+        otp = binary % (10 ** digits)
+        return str(otp).zfill(digits)
+
+    @classmethod
+    def generate_totp(
+        cls,
+        secret: Union[str, bytes],
+        time_step: int = 30,
+        for_time: Optional[float] = None,
+        digits: int = 6,
+    ) -> str:
+        """Generates RFC 6238 Time-Based OTP."""
+        t = time.time() if for_time is None else for_time
+        counter = int(t // time_step)
+        secret_bytes = cls._base32_decode(secret) if isinstance(secret, str) else secret
+        return cls.generate_hotp(secret_bytes, counter, digits=digits)
+
+    @classmethod
+    def verify_totp(
+        cls,
+        secret: Union[str, bytes],
+        token: str,
+        tolerance: int = 1,
+        time_step: int = 30,
+        for_time: Optional[float] = None,
+    ) -> bool:
+        """Verifies token against current time and drift tolerance windows."""
+        t = time.time() if for_time is None else for_time
+        base_counter = int(t // time_step)
+        secret_bytes = cls._base32_decode(secret) if isinstance(secret, str) else secret
+
+        for delta in range(-tolerance, tolerance + 1):
+            expected = cls.generate_hotp(secret_bytes, base_counter + delta, digits=len(token))
+            if hmac.compare_digest(expected, token.strip()):
+                return True
+        return False
+
+
+class Secp256k1Curve:
+    """Pure-Python standard library elliptic curve cryptography on secp256k1 (Bitcoin & Ethereum curve)."""
+
+    P = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F
+    A = 0
+    B = 7
+    GX = 0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798
+    GY = 0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8
+    N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
+
+    Point = Optional[Tuple[int, int]]
+
+    @classmethod
+    def is_on_curve(cls, pt: Point) -> bool:
+        """Verifies point satisfies curve equation: y^2 = x^3 + 7 mod P."""
+        if pt is None:
+            return True
+        x, y = pt
+        return (pow(y, 2, cls.P) - (pow(x, 3, cls.P) + cls.B)) % cls.P == 0
+
+    @classmethod
+    def point_add(cls, p1: Point, p2: Point) -> Point:
+        """Adds two elliptic curve points."""
+        if p1 is None:
+            return p2
+        if p2 is None:
+            return p1
+
+        x1, y1 = p1
+        x2, y2 = p2
+
+        if x1 == x2:
+            if (y1 + y2) % cls.P == 0:
+                return None  # Point at infinity
+            return cls.point_double(p1)
+
+        # Slope m = (y2 - y1) / (x2 - x1) mod P
+        m = ((y2 - y1) * pow(x2 - x1, cls.P - 2, cls.P)) % cls.P
+        x3 = (m * m - x1 - x2) % cls.P
+        y3 = (m * (x1 - x3) - y1) % cls.P
+        return (x3, y3)
+
+    @classmethod
+    def point_double(cls, pt: Point) -> Point:
+        """Doubles an elliptic curve point: 2 * P."""
+        if pt is None:
+            return None
+        x, y = pt
+        if y == 0:
+            return None
+
+        # Slope m = (3 * x^2 + A) / (2 * y) mod P
+        m = ((3 * x * x + cls.A) * pow(2 * y, cls.P - 2, cls.P)) % cls.P
+        x3 = (m * m - 2 * x) % cls.P
+        y3 = (m * (x - x3) - y) % cls.P
+        return (x3, y3)
+
+    @classmethod
+    def scalar_mult(cls, k: int, pt: Point) -> Point:
+        """Multiplies point by scalar k using double-and-add algorithm."""
+        k = k % cls.N
+        if k == 0 or pt is None:
+            return None
+
+        result: Secp256k1Curve.Point = None
+        addend = pt
+
+        while k > 0:
+            if k & 1:
+                result = cls.point_add(result, addend)
+            addend = cls.point_double(addend)
+            k >>= 1
+
+        return result
+
+    @classmethod
+    def public_key(cls, private_key: int) -> Tuple[int, int]:
+        """Derives public key (x, y) point from private scalar key d: Q = d * G."""
+        if not (1 <= private_key < cls.N):
+            raise ValueError("Private key out of valid secp256k1 range")
+        pt = cls.scalar_mult(private_key, (cls.GX, cls.GY))
+        if pt is None:
+            raise ValueError("Invalid public key computation")
+        return pt
+
+    @classmethod
+    def compress_point(cls, pt: Tuple[int, int]) -> str:
+        """Encodes point in compressed 33-byte format: prefix (02 or 03) + 32-byte hex x."""
+        x, y = pt
+        prefix = "03" if y % 2 != 0 else "02"
+        return prefix + f"{x:064x}"
+
+    @classmethod
+    def ecdh_shared_secret(cls, private_key: int, peer_public_key: Tuple[int, int]) -> str:
+        """Derives Elliptic Curve Diffie-Hellman (ECDH) shared secret hash."""
+        shared_pt = cls.scalar_mult(private_key, peer_public_key)
+        if shared_pt is None:
+            raise ValueError("Point at infinity encountered in ECDH key exchange")
+        # SHA-256 of the shared x coordinate
+        x_bytes = shared_pt[0].to_bytes(32, byteorder="big")
+        return hashlib.sha256(x_bytes).hexdigest()

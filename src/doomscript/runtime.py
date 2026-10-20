@@ -3229,6 +3229,9 @@ from doomscript.domains.sec.runtime import (
     sec_cvss_score,
     sec_parse_banner,
     execute_sec_ir,
+    ShamirSecretSharing,
+    TOTPGenerator,
+    Secp256k1Curve,
 )
 
 from doomscript.domains.game.runtime import (
@@ -3269,6 +3272,9 @@ from doomscript.domains.quantum.runtime import (
     quantum_bell_state,
     quantum_state_vector,
     execute_quantum_ir,
+    QuantumErrorCorrection,
+    GroverSearch,
+    QuantumTeleportation,
 )
 
 from doomscript.domains.circuit.runtime import (
@@ -3304,6 +3310,9 @@ from doomscript.domains.chain.runtime import (
     chain_get_utxo_balance,
     chain_eip55_address,
     execute_chain_ir,
+    PatriciaMerkleTrie,
+    SchnorrZKProtocol,
+    RaftConsensusEngine,
 )
 
 from doomscript.domains.math3d.runtime import (
@@ -3451,6 +3460,9 @@ from doomscript.domains.time_series.runtime import (
     time_series_pacf,
     time_series_holt_winters,
     time_series_difference,
+    ARIMASimulator,
+    DynamicTimeWarping,
+    CUSUMDetector,
 )
 
 from doomscript.domains.symbolic.runtime import (
@@ -3635,6 +3647,9 @@ from doomscript.domains.ml.runtime import (
 
 from doomscript.domains.finance.runtime import (
     fin_monte_carlo_var,
+    AnalyticalGreeks,
+    BinomialCoxRossRubinstein,
+    MarkowitzOptimizer,
 )
 
 from doomscript.domains.graph.runtime import (
@@ -3929,3 +3944,107 @@ def train_direct_model(
 
 
 
+
+
+# --- Cluster G: Finance, Time Series, Blockchain, Quantum & Cybersecurity Wrappers ---
+
+def finance_analytical_greeks(S: float, K: float, T: float, r: float, sigma: float, option_type: str = "call") -> Dict[str, float]:
+    """Calculates Black-Scholes price and exact analytical Greeks (Delta, Gamma, Vega, Theta, Rho)."""
+    return AnalyticalGreeks.all_greeks(S, K, T, r, sigma, option_type=option_type)
+
+
+def finance_binomial_price(
+    S0: float, K: float, T: float, r: float, sigma: float, steps: int = 100, option_type: str = "call", is_american: bool = False
+) -> Dict[str, Any]:
+    """Prices European or American option using Cox-Ross-Rubinstein binomial lattice."""
+    return BinomialCoxRossRubinstein.price(S0, K, T, r, sigma, steps=steps, option_type=option_type, is_american=is_american)
+
+
+def finance_optimize_markowitz(
+    returns: List[float], cov_matrix: List[List[float]], risk_free_rate: float = 0.02
+) -> Dict[str, Any]:
+    """Computes tangency maximum Sharpe ratio portfolio weights under Markowitz modern portfolio theory."""
+    return MarkowitzOptimizer.maximum_sharpe_portfolio(returns, cov_matrix, risk_free_rate=risk_free_rate)
+
+
+def time_series_arima_simulate(
+    n: int,
+    ar_params: Optional[List[float]] = None,
+    d: int = 0,
+    ma_params: Optional[List[float]] = None,
+    constant: float = 0.0,
+    sigma: float = 1.0,
+    seed: int = 42,
+) -> List[float]:
+    """Simulates ARIMA(p, d, q) process data."""
+    return ARIMASimulator.simulate(n, ar_params=ar_params, d=d, ma_params=ma_params, constant=constant, sigma=sigma, seed=seed)
+
+
+def time_series_dtw(series1: List[float], series2: List[float], window: Optional[int] = None) -> Dict[str, Any]:
+    """Calculates Dynamic Time Warping alignment distance and optimal path between two sequences."""
+    return DynamicTimeWarping.align(series1, series2, window=window)
+
+
+def time_series_cusum(series: List[float], threshold_h: float = 4.0) -> Dict[str, Any]:
+    """Performs CUSUM change point anomaly detection on time series."""
+    return CUSUMDetector.detect(series, threshold_h=threshold_h)
+
+
+def chain_patricia_trie() -> PatriciaMerkleTrie:
+    """Instantiates a new Modified Merkle Patricia Trie."""
+    return PatriciaMerkleTrie()
+
+
+def chain_schnorr_prove(
+    secret_x: int, public_y: int, g: Optional[int] = None, p: Optional[int] = None, q: Optional[int] = None
+) -> Dict[str, Any]:
+    """Generates non-interactive Schnorr zero-knowledge proof of discrete logarithm."""
+    return SchnorrZKProtocol.prove(secret_x, public_y, g=g, p=p, q=q)
+
+
+def chain_schnorr_verify(
+    public_y: int, proof: Dict[str, Any], g: Optional[int] = None, p: Optional[int] = None, q: Optional[int] = None
+) -> bool:
+    """Verifies Schnorr zero-knowledge proof."""
+    return SchnorrZKProtocol.verify(public_y, proof, g=g, p=p, q=q)
+
+
+def quantum_grover_search(num_qubits: int, target: int) -> Dict[str, Any]:
+    """Executes Grover search algorithm to amplify target state with quadratic speedup."""
+    grover = GroverSearch(num_qubits=num_qubits, target_state=target)
+    return grover.run_optimal()
+
+
+def quantum_teleport(alpha: complex, beta: complex) -> Dict[str, Any]:
+    """Simulates quantum state teleportation over an entangled EPR channel."""
+    return QuantumTeleportation.teleport(alpha, beta)
+
+
+def sec_shamir_split(secret_int: int, n: int, k: int) -> List[Tuple[int, int]]:
+    """Splits integer secret into n shares with threshold k."""
+    return ShamirSecretSharing.split_secret(secret_int, n=n, k=k)
+
+
+def sec_shamir_recover(shares: List[Tuple[int, int]]) -> int:
+    """Reconstructs secret from k shares using Lagrange polynomial interpolation."""
+    return ShamirSecretSharing.recover_secret(shares)
+
+
+def sec_generate_totp(secret: Union[str, bytes], digits: int = 6) -> str:
+    """Generates RFC 6238 time-based one-time password."""
+    return TOTPGenerator.generate_totp(secret, digits=digits)
+
+
+def sec_verify_totp(secret: Union[str, bytes], token: str, tolerance: int = 1) -> bool:
+    """Verifies RFC 6238 time-based one-time password with clock drift window."""
+    return TOTPGenerator.verify_totp(secret, token, tolerance=tolerance)
+
+
+def sec_secp256k1_public_key(priv_key: int) -> Tuple[int, int]:
+    """Derives elliptic curve public key (x, y) point on secp256k1."""
+    return Secp256k1Curve.public_key(priv_key)
+
+
+def sec_secp256k1_ecdh(priv_key: int, peer_pub_key: Tuple[int, int]) -> str:
+    """Derives SHA-256 Elliptic Curve Diffie-Hellman (ECDH) shared secret."""
+    return Secp256k1Curve.ecdh_shared_secret(priv_key, peer_pub_key)

@@ -256,3 +256,251 @@ def execute_quantum_ir(spec_id: str) -> Any:
     if spec is None:
         raise ValueError(f"Unknown quantum spec: {spec_id}")
     return QuantumRuntime().execute_ir(spec, {})
+
+
+# --- Deepened Quantum Simulation: Error Correction, Grover Search & Teleportation ---
+
+class QuantumErrorCorrection:
+    """Simulation of Quantum Error Correcting Codes (QECC) in pure statevector representation."""
+
+    @staticmethod
+    def encode_bit_flip(alpha: complex, beta: complex) -> List[complex]:
+        """Encodes 1 logical qubit (alpha|0> + beta|1>) into 3 physical qubits: alpha|000> + beta|111>."""
+        state = [0.0 + 0.0j] * 8
+        state[0] = alpha  # |000>
+        state[7] = beta   # |111>
+        return state
+
+    @staticmethod
+    def inject_error(state: List[complex], error_type: str, target_qubit: int) -> List[complex]:
+        """Applies Pauli X (bit-flip) or Pauli Z (phase-flip) error to a specific physical qubit."""
+        new_state = list(state)
+        n_qubits = int(math.log2(len(state)))
+        q = target_qubit
+
+        if error_type.upper() == "X":
+            # Swap pairs where target bit differs
+            res = [0.0 + 0.0j] * len(state)
+            for i in range(len(state)):
+                flipped_idx = i ^ (1 << (n_qubits - 1 - q))
+                res[flipped_idx] = new_state[i]
+            return res
+        elif error_type.upper() == "Z":
+            # Invert phase if target bit is 1
+            res = list(state)
+            for i in range(len(state)):
+                if (i >> (n_qubits - 1 - q)) & 1:
+                    res[i] = -res[i]
+            return res
+        return new_state
+
+    @classmethod
+    def detect_and_correct_bit_flip(cls, state: List[complex]) -> Tuple[List[complex], int]:
+        """Detects single-qubit bit flip syndrome via parity checks and applies Pauli X recovery."""
+        # Parity syndromes:
+        # s1 = q0 XOR q1
+        # s2 = q1 XOR q2
+        # Syndrome mapping:
+        # (0, 0) -> no error
+        # (1, 0) -> qubit 0 error
+        # (1, 1) -> qubit 1 error
+        # (0, 1) -> qubit 2 error
+        probs = [abs(amp) ** 2 for amp in state]
+        max_idx = max(range(len(probs)), key=lambda i: probs[i])
+
+        q0 = (max_idx >> 2) & 1
+        q1 = (max_idx >> 1) & 1
+        q2 = max_idx & 1
+
+        s1 = q0 ^ q1
+        s2 = q1 ^ q2
+
+        error_qubit = -1
+        if s1 == 1 and s2 == 0:
+            error_qubit = 0
+        elif s1 == 1 and s2 == 1:
+            error_qubit = 1
+        elif s1 == 0 and s2 == 1:
+            error_qubit = 2
+
+        corrected = list(state)
+        if error_qubit != -1:
+            corrected = cls.inject_error(corrected, "X", error_qubit)
+
+        return corrected, error_qubit
+
+    @classmethod
+    def encode_phase_flip(cls, alpha: complex, beta: complex) -> List[complex]:
+        """Encodes logical qubit into 3 physical qubits using Hadamard basis: alpha|+++> + beta|--->."""
+        # |+> = (|0>+|1>)/sqrt(2), |-> = (|0>-|1>)/sqrt(2)
+        # alpha|+++> + beta|---> expanded across all 8 basis states
+        h = 1.0 / math.sqrt(8.0)
+        state = [0.0 + 0.0j] * 8
+        for i in range(8):
+            # parity of ones in binary representation of i
+            parity = bin(i).count("1") % 2
+            sign_beta = -1.0 if parity == 1 else 1.0
+            state[i] = (alpha + sign_beta * beta) * h
+        return state
+
+    @classmethod
+    def detect_and_correct_phase_flip(cls, state: List[complex]) -> Tuple[List[complex], int]:
+        """Corrects single-qubit phase flip by rotating into computational basis, correcting bit-flip, and rotating back."""
+        # Apply Hadamard to all 3 qubits
+        def _apply_h_all(st: List[complex]) -> List[complex]:
+            dim = len(st)
+            inv_sqrt8 = 1.0 / (2.0 * math.sqrt(2.0))
+            out = [0.0 + 0.0j] * dim
+            for i in range(dim):
+                for j in range(dim):
+                    dot = bin(i & j).count("1") % 2
+                    sign = -1.0 if dot else 1.0
+                    out[i] += sign * st[j]
+                out[i] *= inv_sqrt8
+            return out
+
+        h_state = _apply_h_all(state)
+        corrected_h, err_q = cls.detect_and_correct_bit_flip(h_state)
+        final_state = _apply_h_all(corrected_h)
+        return final_state, err_q
+
+
+class GroverSearch:
+    """Grover's Quantum Search Algorithm simulator with exact statevector evolution."""
+
+    def __init__(self, num_qubits: int, target_state: int):
+        self.num_qubits = max(1, min(10, int(num_qubits)))
+        self.N = 1 << self.num_qubits
+        self.target = target_state % self.N
+        self.dim = self.N
+
+        # Initialize uniform superposition |s> = 1/sqrt(N) sum |x>
+        amp = 1.0 / math.sqrt(self.N)
+        self.state = [complex(amp, 0.0)] * self.dim
+        self.step_history: List[Dict[str, float]] = []
+
+    def apply_oracle(self) -> None:
+        """Phase inversion oracle: flips amplitude of the marked target state."""
+        self.state[self.target] = -self.state[self.target]
+
+    def apply_diffusion(self) -> None:
+        """Grover diffusion operator (inversion about average): 2|s><s| - I."""
+        avg = sum(self.state) / self.dim
+        for i in range(self.dim):
+            self.state[i] = 2.0 * avg - self.state[i]
+
+    def step(self) -> Dict[str, float]:
+        """Performs one full Grover iteration: Oracle followed by Diffusion."""
+        self.apply_oracle()
+        self.apply_diffusion()
+        target_prob = abs(self.state[self.target]) ** 2
+        entry = {
+            "target_probability": round(target_prob, 6),
+            "target_amplitude_real": round(self.state[self.target].real, 6),
+        }
+        self.step_history.append(entry)
+        return entry
+
+    def run_optimal(self) -> Dict[str, Any]:
+        """Runs optimal number of iterations k ~ round(pi / 4 * sqrt(N))."""
+        optimal_k = max(1, int(round((math.pi / 4.0) * math.sqrt(self.N))))
+        for _ in range(optimal_k):
+            self.step()
+
+        probs = [abs(amp) ** 2 for amp in self.state]
+        measured_state = max(range(self.dim), key=lambda i: probs[i])
+
+        return {
+            "num_qubits": self.num_qubits,
+            "search_space_size": self.N,
+            "target_state": self.target,
+            "iterations_performed": optimal_k,
+            "target_probability": round(probs[self.target], 6),
+            "measured_state": measured_state,
+            "success": (measured_state == self.target),
+        }
+
+
+class QuantumTeleportation:
+    """Simulation of quantum state teleportation using Bell-state entanglement and classical feedforward."""
+
+    @classmethod
+    def teleport(cls, alpha: complex, beta: complex) -> Dict[str, Any]:
+        """Transfers quantum state alpha|0> + beta|1> from Alice to Bob using an EPR pair."""
+        # Normalize input state
+        norm = math.sqrt(abs(alpha) ** 2 + abs(beta) ** 2)
+        if norm < 1e-12:
+            alpha, beta = 1.0 + 0j, 0.0 + 0j
+        else:
+            alpha, beta = alpha / norm, beta / norm
+
+        # 3 qubits: Q0 = Alice's message, Q1 = Alice's EPR half, Q2 = Bob's EPR half
+        # Initial 8-state vector: (alpha|0> + beta|1>) (x) (|00> + |11>)/sqrt(2)
+        inv_sqrt2 = 1.0 / math.sqrt(2.0)
+        # States: |000>, |011>, |100>, |111>
+        # Qubit ordering: Q0 (msb), Q1, Q2 (lsb)
+        state = [0.0 + 0.0j] * 8
+        state[0] = alpha * inv_sqrt2  # |000>
+        state[3] = alpha * inv_sqrt2  # |011>
+        state[4] = beta * inv_sqrt2   # |100>
+        state[7] = beta * inv_sqrt2   # |111>
+
+        # Alice applies CNOT between Q0 (control) and Q1 (target)
+        # For states with Q0 = 1, flip Q1 (bit 1)
+        # |100> (4) -> |110> (6)
+        # |111> (7) -> |101> (5)
+        state[4], state[6] = state[6], state[4]
+        state[7], state[5] = state[5], state[7]
+
+        # Alice applies Hadamard to Q0
+        # H on bit 2 (value 4)
+        h_state = [0.0 + 0.0j] * 8
+        inv_sqrt2 = 1.0 / math.sqrt(2.0)
+        for i in range(4):
+            # Q0 = 0 is i, Q0 = 1 is i + 4
+            u = state[i]
+            v = state[i + 4]
+            h_state[i] = (u + v) * inv_sqrt2
+            h_state[i + 4] = (u - v) * inv_sqrt2
+        state = h_state
+
+        # Measure Alice's 2 qubits (Q0 and Q1).
+        # Alice obtains classical bits (m0, m1) from {00, 01, 10, 11}.
+        # For simulation, each of the 4 outcomes occurs with probability 0.25.
+        # Let's inspect Bob's uncollapsed conditional state for each measurement outcome:
+        # m0 m1:
+        # 00: Bob has alpha|0> + beta|1> (identity)
+        # 01: Bob has alpha|1> + beta|0> (apply X)
+        # 10: Bob has alpha|0> - beta|1> (apply Z)
+        # 11: Bob has alpha|1> - beta|0> (apply X, then Z)
+
+        results = {}
+        for m0 in (0, 1):
+            for m1 in (0, 1):
+                idx0 = (m0 << 2) | (m1 << 1) | 0
+                idx1 = (m0 << 2) | (m1 << 1) | 1
+                bob_raw = [state[idx0] * 2.0, state[idx1] * 2.0]  # conditional unnormalized amplitude * 2
+
+                # Bob applies corrections:
+                if m1 == 1:
+                    # Apply X
+                    bob_raw[0], bob_raw[1] = bob_raw[1], bob_raw[0]
+                if m0 == 1:
+                    # Apply Z
+                    bob_raw[1] = -bob_raw[1]
+
+                # Fidelity with original (alpha, beta)
+                inner = (alpha.conjugate() * bob_raw[0] + beta.conjugate() * bob_raw[1])
+                fidelity = abs(inner) ** 2
+                results[f"{m0}{m1}"] = {
+                    "alice_bits": (m0, m1),
+                    "bob_qubit": (complex(round(bob_raw[0].real, 6), round(bob_raw[0].imag, 6)),
+                                  complex(round(bob_raw[1].real, 6), round(bob_raw[1].imag, 6))),
+                    "fidelity": round(fidelity, 6),
+                }
+
+        return {
+            "source_state": (alpha, beta),
+            "measurement_outcomes": results,
+            "perfect_fidelity_achieved": all(v["fidelity"] == 1.0 for v in results.values()),
+        }

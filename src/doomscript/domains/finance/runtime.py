@@ -1037,3 +1037,358 @@ def fin_monte_carlo_var(
         "median_final_value": round(sorted(final_values)[num_simulations // 2], 2),
     }
 
+
+
+# --- Deepened Financial Engineering & Portfolio Optimization ---
+
+class AnalyticalGreeks:
+    """Exact analytical Black-Scholes pricing and partial derivative sensitivities (Greeks).
+    
+    Supports European calls and puts with closed-form formulas:
+    - Delta: dV / dS
+    - Gamma: d2V / dS2
+    - Vega: dV / d(sigma)
+    - Theta: dV / dt (negative decay per year / day)
+    - Rho: dV / dr
+    - Implied Volatility via Newton-Raphson with Vega damping
+    """
+
+    @staticmethod
+    def _norm_cdf(x: float) -> float:
+        """Standard normal cumulative distribution function N(x)."""
+        return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
+
+    @staticmethod
+    def _norm_pdf(x: float) -> float:
+        """Standard normal probability density function N'(x)."""
+        return (1.0 / math.sqrt(2.0 * math.pi)) * math.exp(-0.5 * x * x)
+
+    @classmethod
+    def _d1_d2(cls, S: float, K: float, T: float, r: float, sigma: float) -> Tuple[float, float]:
+        if T <= 0 or sigma <= 0 or S <= 0 or K <= 0:
+            raise ValueError("S, K, T, sigma must all be positive floats")
+        vol_sqrt_t = sigma * math.sqrt(T)
+        d1 = (math.log(S / K) + (r + 0.5 * sigma * sigma) * T) / vol_sqrt_t
+        d2 = d1 - vol_sqrt_t
+        return d1, d2
+
+    @classmethod
+    def call_price(cls, S: float, K: float, T: float, r: float, sigma: float) -> float:
+        """European call option price under Black-Scholes model."""
+        if T <= 0:
+            return max(0.0, S - K)
+        d1, d2 = cls._d1_d2(S, K, T, r, sigma)
+        return S * cls._norm_cdf(d1) - K * math.exp(-r * T) * cls._norm_cdf(d2)
+
+    @classmethod
+    def put_price(cls, S: float, K: float, T: float, r: float, sigma: float) -> float:
+        """European put option price under Black-Scholes model."""
+        if T <= 0:
+            return max(0.0, K - S)
+        d1, d2 = cls._d1_d2(S, K, T, r, sigma)
+        return K * math.exp(-r * T) * cls._norm_cdf(-d2) - S * cls._norm_cdf(-d1)
+
+    @classmethod
+    def delta(cls, S: float, K: float, T: float, r: float, sigma: float, option_type: str = "call") -> float:
+        """Delta sensitivity dV/dS."""
+        d1, _ = cls._d1_d2(S, K, T, r, sigma)
+        if option_type.lower() == "call":
+            return cls._norm_cdf(d1)
+        else:
+            return cls._norm_cdf(d1) - 1.0
+
+    @classmethod
+    def gamma(cls, S: float, K: float, T: float, r: float, sigma: float) -> float:
+        """Gamma sensitivity d2V/dS2 (identical for calls and puts)."""
+        d1, _ = cls._d1_d2(S, K, T, r, sigma)
+        return cls._norm_pdf(d1) / (S * sigma * math.sqrt(T))
+
+    @classmethod
+    def vega(cls, S: float, K: float, T: float, r: float, sigma: float) -> float:
+        """Vega sensitivity dV/d(sigma) (identical for calls and puts)."""
+        d1, _ = cls._d1_d2(S, K, T, r, sigma)
+        return S * math.sqrt(T) * cls._norm_pdf(d1)
+
+    @classmethod
+    def theta(cls, S: float, K: float, T: float, r: float, sigma: float, option_type: str = "call") -> float:
+        """Theta time decay sensitivity dV/dt (annualized)."""
+        d1, d2 = cls._d1_d2(S, K, T, r, sigma)
+        first_term = -(S * cls._norm_pdf(d1) * sigma) / (2.0 * math.sqrt(T))
+        if option_type.lower() == "call":
+            return first_term - r * K * math.exp(-r * T) * cls._norm_cdf(d2)
+        else:
+            return first_term + r * K * math.exp(-r * T) * cls._norm_cdf(-d2)
+
+    @classmethod
+    def rho(cls, S: float, K: float, T: float, r: float, sigma: float, option_type: str = "call") -> float:
+        """Rho interest rate sensitivity dV/dr."""
+        _, d2 = cls._d1_d2(S, K, T, r, sigma)
+        if option_type.lower() == "call":
+            return K * T * math.exp(-r * T) * cls._norm_cdf(d2)
+        else:
+            return -K * T * math.exp(-r * T) * cls._norm_cdf(-d2)
+
+    @classmethod
+    def all_greeks(cls, S: float, K: float, T: float, r: float, sigma: float, option_type: str = "call") -> Dict[str, float]:
+        """Calculates price and all primary Greeks in one pass."""
+        opt = option_type.lower().strip()
+        price = cls.call_price(S, K, T, r, sigma) if opt == "call" else cls.put_price(S, K, T, r, sigma)
+        d = cls.delta(S, K, T, r, sigma, opt)
+        g = cls.gamma(S, K, T, r, sigma)
+        v = cls.vega(S, K, T, r, sigma)
+        th = cls.theta(S, K, T, r, sigma, opt)
+        rh = cls.rho(S, K, T, r, sigma, opt)
+        return {
+            "price": round(price, 6),
+            "delta": round(d, 6),
+            "gamma": round(g, 6),
+            "vega": round(v, 6),
+            "theta": round(th, 6),
+            "theta_per_day": round(th / 365.0, 6),
+            "rho": round(rh, 6),
+        }
+
+    @classmethod
+    def implied_volatility(
+        cls,
+        target_price: float,
+        S: float,
+        K: float,
+        T: float,
+        r: float,
+        option_type: str = "call",
+        max_iter: int = 100,
+        tol: float = 1e-6,
+    ) -> float:
+        """Inverts Black-Scholes formula using Newton-Raphson to find implied volatility."""
+        sigma = 0.3  # initial guess
+        opt = option_type.lower()
+        for _ in range(max_iter):
+            price = cls.call_price(S, K, T, r, sigma) if opt == "call" else cls.put_price(S, K, T, r, sigma)
+            diff = price - target_price
+            if abs(diff) < tol:
+                return round(sigma, 6)
+            v = cls.vega(S, K, T, r, sigma)
+            if abs(v) < 1e-12:
+                break
+            step = diff / v
+            sigma -= step
+            if sigma <= 0.001:
+                sigma = 0.001
+            elif sigma > 10.0:
+                sigma = 10.0
+        return round(sigma, 6)
+
+
+class BinomialCoxRossRubinstein:
+    """Cox-Ross-Rubinstein (CRR) multi-step binomial lattice for European and American options."""
+
+    @classmethod
+    def price(
+        cls,
+        S0: float,
+        K: float,
+        T: float,
+        r: float,
+        sigma: float,
+        steps: int = 100,
+        option_type: str = "call",
+        is_american: bool = False,
+    ) -> Dict[str, Any]:
+        """Prices option via backward induction across CRR binomial recombining tree."""
+        N = max(2, int(steps))
+        dt = T / N
+        u = math.exp(sigma * math.sqrt(dt))
+        d = 1.0 / u
+        p = (math.exp(r * dt) - d) / (u - d)
+        discount = math.exp(-r * dt)
+        is_call = option_type.lower().strip() == "call"
+
+        # Asset prices and option values at maturity (step N)
+        values = [0.0] * (N + 1)
+        for j in range(N + 1):
+            st = S0 * (u ** j) * (d ** (N - j))
+            payoff = max(0.0, st - K) if is_call else max(0.0, K - st)
+            values[j] = payoff
+
+        # Backward induction
+        early_exercised_count = 0
+        step_1_values = [0.0, 0.0]
+        for i in range(N - 1, -1, -1):
+            new_values = [0.0] * (i + 1)
+            for j in range(i + 1):
+                continuation = discount * (p * values[j + 1] + (1.0 - p) * values[j])
+                if is_american:
+                    st = S0 * (u ** j) * (d ** (i - j))
+                    intrinsic = max(0.0, st - K) if is_call else max(0.0, K - st)
+                    if intrinsic > continuation:
+                        early_exercised_count += 1
+                        new_values[j] = intrinsic
+                    else:
+                        new_values[j] = continuation
+                else:
+                    new_values[j] = continuation
+            values = new_values
+            if i == 1:
+                step_1_values = list(values)
+
+        # Delta estimate from step 1
+        s_u = S0 * u
+        s_d = S0 * d
+        delta = (step_1_values[1] - step_1_values[0]) / (s_u - s_d)
+
+        return {
+            "price": round(values[0], 6),
+            "delta": round(delta, 6),
+            "steps": N,
+            "u": round(u, 6),
+            "d": round(d, 6),
+            "p": round(p, 6),
+            "is_american": is_american,
+            "early_exercised_states": early_exercised_count,
+        }
+
+
+class MarkowitzOptimizer:
+    """Modern Portfolio Theory (MPT) mean-variance optimization and efficient frontier."""
+
+    @staticmethod
+    def portfolio_stats(
+        weights: List[float], expected_returns: List[float], cov_matrix: List[List[float]], risk_free_rate: float = 0.0
+    ) -> Tuple[float, float, float]:
+        """Calculates expected return, volatility, and Sharpe ratio for given asset weights."""
+        n = len(weights)
+        ret = sum(weights[i] * expected_returns[i] for i in range(n))
+        var = 0.0
+        for i in range(n):
+            for j in range(n):
+                var += weights[i] * weights[j] * cov_matrix[i][j]
+        vol = math.sqrt(max(0.0, var))
+        sharpe = (ret - risk_free_rate) / vol if vol > 1e-12 else 0.0
+        return ret, vol, sharpe
+
+    @classmethod
+    def minimum_variance_portfolio(
+        cls, expected_returns: List[float], cov_matrix: List[List[float]], risk_free_rate: float = 0.0
+    ) -> Dict[str, Any]:
+        """Computes global minimum variance portfolio using equal-weight starting iterative projection."""
+        n = len(expected_returns)
+        # Gradient descent with simplex constraint sum(w) = 1, w >= 0
+        w = [1.0 / n] * n
+        lr = 0.01
+
+        for _ in range(500):
+            # Gradient of variance: 2 * Sigma * w
+            grad = [0.0] * n
+            for i in range(n):
+                grad[i] = 2.0 * sum(cov_matrix[i][j] * w[j] for j in range(n))
+            # Step in negative gradient
+            w = [w[i] - lr * grad[i] for i in range(n)]
+            # Project onto probability simplex (non-negative, sum = 1)
+            w = [max(0.0, x) for x in w]
+            s = sum(w)
+            if s > 0:
+                w = [x / s for x in w]
+
+        ret, vol, sharpe = cls.portfolio_stats(w, expected_returns, cov_matrix, risk_free_rate=risk_free_rate)
+        return {
+            "weights": [round(x, 4) for x in w],
+            "expected_return": round(ret, 4),
+            "volatility": round(vol, 4),
+            "sharpe_ratio": round(sharpe, 4),
+        }
+
+    @classmethod
+    def maximum_sharpe_portfolio(
+        cls, expected_returns: List[float], cov_matrix: List[List[float]], risk_free_rate: float = 0.02
+    ) -> Dict[str, Any]:
+        """Finds portfolio weights that maximize Sharpe ratio via projected search."""
+        n = len(expected_returns)
+        best_w = [1.0 / n] * n
+        best_sharpe = -1e9
+
+        min_p = cls.minimum_variance_portfolio(expected_returns, cov_matrix, risk_free_rate=risk_free_rate)
+
+        # Grid / random Dirichlet sampling + local refinement
+        random.seed(42)
+        candidates = [list(min_p["weights"])]
+        for i in range(n):
+            single = [0.0] * n
+            single[i] = 1.0
+            candidates.append(single)
+        candidates.append([1.0 / n] * n)
+
+        for _ in range(1500):
+            raw = [random.expovariate(1.0) for _ in range(n)]
+            s = sum(raw)
+            candidates.append([x / s for x in raw])
+
+        for c in candidates:
+            _, _, sh = cls.portfolio_stats(c, expected_returns, cov_matrix, risk_free_rate)
+            if sh > best_sharpe:
+                best_sharpe = sh
+                best_w = c
+
+        # Local perturbation refinement
+        w = list(best_w)
+        for _ in range(300):
+            perturb = [w[i] + (random.random() - 0.5) * 0.05 for i in range(n)]
+            perturb = [max(0.0, x) for x in perturb]
+            s = sum(perturb)
+            if s > 0:
+                perturb = [x / s for x in perturb]
+                _, _, sh = cls.portfolio_stats(perturb, expected_returns, cov_matrix, risk_free_rate)
+                if sh > best_sharpe:
+                    best_sharpe = sh
+                    best_w = perturb
+                    w = perturb
+
+        ret, vol, sharpe = cls.portfolio_stats(best_w, expected_returns, cov_matrix, risk_free_rate)
+        return {
+            "weights": [round(x, 4) for x in best_w],
+            "expected_return": round(ret, 4),
+            "volatility": round(vol, 4),
+            "sharpe_ratio": round(sharpe, 4),
+        }
+
+    @classmethod
+    def efficient_frontier(
+        cls, expected_returns: List[float], cov_matrix: List[List[float]], num_points: int = 15
+    ) -> List[Dict[str, Any]]:
+        """Samples efficient frontier profiles from min-vol to max-return."""
+        n = len(expected_returns)
+        min_p = cls.minimum_variance_portfolio(expected_returns, cov_matrix)
+        max_ret = max(expected_returns)
+        target_returns = [
+            min_p["expected_return"] + (max_ret - min_p["expected_return"]) * (i / max(1, num_points - 1))
+            for i in range(num_points)
+        ]
+
+        frontier = []
+        for target in target_returns:
+            # Penalized optimization: minimize var + lambda * (ret - target)^2
+            w = list(min_p["weights"])
+            best_pen = 1e9
+            best_cand = w
+            for _ in range(100):
+                ret, vol, _ = cls.portfolio_stats(w, expected_returns, cov_matrix)
+                penalty = (vol ** 2) + 50.0 * ((ret - target) ** 2)
+                if penalty < best_pen:
+                    best_pen = penalty
+                    best_cand = list(w)
+                # Random walk step
+                step = [w[i] + (random.random() - 0.5) * 0.05 for i in range(n)]
+                step = [max(0.0, x) for x in step]
+                s = sum(step)
+                if s > 0:
+                    w = [x / s for x in step]
+
+            r, v, sh = cls.portfolio_stats(best_cand, expected_returns, cov_matrix)
+            frontier.append({
+                "target_return": round(target, 4),
+                "actual_return": round(r, 4),
+                "volatility": round(v, 4),
+                "sharpe_ratio": round(sh, 4),
+                "weights": [round(x, 4) for x in best_cand],
+            })
+        return frontier

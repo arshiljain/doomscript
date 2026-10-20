@@ -25,6 +25,9 @@ from doomscript.domains.finance.runtime import (
     fin_hull_white_trinomial,
     fin_ichimoku_cloud,
     fin_monte_carlo_var,
+    AnalyticalGreeks,
+    BinomialCoxRossRubinstein,
+    MarkowitzOptimizer,
 )
 from doomscript.domains.finance.exporter import FinanceASTExporter
 from doomscript.domains.matcher import VerbSpec
@@ -167,5 +170,8 @@ __all__ = [
     "fin_hull_white_trinomial",
     "fin_ichimoku_cloud",
     "fin_monte_carlo_var",
+    "AnalyticalGreeks",
+    "BinomialCoxRossRubinstein",
+    "MarkowitzOptimizer",
 ]
 

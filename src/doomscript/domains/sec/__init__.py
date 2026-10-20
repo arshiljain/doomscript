@@ -27,6 +27,9 @@ from doomscript.domains.sec.runtime import (
     sec_hexdump,
     sec_cvss_score,
     sec_parse_banner,
+    ShamirSecretSharing,
+    TOTPGenerator,
+    Secp256k1Curve,
 )
 from doomscript.domains.sec.parser import SecDomainParser
 from doomscript.domains.sec.exporter import SecASTExporter
@@ -118,4 +121,7 @@ __all__ = [
     "sec_hexdump",
     "sec_cvss_score",
     "sec_parse_banner",
+    "ShamirSecretSharing",
+    "TOTPGenerator",
+    "Secp256k1Curve",
 ]
