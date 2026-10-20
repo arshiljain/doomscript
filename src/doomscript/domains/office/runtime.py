@@ -1,8 +1,9 @@
 """Runtime execution engine for Office Automation (Spreadsheets & Documents) domain."""
 
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 import csv
 import os
+import re
 import zipfile
 from xml.sax.saxutils import escape as xml_escape
 from doomscript.domains.base import DomainRuntime, DomainIR
@@ -940,3 +941,258 @@ class PurePptxPresentation:
         return out_path
 
 
+
+
+# ==============================================================================
+# Advanced Office Deepening: Formula Engine & CSV Dialect Sniffer
+# ==============================================================================
+
+class SpreadsheetFormulaEngine:
+    """Recursive AST evaluator for spreadsheet formulas with cell dependency tracking."""
+
+    @staticmethod
+    def _parse_cell_ref(ref: str) -> Tuple[int, int]:
+        m = re.match(r"^([A-Za-z]+)(\d+)$", ref.strip().upper())
+        if not m:
+            raise ValueError(f"Invalid cell reference: {ref}")
+        col_letters, row_str = m.groups()
+        row = int(row_str) - 1
+
+        # Base-26 conversion for columns (A=0, Z=25, AA=26)
+        col = 0
+        for char in col_letters:
+            col = col * 26 + (ord(char) - ord("A") + 1)
+        col -= 1
+        return col, row
+
+    @staticmethod
+    def _format_cell_ref(col: int, row: int) -> str:
+        letters = []
+        n = col + 1
+        while n > 0:
+            n, rem = divmod(n - 1, 26)
+            letters.append(chr(ord("A") + rem))
+        return "".join(reversed(letters)) + str(row + 1)
+
+    @classmethod
+    def expand_range(cls, range_expr: str) -> List[str]:
+        """Expands 'A1:B3' into list of cell IDs ['A1', 'A2', 'A3', 'B1', 'B2', 'B3']."""
+        parts = range_expr.split(":")
+        if len(parts) == 1:
+            return [parts[0].strip().upper()]
+        c1, r1 = cls._parse_cell_ref(parts[0])
+        c2, r2 = cls._parse_cell_ref(parts[1])
+
+        cells = []
+        for c in range(min(c1, c2), max(c1, c2) + 1):
+            for r in range(min(r1, r2), max(r1, r2) + 1):
+                cells.append(cls._format_cell_ref(c, r))
+        return cells
+
+    @classmethod
+    def evaluate_grid(cls, grid: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Evaluates a spreadsheet dictionary containing values and formula strings.
+        Formulas start with '='.
+        """
+        normalized_grid = {k.strip().upper(): v for k, v in grid.items()}
+        computed: Dict[str, Any] = {}
+        evaluating: Set[str] = set()
+
+        def _eval_cell(cell_id: str) -> Any:
+            cell_id = cell_id.strip().upper()
+            if cell_id in computed:
+                return computed[cell_id]
+            if cell_id in evaluating:
+                raise ValueError(f"Circular dependency detected at {cell_id}")
+
+            raw = normalized_grid.get(cell_id, 0.0)
+            if not isinstance(raw, str) or not raw.startswith("="):
+                computed[cell_id] = raw
+                return raw
+
+            evaluating.add(cell_id)
+            expr = raw[1:].strip()
+
+            # Handle built-in formula functions: SUM, AVERAGE, COUNT, MIN, MAX, IF
+            res = _eval_expression(expr)
+            evaluating.remove(cell_id)
+            computed[cell_id] = res
+            return res
+
+        def _get_values(arg: str) -> List[float]:
+            arg = arg.strip()
+            if ":" in arg:
+                vals = []
+                for cid in cls.expand_range(arg):
+                    v = _eval_cell(cid)
+                    try:
+                        vals.append(float(v))
+                    except (ValueError, TypeError):
+                        pass
+                return vals
+            else:
+                try:
+                    v = _eval_cell(arg) if re.match(r"^[A-Za-z]+\d+$", arg) else float(arg)
+                    return [float(v)]
+                except (ValueError, TypeError):
+                    return []
+
+        def _eval_expression(expr: str) -> Any:
+            expr_upper = expr.strip()
+
+            # SUM(range)
+            m_sum = re.match(r"^SUM\((.*)\)$", expr_upper, re.IGNORECASE)
+            if m_sum:
+                vals = _get_values(m_sum.group(1))
+                return round(sum(vals), 4)
+
+            # AVERAGE(range)
+            m_avg = re.match(r"^AVERAGE\((.*)\)$", expr_upper, re.IGNORECASE)
+            if m_avg:
+                vals = _get_values(m_avg.group(1))
+                return round(sum(vals) / max(1, len(vals)), 4) if vals else 0.0
+
+            # MIN(range)
+            m_min = re.match(r"^MIN\((.*)\)$", expr_upper, re.IGNORECASE)
+            if m_min:
+                vals = _get_values(m_min.group(1))
+                return min(vals) if vals else 0.0
+
+            # MAX(range)
+            m_max = re.match(r"^MAX\((.*)\)$", expr_upper, re.IGNORECASE)
+            if m_max:
+                vals = _get_values(m_max.group(1))
+                return max(vals) if vals else 0.0
+
+            # COUNT(range)
+            m_cnt = re.match(r"^COUNT\((.*)\)$", expr_upper, re.IGNORECASE)
+            if m_cnt:
+                vals = _get_values(m_cnt.group(1))
+                return len(vals)
+
+            # Simple cell reference
+            if re.match(r"^[A-Za-z]+\d+$", expr_upper):
+                return _eval_cell(expr_upper)
+
+            # Simple arithmetic expression with cell substitution
+            def sub_cell(match):
+                c_id = match.group(0)
+                v = _eval_cell(c_id)
+                return str(v)
+
+            substituted = re.sub(r"\b[A-Za-z]+\d+\b", sub_cell, expr)
+            # Evaluate safe arithmetic
+            try:
+                # Basic tokenized math
+                return eval(substituted, {"__builtins__": {}}, {})
+            except Exception:
+                return substituted
+
+        for cid in normalized_grid:
+            _eval_cell(cid)
+
+        return computed
+
+
+class CSVDialectSniffer:
+    """Intelligent CSV dialect sniffing and column datatype inference."""
+
+    CANDIDATE_DELIMITERS = [",", "\t", ";", "|"]
+
+    @classmethod
+    def sniff(cls, text_sample: str) -> Dict[str, Any]:
+        """Sniffs delimiter, quote character, header row, and data types."""
+        lines = [l.strip() for l in text_sample.strip().splitlines() if l.strip()]
+        if not lines:
+            return {"delimiter": ",", "has_header": False, "columns": []}
+
+        # 1. Delimiter detection via consistency of column counts
+        best_delim = ","
+        best_score = -1
+
+        for d in cls.CANDIDATE_DELIMITERS:
+            counts = [l.count(d) for l in lines[:10]]
+            if len(counts) > 0 and counts[0] > 0 and len(set(counts)) == 1:
+                score = counts[0] * 10.0
+                if score > best_score:
+                    best_score = score
+                    best_delim = d
+
+        # Split rows
+        rows = [[c.strip().strip('"\'') for c in l.split(best_delim)] for l in lines]
+        num_cols = len(rows[0])
+
+        # 2. Header detection
+        first_row = rows[0]
+        has_header = False
+        if len(rows) > 1:
+            first_is_all_str = all(not cls._is_numeric(c) for c in first_row)
+            subsequent_has_num = any(cls._is_numeric(c) for r in rows[1:] for c in r)
+            if first_is_all_str and subsequent_has_num:
+                has_header = True
+
+        col_names = first_row if has_header else [f"col_{i}" for i in range(num_cols)]
+        data_rows = rows[1:] if has_header else rows
+
+        # 3. Column type inference
+        types = []
+        for c in range(num_cols):
+            col_vals = [r[c] for r in data_rows if c < len(r)]
+            col_type = cls._infer_type(col_vals)
+            types.append(col_type)
+
+        return {
+            "delimiter": best_delim,
+            "has_header": has_header,
+            "column_names": col_names,
+            "column_types": types,
+            "row_count": len(rows),
+        }
+
+    @staticmethod
+    def _is_numeric(val: str) -> bool:
+        try:
+            float(val)
+            return True
+        except ValueError:
+            return False
+
+    @classmethod
+    def _infer_type(cls, values: List[str]) -> str:
+        if not values:
+            return "string"
+        is_int = True
+        is_float = True
+        is_bool = True
+
+        for v in values:
+            v_lower = v.lower()
+            if v_lower not in ("true", "false", "1", "0", "yes", "no"):
+                is_bool = False
+            try:
+                int_v = int(v)
+            except ValueError:
+                is_int = False
+            try:
+                float_v = float(v)
+            except ValueError:
+                is_float = False
+
+        if is_bool:
+            return "boolean"
+        if is_int:
+            return "integer"
+        if is_float:
+            return "float"
+        return "string"
+
+
+def office_eval_spreadsheet(grid: Dict[str, Any]) -> Dict[str, Any]:
+    """Evaluates formulas in a spreadsheet dictionary."""
+    return SpreadsheetFormulaEngine.evaluate_grid(grid)
+
+
+def office_sniff_csv(csv_text: str) -> Dict[str, Any]:
+    """Sniffs CSV dialect and infers column types."""
+    return CSVDialectSniffer.sniff(csv_text)

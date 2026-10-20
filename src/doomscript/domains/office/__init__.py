@@ -54,6 +54,10 @@ from doomscript.domains.office.runtime import (
     PureXlsxWorkbook,
     PureDocxDocument,
     PurePptxPresentation,
+    SpreadsheetFormulaEngine,
+    CSVDialectSniffer,
+    office_eval_spreadsheet,
+    office_sniff_csv,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.office.exporter import OfficeASTExporter
@@ -263,4 +267,8 @@ __all__ = [
     "PureXlsxWorkbook",
     "PureDocxDocument",
     "PurePptxPresentation",
+    "SpreadsheetFormulaEngine",
+    "CSVDialectSniffer",
+    "office_eval_spreadsheet",
+    "office_sniff_csv",
 ]

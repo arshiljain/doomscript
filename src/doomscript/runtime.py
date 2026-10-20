@@ -2605,6 +2605,11 @@ from doomscript.domains.data.runtime import (
     data_unpivot_melt,
     data_json_explode,
     data_window_rolling,
+    RollingAggregator,
+    RelationalJoinEngine,
+    PivotTableEngine,
+    data_relational_join,
+    data_rolling_aggregate,
 )
 
 from doomscript.domains.nlp.runtime import (
@@ -3092,6 +3097,10 @@ from doomscript.domains.office.runtime import (
     office_count_words_in_document,
     office_count_characters_in_document,
     office_extract_document_metadata,
+    SpreadsheetFormulaEngine,
+    CSVDialectSniffer,
+    office_eval_spreadsheet,
+    office_sniff_csv,
 )
 
 from doomscript.domains.cloud.runtime import (
@@ -3128,6 +3137,12 @@ from doomscript.domains.cloud.runtime import (
     cloud_write_object_text,
     cloud_get_storage_class,
     cloud_set_storage_class,
+    MultipartUploadManager,
+    ContentAddressableStorage,
+    BucketLifecycleEngine,
+    cloud_multipart_initiate,
+    cloud_cas_put,
+    cloud_evaluate_lifecycle,
 )
 
 from doomscript.domains.research.runtime import (
@@ -3415,6 +3430,15 @@ from doomscript.domains.compression.runtime import (
     compression_lz77_decode,
     compression_lzw_encode,
     compression_lzw_decode,
+    BWTCompressor,
+    DeflateEngine,
+    ByteAlignedSnappy,
+    compression_bwt_compress,
+    compression_bwt_decompress,
+    compression_deflate,
+    compression_inflate,
+    compression_snappy_compress,
+    compression_snappy_decompress,
 )
 
 from doomscript.domains.time_series.runtime import (
@@ -3486,6 +3510,14 @@ from doomscript.domains.telecom.runtime import (
     telecom_crc32,
     telecom_reed_solomon_encode,
     telecom_reed_solomon_decode,
+    ViterbiDecoder,
+    QAMModem,
+    OFDMFramer,
+    telecom_viterbi_encode,
+    telecom_viterbi_decode,
+    telecom_qam_modulate,
+    telecom_qam_demodulate,
+    telecom_ofdm_frame,
 )
 
 from doomscript.domains.neuro.runtime import (

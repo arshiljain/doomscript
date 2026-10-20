@@ -29,6 +29,12 @@ from doomscript.domains.data.runtime import (
     data_unpivot_melt,
     data_json_explode,
     data_window_rolling,
+    RollingAggregator,
+    RelationalJoinEngine,
+    PivotTableEngine,
+    data_relational_join,
+    data_pivot_table,
+    data_rolling_aggregate,
 )
 from doomscript.domains.data.exporter import DataASTExporter
 from doomscript.domains.matcher import VerbSpec
@@ -205,4 +211,10 @@ __all__ = [
     "data_unpivot_melt",
     "data_json_explode",
     "data_window_rolling",
+    "RollingAggregator",
+    "RelationalJoinEngine",
+    "PivotTableEngine",
+    "data_relational_join",
+    "data_pivot_table",
+    "data_rolling_aggregate",
 ]

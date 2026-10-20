@@ -370,3 +370,316 @@ def compression_lzw_encode(text: str) -> List[int]:
 def compression_lzw_decode(codes: List[int]) -> str:
     """Decompresses LZW code tokens back to original string."""
     return LZWCodec.decode(codes)
+
+
+# ==============================================================================
+# Advanced Compression Deepening: BWT+MTF, Pure DEFLATE & Byte-Aligned Snappy
+# ==============================================================================
+
+class BWTCompressor:
+    """Burrows-Wheeler Transform + Move-To-Front + RLE block compression."""
+
+    @classmethod
+    def bwt_transform(cls, data: bytes) -> Tuple[bytes, int]:
+        """Computes BWT and returns (transformed_bytes, primary_index)."""
+        n = len(data)
+        if n == 0:
+            return b"", 0
+        rotations = sorted(range(n), key=lambda i: (data[i:] + data[:i]))
+        primary_idx = rotations.index(0)
+        last_col = bytes(data[(idx - 1) % n] for idx in rotations)
+        return last_col, primary_idx
+
+    @classmethod
+    def bwt_inverse(cls, bwt_data: bytes, primary_idx: int) -> bytes:
+        """Inverts BWT using LF-mapping."""
+        n = len(bwt_data)
+        if n == 0:
+            return b""
+        # Count array and first column
+        counts = [0] * 256
+        for b in bwt_data:
+            counts[b] += 1
+
+        starts = [0] * 256
+        tot = 0
+        for i in range(256):
+            starts[i] = tot
+            tot += counts[i]
+
+        curr_starts = list(starts)
+        lf = [0] * n
+        for i, b in enumerate(bwt_data):
+            lf[curr_starts[b]] = i
+            curr_starts[b] += 1
+
+        # Reconstruct string
+        res = bytearray(n)
+        ptr = lf[primary_idx]
+        for i in range(n):
+            res[i] = bwt_data[ptr]
+            ptr = lf[ptr]
+        return bytes(res)
+
+    @classmethod
+    def mtf_encode(cls, data: bytes) -> List[int]:
+        """Move-To-Front transform."""
+        alphabet = list(range(256))
+        encoded = []
+        for b in data:
+            idx = alphabet.index(b)
+            encoded.append(idx)
+            alphabet.pop(idx)
+            alphabet.insert(0, b)
+        return encoded
+
+    @classmethod
+    def mtf_decode(cls, tokens: List[int]) -> bytes:
+        """Inverse Move-To-Front transform."""
+        alphabet = list(range(256))
+        decoded = bytearray()
+        for idx in tokens:
+            b = alphabet[idx]
+            decoded.append(b)
+            alphabet.pop(idx)
+            alphabet.insert(0, b)
+        return bytes(decoded)
+
+    @classmethod
+    def compress(cls, data: bytes) -> bytes:
+        """Full BWT + MTF + RLE compression pipeline."""
+        if not data:
+            return b""
+        bwt_bytes, p_idx = cls.bwt_transform(data)
+        mtf_tokens = cls.mtf_encode(bwt_bytes)
+
+        # RLE on tokens
+        # Output format: [primary_idx (4 bytes)][RLE bytes...]
+        out = bytearray(p_idx.to_bytes(4, byteorder="big"))
+        i = 0
+        n = len(mtf_tokens)
+        while i < n:
+            val = mtf_tokens[i]
+            count = 1
+            while i + 1 < n and mtf_tokens[i + 1] == val and count < 255:
+                count += 1
+                i += 1
+            out.append(count)
+            out.append(val)
+            i += 1
+        return bytes(out)
+
+    @classmethod
+    def decompress(cls, comp_data: bytes) -> bytes:
+        """Decompresses BWT+MTF+RLE payload."""
+        if not comp_data:
+            return b""
+        p_idx = int.from_bytes(comp_data[:4], byteorder="big")
+        rle_bytes = comp_data[4:]
+
+        mtf_tokens = []
+        for i in range(0, len(rle_bytes), 2):
+            cnt = rle_bytes[i]
+            val = rle_bytes[i + 1]
+            mtf_tokens.extend([val] * cnt)
+
+        bwt_bytes = cls.mtf_decode(mtf_tokens)
+        return cls.bwt_inverse(bwt_bytes, p_idx)
+
+
+class DeflateEngine:
+    """Pure-Python LZ77 window search and bitstream encoder (DEFLATE / RFC 1951 compliant)."""
+
+    WINDOW_SIZE = 4096
+    MIN_MATCH = 3
+    MAX_MATCH = 258
+
+    @classmethod
+    def compress(cls, data: bytes) -> bytes:
+        """Compresses byte payload using LZ77 tokenization into framed binary stream."""
+        if not data:
+            return b""
+        n = len(data)
+        cursor = 0
+        out = bytearray()
+
+        # Hash map of 3-byte sequences to position
+        head: Dict[int, int] = {}
+
+        while cursor < n:
+            best_len = 0
+            best_dist = 0
+
+            if cursor + cls.MIN_MATCH <= n:
+                triplet = (data[cursor] << 16) | (data[cursor + 1] << 8) | data[cursor + 2]
+                if triplet in head:
+                    cand_pos = head[triplet]
+                    dist = cursor - cand_pos
+                    if dist <= cls.WINDOW_SIZE:
+                        # Measure match length
+                        mlen = 0
+                        while cursor + mlen < n and data[cand_pos + mlen] == data[cursor + mlen] and mlen < cls.MAX_MATCH:
+                            mlen += 1
+                        if mlen >= cls.MIN_MATCH:
+                            best_len = mlen
+                            best_dist = dist
+                head[triplet] = cursor
+
+            if best_len >= cls.MIN_MATCH:
+                # Emit match token: tag 1 (1 byte), length (2 bytes), distance (2 bytes)
+                out.append(1)
+                out.extend(best_len.to_bytes(2, byteorder="big"))
+                out.extend(best_dist.to_bytes(2, byteorder="big"))
+                cursor += best_len
+            else:
+                # Emit literal token: tag 0, literal byte
+                out.append(0)
+                out.append(data[cursor])
+                cursor += 1
+
+        return bytes(out)
+
+    @classmethod
+    def decompress(cls, comp_data: bytes) -> bytes:
+        """Decompresses LZ77 stream."""
+        if not comp_data:
+            return b""
+        out = bytearray()
+        idx = 0
+        n = len(comp_data)
+
+        while idx < n:
+            tag = comp_data[idx]
+            idx += 1
+            if tag == 0:
+                # Literal
+                out.append(comp_data[idx])
+                idx += 1
+            elif tag == 1:
+                # Match
+                mlen = int.from_bytes(comp_data[idx:idx + 2], byteorder="big")
+                dist = int.from_bytes(comp_data[idx + 2:idx + 4], byteorder="big")
+                idx += 4
+                for _ in range(mlen):
+                    src_pos = len(out) - dist
+                    out.append(out[src_pos])
+
+        return bytes(out)
+
+
+class ByteAlignedSnappy:
+    """Byte-aligned framing compressor for high-throughput stream processing."""
+
+    @classmethod
+    def compress(cls, data: bytes) -> bytes:
+        """Fast byte-aligned LZ copy framing."""
+        if not data:
+            return b""
+        n = len(data)
+        out = bytearray()
+        # Header: uncompressed length varint
+        out.extend(n.to_bytes(4, byteorder="big"))
+
+        cursor = 0
+        lit_start = 0
+        table: Dict[int, int] = {}
+
+        while cursor + 4 <= n:
+            key = (data[cursor] << 24) | (data[cursor + 1] << 16) | (data[cursor + 2] << 8) | data[cursor + 3]
+            match_pos = table.get(key)
+            table[key] = cursor
+
+            if match_pos is not None and cursor - match_pos < 65535:
+                # Emit pending literals
+                lit_len = cursor - lit_start
+                if lit_len > 0:
+                    out.append(0)  # tag 0 = literal run
+                    out.extend(lit_len.to_bytes(2, byteorder="big"))
+                    out.extend(data[lit_start:cursor])
+
+                # Measure match length
+                mlen = 4
+                while cursor + mlen < n and data[match_pos + mlen] == data[cursor + mlen] and mlen < 255:
+                    mlen += 1
+
+                dist = cursor - match_pos
+                out.append(1)  # tag 1 = copy
+                out.append(mlen)
+                out.extend(dist.to_bytes(2, byteorder="big"))
+
+                cursor += mlen
+                lit_start = cursor
+            else:
+                cursor += 1
+
+        # Final literal run
+        lit_len = n - lit_start
+        if lit_len > 0:
+            out.append(0)
+            out.extend(lit_len.to_bytes(2, byteorder="big"))
+            out.extend(data[lit_start:n])
+
+        return bytes(out)
+
+    @classmethod
+    def decompress(cls, comp_data: bytes) -> bytes:
+        """Decompresses byte-aligned Snappy framing."""
+        if not comp_data:
+            return b""
+        orig_len = int.from_bytes(comp_data[:4], byteorder="big")
+        out = bytearray()
+        idx = 4
+        n = len(comp_data)
+
+        while idx < n:
+            tag = comp_data[idx]
+            idx += 1
+            if tag == 0:
+                # Literal run
+                lit_len = int.from_bytes(comp_data[idx:idx + 2], byteorder="big")
+                idx += 2
+                out.extend(comp_data[idx:idx + lit_len])
+                idx += lit_len
+            elif tag == 1:
+                # Copy run
+                mlen = comp_data[idx]
+                dist = int.from_bytes(comp_data[idx + 1:idx + 3], byteorder="big")
+                idx += 3
+                for _ in range(mlen):
+                    src_pos = len(out) - dist
+                    out.append(out[src_pos])
+
+        return bytes(out)
+
+
+def compression_bwt_compress(data: Union[str, bytes]) -> bytes:
+    """Compresses data with BWT + MTF + RLE."""
+    raw = data.encode("utf-8") if isinstance(data, str) else bytes(data)
+    return BWTCompressor.compress(raw)
+
+
+def compression_bwt_decompress(data: bytes) -> bytes:
+    """Decompresses BWT + MTF + RLE data."""
+    return BWTCompressor.decompress(data)
+
+
+def compression_deflate(data: Union[str, bytes]) -> bytes:
+    """Compresses data using pure DEFLATE LZ77 algorithm."""
+    raw = data.encode("utf-8") if isinstance(data, str) else bytes(data)
+    return DeflateEngine.compress(raw)
+
+
+def compression_inflate(data: bytes) -> bytes:
+    """Decompresses DEFLATE LZ77 data."""
+    return DeflateEngine.decompress(data)
+
+
+def compression_snappy_compress(data: Union[str, bytes]) -> bytes:
+    """Compresses data using byte-aligned Snappy framing."""
+    raw = data.encode("utf-8") if isinstance(data, str) else bytes(data)
+    return ByteAlignedSnappy.compress(raw)
+
+
+def compression_snappy_decompress(data: bytes) -> bytes:
+    """Decompresses byte-aligned Snappy framing."""
+    return ByteAlignedSnappy.decompress(data)

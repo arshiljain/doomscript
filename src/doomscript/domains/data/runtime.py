@@ -1492,3 +1492,219 @@ def data_window_rolling(
     return out
 
 
+
+
+# ==============================================================================
+# Advanced Data Deepening: Rolling Aggregator, Relational Joins & Pivot Tables
+# ==============================================================================
+
+class RollingAggregator:
+    """O(1) amortized sliding-window aggregator with statistical moments."""
+
+    @classmethod
+    def rolling_series(
+        cls,
+        series: List[float],
+        window: int,
+        stat: str = "mean",
+        min_periods: Optional[int] = None,
+    ) -> List[Optional[float]]:
+        """Calculates rolling metric over a sequence of numbers."""
+        n = len(series)
+        w = max(1, int(window))
+        min_p = min_periods if min_periods is not None else w
+        res: List[Optional[float]] = []
+
+        window_buf: List[float] = []
+        running_sum = 0.0
+
+        for i in range(n):
+            val = float(series[i])
+            window_buf.append(val)
+            running_sum += val
+            if len(window_buf) > w:
+                running_sum -= window_buf.pop(0)
+
+            if len(window_buf) < min_p:
+                res.append(None)
+                continue
+
+            cur_w = len(window_buf)
+            st = stat.lower().strip()
+            if st == "sum":
+                res.append(round(running_sum, 4))
+            elif st == "mean" or st == "avg":
+                res.append(round(running_sum / cur_w, 4))
+            elif st == "min":
+                res.append(round(min(window_buf), 4))
+            elif st == "max":
+                res.append(round(max(window_buf), 4))
+            elif st == "std" or st == "stddev":
+                m = running_sum / cur_w
+                var = sum((x - m) ** 2 for x in window_buf) / max(1, cur_w - 1)
+                res.append(round(math.sqrt(var), 4))
+            else:
+                res.append(round(running_sum / cur_w, 4))
+
+        return res
+
+
+class RelationalJoinEngine:
+    """Hash-join engine supporting inner, left, right, outer, and cross joins."""
+
+    @staticmethod
+    def _extract_key(row: Dict[str, Any], keys: List[str]) -> Tuple[Any, ...]:
+        return tuple(row.get(k) for k in keys)
+
+    @classmethod
+    def join(
+        cls,
+        left: List[Dict[str, Any]],
+        right: List[Dict[str, Any]],
+        on: Union[str, List[str]],
+        how: str = "inner",
+        suffixes: Tuple[str, str] = ("_left", "_right"),
+    ) -> List[Dict[str, Any]]:
+        """
+        Executes relational hash join between two lists of dict records.
+        `how` in ('inner', 'left', 'right', 'outer', 'cross')
+        """
+        how = how.lower().strip()
+        if how == "cross":
+            results = []
+            for l in left:
+                for r in right:
+                    merged = dict(l)
+                    for k, v in r.items():
+                        key_name = f"{k}{suffixes[1]}" if k in merged else k
+                        merged[key_name] = v
+                    results.append(merged)
+            return results
+
+        join_keys = [on] if isinstance(on, str) else list(on)
+
+        # Build hash table on right table
+        hash_table: Dict[Tuple[Any, ...], List[Dict[str, Any]]] = {}
+        for r_idx, r in enumerate(right):
+            k = cls._extract_key(r, join_keys)
+            hash_table.setdefault(k, []).append(r)
+
+        results = []
+        matched_right_keys = set()
+
+        # Probe with left table
+        for l in left:
+            k = cls._extract_key(l, join_keys)
+            if k in hash_table:
+                matched_right_keys.add(k)
+                for r in hash_table[k]:
+                    merged = dict(l)
+                    for rk, rv in r.items():
+                        if rk in join_keys:
+                            continue
+                        dest_key = f"{rk}{suffixes[1]}" if rk in merged else rk
+                        merged[dest_key] = rv
+                    results.append(merged)
+            elif how in ("left", "outer"):
+                merged = dict(l)
+                # Fill right keys with None
+                for rk in right[0].keys() if right else []:
+                    if rk not in join_keys and rk not in merged:
+                        merged[rk] = None
+                results.append(merged)
+
+        # Right / Outer un-matched right rows
+        if how in ("right", "outer"):
+            left_keys_template = list(left[0].keys()) if left else []
+            for k, rows in hash_table.items():
+                if k not in matched_right_keys:
+                    for r in rows:
+                        merged = {lk: None for lk in left_keys_template if lk not in join_keys}
+                        merged.update(r)
+                        results.append(merged)
+
+        return results
+
+
+class PivotTableEngine:
+    """Multi-dimensional pivot table aggregation generator."""
+
+    @classmethod
+    def pivot(
+        cls,
+        records: List[Dict[str, Any]],
+        index: str,
+        columns: str,
+        values: str,
+        aggfunc: str = "sum",
+        fill_value: Any = 0.0,
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        Aggregates records into a 2D pivot dictionary: {row_index: {col_key: aggregated_value}}
+        """
+        buckets: Dict[Any, Dict[Any, List[float]]] = {}
+        all_cols = set()
+
+        for r in records:
+            idx_val = str(r.get(index, ""))
+            col_val = str(r.get(columns, ""))
+            v = r.get(values)
+            if v is None:
+                continue
+            all_cols.add(col_val)
+            buckets.setdefault(idx_val, {}).setdefault(col_val, []).append(float(v))
+
+        func = aggfunc.lower().strip()
+        pivot_table: Dict[str, Dict[str, Any]] = {}
+
+        for row_k, cols_dict in sorted(buckets.items()):
+            pivot_table[row_k] = {}
+            for col_k in sorted(all_cols):
+                vals = cols_dict.get(col_k, [])
+                if not vals:
+                    pivot_table[row_k][col_k] = fill_value
+                    continue
+
+                if func == "sum":
+                    calc = sum(vals)
+                elif func in ("mean", "avg"):
+                    calc = sum(vals) / len(vals)
+                elif func == "count":
+                    calc = len(vals)
+                elif func == "min":
+                    calc = min(vals)
+                elif func == "max":
+                    calc = max(vals)
+                else:
+                    calc = sum(vals)
+
+                pivot_table[row_k][col_k] = round(calc, 4) if isinstance(calc, float) else calc
+
+        return pivot_table
+
+
+def data_relational_join(
+    left: List[Dict[str, Any]],
+    right: List[Dict[str, Any]],
+    on: Union[str, List[str]],
+    how: str = "inner",
+) -> List[Dict[str, Any]]:
+    """Performs relational hash join between two tables."""
+    return RelationalJoinEngine.join(left, right, on, how)
+
+
+def data_pivot_table(
+    records: List[Dict[str, Any]],
+    index: str,
+    columns: str,
+    values: str,
+    aggfunc: str = "sum",
+    fill_value: Any = 0.0,
+) -> Dict[str, Dict[str, Any]]:
+    """Generates multi-dimensional pivot table."""
+    return PivotTableEngine.pivot(records, index, columns, values, aggfunc, fill_value)
+
+
+def data_rolling_aggregate(series: List[float], window: int, stat: str = "mean") -> List[Optional[float]]:
+    """Computes rolling window aggregate series."""
+    return RollingAggregator.rolling_series(series, window, stat)

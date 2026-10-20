@@ -2,8 +2,10 @@
 
 from typing import Any, Dict, List, Optional, Tuple, Union
 import fnmatch
+import hashlib
 import os
 import shutil
+import time
 from pathlib import Path
 from doomscript.domains.base import DomainRuntime, DomainIR
 from doomscript.domains.cloud.spec import (
@@ -729,3 +731,184 @@ class CloudCostCalculator:
         }
 
 
+
+
+# ==============================================================================
+# Advanced Cloud Deepening: Multipart Uploads, CAS Blob Storage & Lifecycles
+# ==============================================================================
+
+class MultipartUploadManager:
+    """S3-compatible multipart upload coordinator with chunking and ETag verification."""
+
+    def __init__(self):
+        # upload_id -> {"bucket": ..., "key": ..., "parts": {part_number: (etag, bytes)}}
+        self.sessions: Dict[str, Dict[str, Any]] = {}
+
+    def initiate_upload(self, bucket: str, key: str) -> str:
+        """Initiates multipart upload session and returns unique upload_id."""
+        upload_id = f"upload-{hashlib.sha256(f'{bucket}/{key}/{time.time()}'.encode()).hexdigest()[:16]}"
+        self.sessions[upload_id] = {
+            "bucket": bucket,
+            "key": key,
+            "parts": {},
+            "created_at": time.time(),
+        }
+        return upload_id
+
+    def upload_part(self, upload_id: str, part_number: int, data: bytes) -> str:
+        """Uploads a single chunk and returns MD5/SHA256 ETag."""
+        if upload_id not in self.sessions:
+            raise KeyError(f"Upload ID not found: {upload_id}")
+        etag = hashlib.md5(data).hexdigest()
+        self.sessions[upload_id]["parts"][int(part_number)] = (etag, data)
+        return etag
+
+    def complete_upload(self, upload_id: str, parts: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Assembles all parts in sequential order and validates ETags."""
+        if upload_id not in self.sessions:
+            raise KeyError(f"Upload ID not found: {upload_id}")
+
+        session = self.sessions[upload_id]
+        stored_parts = session["parts"]
+
+        # Validate parts
+        assembled_chunks = []
+        for p in sorted(parts, key=lambda x: int(x["part_number"])):
+            p_num = int(p["part_number"])
+            if p_num not in stored_parts:
+                raise ValueError(f"Missing uploaded part number: {p_num}")
+            etag, data = stored_parts[p_num]
+            if "etag" in p and p["etag"] != etag:
+                raise ValueError(f"ETag mismatch for part {p_num}")
+            assembled_chunks.append(data)
+
+        combined_data = b"".join(assembled_chunks)
+        final_etag = f"{hashlib.md5(combined_data).hexdigest()}-{len(assembled_chunks)}"
+
+        res = {
+            "bucket": session["bucket"],
+            "key": session["key"],
+            "total_bytes": len(combined_data),
+            "parts_count": len(assembled_chunks),
+            "etag": final_etag,
+            "data": combined_data,
+        }
+        del self.sessions[upload_id]
+        return res
+
+    def abort_upload(self, upload_id: str) -> bool:
+        """Cancels multipart upload and discards buffers."""
+        if upload_id in self.sessions:
+            del self.sessions[upload_id]
+            return True
+        return False
+
+
+class ContentAddressableStorage:
+    """SHA-256 deduplicating Content-Addressable Storage (CAS) with garbage collection."""
+
+    def __init__(self):
+        self.blobs: Dict[str, bytes] = {}
+
+    def put(self, data: bytes) -> str:
+        """Stores content and returns its SHA-256 hex digest."""
+        h = hashlib.sha256(data).hexdigest()
+        if h not in self.blobs:
+            self.blobs[h] = bytes(data)
+        return h
+
+    def get(self, content_hash: str) -> Optional[bytes]:
+        """Retrieves blob by content hash."""
+        return self.blobs.get(content_hash.strip().lower())
+
+    def has(self, content_hash: str) -> bool:
+        """Checks if content hash exists in CAS."""
+        return content_hash.strip().lower() in self.blobs
+
+    def gc(self, active_hashes: Set[str]) -> Dict[str, int]:
+        """Garbage collects unreferenced blobs and returns deleted count & freed bytes."""
+        active = {h.strip().lower() for h in active_hashes}
+        deleted_count = 0
+        freed_bytes = 0
+
+        unreferenced = [h for h in self.blobs if h not in active]
+        for h in unreferenced:
+            freed_bytes += len(self.blobs[h])
+            del self.blobs[h]
+            deleted_count += 1
+
+        return {
+            "deleted_count": deleted_count,
+            "freed_bytes": freed_bytes,
+            "remaining_count": len(self.blobs),
+        }
+
+
+class BucketLifecycleEngine:
+    """Evaluates S3-style bucket lifecycle rules (expiration and tier transitions)."""
+
+    @classmethod
+    def evaluate(
+        cls,
+        objects: List[Dict[str, Any]],
+        rules: List[Dict[str, Any]],
+        current_time_epoch: Optional[float] = None,
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Evaluates lifecycle policies.
+        `rules` format:
+        [
+            {"prefix": "logs/", "expire_days": 30},
+            {"prefix": "backups/", "transition_days": 90, "target_tier": "GLACIER"},
+            ...
+        ]
+        """
+        now = current_time_epoch if current_time_epoch is not None else time.time()
+        expired: List[Dict[str, Any]] = []
+        transitioned: List[Dict[str, Any]] = []
+
+        for obj in objects:
+            key = obj.get("key", "")
+            last_mod = float(obj.get("last_modified_epoch", now))
+            age_days = (now - last_mod) / 86400.0
+
+            for rule in rules:
+                prefix = rule.get("prefix", "")
+                if not key.startswith(prefix):
+                    continue
+
+                # Expiration check
+                if "expire_days" in rule and age_days >= rule["expire_days"]:
+                    expired.append(dict(obj))
+                    break
+
+                # Transition check
+                if "transition_days" in rule and age_days >= rule["transition_days"]:
+                    target_tier = rule.get("target_tier", "GLACIER")
+                    if obj.get("storage_class") != target_tier:
+                        rec = dict(obj)
+                        rec["new_storage_class"] = target_tier
+                        transitioned.append(rec)
+                        break
+
+        return {
+            "expired": expired,
+            "transitioned": transitioned,
+        }
+
+
+def cloud_multipart_initiate(bucket: str, key: str) -> str:
+    """Initiates multipart upload session."""
+    mgr = MultipartUploadManager()
+    return mgr.initiate_upload(bucket, key)
+
+
+def cloud_cas_put(data: bytes) -> str:
+    """Stores data in in-memory Content-Addressable Storage."""
+    cas = ContentAddressableStorage()
+    return cas.put(data)
+
+
+def cloud_evaluate_lifecycle(objects: List[Dict[str, Any]], rules: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Evaluates bucket lifecycle policies."""
+    return BucketLifecycleEngine.evaluate(objects, rules)

@@ -28,6 +28,15 @@ from doomscript.domains.compression.runtime import (
     compression_lz77_decode,
     compression_lzw_encode,
     compression_lzw_decode,
+    BWTCompressor,
+    DeflateEngine,
+    ByteAlignedSnappy,
+    compression_bwt_compress,
+    compression_bwt_decompress,
+    compression_deflate,
+    compression_inflate,
+    compression_snappy_compress,
+    compression_snappy_decompress,
 )
 from doomscript.domains.compression.parser import CompressionDomainParser
 from doomscript.domains.compression.exporter import CompressionASTExporter
@@ -111,4 +120,13 @@ __all__ = [
     "compression_lz77_decode",
     "compression_lzw_encode",
     "compression_lzw_decode",
+    "BWTCompressor",
+    "DeflateEngine",
+    "ByteAlignedSnappy",
+    "compression_bwt_compress",
+    "compression_bwt_decompress",
+    "compression_deflate",
+    "compression_inflate",
+    "compression_snappy_compress",
+    "compression_snappy_decompress",
 ]

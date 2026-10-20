@@ -11,6 +11,7 @@ Zero external dependencies.
 
 from __future__ import annotations
 
+import math
 import struct
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -398,3 +399,251 @@ def telecom_reed_solomon_encode(msg: List[int], nsym: int) -> List[int]:
 def telecom_reed_solomon_decode(received: List[int], nsym: int) -> Tuple[List[int], bool]:
     """Decodes Reed-Solomon codeword with error correction."""
     return ReedSolomon.decode(received, nsym)
+
+
+# ==============================================================================
+# Advanced Telecom Deepening: Viterbi Decoder, QAM Modem & OFDM Framer
+# ==============================================================================
+
+class ViterbiDecoder:
+    """Rate 1/2 Convolutional encoder and Viterbi trellis maximum likelihood decoder (K=3)."""
+
+    # Polynomials: G1 = 7 (111b), G2 = 5 (101b)
+    K = 3
+    NUM_STATES = 4  # 2^(K-1)
+
+    @classmethod
+    def encode(cls, bits: List[int]) -> List[int]:
+        """Encodes bit stream into rate 1/2 convolutional codeword."""
+        state = 0  # 2-bit shift register (s1, s0)
+        encoded = []
+        for bit in bits:
+            b = 1 if bit else 0
+            # Next state: (b, s1)
+            # Output 1: b ^ s1 ^ s0
+            # Output 2: b ^ s0
+            s1 = (state >> 1) & 1
+            s0 = state & 1
+            out1 = b ^ s1 ^ s0
+            out2 = b ^ s0
+            encoded.append(out1)
+            encoded.append(out2)
+            state = ((b << 1) | s1) & 3
+        return encoded
+
+    @classmethod
+    def decode(cls, received: List[int]) -> List[int]:
+        """Viterbi maximum-likelihood hard-decision trellis traceback decoder."""
+        n_pairs = len(received) // 2
+        if n_pairs == 0:
+            return []
+
+        # path_metrics: state -> metric
+        INF = 1000000000
+        path_metrics = [0] + [INF] * (cls.NUM_STATES - 1)
+        history: List[List[Tuple[int, int]]] = []  # step -> [state -> (prev_state, input_bit)]
+
+        for t in range(n_pairs):
+            r1 = received[2 * t]
+            r2 = received[2 * t + 1]
+
+            new_metrics = [INF] * cls.NUM_STATES
+            step_history = [(0, 0)] * cls.NUM_STATES
+
+            for curr_state in range(cls.NUM_STATES):
+                s1 = (curr_state >> 1) & 1
+                s0 = curr_state & 1
+
+                for input_bit in (0, 1):
+                    out1 = input_bit ^ s1 ^ s0
+                    out2 = input_bit ^ s0
+                    next_state = ((input_bit << 1) | s1) & 3
+
+                    # Hamming distance branch metric
+                    branch_cost = (r1 ^ out1) + (r2 ^ out2)
+                    candidate_cost = path_metrics[curr_state] + branch_cost
+
+                    if candidate_cost < new_metrics[next_state]:
+                        new_metrics[next_state] = candidate_cost
+                        step_history[next_state] = (curr_state, input_bit)
+
+            path_metrics = new_metrics
+            history.append(step_history)
+
+        # Traceback from minimum metric state
+        best_state = min(range(cls.NUM_STATES), key=lambda s: path_metrics[s])
+        decoded_bits = []
+
+        curr = best_state
+        for t in range(n_pairs - 1, -1, -1):
+            prev_state, input_bit = history[t][curr]
+            decoded_bits.append(input_bit)
+            curr = prev_state
+
+        return list(reversed(decoded_bits))
+
+
+class QAMModem:
+    """Quadrature Amplitude Modulation (BPSK, QPSK, 16-QAM) and EVM analyzer."""
+
+    @classmethod
+    def modulate(cls, bits: List[int], scheme: str = "QPSK") -> List[complex]:
+        """Maps bits to complex constellation symbols."""
+        s = scheme.upper().strip()
+        symbols = []
+
+        if s == "BPSK":
+            for b in bits:
+                val = 1.0 if b else -1.0
+                symbols.append(complex(val, 0.0))
+        elif s == "QPSK":
+            norm = 1.0 / math.sqrt(2.0)
+            for i in range(0, len(bits) - 1, 2):
+                re = norm if bits[i] else -norm
+                im = norm if bits[i + 1] else -norm
+                symbols.append(complex(re, im))
+        elif s == "16QAM":
+            norm = 1.0 / math.sqrt(10.0)
+            mapping = {0: -3.0 * norm, 1: -1.0 * norm, 3: 1.0 * norm, 2: 3.0 * norm}
+            for i in range(0, len(bits) - 3, 4):
+                re_bits = (bits[i] << 1) | bits[i + 1]
+                im_bits = (bits[i + 2] << 1) | bits[i + 3]
+                symbols.append(complex(mapping.get(re_bits, 0.0), mapping.get(im_bits, 0.0)))
+        else:
+            # Default BPSK
+            return cls.modulate(bits, "BPSK")
+
+        return symbols
+
+    @classmethod
+    def demodulate(cls, symbols: List[complex], scheme: str = "QPSK") -> List[int]:
+        """Demodulates complex symbols back to bit stream using maximum likelihood slicer."""
+        s = scheme.upper().strip()
+        bits = []
+
+        if s == "BPSK":
+            for sym in symbols:
+                bits.append(1 if sym.real >= 0.0 else 0)
+        elif s == "QPSK":
+            for sym in symbols:
+                bits.append(1 if sym.real >= 0.0 else 0)
+                bits.append(1 if sym.imag >= 0.0 else 0)
+        elif s == "16QAM":
+            norm = 1.0 / math.sqrt(10.0)
+            thresholds = [-2.0 * norm, 0.0, 2.0 * norm]
+
+            def slice_1d(val: float) -> Tuple[int, int]:
+                if val < thresholds[0]:
+                    return (0, 0)
+                elif val < thresholds[1]:
+                    return (0, 1)
+                elif val < thresholds[2]:
+                    return (1, 1)
+                return (1, 0)
+
+            for sym in symbols:
+                b_re = slice_1d(sym.real)
+                b_im = slice_1d(sym.imag)
+                bits.extend([b_re[0], b_re[1], b_im[0], b_im[1]])
+
+        return bits
+
+    @classmethod
+    def calculate_evm(cls, ideal: List[complex], received: List[complex]) -> Dict[str, float]:
+        """Calculates Error Vector Magnitude (EVM) in percentage and dB."""
+        n = min(len(ideal), len(received))
+        if n == 0:
+            return {"evm_pct": 0.0, "evm_db": -100.0}
+
+        err_power = sum(abs(ideal[i] - received[i]) ** 2 for i in range(n))
+        ref_power = sum(abs(ideal[i]) ** 2 for i in range(n))
+
+        if ref_power < 1e-12:
+            return {"evm_pct": 0.0, "evm_db": -100.0}
+
+        evm_rms = math.sqrt(err_power / ref_power)
+        evm_pct = evm_rms * 100.0
+        evm_db = 20.0 * math.log10(max(1e-9, evm_rms))
+
+        return {
+            "evm_percent": round(evm_pct, 3),
+            "evm_db": round(evm_db, 2),
+        }
+
+
+class OFDMFramer:
+    """Orthogonal Frequency Division Multiplexing framer with cyclic prefix insertion."""
+
+    @classmethod
+    def modulate_frame(
+        cls,
+        subcarriers: List[complex],
+        n_fft: int = 64,
+        cp_len: int = 16,
+    ) -> List[complex]:
+        """IFFT subcarrier modulation + Cyclic Prefix (CP) guard interval."""
+        n = len(subcarriers)
+        # Zero-pad or truncate to n_fft
+        sub_padded = list(subcarriers[:n_fft]) + [0.0 + 0.0j] * max(0, n_fft - n)
+
+        # Discrete Inverse Fourier Transform
+        time_samples = []
+        for t in range(n_fft):
+            s = 0.0 + 0.0j
+            for k in range(n_fft):
+                angle = 2.0 * math.pi * k * t / n_fft
+                s += sub_padded[k] * complex(math.cos(angle), math.sin(angle))
+            time_samples.append(s / n_fft)
+
+        # Prepend cyclic prefix (last cp_len samples)
+        cp = time_samples[-cp_len:]
+        return cp + time_samples
+
+    @classmethod
+    def demodulate_frame(
+        cls,
+        time_samples: List[complex],
+        n_fft: int = 64,
+        cp_len: int = 16,
+    ) -> List[complex]:
+        """Strips cyclic prefix and performs FFT."""
+        # Strip CP
+        payload = time_samples[cp_len:cp_len + n_fft]
+        if len(payload) < n_fft:
+            payload.extend([0.0 + 0.0j] * (n_fft - len(payload)))
+
+        # Discrete Fourier Transform
+        freq_bins = []
+        for k in range(n_fft):
+            s = 0.0 + 0.0j
+            for t in range(n_fft):
+                angle = -2.0 * math.pi * k * t / n_fft
+                s += payload[t] * complex(math.cos(angle), math.sin(angle))
+            freq_bins.append(complex(round(s.real, 6), round(s.imag, 6)))
+
+        return freq_bins
+
+
+def telecom_viterbi_encode(bits: List[int]) -> List[int]:
+    """Encodes bit stream using rate 1/2 convolutional code."""
+    return ViterbiDecoder.encode(bits)
+
+
+def telecom_viterbi_decode(codeword: List[int]) -> List[int]:
+    """Decodes rate 1/2 convolutional codeword via Viterbi algorithm."""
+    return ViterbiDecoder.decode(codeword)
+
+
+def telecom_qam_modulate(bits: List[int], scheme: str = "QPSK") -> List[complex]:
+    """Modulates bits to complex constellation symbols."""
+    return QAMModem.modulate(bits, scheme)
+
+
+def telecom_qam_demodulate(symbols: List[complex], scheme: str = "QPSK") -> List[int]:
+    """Demodulates complex symbols to bits."""
+    return QAMModem.demodulate(symbols, scheme)
+
+
+def telecom_ofdm_frame(subcarriers: List[complex], n_fft: int = 64, cp_len: int = 16) -> List[complex]:
+    """Generates time-domain OFDM frame with cyclic prefix."""
+    return OFDMFramer.modulate_frame(subcarriers, n_fft, cp_len)

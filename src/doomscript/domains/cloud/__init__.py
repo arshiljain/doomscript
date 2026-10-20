@@ -48,6 +48,12 @@ from doomscript.domains.cloud.runtime import (
     CloudStorageManager,
     IAMPolicyEngine,
     CloudCostCalculator,
+    MultipartUploadManager,
+    ContentAddressableStorage,
+    BucketLifecycleEngine,
+    cloud_multipart_initiate,
+    cloud_cas_put,
+    cloud_evaluate_lifecycle,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.cloud.exporter import CloudASTExporter
@@ -209,4 +215,10 @@ __all__ = [
     "CloudStorageManager",
     "IAMPolicyEngine",
     "CloudCostCalculator",
+    "MultipartUploadManager",
+    "ContentAddressableStorage",
+    "BucketLifecycleEngine",
+    "cloud_multipart_initiate",
+    "cloud_cas_put",
+    "cloud_evaluate_lifecycle",
 ]

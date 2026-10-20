@@ -24,6 +24,14 @@ from doomscript.domains.telecom.runtime import (
     telecom_crc32,
     telecom_reed_solomon_encode,
     telecom_reed_solomon_decode,
+    ViterbiDecoder,
+    QAMModem,
+    OFDMFramer,
+    telecom_viterbi_encode,
+    telecom_viterbi_decode,
+    telecom_qam_modulate,
+    telecom_qam_demodulate,
+    telecom_ofdm_frame,
 )
 from doomscript.domains.telecom.parser import TelecomDomainParser
 from doomscript.domains.telecom.exporter import TelecomASTExporter
@@ -94,4 +102,12 @@ __all__ = [
     "telecom_crc32",
     "telecom_reed_solomon_encode",
     "telecom_reed_solomon_decode",
+    "ViterbiDecoder",
+    "QAMModem",
+    "OFDMFramer",
+    "telecom_viterbi_encode",
+    "telecom_viterbi_decode",
+    "telecom_qam_modulate",
+    "telecom_qam_demodulate",
+    "telecom_ofdm_frame",
 ]
