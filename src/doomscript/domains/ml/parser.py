@@ -444,6 +444,30 @@ class MLDomainParser(DomainParser):
             data, model, target = m_pca_proj.group(1).strip(), m_pca_proj.group(2).strip(), m_pca_proj.group(3).strip()
             return f"set {target} to ml_pca_transform({model}, {data})"
 
+        # detect anomalies using isolation forest on <data> [trees <n>] [contamination <c>] into <target>
+        m_if = re.match(
+            r"^detect\s+anomalies\s+using\s+isolation\s+forest\s+on\s+(.+?)(?:\s+trees\s+(\d+))?(?:\s+contamination\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_if:
+            data, trees, contam, target = m_if.group(1).strip(), m_if.group(2), m_if.group(3), m_if.group(4).strip()
+            t_arg = f", n_trees={trees}" if trees else ""
+            c_arg = f", contamination={contam.strip()}" if contam else ""
+            return f"set {target} to ml_isolation_forest({data}{t_arg}{c_arg})"
+
+        # cluster data using dbscan on <data> [eps <eps>] [min samples <min_pts>] into <target>
+        m_db = re.match(
+            r"^cluster\s+data\s+using\s+dbscan\s+on\s+(.+?)(?:\s+eps\s+(.+?))?(?:\s+min\s+samples\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_db:
+            data, eps, min_s, target = m_db.group(1).strip(), m_db.group(2), m_db.group(3), m_db.group(4).strip()
+            e_arg = f", eps={eps.strip()}" if eps else ""
+            m_arg = f", min_samples={min_s}" if min_s else ""
+            return f"set {target} to ml_dbscan({data}{e_arg}{m_arg})"
+
         return None
 
     def parse_block(

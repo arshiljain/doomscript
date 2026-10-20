@@ -187,6 +187,56 @@ class GameDomainParser(DomainParser):
             target = m_mcts.group(3).strip()
             return f"set {target} to game_mcts_search({st}, iterations={iters})"
 
+        # calculate hex distance from q <q1> r <r1> to q <q2> r <r2> into <target>
+        m_hdist = re.match(
+            r"^calculate\s+hex\s+distance\s+from\s+q\s+(.+?)\s+r\s+(.+?)\s+to\s+q\s+(.+?)\s+r\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_hdist:
+            q1, r1, q2, r2, target = m_hdist.group(1).strip(), m_hdist.group(2).strip(), m_hdist.group(3).strip(), m_hdist.group(4).strip(), m_hdist.group(5).strip()
+            return f"set {target} to game_hex_distance({q1}, {r1}, {q2}, {r2})"
+
+        # draw hex line from q <q1> r <r1> to q <q2> r <r2> into <target>
+        m_hline = re.match(
+            r"^draw\s+hex\s+line\s+from\s+q\s+(.+?)\s+r\s+(.+?)\s+to\s+q\s+(.+?)\s+r\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_hline:
+            q1, r1, q2, r2, target = m_hline.group(1).strip(), m_hline.group(2).strip(), m_hline.group(3).strip(), m_hline.group(4).strip(), m_hline.group(5).strip()
+            return f"set {target} to game_hex_line({q1}, {r1}, {q2}, {r2})"
+
+        # find hex range around q <q> r <r> radius <radius> into <target>
+        m_hrange = re.match(
+            r"^find\s+hex\s+range\s+around\s+q\s+(.+?)\s+r\s+(.+?)\s+radius\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_hrange:
+            q, r, rad, target = m_hrange.group(1).strip(), m_hrange.group(2).strip(), m_hrange.group(3).strip(), m_hrange.group(4).strip()
+            return f"set {target} to game_hex_range({q}, {r}, {rad})"
+
+        # create hfsm initial <init> states <states> transitions <trans> into <target>
+        m_hfsm_c = re.match(
+            r"^create\s+hfsm\s+initial\s+(.+?)\s+states\s+(.+?)\s+transitions\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_hfsm_c:
+            init_st, states, trans, target = m_hfsm_c.group(1).strip(), m_hfsm_c.group(2).strip(), m_hfsm_c.group(3).strip(), m_hfsm_c.group(4).strip()
+            return f"set {target} to game_hfsm_create({init_st}, {states}, {trans})"
+
+        # trigger hfsm event <event> on <machine> into <target>
+        m_hfsm_t = re.match(
+            r"^trigger\s+hfsm\s+event\s+(.+?)\s+on\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_hfsm_t:
+            ev, mach, target = m_hfsm_t.group(1).strip(), m_hfsm_t.group(2).strip(), m_hfsm_t.group(3).strip()
+            return f"set {target} to game_hfsm_trigger({mach}, {ev})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

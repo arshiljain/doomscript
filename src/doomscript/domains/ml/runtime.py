@@ -1999,4 +1999,223 @@ def ml_pca_transform(model: Any, data: List[List[float]]) -> List[List[float]]:
     return inst.transform([list(r) for r in data])
 
 
+# ==============================================================================
+# ISOLATION FOREST ANOMALY DETECTOR
+# ==============================================================================
+
+class IsolationTreeNode:
+    def __init__(self, size: int):
+        self.size = size
+        self.split_feature: Optional[int] = None
+        self.split_value: Optional[float] = None
+        self.left: Optional["IsolationTreeNode"] = None
+        self.right: Optional["IsolationTreeNode"] = None
+
+
+class IsolationForestAnomalyDetector:
+    """Isolation Forest algorithm (Liu, Ting, Zhou 2008) for unsupervised outlier detection."""
+
+    EULER_MASCHERONI = 0.5772156649
+
+    def __init__(self, n_trees: int = 50, max_samples: int = 256, contamination: float = 0.1, seed: Optional[int] = 42):
+        self.n_trees = max(5, int(n_trees))
+        self.max_samples = max(8, int(max_samples))
+        self.contamination = float(contamination)
+        self.seed = seed
+        self.trees: List[IsolationTreeNode] = []
+        self.max_depth = 0
+        self.subsample_size = 0
+
+    @classmethod
+    def _c_factor(cls, n: int) -> float:
+        """Average path length of unsuccessful searches in BST."""
+        if n <= 1:
+            return 0.0
+        if n == 2:
+            return 1.0
+        return 2.0 * (math.log(n - 1) + cls.EULER_MASCHERONI) - (2.0 * (n - 1) / n)
+
+    def _build_itree(self, X: List[List[float]], current_depth: int, rng: random.Random) -> IsolationTreeNode:
+        n = len(X)
+        node = IsolationTreeNode(n)
+        if current_depth >= self.max_depth or n <= 1:
+            return node
+
+        d = len(X[0])
+        features = list(range(d))
+        rng.shuffle(features)
+
+        split_feature = None
+        min_v = 0.0
+        max_v = 0.0
+
+        for f in features:
+            vals = [row[f] for row in X]
+            f_min = min(vals)
+            f_max = max(vals)
+            if f_min < f_max:
+                split_feature = f
+                min_v = f_min
+                max_v = f_max
+                break
+
+        if split_feature is None:
+            return node
+
+        split_value = rng.uniform(min_v, max_v)
+        left_X = [row for row in X if row[split_feature] < split_value]
+        right_X = [row for row in X if row[split_feature] >= split_value]
+
+        node.split_feature = split_feature
+        node.split_value = split_value
+        node.left = self._build_itree(left_X, current_depth + 1, rng)
+        node.right = self._build_itree(right_X, current_depth + 1, rng)
+        return node
+
+    def fit(self, X: List[List[float]]) -> "IsolationForestAnomalyDetector":
+        n = len(X)
+        if n == 0:
+            return self
+
+        self.subsample_size = min(self.max_samples, n)
+        self.max_depth = int(math.ceil(math.log2(max(2, self.subsample_size))))
+        rng = random.Random(self.seed)
+        self.trees = []
+
+        for _ in range(self.n_trees):
+            if n <= self.subsample_size:
+                subsample = list(X)
+            else:
+                indices = rng.sample(range(n), self.subsample_size)
+                subsample = [X[i] for i in indices]
+            tree_root = self._build_itree(subsample, 0, rng)
+            self.trees.append(tree_root)
+
+        return self
+
+    def _path_length(self, x: List[float], node: IsolationTreeNode, current_depth: int) -> float:
+        if node.left is None or node.right is None or node.split_feature is None or node.split_value is None:
+            return current_depth + self._c_factor(node.size)
+        f = node.split_feature
+        if x[f] < node.split_value:
+            return self._path_length(x, node.left, current_depth + 1)
+        else:
+            return self._path_length(x, node.right, current_depth + 1)
+
+    def score_samples(self, X: List[List[float]]) -> List[float]:
+        """Calculates anomaly scores s(x, n) in [0, 1]. High score indicates anomaly."""
+        c = self._c_factor(self.subsample_size)
+        if c <= 0.0 or not self.trees:
+            return [0.5] * len(X)
+
+        scores = []
+        for row in X:
+            avg_h = sum(self._path_length(row, t, 0) for t in self.trees) / len(self.trees)
+            s = 2.0 ** (-avg_h / c)
+            scores.append(round(s, 4))
+        return scores
+
+    def predict(self, X: List[List[float]]) -> List[int]:
+        """Returns 1 for normal instances, -1 for anomalies."""
+        scores = self.score_samples(X)
+        sorted_scores = sorted(scores, reverse=True)
+        idx = int(math.floor(len(scores) * self.contamination))
+        threshold = sorted_scores[min(idx, len(scores) - 1)] if sorted_scores else 0.6
+        return [-1 if s >= threshold else 1 for s in scores]
+
+
+# ==============================================================================
+# DBSCAN CLUSTERING ENGINE
+# ==============================================================================
+
+class DBSCANClusteringEngine:
+    """Density-Based Spatial Clustering of Applications with Noise (Ester et al. 1996)."""
+
+    @staticmethod
+    def _dist(p1: List[float], p2: List[float]) -> float:
+        return math.sqrt(sum((a - b) ** 2 for a, b in zip(p1, p2)))
+
+    @classmethod
+    def fit(cls, X: List[List[float]], eps: float = 0.5, min_samples: int = 5) -> Dict[str, Any]:
+        n = len(X)
+        if n == 0:
+            return {"labels": [], "num_clusters": 0, "num_noise": 0, "core_indices": []}
+
+        eps_val = max(1e-6, float(eps))
+        min_pts = max(1, int(min_samples))
+
+        labels = [-1] * n
+        visited = [False] * n
+        cluster_id = 0
+        core_indices = []
+
+        neighbors_map: List[List[int]] = []
+        for i in range(n):
+            nbrs = []
+            for j in range(n):
+                if cls._dist(X[i], X[j]) <= eps_val:
+                    nbrs.append(j)
+            neighbors_map.append(nbrs)
+            if len(nbrs) >= min_pts:
+                core_indices.append(i)
+
+        for i in range(n):
+            if visited[i]:
+                continue
+            visited[i] = True
+
+            nbrs = list(neighbors_map[i])
+            if len(nbrs) < min_pts:
+                labels[i] = -1
+            else:
+                labels[i] = cluster_id
+                queue = list(nbrs)
+                while queue:
+                    q_idx = queue.pop(0)
+                    if not visited[q_idx]:
+                        visited[q_idx] = True
+                        q_nbrs = neighbors_map[q_idx]
+                        if len(q_nbrs) >= min_pts:
+                            queue.extend(q_nbrs)
+                    if labels[q_idx] == -1:
+                        labels[q_idx] = cluster_id
+
+                cluster_id += 1
+
+        num_noise = sum(1 for l in labels if l == -1)
+
+        return {
+            "labels": labels,
+            "num_clusters": cluster_id,
+            "num_noise": num_noise,
+            "core_indices": core_indices,
+            "eps": eps_val,
+            "min_samples": min_pts,
+        }
+
+
+def ml_isolation_forest(data: List[List[float]], n_trees: int = 50, contamination: float = 0.1) -> Record:
+    """Detects anomalies using Isolation Forest ensemble."""
+    iso = IsolationForestAnomalyDetector(n_trees=n_trees, contamination=contamination)
+    data_list = [list(r) for r in data]
+    iso.fit(data_list)
+    scores = iso.score_samples(data_list)
+    preds = iso.predict(data_list)
+    return Record({
+        "anomaly_scores": scores,
+        "predictions": preds,
+        "num_trees": iso.n_trees,
+        "anomalies_detected": preds.count(-1),
+        "instance": iso,
+    })
+
+
+def ml_dbscan(data: List[List[float]], eps: float = 0.5, min_samples: int = 5) -> Record:
+    """Clusters data points using density-based DBSCAN algorithm."""
+    data_list = [list(r) for r in data]
+    res = DBSCANClusteringEngine.fit(data_list, eps=eps, min_samples=min_samples)
+    return Record(res)
+
+
+
 

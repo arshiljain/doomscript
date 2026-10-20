@@ -46,6 +46,13 @@ from doomscript.domains.game.runtime import (
     game_jps_path,
     game_simulate_flock,
     game_mcts_search,
+    HexagonalGridCoordinates,
+    HierarchicalFiniteStateMachineHFSM,
+    game_hex_distance,
+    game_hex_line,
+    game_hex_range,
+    game_hfsm_create,
+    game_hfsm_trigger,
 )
 from doomscript.domains.game.parser import GameDomainParser
 from doomscript.domains.game.exporter import GameASTExporter
@@ -151,4 +158,11 @@ __all__ = [
     "game_jps_path",
     "game_simulate_flock",
     "game_mcts_search",
+    "HexagonalGridCoordinates",
+    "HierarchicalFiniteStateMachineHFSM",
+    "game_hex_distance",
+    "game_hex_line",
+    "game_hex_range",
+    "game_hfsm_create",
+    "game_hfsm_trigger",
 ]

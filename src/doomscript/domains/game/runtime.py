@@ -1344,3 +1344,230 @@ def game_mcts_search(
         evaluate_winner_fn=eval_fn,
     )
 
+
+# ==============================================================================
+# HEXAGONAL GRID COORDINATE SYSTEM (AXIAL & CUBE)
+# ==============================================================================
+
+class HexagonalGridCoordinates:
+    """Axial (q, r) and Cube (x, y, z) coordinate algebra for hexagonal map boards."""
+
+    DIRECTIONS = [
+        (1, 0), (1, -1), (0, -1),
+        (-1, 0), (-1, 1), (0, 1),
+    ]
+
+    @staticmethod
+    def axial_to_cube(q: int, r: int) -> Tuple[int, int, int]:
+        x = int(q)
+        z = int(r)
+        y = -x - z
+        return (x, y, z)
+
+    @staticmethod
+    def cube_to_axial(x: int, y: int, z: int) -> Tuple[int, int]:
+        return (int(x), int(z))
+
+    @classmethod
+    def distance(cls, q1: int, r1: int, q2: int, r2: int) -> int:
+        """Computes shortest path step distance between two hex cells."""
+        x1, y1, z1 = cls.axial_to_cube(q1, r1)
+        x2, y2, z2 = cls.axial_to_cube(q2, r2)
+        return (abs(x1 - x2) + abs(y1 - y2) + abs(z1 - z2)) // 2
+
+    @classmethod
+    def neighbors(cls, q: int, r: int) -> List[Tuple[int, int]]:
+        """Returns the 6 direct adjacent neighbors of a hex coordinate."""
+        return [(q + dq, r + dr) for dq, dr in cls.DIRECTIONS]
+
+    @classmethod
+    def line_draw(cls, q1: int, r1: int, q2: int, r2: int) -> List[Tuple[int, int]]:
+        """Computes straight-line path of hexes connecting two coordinates."""
+        n = cls.distance(q1, r1, q2, r2)
+        if n == 0:
+            return [(q1, r1)]
+
+        x1, y1, z1 = cls.axial_to_cube(q1, r1)
+        x2, y2, z2 = cls.axial_to_cube(q2, r2)
+
+        results = []
+        for i in range(n + 1):
+            t = i / max(1, n)
+            # Continuous cube interpolation with nudge to avoid edge ambiguity
+            fx = x1 + (x2 - x1) * t + 1e-6
+            fy = y1 + (y2 - y1) * t + 1e-6
+            fz = z1 + (z2 - z1) * t - 2e-6
+
+            # Cube rounding
+            rx = round(fx)
+            ry = round(fy)
+            rz = round(fz)
+
+            x_diff = abs(rx - fx)
+            y_diff = abs(ry - fy)
+            z_diff = abs(rz - fz)
+
+            if x_diff > y_diff and x_diff > z_diff:
+                rx = -ry - rz
+            elif y_diff > z_diff:
+                ry = -rx - rz
+            else:
+                rz = -rx - ry
+
+            results.append(cls.cube_to_axial(rx, ry, rz))
+
+        return results
+
+    @classmethod
+    def range_query(cls, center_q: int, center_r: int, radius: int) -> List[Tuple[int, int]]:
+        """Returns all hexes within distance radius of center."""
+        rad = max(0, int(radius))
+        results = []
+        for q in range(-rad, rad + 1):
+            r1 = max(-rad, -q - rad)
+            r2 = min(rad, -q + rad)
+            for r in range(r1, r2 + 1):
+                results.append((center_q + q, center_r + r))
+        return results
+
+    @classmethod
+    def ring(cls, center_q: int, center_r: int, radius: int) -> List[Tuple[int, int]]:
+        """Returns single border ring of hexes at exact distance radius."""
+        rad = int(radius)
+        if rad <= 0:
+            return [(center_q, center_r)]
+
+        results = []
+        # Start at direction 4 multiplied by radius
+        cur_q = center_q + cls.DIRECTIONS[4][0] * rad
+        cur_r = center_r + cls.DIRECTIONS[4][1] * rad
+
+        for side in range(6):
+            dq, dr = cls.DIRECTIONS[side]
+            for _ in range(rad):
+                results.append((cur_q, cur_r))
+                cur_q += dq
+                cur_r += dr
+
+        return results
+
+
+# ==============================================================================
+# HIERARCHICAL FINITE STATE MACHINE (HFSM)
+# ==============================================================================
+
+class HierarchicalFiniteStateMachineHFSM:
+    """Hierarchical Finite State Machine with compound states, parent transitions, and active chain."""
+
+    def __init__(
+        self,
+        initial_state: str,
+        states_def: Dict[str, Dict[str, Any]],
+        transitions: List[Dict[str, Any]],
+    ):
+        self.states_def = states_def
+        self.transitions = transitions
+        self.current_leaf_state = initial_state
+        self.active_chain = self._resolve_active_chain(initial_state)
+        self.history_transitions: List[str] = []
+
+    def _resolve_active_chain(self, leaf_state: str) -> List[str]:
+        chain = []
+        curr: Optional[str] = leaf_state
+        visited = set()
+        while curr and curr not in visited:
+            visited.add(curr)
+            chain.append(curr)
+            st_info = self.states_def.get(curr, {})
+            curr = st_info.get("parent")
+        chain.reverse()  # Root -> Leaf
+        return chain
+
+    def trigger_event(self, event: str) -> Dict[str, Any]:
+        """Evaluates active state hierarchy for transitions matching event."""
+        fired_transition = None
+
+        # Check from leaf up to root in active chain
+        for active_st in reversed(self.active_chain):
+            for t in self.transitions:
+                if t.get("from") == active_st and t.get("event") == event:
+                    fired_transition = t
+                    break
+            if fired_transition:
+                break
+
+        if not fired_transition:
+            return {
+                "event": event,
+                "transition_fired": False,
+                "current_state": self.current_leaf_state,
+                "active_chain": list(self.active_chain),
+            }
+
+        target_state = fired_transition["to"]
+        # If target has initial substate, descend to leaf
+        curr_target = target_state
+        visited = set()
+        while curr_target not in visited:
+            visited.add(curr_target)
+            sub = self.states_def.get(curr_target, {}).get("initial_substate")
+            if sub and sub in self.states_def:
+                curr_target = sub
+            else:
+                break
+
+        prev_leaf = self.current_leaf_state
+        self.current_leaf_state = curr_target
+        self.active_chain = self._resolve_active_chain(curr_target)
+        trans_str = f"{prev_leaf} -> {curr_target} on '{event}'"
+        self.history_transitions.append(trans_str)
+
+        return {
+            "event": event,
+            "transition_fired": True,
+            "previous_state": prev_leaf,
+            "current_state": self.current_leaf_state,
+            "active_chain": list(self.active_chain),
+            "transition": trans_str,
+        }
+
+
+def game_hex_distance(q1: int, r1: int, q2: int, r2: int) -> int:
+    """Calculates hex board step distance between (q1, r1) and (q2, r2)."""
+    return HexagonalGridCoordinates.distance(q1, r1, q2, r2)
+
+
+def game_hex_line(q1: int, r1: int, q2: int, r2: int) -> List[List[int]]:
+    """Calculates straight-line hex coordinates between (q1, r1) and (q2, r2)."""
+    return [[p[0], p[1]] for p in HexagonalGridCoordinates.line_draw(q1, r1, q2, r2)]
+
+
+def game_hex_range(q: int, r: int, radius: int) -> List[List[int]]:
+    """Returns list of hex coordinates within distance radius."""
+    return [[p[0], p[1]] for p in HexagonalGridCoordinates.range_query(q, r, radius)]
+
+
+def game_hfsm_create(
+    initial_state: str,
+    states_def: Dict[str, Any],
+    transitions: List[Dict[str, Any]],
+) -> Record:
+    """Initializes a Hierarchical Finite State Machine instance."""
+    hfsm = HierarchicalFiniteStateMachineHFSM(initial_state, states_def, transitions)
+    return Record({
+        "current_state": hfsm.current_leaf_state,
+        "active_chain": hfsm.active_chain,
+        "instance": hfsm,
+    })
+
+
+def game_hfsm_trigger(machine_record: Any, event: str) -> Record:
+    """Triggers event on HFSM instance and transitions state hierarchy."""
+    inst = machine_record.instance if hasattr(machine_record, "instance") else machine_record
+    res = inst.trigger_event(event)
+    if hasattr(machine_record, "current_state"):
+        machine_record["current_state"] = res["current_state"]
+        machine_record["active_chain"] = res["active_chain"]
+    return Record(res)
+
+

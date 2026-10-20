@@ -40,6 +40,10 @@ from doomscript.domains.automata.runtime import (
     ContextFreeGrammarCYKParser,
     automata_run_multitape_tm,
     automata_cyk_parse,
+    HopcroftDFAMinimizer,
+    MarkovDecisionProcessValueIteration,
+    automata_hopcroft_minimize,
+    automata_mdp_value_iteration,
 )
 from doomscript.domains.automata.parser import AutomataDomainParser
 from doomscript.domains.automata.exporter import AutomataASTExporter
@@ -132,4 +136,8 @@ __all__ = [
     "ContextFreeGrammarCYKParser",
     "automata_run_multitape_tm",
     "automata_cyk_parse",
+    "HopcroftDFAMinimizer",
+    "MarkovDecisionProcessValueIteration",
+    "automata_hopcroft_minimize",
+    "automata_mdp_value_iteration",
 ]

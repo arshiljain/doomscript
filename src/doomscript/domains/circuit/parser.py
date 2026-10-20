@@ -225,6 +225,29 @@ class CircuitDomainParser(DomainParser):
             target = m_rlc_lap.group(7).strip()
             return f"set {target} to circuit_rlc_laplace_transient({topo}, {r_val}, {l_val}, {c_val}, v_step={vs}, duration={dur})"
 
+        # minimize boolean function minterms <minterms> [dont cares <dc>] variables <n> into <target>
+        m_qm = re.match(
+            r"^minimize\s+boolean\s+function\s+minterms\s+(.+?)(?:\s+dont\s+cares\s+(.+?))?\s+variables\s+(\d+)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_qm:
+            mterms, dcares, nvars, target = m_qm.group(1).strip(), m_qm.group(2), m_qm.group(3).strip(), m_qm.group(4).strip()
+            dc_arg = f", dont_cares={dcares.strip()}" if dcares else ""
+            return f"set {target} to circuit_quine_mccluskey_minimize({mterms}{dc_arg}, num_vars={nvars})"
+
+        # calculate bjt q point vcc <vcc> rb <rb> rc <rc> [beta <beta>] [va <va>] into <target>
+        m_bjt = re.match(
+            r"^calculate\s+bjt\s+q\s+point\s+vcc\s+(.+?)\s+rb\s+(.+?)\s+rc\s+(.+?)(?:\s+beta\s+(.+?))?(?:\s+va\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_bjt:
+            vcc, rb, rc, beta, va, target = m_bjt.group(1).strip(), m_bjt.group(2).strip(), m_bjt.group(3).strip(), m_bjt.group(4), m_bjt.group(5), m_bjt.group(6).strip()
+            b_arg = f", beta={beta.strip()}" if beta else ""
+            va_arg = f", va={va.strip()}" if va else ""
+            return f"set {target} to circuit_bjt_operating_point({vcc}, {rb}, {rc}{b_arg}{va_arg})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

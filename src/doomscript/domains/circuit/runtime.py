@@ -1131,3 +1131,235 @@ def circuit_rlc_laplace_transient(
     """Solves analytical transient Laplace step response for series or parallel RLC circuit."""
     return Record(RLCTransientLaplaceSolver.solve(topology, r, l, c, v_step=v_step, duration=duration, points=points))
 
+
+# ==============================================================================
+# QUINE-MCCLUSKEY BOOLEAN FUNCTION MINIMIZATION
+# ==============================================================================
+
+class QuineMcCluskeyBooleanMinimizer:
+    """Exact Quine-McCluskey algorithm with prime implicant table reduction."""
+
+    @classmethod
+    def minimize(
+        cls,
+        minterms: List[int],
+        dont_cares: Optional[List[int]] = None,
+        num_vars: int = 4,
+    ) -> Dict[str, Any]:
+        n_vars = max(1, min(10, int(num_vars)))
+        m_set = set(int(m) for m in minterms if 0 <= int(m) < (1 << n_vars))
+        d_set = set(int(d) for d in (dont_cares or []) if 0 <= int(d) < (1 << n_vars))
+        all_terms = sorted(list(m_set | d_set))
+
+        if not m_set:
+            return {
+                "minterms": [],
+                "num_vars": n_vars,
+                "prime_implicants": [],
+                "essential_implicants": [],
+                "minimal_sop": "0",
+                "terms_count": 0,
+            }
+
+        if len(m_set | d_set) == (1 << n_vars):
+            return {
+                "minterms": sorted(list(m_set)),
+                "num_vars": n_vars,
+                "prime_implicants": ["-" * n_vars],
+                "essential_implicants": ["-" * n_vars],
+                "minimal_sop": "1",
+                "terms_count": 1,
+            }
+
+        # Format binary string representation: (binary_str, set_of_covered_minterms)
+        current_groups: Dict[int, Set[Tuple[str, Tuple[int, ...]]]] = {}
+        for term in all_terms:
+            bin_str = bin(term)[2:].zfill(n_vars)
+            ones = bin_str.count("1")
+            current_groups.setdefault(ones, set()).add((bin_str, (term,)))
+
+        prime_implicants: Set[Tuple[str, Tuple[int, ...]]] = set()
+
+        while current_groups:
+            next_groups: Dict[int, Set[Tuple[str, Tuple[int, ...]]]] = {}
+            used: Set[Tuple[str, Tuple[int, ...]]] = set()
+            sorted_ones = sorted(current_groups.keys())
+
+            for i in range(len(sorted_ones) - 1):
+                c1 = sorted_ones[i]
+                c2 = sorted_ones[i + 1]
+                if c2 != c1 + 1:
+                    continue
+
+                for term1, cov1 in current_groups[c1]:
+                    for term2, cov2 in current_groups[c2]:
+                        # Check if differing by exactly one bit
+                        diffs = 0
+                        merged = []
+                        for b1, b2 in zip(term1, term2):
+                            if b1 == b2:
+                                merged.append(b1)
+                            elif b1 != "-" and b2 != "-":
+                                diffs += 1
+                                merged.append("-")
+                            else:
+                                diffs = 2
+                                break
+
+                        if diffs == 1:
+                            used.add((term1, cov1))
+                            used.add((term2, cov2))
+                            new_term = "".join(merged)
+                            new_cov = tuple(sorted(set(cov1 + cov2)))
+                            next_groups.setdefault(c1, set()).add((new_term, new_cov))
+
+            # Add unused terms to prime implicants
+            for ones, term_set in current_groups.items():
+                for t in term_set:
+                    if t not in used:
+                        prime_implicants.add(t)
+
+            current_groups = next_groups
+
+        # Prime implicant table reduction for minterms in m_set
+        pi_list = sorted(list(prime_implicants), key=lambda x: (x[0].count("-"), x[0]))
+        essential: List[Tuple[str, Tuple[int, ...]]] = []
+        covered_minterms: Set[int] = set()
+
+        # Find essentials
+        for m in sorted(list(m_set)):
+            covering_pis = [pi for pi in pi_list if m in pi[1]]
+            if len(covering_pis) == 1:
+                e = covering_pis[0]
+                if e not in essential:
+                    essential.append(e)
+                    covered_minterms.update(m for m in e[1] if m in m_set)
+
+        # Greedy set cover for any remaining uncovered minterms
+        remaining_minterms = set(m_set) - covered_minterms
+        chosen_pis = list(essential)
+
+        while remaining_minterms:
+            best_pi = max(pi_list, key=lambda pi: len(set(pi[1]) & remaining_minterms))
+            chosen_pis.append(best_pi)
+            remaining_minterms -= set(best_pi[1])
+
+        # Convert to algebraic expression A, B, C, D...
+        var_names = [chr(ord("A") + idx) for idx in range(n_vars)]
+
+        def pi_to_expr(pi_str: str) -> str:
+            parts = []
+            for b, vname in zip(pi_str, var_names):
+                if b == "1":
+                    parts.append(vname)
+                elif b == "0":
+                    parts.append(f"{vname}'")
+            return "".join(parts) if parts else "1"
+
+        sop_terms = [pi_to_expr(pi[0]) for pi in chosen_pis]
+        minimal_sop = " + ".join(sorted(sop_terms)) if sop_terms else "0"
+
+        return {
+            "minterms": sorted(list(m_set)),
+            "num_vars": n_vars,
+            "prime_implicants": [pi[0] for pi in pi_list],
+            "essential_implicants": [pi[0] for pi in essential],
+            "minimal_sop": minimal_sop,
+            "terms_count": len(chosen_pis),
+        }
+
+
+# ==============================================================================
+# SMALL-SIGNAL BJT & NONLINEAR DIODE ANALYZER
+# ==============================================================================
+
+class SmallSignalDiodeBJTAnalyzer:
+    """NPN BJT DC Q-point and small-signal hybrid-pi parameter solver."""
+
+    THERMAL_VOLTAGE_VT = 0.02585  # V at 300K
+
+    @classmethod
+    def analyze_common_emitter(
+        cls,
+        vcc: float,
+        rb_kohm: float,
+        rc_kohm: float,
+        beta: float = 100.0,
+        va: float = 100.0,
+        vbe: float = 0.7,
+    ) -> Dict[str, Any]:
+        vcc_v = float(vcc)
+        rb = float(rb_kohm) * 1000.0  # Ohms
+        rc = float(rc_kohm) * 1000.0  # Ohms
+        b = float(beta)
+        v_early = float(va)
+
+        if vcc_v <= vbe:
+            return {
+                "operating_region": "Cutoff",
+                "v_be": vbe,
+                "i_b_ua": 0.0,
+                "i_c_ma": 0.0,
+                "v_ce": vcc_v,
+                "gm_ms": 0.0,
+                "r_pi_kohm": float("inf"),
+                "ro_kohm": float("inf"),
+                "voltage_gain": 0.0,
+            }
+
+        # Active mode calculation
+        i_b = (vcc_v - vbe) / rb  # Amps
+        i_c = b * i_b             # Amps
+        v_ce = vcc_v - i_c * rc    # Volts
+
+        if v_ce < 0.2:
+            # Saturation mode
+            region = "Saturation"
+            v_ce = 0.2
+            i_c = (vcc_v - v_ce) / rc
+            gm = (i_c / cls.THERMAL_VOLTAGE_VT) * 1000.0
+            r_pi = (b * cls.THERMAL_VOLTAGE_VT / max(1e-12, i_c)) / 1000.0
+            ro = ((v_early + v_ce) / max(1e-12, i_c)) / 1000.0
+            av = 0.0
+        else:
+            region = "Forward-Active"
+            gm = (i_c / cls.THERMAL_VOLTAGE_VT) * 1000.0  # mS
+            r_pi = (b * cls.THERMAL_VOLTAGE_VT / max(1e-12, i_c)) / 1000.0  # kOhms
+            ro = ((v_early + v_ce) / max(1e-12, i_c)) / 1000.0             # kOhms
+            rc_k = float(rc_kohm)
+            r_load = (rc_k * ro) / (rc_k + ro)
+            av = -(gm * 0.001) * (r_load * 1000.0)
+
+        return {
+            "operating_region": region,
+            "v_be": round(vbe, 3),
+            "i_b_ua": round(i_b * 1e6, 2),
+            "i_c_ma": round(i_c * 1e3, 3),
+            "v_ce": round(v_ce, 3),
+            "gm_ms": round(gm, 3),
+            "r_pi_kohm": round(r_pi, 3),
+            "ro_kohm": round(ro, 3),
+            "voltage_gain": round(av, 2),
+        }
+
+
+def circuit_quine_mccluskey_minimize(
+    minterms: List[int],
+    dont_cares: Optional[List[int]] = None,
+    num_vars: int = 4,
+) -> Record:
+    """Minimizes Boolean logic function using exact Quine-McCluskey method."""
+    return Record(QuineMcCluskeyBooleanMinimizer.minimize(minterms, dont_cares=dont_cares, num_vars=num_vars))
+
+
+def circuit_bjt_operating_point(
+    vcc: float,
+    rb_kohm: float,
+    rc_kohm: float,
+    beta: float = 100.0,
+    va: float = 100.0,
+) -> Record:
+    """Calculates BJT DC Q-point and small-signal parameters."""
+    return Record(SmallSignalDiodeBJTAnalyzer.analyze_common_emitter(vcc, rb_kohm, rc_kohm, beta=beta, va=va))
+
+

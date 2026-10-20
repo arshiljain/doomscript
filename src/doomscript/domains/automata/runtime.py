@@ -1098,3 +1098,223 @@ def automata_cyk_parse(
     return Record(ContextFreeGrammarCYKParser.parse(cnf_grammar, start_symbol, input_tokens))
 
 
+# ==============================================================================
+# HOPCROFT DFA MINIMIZATION ALGORITHM (O(k * n log n))
+# ==============================================================================
+
+class HopcroftDFAMinimizer:
+    """Hopcroft's optimal partition refinement algorithm for canonical DFA state minimization."""
+
+    @classmethod
+    def minimize(
+        cls,
+        states: List[str],
+        alphabet: List[str],
+        initial_state: str,
+        accept_states: List[str],
+        transitions: Dict[str, Dict[str, str]],
+    ) -> Dict[str, Any]:
+        all_states = set(str(s) for s in states)
+        sigma = sorted(list(set(str(c) for c in alphabet)))
+        q0 = str(initial_state)
+        f_set = set(str(s) for s in accept_states) & all_states
+
+        # 1. Eliminate unreachable states from q0 via BFS
+        reachable = set()
+        queue = [q0]
+        reachable.add(q0)
+        while queue:
+            curr = queue.pop(0)
+            for c in sigma:
+                nxt = transitions.get(curr, {}).get(c)
+                if nxt and nxt in all_states and nxt not in reachable:
+                    reachable.add(nxt)
+                    queue.append(nxt)
+
+        all_states = reachable
+        f_set = f_set & reachable
+        non_f = all_states - f_set
+
+        # Initial partition P
+        partitions: List[Set[str]] = []
+        if f_set:
+            partitions.append(f_set)
+        if non_f:
+            partitions.append(non_f)
+
+        # Worklist W
+        worklist: List[Set[str]] = [set(f_set)] if (f_set and len(f_set) <= len(non_f)) else ([set(non_f)] if non_f else [set(f_set)])
+
+        while worklist:
+            A = worklist.pop()
+            for c in sigma:
+                # Pre-image X: states that transition into A on c
+                X = {s for s in all_states if transitions.get(s, {}).get(c) in A}
+                if not X:
+                    continue
+
+                new_partitions = []
+                for Y in partitions:
+                    y1 = Y & X
+                    y2 = Y - X
+                    if y1 and y2:
+                        new_partitions.append(y1)
+                        new_partitions.append(y2)
+                        if Y in worklist:
+                            worklist.remove(Y)
+                            worklist.append(y1)
+                            worklist.append(y2)
+                        else:
+                            if len(y1) <= len(y2):
+                                worklist.append(y1)
+                            else:
+                                worklist.append(y2)
+                    else:
+                        new_partitions.append(Y)
+                partitions = new_partitions
+
+        # Build quotient DFA
+        # Canonical state name for each equivalence class
+        state_to_class: Dict[str, str] = {}
+        class_list: List[List[str]] = []
+        for idx, part in enumerate(sorted(partitions, key=lambda s: (q0 not in s, sorted(list(s))[0]))):
+            sorted_part = sorted(list(part))
+            class_name = f"S{idx}" if q0 not in part else "S0"
+            for st in sorted_part:
+                state_to_class[st] = class_name
+            class_list.append(sorted_part)
+
+        new_states = sorted(list(set(state_to_class.values())))
+        new_q0 = state_to_class[q0]
+        new_f = sorted(list(set(state_to_class[s] for s in f_set)))
+
+        new_transitions: Dict[str, Dict[str, str]] = {}
+        for part in partitions:
+            rep = next(iter(part))
+            c_name = state_to_class[rep]
+            new_transitions[c_name] = {}
+            for c in sigma:
+                dst = transitions.get(rep, {}).get(c)
+                if dst and dst in state_to_class:
+                    new_transitions[c_name][c] = state_to_class[dst]
+
+        return {
+            "original_states_count": len(states),
+            "minimal_states_count": len(new_states),
+            "states": new_states,
+            "alphabet": sigma,
+            "initial_state": new_q0,
+            "accept_states": new_f,
+            "transitions": new_transitions,
+            "equivalence_classes": class_list,
+        }
+
+
+# ==============================================================================
+# MARKOV DECISION PROCESS (MDP) VALUE ITERATION SOLVER
+# ==============================================================================
+
+class MarkovDecisionProcessValueIteration:
+    """Discrete finite MDP Bellman optimality solver and optimal policy extractor."""
+
+    @classmethod
+    def solve(
+        cls,
+        states: List[str],
+        actions: List[str],
+        transitions: Dict[str, Dict[str, Dict[str, float]]],
+        rewards: Dict[str, Dict[str, float]],
+        gamma: float = 0.9,
+        epsilon: float = 1e-4,
+        max_iterations: int = 200,
+    ) -> Dict[str, Any]:
+        """Solves optimal value function V*(s) and extracts deterministic policy pi*(s)."""
+        st_list = [str(s) for s in states]
+        act_list = [str(a) for a in actions]
+        v: Dict[str, float] = {s: 0.0 for s in st_list}
+        converged = False
+        iters_done = 0
+
+        gamma_val = max(0.0, min(0.9999, float(gamma)))
+        threshold = float(epsilon) * (1.0 - gamma_val) / (2.0 * max(1e-8, gamma_val))
+
+        for it in range(max_iterations):
+            delta = 0.0
+            new_v: Dict[str, float] = {}
+
+            for s in st_list:
+                best_val = -float("inf")
+                for a in act_list:
+                    # Q(s, a) = R(s, a) + gamma * sum(P(s'|s,a) * V(s'))
+                    r_sa = rewards.get(s, {}).get(a, 0.0)
+                    prob_dict = transitions.get(s, {}).get(a, {})
+                    exp_future = sum(prob * v.get(next_s, 0.0) for next_s, prob in prob_dict.items())
+                    q_sa = r_sa + gamma_val * exp_future
+                    if q_sa > best_val:
+                        best_val = q_sa
+
+                if best_val == -float("inf"):
+                    best_val = 0.0
+
+                new_v[s] = best_val
+                delta = max(delta, abs(new_v[s] - v[s]))
+
+            v = new_v
+            iters_done = it + 1
+            if delta < threshold:
+                converged = True
+                break
+
+        # Extract optimal policy
+        policy: Dict[str, str] = {}
+        for s in st_list:
+            best_a = act_list[0] if act_list else ""
+            best_q = -float("inf")
+            for a in act_list:
+                r_sa = rewards.get(s, {}).get(a, 0.0)
+                prob_dict = transitions.get(s, {}).get(a, {})
+                exp_future = sum(prob * v.get(next_s, 0.0) for next_s, prob in prob_dict.items())
+                q_sa = r_sa + gamma_val * exp_future
+                if q_sa > best_q:
+                    best_q = q_sa
+                    best_a = a
+            policy[s] = best_a
+
+        return {
+            "converged": converged,
+            "iterations": iters_done,
+            "state_values": {s: round(v[s], 4) for s in st_list},
+            "optimal_policy": policy,
+            "discount_gamma": gamma_val,
+        }
+
+
+def automata_hopcroft_minimize(
+    states: List[str],
+    alphabet: List[str],
+    initial_state: str,
+    accept_states: List[str],
+    transitions: Dict[str, Dict[str, str]],
+) -> Record:
+    """Minimizes deterministic finite automaton using Hopcroft's partition refinement."""
+    res = HopcroftDFAMinimizer.minimize(states, alphabet, initial_state, accept_states, transitions)
+    res["transitions"] = Record(res["transitions"])
+    return Record(res)
+
+
+def automata_mdp_value_iteration(
+    states: List[str],
+    actions: List[str],
+    transitions: Dict[str, Dict[str, Dict[str, float]]],
+    rewards: Dict[str, Dict[str, float]],
+    gamma: float = 0.9,
+    epsilon: float = 1e-4,
+) -> Record:
+    """Solves MDP optimal policy and value function using Bellman value iteration."""
+    res = MarkovDecisionProcessValueIteration.solve(states, actions, transitions, rewards, gamma=gamma, epsilon=epsilon)
+    res["state_values"] = Record(res["state_values"])
+    res["optimal_policy"] = Record(res["optimal_policy"])
+    return Record(res)
+
+
+

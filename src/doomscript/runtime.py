@@ -3415,6 +3415,13 @@ from doomscript.domains.game.runtime import (
     game_jps_path,
     game_simulate_flock,
     game_mcts_search,
+    HexagonalGridCoordinates,
+    HierarchicalFiniteStateMachineHFSM,
+    game_hex_distance,
+    game_hex_line,
+    game_hex_range,
+    game_hfsm_create,
+    game_hfsm_trigger,
 )
 game_tilemap_create = game_create_tilemap
 game_tilemap_set = game_set_tile
@@ -3490,6 +3497,10 @@ from doomscript.domains.circuit.runtime import (
     RLCTransientLaplaceSolver,
     circuit_design_sallen_key,
     circuit_rlc_laplace_transient,
+    QuineMcCluskeyBooleanMinimizer,
+    SmallSignalDiodeBJTAnalyzer,
+    circuit_quine_mccluskey_minimize,
+    circuit_bjt_operating_point,
 )
 
 from doomscript.domains.chain.runtime import (
@@ -3949,6 +3960,10 @@ from doomscript.domains.automata.runtime import (
     ContextFreeGrammarCYKParser,
     automata_run_multitape_tm,
     automata_cyk_parse,
+    HopcroftDFAMinimizer,
+    MarkovDecisionProcessValueIteration,
+    automata_hopcroft_minimize,
+    automata_mdp_value_iteration,
 )
 
 from doomscript.domains.metrics.runtime import (
@@ -4037,6 +4052,12 @@ from doomscript.domains.dsa.runtime import (
     SplayTreeSelfBalancing,
     dsa_fibonacci_heap_ops,
     dsa_splay_tree_ops,
+    VanEmdeBoasTreeVEB,
+    HeavyLightDecompositionHLD,
+    dsa_veb_tree_ops,
+    dsa_hld_tree,
+    dsa_hld_query_path,
+    dsa_hld_update_node,
 )
 
 from doomscript.domains.ml.runtime import (
@@ -4056,6 +4077,10 @@ from doomscript.domains.ml.runtime import (
     ml_gmm_predict,
     ml_pca_fit,
     ml_pca_transform,
+    IsolationForestAnomalyDetector,
+    DBSCANClusteringEngine,
+    ml_isolation_forest,
+    ml_dbscan,
 )
 
 from doomscript.domains.finance.runtime import (

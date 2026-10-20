@@ -729,6 +729,31 @@ class DsaDomainParser(DomainParser):
         if m_splay:
             return f"set {m_splay.group(2).strip()} to dsa_splay_tree_ops({m_splay.group(1).strip()})"
 
+        # Van Emde Boas operations
+        m_veb = re.match(r"^execute\s+veb\s+tree\s+operations\s+(.+?)\s+with\s+universe\s+(\d+)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if m_veb:
+            ops, u_sz, target = m_veb.group(1).strip(), m_veb.group(2).strip(), m_veb.group(3).strip()
+            return f"set {target} to dsa_veb_tree_ops({u_sz}, {ops})"
+
+        # create hld tree nodes <n> edges <edges> [values <vals>] into <target>
+        m_hld_c = re.match(r"^create\s+hld\s+tree\s+nodes\s+(\d+)\s+edges\s+(.+?)(?:\s+values\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if m_hld_c:
+            n_val, edges, vals, target = m_hld_c.group(1).strip(), m_hld_c.group(2).strip(), m_hld_c.group(3), m_hld_c.group(4).strip()
+            v_arg = f", initial_values={vals.strip()}" if vals else ""
+            return f"set {target} to dsa_hld_tree({n_val}, {edges}{v_arg})"
+
+        # query hld path from <u> to <v> in <tree> into <target>
+        m_hld_q = re.match(r"^query\s+hld\s+path\s+from\s+(.+?)\s+to\s+(.+?)\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        if m_hld_q:
+            u, v, tree, target = m_hld_q.group(1).strip(), m_hld_q.group(2).strip(), m_hld_q.group(3).strip(), m_hld_q.group(4).strip()
+            return f"set {target} to dsa_hld_query_path({tree}, {u}, {v})"
+
+        # update hld node <u> in <tree> to <val>
+        m_hld_u = re.match(r"^update\s+hld\s+node\s+(.+?)\s+in\s+(.+?)\s+to\s+(.+?)$", line.strip(), re.IGNORECASE)
+        if m_hld_u:
+            u, tree, val = m_hld_u.group(1).strip(), m_hld_u.group(2).strip(), m_hld_u.group(3).strip()
+            return f"dsa_hld_update_node({tree}, {u}, {val})"
+
         return None
 
     def parse_block(

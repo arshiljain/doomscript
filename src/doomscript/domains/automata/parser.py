@@ -96,6 +96,29 @@ class AutomataDomainParser(DomainParser):
                 start = f'"{start}"'
             return f"set {target} to automata_cyk_parse({gram}, {start}, {toks})"
 
+        # minimize hopcroft dfa states <states> alphabet <sigma> initial <q0> accept <f> transitions <trans> into <target>
+        m_hop = re.match(
+            r"^minimize\s+hopcroft\s+dfa\s+states\s+(.+?)\s+alphabet\s+(.+?)\s+initial\s+(.+?)\s+accept\s+(.+?)\s+transitions\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_hop:
+            states, sigma, q0, acc, trans, target = m_hop.group(1).strip(), m_hop.group(2).strip(), m_hop.group(3).strip(), m_hop.group(4).strip(), m_hop.group(5).strip(), m_hop.group(6).strip()
+            if not (q0.startswith('"') or q0.startswith("'")):
+                q0 = f'"{q0}"'
+            return f"set {target} to automata_hopcroft_minimize({states}, {sigma}, {q0}, {acc}, {trans})"
+
+        # solve mdp states <states> actions <actions> transitions <trans> rewards <rew> [gamma <gamma>] into <target>
+        m_mdp = re.match(
+            r"^solve\s+mdp\s+states\s+(.+?)\s+actions\s+(.+?)\s+transitions\s+(.+?)\s+rewards\s+(.+?)(?:\s+gamma\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_mdp:
+            states, acts, trans, rew, gamma, target = m_mdp.group(1).strip(), m_mdp.group(2).strip(), m_mdp.group(3).strip(), m_mdp.group(4).strip(), m_mdp.group(5), m_mdp.group(6).strip()
+            g_arg = f", gamma={gamma.strip()}" if gamma else ""
+            return f"set {target} to automata_mdp_value_iteration({states}, {acts}, {trans}, {rew}{g_arg})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

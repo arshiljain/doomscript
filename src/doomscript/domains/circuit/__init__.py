@@ -44,6 +44,10 @@ from doomscript.domains.circuit.runtime import (
     RLCTransientLaplaceSolver,
     circuit_design_sallen_key,
     circuit_rlc_laplace_transient,
+    QuineMcCluskeyBooleanMinimizer,
+    SmallSignalDiodeBJTAnalyzer,
+    circuit_quine_mccluskey_minimize,
+    circuit_bjt_operating_point,
 )
 from doomscript.domains.circuit.parser import CircuitDomainParser
 from doomscript.domains.circuit.exporter import CircuitASTExporter
@@ -148,4 +152,8 @@ __all__ = [
     "RLCTransientLaplaceSolver",
     "circuit_design_sallen_key",
     "circuit_rlc_laplace_transient",
+    "QuineMcCluskeyBooleanMinimizer",
+    "SmallSignalDiodeBJTAnalyzer",
+    "circuit_quine_mccluskey_minimize",
+    "circuit_bjt_operating_point",
 ]

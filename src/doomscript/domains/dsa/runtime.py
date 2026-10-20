@@ -3726,3 +3726,278 @@ def dsa_splay_tree_ops(operations: List[Dict[str, Any]]) -> Any:
     })
 
 
+# ==============================================================================
+# VAN EMDE BOAS (vEB) TREE O(log log U) PRIORITY QUEUE
+# ==============================================================================
+
+class VanEmdeBoasTreeVEB:
+    """Van Emde Boas recursive priority queue tree over universe size U = 2^(2^k)."""
+
+    def __init__(self, u: int = 16):
+        # Round up u to power of 2
+        power = 1
+        while power < u:
+            power <<= 1
+        self.u = max(2, power)
+
+        self.min_val: Optional[int] = None
+        self.max_val: Optional[int] = None
+
+        if self.u == 2:
+            self.summary = None
+            self.clusters = None
+        else:
+            half_power = int(math.ceil(math.log2(self.u) / 2.0))
+            self.u_upper = 1 << half_power
+            self.u_lower = 1 << (int(math.log2(self.u)) - half_power)
+
+            self.summary: Optional[VanEmdeBoasTreeVEB] = VanEmdeBoasTreeVEB(self.u_upper)
+            self.clusters: Optional[List[VanEmdeBoasTreeVEB]] = [
+                VanEmdeBoasTreeVEB(self.u_lower) for _ in range(self.u_upper)
+            ]
+
+    def _high(self, x: int) -> int:
+        return x // self.u_lower
+
+    def _low(self, x: int) -> int:
+        return x % self.u_lower
+
+    def _index(self, h: int, l: int) -> int:
+        return h * self.u_lower + l
+
+    def contains(self, x: int) -> bool:
+        if x == self.min_val or x == self.max_val:
+            return True
+        if self.u == 2 or self.min_val is None:
+            return False
+        return self.clusters[self._high(x)].contains(self._low(x))
+
+    def insert(self, x: int) -> None:
+        if self.min_val is None:
+            self.min_val = x
+            self.max_val = x
+            return
+
+        if x < self.min_val:
+            x, self.min_val = self.min_val, x
+
+        if self.u > 2:
+            h = self._high(x)
+            l = self._low(x)
+            if self.clusters[h].min_val is None:
+                self.summary.insert(h)
+                self.clusters[h].insert(l)
+            else:
+                self.clusters[h].insert(l)
+
+        if x > self.max_val:
+            self.max_val = x
+
+    def successor(self, x: int) -> Optional[int]:
+        if self.u == 2:
+            if x == 0 and self.max_val == 1:
+                return 1
+            return None
+
+        if self.min_val is not None and x < self.min_val:
+            return self.min_val
+
+        h = self._high(x)
+        l = self._low(x)
+        max_in_cluster = self.clusters[h].max_val
+
+        if max_in_cluster is not None and l < max_in_cluster:
+            offset = self.clusters[h].successor(l)
+            return self._index(h, offset)
+
+        succ_cluster = self.summary.successor(h)
+        if succ_cluster is None:
+            return None
+
+        offset = self.clusters[succ_cluster].min_val
+        return self._index(succ_cluster, offset)
+
+    def delete(self, x: int) -> None:
+        if self.min_val == self.max_val:
+            if self.min_val == x:
+                self.min_val = None
+                self.max_val = None
+            return
+
+        if self.u == 2:
+            if x == 0:
+                self.min_val = 1
+            else:
+                self.min_val = 0
+            self.max_val = self.min_val
+            return
+
+        if x == self.min_val:
+            first_cluster = self.summary.min_val
+            if first_cluster is None:
+                self.min_val = None
+                self.max_val = None
+                return
+            x = self._index(first_cluster, self.clusters[first_cluster].min_val)
+            self.min_val = x
+
+        h = self._high(x)
+        l = self._low(x)
+        self.clusters[h].delete(l)
+
+        if self.clusters[h].min_val is None:
+            self.summary.delete(h)
+            if x == self.max_val:
+                summary_max = self.summary.max_val
+                if summary_max is None:
+                    self.max_val = self.min_val
+                else:
+                    self.max_val = self._index(summary_max, self.clusters[summary_max].max_val)
+        elif x == self.max_val:
+            self.max_val = self._index(h, self.clusters[h].max_val)
+
+
+# ==============================================================================
+# HEAVY-LIGHT DECOMPOSITION (HLD) TREE SOLVER
+# ==============================================================================
+
+class HeavyLightDecompositionHLD:
+    """Heavy-Light tree decomposition with iterative Segment Tree for path queries in O(log^2 N)."""
+
+    def __init__(self, n: int, edges: List[Tuple[int, int]], values: Optional[List[float]] = None):
+        self.n = max(1, int(n))
+        self.adj: List[List[int]] = [[] for _ in range(self.n)]
+        for u, v in edges:
+            if 0 <= u < self.n and 0 <= v < self.n:
+                self.adj[u].append(v)
+                self.adj[v].append(u)
+
+        self.parent = [-1] * self.n
+        self.depth = [0] * self.n
+        self.sz = [0] * self.n
+        self.heavy = [-1] * self.n
+        self.head = [0] * self.n
+        self.pos = [0] * self.n
+        self.cur_pos = 0
+
+        # Initial DFS for sizes and heavy edges
+        self._dfs_sz(0, -1, 0)
+        # Second DFS for chain heads and flat position mapping
+        self._dfs_hld(0, 0)
+
+        # Build Segment Tree over flattened node values
+        self.seg_tree = [0.0] * (2 * self.n)
+        if values:
+            for node_idx, val in enumerate(values[:self.n]):
+                self.update_node(node_idx, float(val))
+
+    def _dfs_sz(self, u: int, p: int, d: int) -> None:
+        self.parent[u] = p
+        self.depth[u] = d
+        self.sz[u] = 1
+        max_c_size = 0
+        for v in self.adj[u]:
+            if v != p:
+                self._dfs_sz(v, u, d + 1)
+                self.sz[u] += self.sz[v]
+                if self.sz[v] > max_c_size:
+                    max_c_size = self.sz[v]
+                    self.heavy[u] = v
+
+    def _dfs_hld(self, u: int, h: int) -> None:
+        self.head[u] = h
+        self.pos[u] = self.cur_pos
+        self.cur_pos += 1
+        if self.heavy[u] != -1:
+            self._dfs_hld(self.heavy[u], h)
+        for v in self.adj[u]:
+            if v != self.parent[u] and v != self.heavy[u]:
+                self._dfs_hld(v, v)
+
+    def update_node(self, node: int, val: float) -> None:
+        p = self.pos[node] + self.n
+        self.seg_tree[p] = float(val)
+        p >>= 1
+        while p > 0:
+            self.seg_tree[p] = max(self.seg_tree[p << 1], self.seg_tree[(p << 1) | 1])
+            p >>= 1
+
+    def _query_seg(self, left: int, right: int) -> float:
+        l = left + self.n
+        r = right + self.n + 1
+        res = -float("inf")
+        while l < r:
+            if l & 1:
+                res = max(res, self.seg_tree[l])
+                l += 1
+            if r & 1:
+                r -= 1
+                res = max(res, self.seg_tree[r])
+            l >>= 1
+            r >>= 1
+        return res if res != -float("inf") else 0.0
+
+    def query_path_max(self, u: int, v: int) -> float:
+        """Finds maximum node value along unique path between u and v in O(log^2 N)."""
+        res = -float("inf")
+        while self.head[u] != self.head[v]:
+            if self.depth[self.head[u]] > self.depth[self.head[v]]:
+                u, v = v, u
+            res = max(res, self._query_seg(self.pos[self.head[v]], self.pos[v]))
+            v = self.parent[self.head[v]]
+
+        if self.depth[u] > self.depth[v]:
+            u, v = v, u
+        res = max(res, self._query_seg(self.pos[u], self.pos[v]))
+        return res if res != -float("inf") else 0.0
+
+
+def dsa_veb_tree_ops(universe_size: int, operations: List[Dict[str, Any]]) -> Record:
+    """Executes operations on a Van Emde Boas Priority Queue tree."""
+    veb = VanEmdeBoasTreeVEB(universe_size)
+    results = []
+    for op in operations:
+        action = str(op.get("op", op.get("action", ""))).lower()
+        val = int(op.get("val", op.get("x", 0)))
+        if action == "insert":
+            veb.insert(val)
+        elif action == "delete":
+            veb.delete(val)
+        elif action == "contains":
+            results.append(veb.contains(val))
+        elif action == "successor":
+            results.append(veb.successor(val))
+
+    return Record({
+        "universe_size": veb.u,
+        "min": veb.min_val,
+        "max": veb.max_val,
+        "query_results": results,
+    })
+
+
+def dsa_hld_tree(n_nodes: int, edges: List[Any], initial_values: Optional[List[float]] = None) -> Record:
+    """Initializes a Heavy-Light Tree Decomposition."""
+    edge_pairs = []
+    for e in edges:
+        edge_pairs.append((int(e[0]), int(e[1])))
+    hld = HeavyLightDecompositionHLD(n_nodes, edge_pairs, values=initial_values)
+    return Record({
+        "num_nodes": hld.n,
+        "instance": hld,
+    })
+
+
+def dsa_hld_query_path(hld_record: Any, u: int, v: int) -> float:
+    """Queries max node value along tree path from u to v."""
+    inst = hld_record.instance if hasattr(hld_record, "instance") else hld_record
+    return inst.query_path_max(int(u), int(v))
+
+
+def dsa_hld_update_node(hld_record: Any, u: int, val: float) -> None:
+    """Updates node value in HLD tree."""
+    inst = hld_record.instance if hasattr(hld_record, "instance") else hld_record
+    inst.update_node(int(u), float(val))
+
+
+

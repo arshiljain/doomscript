@@ -36,6 +36,10 @@ from doomscript.domains.ml.runtime import (
     ml_gmm_predict,
     ml_pca_fit,
     ml_pca_transform,
+    IsolationForestAnomalyDetector,
+    DBSCANClusteringEngine,
+    ml_isolation_forest,
+    ml_dbscan,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.ml.exporter import MLASTExporter
@@ -202,5 +206,9 @@ __all__ = [
     "ml_gmm_predict",
     "ml_pca_fit",
     "ml_pca_transform",
+    "IsolationForestAnomalyDetector",
+    "DBSCANClusteringEngine",
+    "ml_isolation_forest",
+    "ml_dbscan",
 ]
 

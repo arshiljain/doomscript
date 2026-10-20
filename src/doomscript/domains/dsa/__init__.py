@@ -19,6 +19,12 @@ from doomscript.domains.dsa.runtime import (
     SplayTreeSelfBalancing,
     dsa_fibonacci_heap_ops,
     dsa_splay_tree_ops,
+    VanEmdeBoasTreeVEB,
+    HeavyLightDecompositionHLD,
+    dsa_veb_tree_ops,
+    dsa_hld_tree,
+    dsa_hld_query_path,
+    dsa_hld_update_node,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.dsa.exporter import DsaASTExporter
@@ -333,4 +339,10 @@ __all__ = [
     "SplayTreeSelfBalancing",
     "dsa_fibonacci_heap_ops",
     "dsa_splay_tree_ops",
+    "VanEmdeBoasTreeVEB",
+    "HeavyLightDecompositionHLD",
+    "dsa_veb_tree_ops",
+    "dsa_hld_tree",
+    "dsa_hld_query_path",
+    "dsa_hld_update_node",
 ]
