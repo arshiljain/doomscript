@@ -2,6 +2,7 @@
 
 import math
 from typing import Any, Dict, List, Optional, Tuple, Union
+from doomscript.runtime import Record
 from doomscript.domains.base import DomainRuntime, DomainIR
 from doomscript.domains.geo.spec import (
     GeoPointSpec,
@@ -1273,3 +1274,235 @@ class IsochroneContour:
             "reachable_nodes": reachable_nodes,
             "contour_polygon": hull_pts,
         }
+
+
+# ==============================================================================
+# VINCENTY ELLIPSOIDAL GEODESICS, DOUGLAS-PEUCKER & SUTHERLAND-HODGMAN CLIPPING
+# ==============================================================================
+
+class VincentyGeodesicDistance:
+    """High-precision geodesic distance on WGS-84 ellipsoid using Vincenty's inverse formula."""
+
+    A_WGS84 = 6378137.0  # meters
+    F_WGS84 = 1.0 / 298.257223563
+    B_WGS84 = 6356752.314245
+
+    @classmethod
+    def distance(cls, lat1: float, lon1: float, lat2: float, lon2: float) -> Dict[str, Any]:
+        if abs(lat1 - lat2) < 1e-11 and abs(lon1 - lon2) < 1e-11:
+            return {"distance_meters": 0.0, "distance_km": 0.0, "converged": True}
+
+        a = cls.A_WGS84
+        f = cls.F_WGS84
+        b = cls.B_WGS84
+
+        phi1 = math.radians(lat1)
+        phi2 = math.radians(lat2)
+        l_diff = math.radians(lon2 - lon1)
+
+        u1 = math.atan((1.0 - f) * math.tan(phi1))
+        u2 = math.atan((1.0 - f) * math.tan(phi2))
+        sin_u1 = math.sin(u1)
+        cos_u1 = math.cos(u1)
+        sin_u2 = math.sin(u2)
+        cos_u2 = math.cos(u2)
+
+        lam = l_diff
+        converged = False
+
+        for _ in range(100):
+            sin_lam = math.sin(lam)
+            cos_lam = math.cos(lam)
+
+            sin_sigma = math.sqrt(
+                (cos_u2 * sin_lam) ** 2
+                + (cos_u1 * sin_u2 - sin_u1 * cos_u2 * cos_lam) ** 2
+            )
+            if sin_sigma < 1e-12:
+                return {"distance_meters": 0.0, "distance_km": 0.0, "converged": True}
+
+            cos_sigma = sin_u1 * sin_u2 + cos_u1 * cos_u2 * cos_lam
+            sigma = math.atan2(sin_sigma, cos_sigma)
+
+            sin_alpha = (cos_u1 * cos_u2 * sin_lam) / sin_sigma
+            cos2_alpha = 1.0 - sin_alpha ** 2
+
+            cos2_sigmam = (
+                cos_sigma - (2.0 * sin_u1 * sin_u2) / cos2_alpha
+                if abs(cos2_alpha) > 1e-12
+                else 0.0
+            )
+
+            c_val = (f / 16.0) * cos2_alpha * (4.0 + f * (4.0 - 3.0 * cos2_alpha))
+            lam_prev = lam
+            lam = l_diff + (1.0 - c_val) * f * sin_alpha * (
+                sigma
+                + c_val
+                * sin_sigma
+                * (
+                    cos2_sigmam
+                    + c_val * cos_sigma * (-1.0 + 2.0 * (cos2_sigmam ** 2))
+                )
+            )
+
+            if abs(lam - lam_prev) < 1e-12:
+                converged = True
+                break
+
+        u_sq = cos2_alpha * ((a ** 2 - b ** 2) / (b ** 2))
+        a_param = 1.0 + (u_sq / 16384.0) * (
+            4096.0 + u_sq * (-768.0 + u_sq * (320.0 - 175.0 * u_sq))
+        )
+        b_param = (u_sq / 1024.0) * (
+            256.0 + u_sq * (-128.0 + u_sq * (74.0 - 47.0 * u_sq))
+        )
+        delta_sigma = (
+            b_param
+            * sin_sigma
+            * (
+                cos2_sigmam
+                + (b_param / 4.0)
+                * (
+                    cos_sigma * (-1.0 + 2.0 * (cos2_sigmam ** 2))
+                    - (b_param / 6.0)
+                    * cos2_sigmam
+                    * (-3.0 + 4.0 * (sin_sigma ** 2))
+                    * (-3.0 + 4.0 * (cos2_sigmam ** 2))
+                )
+            )
+        )
+
+        dist_m = b * a_param * (sigma - delta_sigma)
+        return {
+            "distance_meters": round(dist_m, 3),
+            "distance_km": round(dist_m / 1000.0, 4),
+            "converged": converged,
+        }
+
+
+class DouglasPeuckerSimplifier:
+    """Ramer-Douglas-Peucker polyline and polygon decimation algorithm."""
+
+    @classmethod
+    def _perpendicular_distance(
+        cls, pt: List[float], line_start: List[float], line_end: List[float]
+    ) -> float:
+        dx = line_end[0] - line_start[0]
+        dy = line_end[1] - line_start[1]
+        mag_sq = dx * dx + dy * dy
+        if mag_sq < 1e-12:
+            return math.sqrt((pt[0] - line_start[0]) ** 2 + (pt[1] - line_start[1]) ** 2)
+        num = abs(dx * (line_start[1] - pt[1]) - (line_start[0] - pt[0]) * dy)
+        return num / math.sqrt(mag_sq)
+
+    @classmethod
+    def simplify(cls, points: List[List[float]], epsilon: float) -> Dict[str, Any]:
+        eps = max(1e-9, float(epsilon))
+        if len(points) <= 2:
+            return {
+                "simplified_coordinates": points,
+                "original_count": len(points),
+                "simplified_count": len(points),
+                "reduction_ratio": 0.0,
+            }
+
+        def _rdp(pts: List[List[float]]) -> List[List[float]]:
+            if len(pts) <= 2:
+                return pts
+            d_max = 0.0
+            idx = 0
+            start = pts[0]
+            end = pts[-1]
+            for i in range(1, len(pts) - 1):
+                d = cls._perpendicular_distance(pts[i], start, end)
+                if d > d_max:
+                    d_max = d
+                    idx = i
+
+            if d_max > eps:
+                rec_left = _rdp(pts[: idx + 1])
+                rec_right = _rdp(pts[idx:])
+                return rec_left[:-1] + rec_right
+            else:
+                return [start, end]
+
+        simplified = _rdp(points)
+        orig_len = len(points)
+        simp_len = len(simplified)
+        red_ratio = round((orig_len - simp_len) / orig_len, 4) if orig_len > 0 else 0.0
+
+        return {
+            "simplified_coordinates": simplified,
+            "original_count": orig_len,
+            "simplified_count": simp_len,
+            "reduction_ratio": red_ratio,
+        }
+
+
+class PolygonClippingSutherlandHodgman:
+    """Sutherland-Hodgman convex polygon clipping algorithm."""
+
+    @classmethod
+    def clip(
+        cls, subject_polygon: List[List[float]], clip_polygon: List[List[float]]
+    ) -> Dict[str, Any]:
+        output_list = list(subject_polygon)
+
+        def _is_inside(cp1: List[float], cp2: List[float], p: List[float]) -> bool:
+            return (cp2[0] - cp1[0]) * (p[1] - cp1[1]) - (cp2[1] - cp1[1]) * (p[0] - cp1[0]) >= -1e-9
+
+        def _intersection(
+            cp1: List[float], cp2: List[float], s: List[float], e: List[float]
+        ) -> List[float]:
+            dc = [cp1[0] - cp2[0], cp1[1] - cp2[1]]
+            dp = [s[0] - e[0], s[1] - e[1]]
+            n1 = cp1[0] * cp2[1] - cp1[1] * cp2[0]
+            n2 = s[0] * e[1] - s[1] * e[0]
+            denom = dc[0] * dp[1] - dc[1] * dp[0]
+            if abs(denom) < 1e-12:
+                return [round(s[0], 4), round(s[1], 4)]
+            x = (n1 * dp[0] - n2 * dc[0]) / denom
+            y = (n1 * dp[1] - n2 * dc[1]) / denom
+            return [round(x, 4), round(y, 4)]
+
+        cp_len = len(clip_polygon)
+        for i in range(cp_len):
+            cp1 = clip_polygon[i]
+            cp2 = clip_polygon[(i + 1) % cp_len]
+            input_list = output_list
+            output_list = []
+            if not input_list:
+                break
+
+            s = input_list[-1]
+            for e in input_list:
+                if _is_inside(cp1, cp2, e):
+                    if not _is_inside(cp1, cp2, s):
+                        output_list.append(_intersection(cp1, cp2, s, e))
+                    output_list.append(e)
+                elif _is_inside(cp1, cp2, s):
+                    output_list.append(_intersection(cp1, cp2, s, e))
+                s = e
+
+        return {
+            "clipped_polygon": output_list,
+            "num_vertices": len(output_list),
+        }
+
+
+def geo_vincenty_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> Any:
+    """Computes high-precision WGS-84 ellipsoidal distance using Vincenty's formula."""
+    return Record(VincentyGeodesicDistance.distance(lat1, lon1, lat2, lon2))
+
+
+def geo_douglas_peucker(points: List[List[float]], epsilon: float) -> Any:
+    """Decimates polyline or polygon using the Douglas-Peucker algorithm."""
+    return Record(DouglasPeuckerSimplifier.simplify(points, epsilon))
+
+
+def geo_sutherland_hodgman_clip(
+    subject_polygon: List[List[float]], clip_polygon: List[List[float]]
+) -> Any:
+    """Clips a polygon against a convex boundary using Sutherland-Hodgman."""
+    return Record(PolygonClippingSutherlandHodgman.clip(subject_polygon, clip_polygon))
+

@@ -7,6 +7,7 @@ import os
 import shutil
 import time
 from pathlib import Path
+from doomscript.runtime import Record
 from doomscript.domains.base import DomainRuntime, DomainIR
 from doomscript.domains.cloud.spec import (
     CloudConnectSpec,
@@ -912,3 +913,211 @@ def cloud_cas_put(data: bytes) -> str:
 def cloud_evaluate_lifecycle(objects: List[Dict[str, Any]], rules: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Evaluates bucket lifecycle policies."""
     return BucketLifecycleEngine.evaluate(objects, rules)
+
+
+# ==============================================================================
+# TOKEN BUCKET RATE LIMITER, CIRCUIT BREAKER & RAFT CONSENSUS SIMULATOR
+# ==============================================================================
+
+class TokenBucketRateLimiter:
+    """Token Bucket rate limiter with burst capacity and fractional token refills."""
+
+    def __init__(self, capacity: float = 10.0, refill_rate: float = 2.0):
+        self.capacity = float(capacity)
+        self.refill_rate = float(refill_rate)  # tokens per second
+        self.tokens = self.capacity
+        self.last_refill = time.time()
+
+    def acquire(self, requested: float = 1.0) -> Dict[str, Any]:
+        """Attempts to acquire requested tokens, returning allowed status and stats."""
+        now = time.time()
+        elapsed = max(0.0, now - self.last_refill)
+        self.last_refill = now
+
+        # Refill tokens up to capacity
+        self.tokens = min(self.capacity, self.tokens + elapsed * self.refill_rate)
+
+        req = float(requested)
+        if self.tokens >= req:
+            self.tokens -= req
+            return {
+                "allowed": True,
+                "remaining_tokens": round(self.tokens, 4),
+                "retry_after_sec": 0.0,
+            }
+        else:
+            deficit = req - self.tokens
+            retry_after = round(deficit / self.refill_rate, 4) if self.refill_rate > 0 else float("inf")
+            return {
+                "allowed": False,
+                "remaining_tokens": round(self.tokens, 4),
+                "retry_after_sec": retry_after,
+            }
+
+
+class CircuitBreakerResilience:
+    """Martin Fowler's Circuit Breaker state machine (CLOSED, OPEN, HALF_OPEN)."""
+
+    def __init__(
+        self,
+        failure_threshold: int = 3,
+        recovery_timeout_sec: float = 5.0,
+        half_open_success_threshold: int = 2,
+    ):
+        self.failure_threshold = max(1, int(failure_threshold))
+        self.recovery_timeout = float(recovery_timeout_sec)
+        self.half_open_threshold = max(1, int(half_open_success_threshold))
+
+        self.state = "CLOSED"  # CLOSED, OPEN, HALF_OPEN
+        self.consecutive_failures = 0
+        self.consecutive_successes = 0
+        self.last_state_change = time.time()
+
+    def record_success(self) -> None:
+        """Records a successful operation."""
+        if self.state == "HALF_OPEN":
+            self.consecutive_successes += 1
+            if self.consecutive_successes >= self.half_open_threshold:
+                self.state = "CLOSED"
+                self.consecutive_failures = 0
+                self.consecutive_successes = 0
+                self.last_state_change = time.time()
+        elif self.state == "CLOSED":
+            self.consecutive_failures = 0
+
+    def record_failure(self) -> None:
+        """Records a failed operation."""
+        self.consecutive_failures += 1
+        if self.state == "HALF_OPEN" or self.consecutive_failures >= self.failure_threshold:
+            self.state = "OPEN"
+            self.consecutive_successes = 0
+            self.last_state_change = time.time()
+
+    def can_execute(self) -> bool:
+        """Determines if a request should be permitted."""
+        now = time.time()
+        if self.state == "OPEN":
+            if now - self.last_state_change >= self.recovery_timeout:
+                self.state = "HALF_OPEN"
+                self.consecutive_successes = 0
+                self.last_state_change = now
+                return True
+            return False
+        return True
+
+    def get_stats(self) -> Dict[str, Any]:
+        return {
+            "state": self.state,
+            "consecutive_failures": self.consecutive_failures,
+            "consecutive_successes": self.consecutive_successes,
+            "can_execute": self.can_execute(),
+        }
+
+
+class RaftConsensusSimulator:
+    """Raft consensus protocol state machine and replicated log simulator."""
+
+    def __init__(self, node_id: str, peers: List[str]):
+        self.node_id = str(node_id)
+        self.peers = [str(p) for p in peers if str(p) != self.node_id]
+
+        # Persistent state
+        self.current_term = 0
+        self.voted_for: Optional[str] = None
+        self.log: List[Dict[str, Any]] = []  # [{term, index, command}]
+
+        # Volatile state
+        self.commit_index = 0
+        self.last_applied = 0
+        self.role = "FOLLOWER"  # FOLLOWER, CANDIDATE, LEADER
+
+        # Cluster vote tracker
+        self.votes_received: Set[str] = set()
+
+    def start_election(self) -> Dict[str, Any]:
+        """Transitions node to CANDIDATE and increments term."""
+        self.role = "CANDIDATE"
+        self.current_term += 1
+        self.voted_for = self.node_id
+        self.votes_received = {self.node_id}
+
+        quorum = (len(self.peers) + 1) // 2 + 1
+        is_leader = len(self.votes_received) >= quorum
+        if is_leader:
+            self.role = "LEADER"
+
+        return {
+            "node_id": self.node_id,
+            "term": self.current_term,
+            "role": self.role,
+            "votes_count": len(self.votes_received),
+            "quorum_required": quorum,
+            "is_leader": is_leader,
+        }
+
+    def append_entry(self, command: str) -> Dict[str, Any]:
+        """Appends a log entry if node is LEADER."""
+        if self.role != "LEADER":
+            return {"success": False, "reason": "Not the leader"}
+
+        entry_idx = len(self.log) + 1
+        entry = {
+            "term": self.current_term,
+            "index": entry_idx,
+            "command": command,
+        }
+        self.log.append(entry)
+        self.commit_index = entry_idx
+        return {
+            "success": True,
+            "entry_index": entry_idx,
+            "term": self.current_term,
+            "command": command,
+        }
+
+
+def cloud_rate_limiter_create(capacity: float = 10.0, refill_rate: float = 2.0) -> Any:
+    """Creates a Token Bucket distributed rate limiter."""
+    limiter = TokenBucketRateLimiter(capacity=capacity, refill_rate=refill_rate)
+    return Record({
+        "capacity": limiter.capacity,
+        "refill_rate": limiter.refill_rate,
+        "instance": limiter,
+    })
+
+
+def cloud_rate_limiter_acquire(limiter: Any, tokens: float = 1.0) -> Any:
+    """Attempts to acquire tokens from rate limiter."""
+    inst = limiter.instance if hasattr(limiter, "instance") else limiter
+    return Record(inst.acquire(tokens))
+
+
+def cloud_circuit_breaker_create(
+    failure_threshold: int = 3, recovery_timeout_sec: float = 5.0
+) -> Any:
+    """Creates a resilience Circuit Breaker."""
+    cb = CircuitBreakerResilience(failure_threshold=failure_threshold, recovery_timeout_sec=recovery_timeout_sec)
+    return Record({
+        "failure_threshold": cb.failure_threshold,
+        "recovery_timeout": cb.recovery_timeout,
+        "state": cb.state,
+        "instance": cb,
+    })
+
+
+def cloud_raft_create(node_id: str, peers: List[str]) -> Any:
+    """Creates a Raft consensus node."""
+    raft = RaftConsensusSimulator(node_id=node_id, peers=peers)
+    return Record({
+        "node_id": raft.node_id,
+        "term": raft.current_term,
+        "role": raft.role,
+        "instance": raft,
+    })
+
+
+def cloud_raft_elect(raft: Any) -> Any:
+    """Triggers election on Raft consensus node."""
+    inst = raft.instance if hasattr(raft, "instance") else raft
+    return Record(inst.start_election())
+

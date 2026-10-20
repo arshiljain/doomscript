@@ -54,6 +54,11 @@ from doomscript.domains.geo.runtime import (
     DelaunayTriangulator,
     WebMercatorProjection,
     IsochroneContour,
+    VincentyGeodesicDistance,
+    DouglasPeuckerSimplifier,
+    PolygonClippingSutherlandHodgman,
+    geo_douglas_peucker,
+    geo_sutherland_hodgman_clip,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.geo.exporter import GeoASTExporter
@@ -125,6 +130,8 @@ class GeoDomain(DomainContract):
     ]
 
     def can_handle_line(self, line: str) -> bool:
+        if self.parser.parse_inspect(line, 0) is not None or self.parser.parse_operation(line, 0) is not None:
+            return True
         s = line.strip().lower()
         return (
             s.startswith("point ")
@@ -233,5 +240,10 @@ __all__ = [
     "DelaunayTriangulator",
     "WebMercatorProjection",
     "IsochroneContour",
+    "VincentyGeodesicDistance",
+    "DouglasPeuckerSimplifier",
+    "PolygonClippingSutherlandHodgman",
+    "geo_douglas_peucker",
+    "geo_sutherland_hodgman_clip",
 ]
 

@@ -2944,6 +2944,12 @@ from doomscript.domains.web.runtime import (
     web_parse_content_type,
     web_is_valid_url,
     web_generate_curl_command,
+    WebFormEncoderAndMultipart,
+    HttpHeaderParserAndNegotiator,
+    UriTemplateRFC6570,
+    web_multipart_encode,
+    web_content_negotiate,
+    web_uri_template_expand,
 )
 
 from doomscript.domains.audio.runtime import (
@@ -3170,6 +3176,14 @@ from doomscript.domains.cloud.runtime import (
     cloud_multipart_initiate,
     cloud_cas_put,
     cloud_evaluate_lifecycle,
+    TokenBucketRateLimiter,
+    CircuitBreakerResilience,
+    RaftConsensusSimulator,
+    cloud_rate_limiter_create,
+    cloud_rate_limiter_acquire,
+    cloud_circuit_breaker_create,
+    cloud_raft_create,
+    cloud_raft_elect,
 )
 
 from doomscript.domains.research.runtime import (
@@ -3865,6 +3879,12 @@ from doomscript.domains.finance.runtime import (
     AnalyticalGreeks,
     BinomialCoxRossRubinstein,
     MarkowitzOptimizer,
+    VasicekShortRateSimulator,
+    BondConvexityAndMacaulayDuration,
+    HestonStochasticVolatility,
+    fin_vasicek_simulate,
+    fin_bond_duration_convexity,
+    fin_heston_simulate,
 )
 
 from doomscript.domains.graph.runtime import (
@@ -3873,6 +3893,12 @@ from doomscript.domains.graph.runtime import (
     graph_hopcroft_karp,
     graph_eulerian_path,
     graph_boruvka_mst,
+    HopcroftKarpBipartiteMatching,
+    TarjanBridgeAndArticulation,
+    HierholzerEulerianCircuit,
+    graph_bipartite_matching,
+    graph_find_bridges_and_cuts,
+    graph_eulerian_trail,
 )
 
 from doomscript.domains.net.runtime import (
@@ -3907,6 +3933,12 @@ from doomscript.domains.geo.runtime import (
     DelaunayTriangulator,
     WebMercatorProjection,
     IsochroneContour,
+    VincentyGeodesicDistance,
+    DouglasPeuckerSimplifier,
+    PolygonClippingSutherlandHodgman,
+    geo_douglas_peucker,
+    geo_sutherland_hodgman_clip,
+    geo_vincenty_distance,
 )
 
 from doomscript.domains.nlp.runtime import (

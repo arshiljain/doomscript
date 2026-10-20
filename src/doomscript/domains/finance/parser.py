@@ -380,6 +380,36 @@ class FinanceDomainParser(DomainParser):
             target = binom_m.group(9).strip()
             return f"set {target} to finance_binomial_price({spot}, {strike}, {t}, {r}, {v}, steps={steps}, option_type={opt_type}, is_american={is_amer})"
 
+        # simulate vasicek rate from r0 <r0> speed <a> mean <b> vol <sigma> expiry <t> into <target>
+        m_vas = re.match(
+            r"^simulate\s+vasicek\s+rate\s+from\s+r0\s+(.+?)\s+speed\s+(.+?)\s+mean\s+(.+?)\s+vol\s+(.+?)\s+expiry\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_vas:
+            r0, a, b, sigma, t, target = m_vas.group(1).strip(), m_vas.group(2).strip(), m_vas.group(3).strip(), m_vas.group(4).strip(), m_vas.group(5).strip(), m_vas.group(6).strip()
+            return f"set {target} to fin_vasicek_simulate({r0}, {a}, {b}, {sigma}, {t})"
+
+        # analyze bond duration with face <f> coupon <c> maturity <t> ytm <y> into <target>
+        m_bond = re.match(
+            r"^analyze\s+bond\s+duration\s+with\s+face\s+(.+?)\s+coupon\s+(.+?)\s+maturity\s+(.+?)\s+ytm\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_bond:
+            f, c, t, y, target = m_bond.group(1).strip(), m_bond.group(2).strip(), m_bond.group(3).strip(), m_bond.group(4).strip(), m_bond.group(5).strip()
+            return f"set {target} to fin_bond_duration_convexity({f}, {c}, {t}, {y})"
+
+        # simulate heston volatility spot <s0> vol <v0> kappa <k> theta <th> xi <xi> rho <rho> into <target>
+        m_heston = re.match(
+            r"^simulate\s+heston\s+volatility\s+spot\s+(.+?)\s+vol\s+(.+?)\s+kappa\s+(.+?)\s+theta\s+(.+?)\s+xi\s+(.+?)\s+rho\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_heston:
+            s0, v0, k, th, xi, rho, target = m_heston.group(1).strip(), m_heston.group(2).strip(), m_heston.group(3).strip(), m_heston.group(4).strip(), m_heston.group(5).strip(), m_heston.group(6).strip(), m_heston.group(7).strip()
+            return f"set {target} to fin_heston_simulate({s0}, {v0}, {k}, {th}, {xi}, {rho})"
+
         return None
 
     def parse_block(

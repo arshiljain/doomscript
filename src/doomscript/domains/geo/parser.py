@@ -361,6 +361,36 @@ class GeoDomainParser(DomainParser):
             p1, p2, target = m_rlb.group(1).strip(), m_rlb.group(2).strip(), m_rlb.group(3).strip()
             return f"set {target} to geo_rhumb_line_bearing({p1}, {p2})"
 
+        # calculate vincenty distance from lat <lat1> lon <lon1> to lat <lat2> lon <lon2> into <target>
+        m_vinc = re.match(
+            r"^calculate\s+vincenty\s+distance\s+from\s+lat\s+(.+?)\s+lon\s+(.+?)\s+to\s+lat\s+(.+?)\s+lon\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_vinc:
+            lat1, lon1, lat2, lon2, target = m_vinc.group(1).strip(), m_vinc.group(2).strip(), m_vinc.group(3).strip(), m_vinc.group(4).strip(), m_vinc.group(5).strip()
+            return f"set {target} to geo_vincenty_distance({lat1}, {lon1}, {lat2}, {lon2})"
+
+        # simplify polyline <pts> with epsilon <eps> into <target>
+        m_dp = re.match(
+            r"^simplify\s+polyline\s+(.+?)\s+with\s+epsilon\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_dp:
+            pts, eps, target = m_dp.group(1).strip(), m_dp.group(2).strip(), m_dp.group(3).strip()
+            return f"set {target} to geo_douglas_peucker({pts}, {eps})"
+
+        # clip polygon <subject> against <clipper> into <target>
+        m_clip = re.match(
+            r"^clip\s+polygon\s+(.+?)\s+against\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_clip:
+            subj, clip, target = m_clip.group(1).strip(), m_clip.group(2).strip(), m_clip.group(3).strip()
+            return f"set {target} to geo_sutherland_hodgman_clip({subj}, {clip})"
+
         return None
 
     def parse_block(

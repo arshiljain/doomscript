@@ -48,6 +48,12 @@ from doomscript.domains.web.runtime import (
     DOMElement,
     CSSSelectorEngine,
     RFC6265CookieJar,
+    WebFormEncoderAndMultipart,
+    HttpHeaderParserAndNegotiator,
+    UriTemplateRFC6570,
+    web_multipart_encode,
+    web_content_negotiate,
+    web_uri_template_expand,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.web.exporter import WebASTExporter
@@ -119,6 +125,8 @@ class WebDomain(DomainContract):
     ]
 
     def can_handle_line(self, line: str) -> bool:
+        if self.parser.parse_inspect(line, 0) is not None or self.parser.parse_operation(line, 0) is not None:
+            return True
         s = line.strip().lower()
         if (
             s.startswith("open webpage ")
@@ -236,4 +244,10 @@ __all__ = [
     "DOMElement",
     "CSSSelectorEngine",
     "RFC6265CookieJar",
+    "WebFormEncoderAndMultipart",
+    "HttpHeaderParserAndNegotiator",
+    "UriTemplateRFC6570",
+    "web_multipart_encode",
+    "web_content_negotiate",
+    "web_uri_template_expand",
 ]

@@ -54,6 +54,14 @@ from doomscript.domains.cloud.runtime import (
     cloud_multipart_initiate,
     cloud_cas_put,
     cloud_evaluate_lifecycle,
+    TokenBucketRateLimiter,
+    CircuitBreakerResilience,
+    RaftConsensusSimulator,
+    cloud_rate_limiter_create,
+    cloud_rate_limiter_acquire,
+    cloud_circuit_breaker_create,
+    cloud_raft_create,
+    cloud_raft_elect,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.cloud.exporter import CloudASTExporter
@@ -112,6 +120,8 @@ class CloudDomain(DomainContract):
     ]
 
     def can_handle_line(self, line: str) -> bool:
+        if self.parser.parse_inspect(line, 0) is not None or self.parser.parse_operation(line, 0) is not None:
+            return True
         s = line.strip().lower()
         if (
             s.startswith("connect to bucket ")
@@ -221,4 +231,12 @@ __all__ = [
     "cloud_multipart_initiate",
     "cloud_cas_put",
     "cloud_evaluate_lifecycle",
+    "TokenBucketRateLimiter",
+    "CircuitBreakerResilience",
+    "RaftConsensusSimulator",
+    "cloud_rate_limiter_create",
+    "cloud_rate_limiter_acquire",
+    "cloud_circuit_breaker_create",
+    "cloud_raft_create",
+    "cloud_raft_elect",
 ]

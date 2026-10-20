@@ -1408,3 +1408,219 @@ def finance_binomial_price(
     from doomscript.runtime import Record
     res = BinomialCoxRossRubinstein.price(float(S0), float(K), float(T), float(r), float(sigma), int(steps), option_type, bool(is_american))
     return Record(res)
+
+
+# ==============================================================================
+# VASICEK INTEREST RATES, BOND CONVEXITY/DURATION & HESTON STOCHASTIC VOLATILITY
+# ==============================================================================
+
+class VasicekShortRateSimulator:
+    """Vasicek mean-reverting interest rate model: dr_t = a*(b - r_t)*dt + sigma*dW_t."""
+
+    @classmethod
+    def simulate_path(
+        cls,
+        r0: float,
+        a: float,
+        b: float,
+        sigma: float,
+        t_years: float = 1.0,
+        steps: int = 100,
+        seed: Optional[int] = 42,
+    ) -> Dict[str, Any]:
+        dt = float(t_years) / max(1, steps)
+        sqrt_dt = math.sqrt(dt)
+        import random
+        rng = random.Random(seed)
+
+        rates = [float(r0)]
+        curr_r = float(r0)
+
+        for _ in range(steps):
+            z = rng.gauss(0.0, 1.0)
+            dr = a * (b - curr_r) * dt + sigma * sqrt_dt * z
+            curr_r += dr
+            rates.append(round(curr_r, 6))
+
+        # Analytical zero-coupon bond yield curve for maturities 1..10 years
+        yield_curve = []
+        for maturity in range(1, 11):
+            tau = float(maturity)
+            b_factor = (1.0 - math.exp(-a * tau)) / a if a > 0 else tau
+            term1 = (b - (sigma ** 2) / (2.0 * a ** 2)) * (b_factor - tau) if a > 0 else 0.0
+            term2 = ((sigma ** 2) * (b_factor ** 2)) / (4.0 * a) if a > 0 else 0.0
+            a_factor = math.exp(term1 - term2)
+            p_tau = a_factor * math.exp(-b_factor * r0)
+            yield_rate = -math.log(max(1e-12, p_tau)) / tau
+            yield_curve.append({
+                "maturity_years": maturity,
+                "bond_price": round(p_tau, 4),
+                "yield": round(yield_rate, 4),
+            })
+
+        return {
+            "initial_rate": r0,
+            "mean_reversion_speed": a,
+            "long_term_mean": b,
+            "volatility": sigma,
+            "final_rate": rates[-1],
+            "trajectory": rates,
+            "yield_curve": yield_curve,
+        }
+
+
+class BondConvexityAndMacaulayDuration:
+    """Fixed-income Macaulay duration, modified duration, dollar duration (DV01), and convexity."""
+
+    @classmethod
+    def analyze(
+        cls,
+        face_value: float = 1000.0,
+        coupon_rate: float = 0.05,
+        maturity_years: float = 5.0,
+        ytm: float = 0.04,
+        frequency: int = 2,
+    ) -> Dict[str, Any]:
+        f = float(face_value)
+        c = float(coupon_rate)
+        t = float(maturity_years)
+        y = float(ytm)
+        m = max(1, int(frequency))
+
+        n_periods = int(round(t * m))
+        c_period = (f * c) / m
+        y_period = y / m
+
+        cash_flows = []
+        pv_cfs = []
+        weighted_times = []
+        convexity_terms = []
+
+        bond_price = 0.0
+
+        for i in range(1, n_periods + 1):
+            time_year = i / m
+            cf = c_period if i < n_periods else c_period + f
+            discount = (1.0 + y_period) ** i
+            pv = cf / discount
+
+            bond_price += pv
+            cash_flows.append(round(cf, 2))
+            pv_cfs.append(pv)
+            weighted_times.append(time_year * pv)
+            convexity_terms.append(time_year * (time_year + 1.0 / m) * pv)
+
+        mac_duration = sum(weighted_times) / bond_price if bond_price > 0 else 0.0
+        mod_duration = mac_duration / (1.0 + y_period)
+        dv01 = mod_duration * bond_price * 0.0001
+        convexity = (
+            sum(convexity_terms) / (bond_price * ((1.0 + y_period) ** 2))
+            if bond_price > 0
+            else 0.0
+        )
+
+        return {
+            "bond_price": round(bond_price, 4),
+            "macaulay_duration": round(mac_duration, 4),
+            "modified_duration": round(mod_duration, 4),
+            "dv01": round(dv01, 6),
+            "convexity": round(convexity, 4),
+            "periods_count": n_periods,
+            "cash_flows": cash_flows,
+        }
+
+
+class HestonStochasticVolatility:
+    """Heston stochastic volatility simulation for derivative pricing and smiles."""
+
+    @classmethod
+    def simulate(
+        cls,
+        s0: float = 100.0,
+        v0: float = 0.04,
+        kappa: float = 2.0,
+        theta: float = 0.04,
+        xi: float = 0.3,
+        rho: float = -0.7,
+        t_years: float = 1.0,
+        steps: int = 100,
+        seed: Optional[int] = 42,
+    ) -> Dict[str, Any]:
+        dt = float(t_years) / max(1, steps)
+        sqrt_dt = math.sqrt(dt)
+        import random
+        rng = random.Random(seed)
+
+        prices = [float(s0)]
+        variances = [float(v0)]
+
+        curr_s = float(s0)
+        curr_v = float(v0)
+
+        for _ in range(steps):
+            z1 = rng.gauss(0.0, 1.0)
+            z2 = rng.gauss(0.0, 1.0)
+            # Correlate standard normals
+            zv = z1
+            zs = rho * z1 + math.sqrt(max(0.0, 1.0 - rho ** 2)) * z2
+
+            v_pos = max(0.0, curr_v)
+            sqrt_v = math.sqrt(v_pos)
+
+            # Euler discretization with reflection
+            ds = curr_s * sqrt_v * sqrt_dt * zs
+            dv = kappa * (theta - v_pos) * dt + xi * sqrt_v * sqrt_dt * zv
+
+            curr_s = max(0.01, curr_s + ds)
+            curr_v = abs(curr_v + dv)  # Reflection for Feller condition
+
+            prices.append(round(curr_s, 4))
+            variances.append(round(curr_v, 6))
+
+        return {
+            "initial_price": s0,
+            "final_price": prices[-1],
+            "initial_variance": v0,
+            "final_variance": variances[-1],
+            "mean_reversion_kappa": kappa,
+            "long_term_variance_theta": theta,
+            "vol_of_vol_xi": xi,
+            "correlation_rho": rho,
+            "price_trajectory": prices,
+            "variance_trajectory": variances,
+        }
+
+
+def fin_vasicek_simulate(
+    r0: float, a: float, b: float, sigma: float, t_years: float = 1.0, steps: int = 100
+) -> Any:
+    """Simulates Vasicek short rate path and analytical yield curve."""
+    from doomscript.runtime import Record
+    res = VasicekShortRateSimulator.simulate_path(r0, a, b, sigma, t_years=t_years, steps=steps)
+    return Record(res)
+
+
+def fin_bond_duration_convexity(
+    face_value: float, coupon_rate: float, maturity_years: float, ytm: float, freq: int = 2
+) -> Any:
+    """Computes Macaulay duration, modified duration, DV01, and convexity of a coupon bond."""
+    from doomscript.runtime import Record
+    res = BondConvexityAndMacaulayDuration.analyze(face_value, coupon_rate, maturity_years, ytm, frequency=freq)
+    return Record(res)
+
+
+def fin_heston_simulate(
+    s0: float,
+    v0: float,
+    kappa: float,
+    theta: float,
+    xi: float,
+    rho: float,
+    t_years: float = 1.0,
+    steps: int = 100,
+) -> Any:
+    """Simulates Heston stochastic volatility path."""
+    from doomscript.runtime import Record
+    res = HestonStochasticVolatility.simulate(s0, v0, kappa, theta, xi, rho, t_years=t_years, steps=steps)
+    return Record(res)
+

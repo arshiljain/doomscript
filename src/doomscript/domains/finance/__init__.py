@@ -28,6 +28,12 @@ from doomscript.domains.finance.runtime import (
     AnalyticalGreeks,
     BinomialCoxRossRubinstein,
     MarkowitzOptimizer,
+    VasicekShortRateSimulator,
+    BondConvexityAndMacaulayDuration,
+    HestonStochasticVolatility,
+    fin_vasicek_simulate,
+    fin_bond_duration_convexity,
+    fin_heston_simulate,
 )
 from doomscript.domains.finance.exporter import FinanceASTExporter
 from doomscript.domains.matcher import VerbSpec
@@ -93,6 +99,8 @@ class FinanceDomain(DomainContract):
     ]
 
     def can_handle_line(self, line: str) -> bool:
+        if self.parser.parse_inspect(line, 0) is not None or self.parser.parse_operation(line, 0) is not None:
+            return True
         s = line.strip().lower()
         if (
             s.startswith("fetch stock ")
@@ -183,5 +191,11 @@ __all__ = [
     "AnalyticalGreeks",
     "BinomialCoxRossRubinstein",
     "MarkowitzOptimizer",
+    "VasicekShortRateSimulator",
+    "BondConvexityAndMacaulayDuration",
+    "HestonStochasticVolatility",
+    "fin_vasicek_simulate",
+    "fin_bond_duration_convexity",
+    "fin_heston_simulate",
 ]
 

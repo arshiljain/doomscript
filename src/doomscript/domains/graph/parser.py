@@ -387,6 +387,36 @@ class GraphDomainParser(DomainParser):
             g, target = m_lap.group(1).strip(), m_lap.group(2).strip()
             return f"set {target} to graph_laplacian_matrix({g})"
 
+        # compute bipartite matching for edges <edges> into <target>
+        m_bm = re.match(
+            r"^compute\s+bipartite\s+matching\s+for\s+edges\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_bm:
+            edges, target = m_bm.group(1).strip(), m_bm.group(2).strip()
+            return f"set {target} to graph_bipartite_matching({edges})"
+
+        # find bridges and articulation points in <adj> into <target>
+        m_br = re.match(
+            r"^find\s+bridges\s+and\s+articulation\s+points\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_br:
+            adj, target = m_br.group(1).strip(), m_br.group(2).strip()
+            return f"set {target} to graph_find_bridges_and_cuts({adj})"
+
+        # find eulerian trail for edges <edges> into <target>
+        m_eul = re.match(
+            r"^find\s+eulerian\s+trail\s+for\s+edges\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_eul:
+            edges, target = m_eul.group(1).strip(), m_eul.group(2).strip()
+            return f"set {target} to graph_eulerian_trail({edges})"
+
         return None
 
     def parse_block(

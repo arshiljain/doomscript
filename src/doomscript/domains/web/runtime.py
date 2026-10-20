@@ -1196,3 +1196,216 @@ def web_css_select(html: str, selector: str) -> List[Any]:
 
 def web_cookie_jar() -> RFC6265CookieJar:
     return RFC6265CookieJar()
+
+
+# ==============================================================================
+# MULTIPART/FORM-DATA, CONTENT NEGOTIATION & RFC 6570 URI TEMPLATES
+# ==============================================================================
+
+class WebFormEncoderAndMultipart:
+    """RFC 7578 multipart/form-data boundary packager and parser."""
+
+    @classmethod
+    def encode_multipart(
+        cls, fields: Dict[str, Any], boundary: Optional[str] = None
+    ) -> Dict[str, Any]:
+        bound = boundary or "----DoomScriptFormBoundary7MA4YWxkTrZu0gW"
+        lines = []
+
+        for name, val in fields.items():
+            lines.append(f"--{bound}")
+            if isinstance(val, dict) and "filename" in val:
+                fn = val["filename"]
+                ct = val.get("content_type", "application/octet-stream")
+                data = val.get("data", "")
+                lines.append(f'Content-Disposition: form-data; name="{name}"; filename="{fn}"')
+                lines.append(f"Content-Type: {ct}")
+                lines.append("")
+                lines.append(str(data))
+            else:
+                lines.append(f'Content-Disposition: form-data; name="{name}"')
+                lines.append("")
+                lines.append(str(val))
+
+        lines.append(f"--{bound}--")
+        lines.append("")
+        body = "\r\n".join(lines)
+
+        return {
+            "boundary": bound,
+            "content_type": f"multipart/form-data; boundary={bound}",
+            "body": body,
+            "content_length": len(body.encode("utf-8")),
+        }
+
+    @classmethod
+    def parse_multipart(cls, body: str, boundary: str) -> Dict[str, Any]:
+        parts = body.split(f"--{boundary}")
+        fields: Dict[str, Any] = {}
+
+        for part in parts:
+            part = part.strip()
+            if not part or part == "--":
+                continue
+            headers_and_body = part.split("\r\n\r\n", 1)
+            if len(headers_and_body) != 2:
+                continue
+            headers_str, p_body = headers_and_body
+            m = re.search(r'name="([^"]+)"', headers_str)
+            if m:
+                field_name = m.group(1)
+                # Check for filename
+                fn_m = re.search(r'filename="([^"]+)"', headers_str)
+                if fn_m:
+                    fields[field_name] = {
+                        "filename": fn_m.group(1),
+                        "data": p_body,
+                    }
+                else:
+                    fields[field_name] = p_body
+
+        return fields
+
+
+class HttpHeaderParserAndNegotiator:
+    """RFC 7231 HTTP content negotiation and quality-factor (q-value) parser."""
+
+    @classmethod
+    def parse_quality_values(cls, header: str) -> List[Tuple[str, float]]:
+        """Parses comma-separated items with ;q=0.X into sorted [(media_type, q_val)]."""
+        if not header or not header.strip():
+            return []
+
+        items = []
+        for part in header.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            subparts = part.split(";")
+            item_val = subparts[0].strip().lower()
+            q_val = 1.0
+            for sub in subparts[1:]:
+                sub = sub.strip()
+                if sub.startswith("q="):
+                    try:
+                        q_val = float(sub[2:])
+                    except ValueError:
+                        q_val = 1.0
+            items.append((item_val, q_val))
+
+        # Sort descending by q-value, with wildcard specificity tiebreaker
+        items.sort(
+            key=lambda x: (
+                x[1],
+                0 if x[0] == "*/*" else (1 if "/*" in x[0] else 2),
+            ),
+            reverse=True,
+        )
+        return items
+
+    @classmethod
+    def negotiate(cls, accept_header: str, supported: List[str]) -> str:
+        """Selects the best supported media-type matching client's Accept header."""
+        preferences = cls.parse_quality_values(accept_header)
+        if not preferences:
+            return supported[0] if supported else ""
+
+        supp_lower = [s.lower() for s in supported]
+
+        for pref, q in preferences:
+            if q <= 0.0:
+                continue
+            if pref == "*/*":
+                return supported[0]
+            if pref in supp_lower:
+                idx = supp_lower.index(pref)
+                return supported[idx]
+            if pref.endswith("/*"):
+                prefix = pref[:-1]
+                for idx, s in enumerate(supp_lower):
+                    if s.startswith(prefix):
+                        return supported[idx]
+
+        return supported[0] if supported else ""
+
+
+class UriTemplateRFC6570:
+    """RFC 6570 Level 3 URI template expansion engine."""
+
+    @classmethod
+    def expand(cls, template: str, variables: Dict[str, Any]) -> str:
+        def _replace_expression(match: re.Match) -> str:
+            expr = match.group(1)
+            operator = ""
+            if expr[0] in ("+", "#", ".", "/", ";", "?", "&"):
+                operator = expr[0]
+                var_spec = expr[1:]
+            else:
+                var_spec = expr
+
+            var_names = [v.strip() for v in var_spec.split(",")]
+            expanded_parts = []
+
+            for vname in var_names:
+                explode = vname.endswith("*")
+                actual_name = vname[:-1] if explode else vname
+                val = variables.get(actual_name)
+                if val is None:
+                    continue
+
+                if isinstance(val, (list, tuple)):
+                    if explode:
+                        expanded_parts.extend(str(x) for x in val)
+                    else:
+                        expanded_parts.append(",".join(str(x) for x in val))
+                elif isinstance(val, dict):
+                    if explode:
+                        expanded_parts.extend(f"{k}={v}" for k, v in val.items())
+                    else:
+                        expanded_parts.append(",".join(f"{k},{v}" for k, v in val.items()))
+                else:
+                    if operator == "?":
+                        expanded_parts.append(f"{actual_name}={val}")
+                    elif operator == "&":
+                        expanded_parts.append(f"{actual_name}={val}")
+                    elif operator == ";":
+                        expanded_parts.append(f"{actual_name}={val}" if val != "" else actual_name)
+                    else:
+                        expanded_parts.append(str(val))
+
+            if not expanded_parts:
+                return ""
+
+            if operator == "+":
+                return ",".join(expanded_parts)
+            elif operator == "#":
+                return "#" + ",".join(expanded_parts)
+            elif operator == ".":
+                return "." + ".".join(expanded_parts)
+            elif operator == "/":
+                return "/" + "/".join(expanded_parts)
+            elif operator == ";":
+                return ";" + ";".join(expanded_parts)
+            elif operator == "?":
+                return "?" + "&".join(expanded_parts)
+            elif operator == "&":
+                return "&" + "&".join(expanded_parts)
+            return ",".join(expanded_parts)
+
+        return re.sub(r"\{([^}]+)\}", _replace_expression, template)
+
+
+def web_multipart_encode(fields: Dict[str, Any], boundary: Optional[str] = None) -> Any:
+    """Encodes form dictionary into multipart/form-data body and headers."""
+    return Record(WebFormEncoderAndMultipart.encode_multipart(fields, boundary=boundary))
+
+
+def web_content_negotiate(accept_header: str, supported_types: List[str]) -> str:
+    """Negotiates best media type matching RFC 7231 Accept preferences."""
+    return HttpHeaderParserAndNegotiator.negotiate(accept_header, supported_types)
+
+
+def web_uri_template_expand(template: str, variables: Dict[str, Any]) -> str:
+    """Expands an RFC 6570 URI template with variables."""
+    return UriTemplateRFC6570.expand(template, variables)
+

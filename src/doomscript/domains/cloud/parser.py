@@ -409,6 +409,56 @@ class CloudDomainParser(DomainParser):
                 return f"set {target.strip()} to cloud_set_storage_class({b_var}, {key}, {cls_val})"
             return f"cloud_set_storage_class({b_var}, {key}, {cls_val})"
 
+        # create rate limiter with capacity <cap> and refill rate <rate> into <target>
+        m_rl = re.match(
+            r"^create\s+rate\s+limiter\s+with\s+capacity\s+(.+?)\s+and\s+refill\s+rate\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_rl:
+            cap, rate, target = m_rl.group(1).strip(), m_rl.group(2).strip(), m_rl.group(3).strip()
+            return f"set {target} to cloud_rate_limiter_create({cap}, {rate})"
+
+        # acquire <tokens> tokens from rate limiter <limiter> into <target>
+        m_acq = re.match(
+            r"^acquire\s+(.+?)\s+tokens\s+from\s+rate\s+limiter\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_acq:
+            toks, lim, target = m_acq.group(1).strip(), m_acq.group(2).strip(), m_acq.group(3).strip()
+            return f"set {target} to cloud_rate_limiter_acquire({lim}, {toks})"
+
+        # create circuit breaker with failure threshold <thresh> into <target>
+        m_cb = re.match(
+            r"^create\s+circuit\s+breaker\s+with\s+failure\s+threshold\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_cb:
+            thresh, target = m_cb.group(1).strip(), m_cb.group(2).strip()
+            return f"set {target} to cloud_circuit_breaker_create({thresh})"
+
+        # create raft node <node_id> with peers <peers> into <target>
+        m_raft = re.match(
+            r"^create\s+raft\s+node\s+(.+?)\s+with\s+peers\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_raft:
+            nid, peers, target = m_raft.group(1).strip(), m_raft.group(2).strip(), m_raft.group(3).strip()
+            return f"set {target} to cloud_raft_create({nid}, {peers})"
+
+        # elect raft leader for <raft> into <target>
+        m_elect = re.match(
+            r"^elect\s+raft\s+leader\s+for\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_elect:
+            raft, target = m_elect.group(1).strip(), m_elect.group(2).strip()
+            return f"set {target} to cloud_raft_elect({raft})"
+
         return None
 
     def parse_block(

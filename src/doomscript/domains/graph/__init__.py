@@ -57,6 +57,12 @@ from doomscript.domains.graph.runtime import (
     graph_hopcroft_karp,
     graph_eulerian_path,
     graph_boruvka_mst,
+    HopcroftKarpBipartiteMatching,
+    TarjanBridgeAndArticulation,
+    HierholzerEulerianCircuit,
+    graph_bipartite_matching,
+    graph_find_bridges_and_cuts,
+    graph_eulerian_trail,
 )
 from doomscript.domains.matcher import VerbSpec
 from doomscript.domains.graph.exporter import GraphASTExporter
@@ -128,6 +134,8 @@ class GraphDomain(DomainContract):
     ]
 
     def can_handle_line(self, line: str) -> bool:
+        if self.parser.parse_inspect(line, 0) is not None or self.parser.parse_operation(line, 0) is not None:
+            return True
         s = line.strip().lower()
         if (
             s.startswith("create graph ")
@@ -247,5 +255,11 @@ __all__ = [
     "graph_hopcroft_karp",
     "graph_eulerian_path",
     "graph_boruvka_mst",
+    "HopcroftKarpBipartiteMatching",
+    "TarjanBridgeAndArticulation",
+    "HierholzerEulerianCircuit",
+    "graph_bipartite_matching",
+    "graph_find_bridges_and_cuts",
+    "graph_eulerian_trail",
 ]
 

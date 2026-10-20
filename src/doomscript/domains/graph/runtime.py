@@ -2,6 +2,7 @@
 
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 import heapq
+from doomscript.runtime import Record
 from doomscript.domains.base import DomainRuntime, DomainIR
 from doomscript.domains.graph.spec import (
     GraphCreateSpec,
@@ -1575,6 +1576,241 @@ def graph_boruvka_mst(g: Any) -> Dict[str, Any]:
         "total_weight": round(total_weight, 4),
         "is_connected": len(mst_edges) == n_nodes - 1 if n_nodes > 0 else True,
     }
+
+
+# ==============================================================================
+# HOPCROFT-KARP MATCHING, TARJAN BRIDGES & HIERHOLZER EULERIAN TRAILS
+# ==============================================================================
+
+class HopcroftKarpBipartiteMatching:
+    """O(E * sqrt(V)) Maximum Cardinality Bipartite Matching."""
+
+    @classmethod
+    def match(cls, edges: List[Tuple[Any, Any]]) -> Dict[str, Any]:
+        adj_u: Dict[str, List[str]] = {}
+        all_u: Set[str] = set()
+        all_v: Set[str] = set()
+
+        for u_raw, v_raw in edges:
+            u, v = str(u_raw), str(v_raw)
+            all_u.add(u)
+            all_v.add(v)
+            adj_u.setdefault(u, []).append(v)
+
+        pair_u: Dict[Optional[str], Optional[str]] = {u: None for u in all_u}
+        pair_v: Dict[Optional[str], Optional[str]] = {v: None for v in all_v}
+        dist: Dict[Optional[str], float] = {}
+
+        def bfs() -> bool:
+            from collections import deque
+            q: deque = deque()
+            for u in all_u:
+                if pair_u[u] is None:
+                    dist[u] = 0
+                    q.append(u)
+                else:
+                    dist[u] = float("inf")
+            dist[None] = float("inf")
+
+            while q:
+                u = q.popleft()
+                if dist[u] < dist[None]:
+                    for v in adj_u.get(u, []):
+                        nxt_u = pair_v[v]
+                        if dist.get(nxt_u, float("inf")) == float("inf"):
+                            dist[nxt_u] = dist[u] + 1
+                            q.append(nxt_u)
+
+            return dist[None] != float("inf")
+
+        def dfs(u: Optional[str]) -> bool:
+            if u is not None:
+                for v in adj_u.get(u, []):
+                    nxt_u = pair_v[v]
+                    if dist.get(nxt_u, float("inf")) == dist[u] + 1:
+                        if dfs(nxt_u):
+                            pair_v[v] = u
+                            pair_u[u] = v
+                            return True
+                dist[u] = float("inf")
+                return False
+            return True
+
+        matching_size = 0
+        while bfs():
+            for u in sorted(list(all_u)):
+                if pair_u[u] is None:
+                    if dfs(u):
+                        matching_size += 1
+
+        pairs = {u: pair_u[u] for u in sorted(list(all_u)) if pair_u[u] is not None}
+        return {
+            "matching_size": matching_size,
+            "pairs": pairs,
+            "num_u": len(all_u),
+            "num_v": len(all_v),
+            "is_perfect": matching_size == min(len(all_u), len(all_v)) and len(all_u) == len(all_v),
+        }
+
+
+class TarjanBridgeAndArticulation:
+    """Discovers all bridges (cut edges) and articulation points (cut vertices) in undirected graphs."""
+
+    @classmethod
+    def analyze(cls, adj: Dict[str, List[str]]) -> Dict[str, Any]:
+        nodes = sorted(list(adj.keys()))
+        disc: Dict[str, int] = {}
+        low: Dict[str, int] = {}
+        parent: Dict[str, Optional[str]] = {n: None for n in nodes}
+        articulation_pts: Set[str] = set()
+        bridges: List[List[str]] = []
+        timer = [0]
+
+        def dfs(u: str) -> None:
+            timer[0] += 1
+            disc[u] = low[u] = timer[0]
+            children = 0
+
+            for v in adj.get(u, []):
+                if v not in disc:
+                    children += 1
+                    parent[v] = u
+                    dfs(v)
+                    low[u] = min(low[u], low[v])
+
+                    # Articulation check for non-root
+                    if parent[u] is not None and low[v] >= disc[u]:
+                        articulation_pts.add(u)
+
+                    # Bridge check
+                    if low[v] > disc[u]:
+                        bridges.append(sorted([u, v]))
+                elif v != parent[u]:
+                    low[u] = min(low[u], disc[v])
+
+            # Articulation check for root
+            if parent[u] is None and children > 1:
+                articulation_pts.add(u)
+
+        for n in nodes:
+            if n not in disc:
+                dfs(n)
+
+        # Unique sorted bridges
+        unique_bridges = sorted(list(set(tuple(b) for b in bridges)))
+        return {
+            "bridges": [list(b) for b in unique_bridges],
+            "num_bridges": len(unique_bridges),
+            "articulation_points": sorted(list(articulation_pts)),
+            "num_cut_vertices": len(articulation_pts),
+        }
+
+
+class HierholzerEulerianCircuit:
+    """Finds Eulerian circuit or path in directed graph using Hierholzer's cycle splicing algorithm."""
+
+    @classmethod
+    def find_eulerian_trail(cls, edges: List[Tuple[Any, Any]]) -> Dict[str, Any]:
+        from collections import defaultdict
+        adj = defaultdict(list)
+        in_degree = defaultdict(int)
+        out_degree = defaultdict(int)
+        all_nodes: Set[str] = set()
+
+        for u_raw, v_raw in edges:
+            u, v = str(u_raw), str(v_raw)
+            adj[u].append(v)
+            out_degree[u] += 1
+            in_degree[v] += 1
+            all_nodes.add(u)
+            all_nodes.add(v)
+
+        if not edges:
+            return {
+                "has_eulerian_circuit": False,
+                "has_eulerian_path": False,
+                "trail": [],
+                "trail_length": 0,
+            }
+
+        start_node = None
+        end_node = None
+        start_count = 0
+        end_count = 0
+
+        for n in all_nodes:
+            out_d = out_degree[n]
+            in_d = in_degree[n]
+            if out_d - in_d == 1:
+                start_node = n
+                start_count += 1
+            elif in_d - out_d == 1:
+                end_node = n
+                end_count += 1
+            elif in_d != out_d:
+                return {
+                    "has_eulerian_circuit": False,
+                    "has_eulerian_path": False,
+                    "trail": [],
+                    "trail_length": 0,
+                }
+
+        is_circuit = (start_count == 0 and end_count == 0)
+        is_path = is_circuit or (start_count == 1 and end_count == 1)
+
+        if not is_path:
+            return {
+                "has_eulerian_circuit": False,
+                "has_eulerian_path": False,
+                "trail": [],
+                "trail_length": 0,
+            }
+
+        if start_node is None:
+            # Pick any node with positive out-degree
+            for n in sorted(list(all_nodes)):
+                if out_degree[n] > 0:
+                    start_node = n
+                    break
+
+        # Hierholzer DFS traversal with stack
+        curr_adj = {n: list(adj[n]) for n in adj}
+        stack = [start_node]
+        trail = []
+
+        while stack:
+            curr = stack[-1]
+            if curr_adj.get(curr):
+                nxt = curr_adj[curr].pop()
+                stack.append(nxt)
+            else:
+                trail.append(stack.pop())
+
+        trail.reverse()
+        valid = len(trail) == len(edges) + 1
+
+        return {
+            "has_eulerian_circuit": is_circuit and valid,
+            "has_eulerian_path": is_path and valid,
+            "trail": trail if valid else [],
+            "trail_length": len(trail) if valid else 0,
+        }
+
+
+def graph_bipartite_matching(bipartite_edges: List[Tuple[Any, Any]]) -> Any:
+    """Computes maximum cardinality bipartite matching using Hopcroft-Karp algorithm."""
+    return Record(HopcroftKarpBipartiteMatching.match(bipartite_edges))
+
+
+def graph_find_bridges_and_cuts(adj_list: Dict[str, List[str]]) -> Any:
+    """Finds all bridges and articulation cut vertices using Tarjan's low-link algorithm."""
+    return Record(TarjanBridgeAndArticulation.analyze(adj_list))
+
+
+def graph_eulerian_trail(edges: List[Tuple[Any, Any]]) -> Any:
+    """Finds an Eulerian path or circuit using Hierholzer's cycle splicing algorithm."""
+    return Record(HierholzerEulerianCircuit.find_eulerian_trail(edges))
+
 
 
 

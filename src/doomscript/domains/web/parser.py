@@ -409,6 +409,36 @@ class WebDomainParser(DomainParser):
             b_arg = f", body={body.strip()}" if body else ""
             return f"set {target} to web_generate_curl_command({method}, {url}{h_arg}{b_arg})"
 
+        # encode multipart form fields <fields> into <target>
+        m_mp = re.match(
+            r"^encode\s+multipart\s+form\s+fields\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_mp:
+            fields, target = m_mp.group(1).strip(), m_mp.group(2).strip()
+            return f"set {target} to web_multipart_encode({fields})"
+
+        # negotiate content type for header <header> from <supported> into <target>
+        m_neg = re.match(
+            r"^negotiate\s+content\s+type\s+for\s+header\s+(.+?)\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_neg:
+            hdr, supp, target = m_neg.group(1).strip(), m_neg.group(2).strip(), m_neg.group(3).strip()
+            return f"set {target} to web_content_negotiate({hdr}, {supp})"
+
+        # expand uri template <template> with variables <variables> into <target>
+        m_uri = re.match(
+            r"^expand\s+uri\s+template\s+(.+?)\s+with\s+variables\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_uri:
+            tmpl, vars_dict, target = m_uri.group(1).strip(), m_uri.group(2).strip(), m_uri.group(3).strip()
+            return f"set {target} to web_uri_template_expand({tmpl}, {vars_dict})"
+
         return None
 
     def parse_block(
