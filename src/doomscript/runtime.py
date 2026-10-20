@@ -3431,10 +3431,25 @@ from doomscript.domains.robotics.runtime import (
     InverseKinematics2D,
     TrajectoryPlanner,
     ExtendedKalmanFilter2D,
+    RRTNode,
+    RRTPlanner2D,
+    ArtificialPotentialField2D,
+    DifferentialDriveKinematics,
+    PurePursuitController,
+    StewartPlatformIK,
+    TrapezoidalVelocityProfile,
     robotics_forward_kinematics,
     robotics_inverse_kinematics_2link,
     robotics_cubic_trajectory,
     robotics_create_ekf,
+    robotics_rrt_plan,
+    robotics_rrt_star_plan,
+    robotics_apf_forces,
+    robotics_diff_drive_forward,
+    robotics_diff_drive_odometry,
+    robotics_pure_pursuit,
+    robotics_stewart_platform_ik,
+    robotics_trapezoidal_profile,
 )
 
 from doomscript.domains.signals.runtime import (
@@ -3452,6 +3467,16 @@ from doomscript.domains.signals.runtime import (
     SavitzkyGolayFilter,
     signals_stft,
     signals_savitzky_golay,
+    CooleyTukeyFFT,
+    HilbertTransform,
+    CrossCorrelation,
+    PeakDetector,
+    LombScarglePeriodogram,
+    signals_fft,
+    signals_ifft,
+    signals_cross_correlation,
+    signals_detect_pitch,
+    signals_lomb_scargle,
 )
 
 from doomscript.domains.astronomy.runtime import (
@@ -3672,9 +3697,13 @@ from doomscript.domains.spatial_audio.runtime import (
     HigherOrderAmbisonics,
     AcousticRaytracer,
     HRTFConvolution,
+    VectorBaseAmplitudePanning,
+    AtmosphericAttenuation,
     spatial_audio_hoa_encode,
     spatial_audio_room_impulse_response,
     spatial_audio_hrtf_binaural,
+    spatial_audio_vbap_2d,
+    spatial_audio_distance_attenuate,
 )
 
 from doomscript.domains.dsa.runtime import (

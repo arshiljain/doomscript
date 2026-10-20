@@ -2,6 +2,7 @@
 
 import math
 from typing import List, Dict, Any, Tuple, Optional
+from doomscript.runtime import Record
 
 
 class DHParameter:
@@ -190,3 +191,594 @@ def robotics_cubic_trajectory(q0: float, q1: float, v0: float, v1: float, t0: fl
 
 def robotics_create_ekf(init_x: float, init_y: float, process_noise: float = 0.1, meas_noise: float = 1.0) -> ExtendedKalmanFilter2D:
     return ExtendedKalmanFilter2D(init_x, init_y, process_noise, meas_noise)
+
+
+# ===========================================================================
+# RAPIDLY-EXPLORING RANDOM TREE (RRT & RRT*) 2D PATH PLANNING
+# ===========================================================================
+
+class RRTNode:
+    """Node in RRT motion planning tree."""
+
+    def __init__(self, x: float, y: float, parent: Optional["RRTNode"] = None, cost: float = 0.0):
+        self.x = float(x)
+        self.y = float(y)
+        self.parent = parent
+        self.cost = float(cost)
+
+
+class RRTPlanner2D:
+    """RRT and RRT* obstacle-aware path planner in 2D Euclidean space."""
+
+    def __init__(
+        self,
+        start: Tuple[float, float],
+        goal: Tuple[float, float],
+        bounds: Tuple[float, float, float, float],  # (min_x, max_x, min_y, max_y)
+        obstacles: Optional[List[Dict[str, float]]] = None,  # [{"x": 5.0, "y": 5.0, "r": 1.5}, ...]
+        step_size: float = 1.0,
+        goal_bias: float = 0.1,
+        max_iterations: int = 1000,
+    ):
+        self.start = RRTNode(start[0], start[1], None, 0.0)
+        self.goal = RRTNode(goal[0], goal[1], None, 0.0)
+        self.bounds = bounds
+        self.obstacles = obstacles or []
+        self.step_size = float(step_size)
+        self.goal_bias = float(goal_bias)
+        self.max_iterations = int(max_iterations)
+        self.nodes: List[RRTNode] = [self.start]
+
+    def _distance(self, n1: RRTNode, n2: RRTNode) -> float:
+        return math.hypot(n1.x - n2.x, n1.y - n2.y)
+
+    def _is_collision_free(self, x1: float, y1: float, x2: float, y2: float) -> bool:
+        dist = math.hypot(x2 - x1, y2 - y1)
+        steps = max(2, int(dist / (self.step_size * 0.25)))
+        for s in range(steps + 1):
+            t = s / steps
+            px = x1 + t * (x2 - x1)
+            py = y1 + t * (y2 - y1)
+            for obs in self.obstacles:
+                ox = obs.get("x", 0.0)
+                oy = obs.get("y", 0.0)
+                r = obs.get("r", 1.0)
+                if math.hypot(px - ox, py - oy) <= r:
+                    return False
+        return True
+
+    def plan(self, seed: Optional[int] = 42) -> Optional[List[List[float]]]:
+        """Plans collision-free path from start to goal."""
+        import random
+        rng = random.Random(seed)
+        min_x, max_x, min_y, max_y = self.bounds
+
+        for _ in range(self.max_iterations):
+            if rng.random() < self.goal_bias:
+                rand_x, rand_y = self.goal.x, self.goal.y
+            else:
+                rand_x = rng.uniform(min_x, max_x)
+                rand_y = rng.uniform(min_y, max_y)
+
+            # Nearest node
+            nearest = min(self.nodes, key=lambda n: math.hypot(n.x - rand_x, n.y - rand_y))
+            dist = math.hypot(rand_x - nearest.x, rand_y - nearest.y)
+            if dist < 1e-6:
+                continue
+
+            theta = math.atan2(rand_y - nearest.y, rand_x - nearest.x)
+            step = min(self.step_size, dist)
+            new_x = nearest.x + step * math.cos(theta)
+            new_y = nearest.y + step * math.sin(theta)
+
+            if not (min_x <= new_x <= max_x and min_y <= new_y <= max_y):
+                continue
+
+            if self._is_collision_free(nearest.x, nearest.y, new_x, new_y):
+                new_node = RRTNode(new_x, new_y, parent=nearest, cost=nearest.cost + step)
+                self.nodes.append(new_node)
+
+                # Check goal reachability
+                if math.hypot(new_x - self.goal.x, new_y - self.goal.y) <= self.step_size:
+                    if self._is_collision_free(new_x, new_y, self.goal.x, self.goal.y):
+                        self.goal.parent = new_node
+                        self.goal.cost = new_node.cost + math.hypot(new_x - self.goal.x, new_y - self.goal.y)
+                        self.nodes.append(self.goal)
+                        # Reconstruct path
+                        path = []
+                        curr: Optional[RRTNode] = self.goal
+                        while curr:
+                            path.append([round(curr.x, 4), round(curr.y, 4)])
+                            curr = curr.parent
+                        path.reverse()
+                        return path
+
+        return None
+
+    def plan_star(self, search_radius: float = 2.5, seed: Optional[int] = 42) -> Optional[List[List[float]]]:
+        """RRT* implementation with neighborhood rewiring for path cost optimization."""
+        import random
+        rng = random.Random(seed)
+        min_x, max_x, min_y, max_y = self.bounds
+        best_goal_node: Optional[RRTNode] = None
+
+        for _ in range(self.max_iterations):
+            if rng.random() < self.goal_bias:
+                rand_x, rand_y = self.goal.x, self.goal.y
+            else:
+                rand_x = rng.uniform(min_x, max_x)
+                rand_y = rng.uniform(min_y, max_y)
+
+            nearest = min(self.nodes, key=lambda n: math.hypot(n.x - rand_x, n.y - rand_y))
+            dist = math.hypot(rand_x - nearest.x, rand_y - nearest.y)
+            if dist < 1e-6:
+                continue
+
+            theta = math.atan2(rand_y - nearest.y, rand_x - nearest.x)
+            step = min(self.step_size, dist)
+            new_x = nearest.x + step * math.cos(theta)
+            new_y = nearest.y + step * math.sin(theta)
+
+            if not (min_x <= new_x <= max_x and min_y <= new_y <= max_y):
+                continue
+
+            if not self._is_collision_free(nearest.x, nearest.y, new_x, new_y):
+                continue
+
+            # Find near neighbors within search_radius
+            near_nodes = [
+                n for n in self.nodes
+                if math.hypot(n.x - new_x, n.y - new_y) <= search_radius
+                and self._is_collision_free(n.x, n.y, new_x, new_y)
+            ]
+
+            min_cost_node = nearest
+            min_cost = nearest.cost + math.hypot(nearest.x - new_x, nearest.y - new_y)
+            for n in near_nodes:
+                c = n.cost + math.hypot(n.x - new_x, n.y - new_y)
+                if c < min_cost:
+                    min_cost = c
+                    min_cost_node = n
+
+            new_node = RRTNode(new_x, new_y, parent=min_cost_node, cost=min_cost)
+            self.nodes.append(new_node)
+
+            # Rewire tree
+            for n in near_nodes:
+                dist_new_to_n = math.hypot(new_x - n.x, new_y - n.y)
+                if new_node.cost + dist_new_to_n < n.cost:
+                    if self._is_collision_free(new_x, new_y, n.x, n.y):
+                        n.parent = new_node
+                        n.cost = new_node.cost + dist_new_to_n
+
+            # Check goal connection
+            dist_to_goal = math.hypot(new_x - self.goal.x, new_y - self.goal.y)
+            if dist_to_goal <= self.step_size and self._is_collision_free(new_x, new_y, self.goal.x, self.goal.y):
+                goal_cost = new_node.cost + dist_to_goal
+                if best_goal_node is None or goal_cost < best_goal_node.cost:
+                    best_goal_node = RRTNode(self.goal.x, self.goal.y, parent=new_node, cost=goal_cost)
+
+        if best_goal_node:
+            path = []
+            curr: Optional[RRTNode] = best_goal_node
+            while curr:
+                path.append([round(curr.x, 4), round(curr.y, 4)])
+                curr = curr.parent
+            path.reverse()
+            return path
+        return None
+
+
+# ===========================================================================
+# ARTIFICIAL POTENTIAL FIELD (APF) REAL-TIME NAVIGATION
+# ===========================================================================
+
+class ArtificialPotentialField2D:
+    """Artificial Potential Field algorithm for reactive mobile robot navigation."""
+
+    def __init__(
+        self,
+        goal: Tuple[float, float],
+        obstacles: Optional[List[Dict[str, float]]] = None,
+        k_att: float = 1.0,
+        k_rep: float = 100.0,
+        influence_radius: float = 3.0,
+    ):
+        self.goal = goal
+        self.obstacles = obstacles or []
+        self.k_att = float(k_att)
+        self.k_rep = float(k_rep)
+        self.d0 = float(influence_radius)
+
+    def compute_force(self, position: Tuple[float, float]) -> Dict[str, float]:
+        """Computes net attractive and repulsive force vector at given position."""
+        px, py = position
+        gx, gy = self.goal
+
+        # Attractive force F_att = -k_att * (p - goal)
+        dist_goal = math.hypot(gx - px, gy - py)
+        if dist_goal > 0:
+            f_att_x = self.k_att * (gx - px)
+            f_att_y = self.k_att * (gy - py)
+        else:
+            f_att_x, f_att_y = 0.0, 0.0
+
+        # Repulsive force sum over obstacles
+        f_rep_x, f_rep_y = 0.0, 0.0
+        for obs in self.obstacles:
+            ox, oy = obs.get("x", 0.0), obs.get("y", 0.0)
+            d = math.hypot(px - ox, py - oy)
+            if 0 < d < self.d0:
+                # F_rep = k_rep * (1/d - 1/d0) * (1/d^2) * ( (p - obs) / d )
+                scale = self.k_rep * (1.0 / d - 1.0 / self.d0) * (1.0 / (d * d))
+                f_rep_x += scale * (px - ox) / d
+                f_rep_y += scale * (py - oy) / d
+
+        fx = f_att_x + f_rep_x
+        fy = f_att_y + f_rep_y
+        magnitude = math.hypot(fx, fy)
+        heading = math.atan2(fy, fx) if magnitude > 1e-6 else 0.0
+
+        return {
+            "fx": round(fx, 4),
+            "fy": round(fy, 4),
+            "f_att_x": round(f_att_x, 4),
+            "f_att_y": round(f_att_y, 4),
+            "f_rep_x": round(f_rep_x, 4),
+            "f_rep_y": round(f_rep_y, 4),
+            "magnitude": round(magnitude, 4),
+            "heading": round(heading, 4),
+            "heading_deg": round(math.degrees(heading), 2),
+        }
+
+    def simulate_path(
+        self,
+        start: Tuple[float, float],
+        max_steps: int = 500,
+        step_size: float = 0.1,
+        goal_tolerance: float = 0.2,
+    ) -> Dict[str, Any]:
+        """Simulates path following gradient descent of potential field."""
+        curr = list(start)
+        path = [[round(curr[0], 4), round(curr[1], 4)]]
+        reached = False
+
+        for _ in range(max_steps):
+            dist_goal = math.hypot(self.goal[0] - curr[0], self.goal[1] - curr[1])
+            if dist_goal <= goal_tolerance:
+                reached = True
+                break
+
+            forces = self.compute_force((curr[0], curr[1]))
+            mag = forces["magnitude"]
+            if mag < 1e-6:
+                # Local minimum or saddle point reached
+                break
+
+            curr[0] += step_size * (forces["fx"] / mag)
+            curr[1] += step_size * (forces["fy"] / mag)
+            path.append([round(curr[0], 4), round(curr[1], 4)])
+
+        return {
+            "path": path,
+            "steps": len(path) - 1,
+            "reached_goal": reached,
+            "final_distance": round(math.hypot(self.goal[0] - curr[0], self.goal[1] - curr[1]), 4),
+        }
+
+
+# ===========================================================================
+# DIFFERENTIAL DRIVE & UNICYCLE ODOMETRY & PURE PURSUIT TRACKING
+# ===========================================================================
+
+class DifferentialDriveKinematics:
+    """Forward & Inverse kinematics for 2-wheeled differential drive mobile robots."""
+
+    def __init__(self, wheel_radius: float = 0.05, wheel_base: float = 0.2):
+        self.r = float(wheel_radius)
+        self.L = float(wheel_base)
+
+    def forward(self, omega_left: float, omega_right: float) -> Tuple[float, float]:
+        """Calculates linear velocity v (m/s) and angular velocity w (rad/s) from wheel speeds."""
+        v = (self.r / 2.0) * (omega_right + omega_left)
+        w = (self.r / self.L) * (omega_right - omega_left)
+        return round(v, 4), round(w, 4)
+
+    def inverse(self, v: float, w: float) -> Tuple[float, float]:
+        """Calculates wheel angular speeds (left, right) required for desired (v, w)."""
+        omega_left = (v - (self.L * w / 2.0)) / self.r
+        omega_right = (v + (self.L * w / 2.0)) / self.r
+        return round(omega_left, 4), round(omega_right, 4)
+
+    def integrate_odometry(
+        self,
+        pose: Tuple[float, float, float],  # (x, y, theta_rad)
+        v: float,
+        w: float,
+        dt: float,
+    ) -> Tuple[float, float, float]:
+        """Integrates 2nd-order Runge-Kutta odometry over time step dt."""
+        x, y, theta = pose
+        if abs(w) < 1e-6:
+            new_x = x + v * math.cos(theta) * dt
+            new_y = y + v * math.sin(theta) * dt
+            new_theta = theta
+        else:
+            # Exact circular arc integration
+            new_theta = theta + w * dt
+            new_x = x + (v / w) * (math.sin(new_theta) - math.sin(theta))
+            new_y = y - (v / w) * (math.cos(new_theta) - math.cos(theta))
+
+        # Normalize theta to [-pi, pi]
+        new_theta = (new_theta + math.pi) % (2.0 * math.pi) - math.pi
+        return round(new_x, 4), round(new_y, 4), round(new_theta, 4)
+
+
+class PurePursuitController:
+    """Geometric Pure Pursuit path tracking algorithm for unicycle mobile robots."""
+
+    def __init__(self, lookahead_distance: float = 1.0, max_steering_angle: float = math.pi / 4):
+        self.ld = float(lookahead_distance)
+        self.max_steer = float(max_steering_angle)
+
+    def compute_steering(
+        self,
+        robot_pose: Tuple[float, float, float],  # (x, y, theta_rad)
+        path: List[List[float]],
+    ) -> Dict[str, float]:
+        """Computes path-tracking steering curvature and target lookahead point."""
+        rx, ry, rtheta = robot_pose
+
+        # Find lookahead target along path
+        target = path[-1]
+        for pt in path:
+            dist = math.hypot(pt[0] - rx, pt[1] - ry)
+            if dist >= self.ld:
+                target = pt
+                break
+
+        # Transform target to robot frame
+        dx = target[0] - rx
+        dy = target[1] - ry
+        # Angle from robot heading to target
+        alpha = math.atan2(dy, dx) - rtheta
+        # Normalize alpha to [-pi, pi]
+        alpha = (alpha + math.pi) % (2.0 * math.pi) - math.pi
+
+        # Curvature kappa = 2 * sin(alpha) / ld
+        curvature = 2.0 * math.sin(alpha) / self.ld
+        steer_angle = math.atan(curvature * self.ld)
+        steer_angle = max(-self.max_steer, min(self.max_steer, steer_angle))
+
+        return {
+            "curvature": round(curvature, 4),
+            "steering_angle": round(steer_angle, 4),
+            "steering_angle_deg": round(math.degrees(steer_angle), 2),
+            "lookahead_x": round(target[0], 4),
+            "lookahead_y": round(target[1], 4),
+            "alpha": round(alpha, 4),
+        }
+
+
+# ===========================================================================
+# STEWART PLATFORM (6-DOF PARALLEL HEXAPOD MANIPULATOR) INVERSE KINEMATICS
+# ===========================================================================
+
+class StewartPlatformIK:
+    """Computes exact actuator leg lengths for a 6-DOF Stewart-Gough parallel platform."""
+
+    def __init__(
+        self,
+        base_radius: float = 1.0,
+        platform_radius: float = 0.5,
+        base_angles_deg: Optional[List[float]] = None,
+        platform_angles_deg: Optional[List[float]] = None,
+    ):
+        self.rb = float(base_radius)
+        self.rp = float(platform_radius)
+
+        # Standard 6-joint attachment angle distributions (hexagonal paired layout)
+        if base_angles_deg is None:
+            base_angles_deg = [10.0, 50.0, 130.0, 170.0, 250.0, 290.0]
+        if platform_angles_deg is None:
+            platform_angles_deg = [30.0, 30.0, 150.0, 150.0, 270.0, 270.0]
+
+        self.base_anchors: List[List[float]] = []
+        for a in base_angles_deg:
+            rad = math.radians(a)
+            self.base_anchors.append([self.rb * math.cos(rad), self.rb * math.sin(rad), 0.0])
+
+        self.plat_anchors: List[List[float]] = []
+        for a in platform_angles_deg:
+            rad = math.radians(a)
+            self.plat_anchors.append([self.rp * math.cos(rad), self.rp * math.sin(rad), 0.0])
+
+    def solve_leg_lengths(
+        self,
+        translation: Tuple[float, float, float],  # (tx, ty, tz)
+        rotation_deg: Tuple[float, float, float],  # (roll_x, pitch_y, yaw_z)
+    ) -> List[float]:
+        """Calculates Euclidean lengths of all 6 actuator legs for given 6-DOF pose."""
+        tx, ty, tz = translation
+        rx = math.radians(rotation_deg[0])
+        ry = math.radians(rotation_deg[1])
+        rz = math.radians(rotation_deg[2])
+
+        # Euler Z-Y-X Rotation Matrix R
+        cx, sx = math.cos(rx), math.sin(rx)
+        cy, sy = math.cos(ry), math.sin(ry)
+        cz, sz = math.cos(rz), math.sin(rz)
+
+        R = [
+            [cz * cy, cz * sy * sx - sz * cx, cz * sy * cx + sz * sx],
+            [sz * cy, sz * sy * sx + cz * cx, sz * sy * cx - cz * sx],
+            [-sy, cy * sx, cy * cx],
+        ]
+
+        leg_lengths: List[float] = []
+        for i in range(6):
+            p = self.plat_anchors[i]
+            b = self.base_anchors[i]
+
+            # Transformed platform anchor: q_i = T + R * p_i
+            qx = tx + (R[0][0] * p[0] + R[0][1] * p[1] + R[0][2] * p[2])
+            qy = ty + (R[1][0] * p[0] + R[1][1] * p[1] + R[1][2] * p[2])
+            qz = tz + (R[2][0] * p[0] + R[2][1] * p[1] + R[2][2] * p[2])
+
+            # Leg vector L_i = q_i - b_i
+            lx = qx - b[0]
+            ly = qy - b[1]
+            lz = qz - b[2]
+            length = math.sqrt(lx * lx + ly * ly + lz * lz)
+            leg_lengths.append(round(length, 4))
+
+        return leg_lengths
+
+
+# ===========================================================================
+# TRAPEZOIDAL VELOCITY PROFILE MOTION CONTROLLER
+# ===========================================================================
+
+class TrapezoidalVelocityProfile:
+    """1D and multi-axis trapezoidal velocity trajectory profile generator."""
+
+    def __init__(self, max_velocity: float, max_acceleration: float):
+        self.v_max = float(max_velocity)
+        self.a_max = float(max_acceleration)
+
+    def plan(self, distance: float) -> Dict[str, Any]:
+        """Calculates acceleration time, cruise time, deceleration time, and total duration."""
+        d = abs(float(distance))
+        if d < 1e-9:
+            return {"total_time": 0.0, "t_acc": 0.0, "t_cruise": 0.0, "v_peak": 0.0, "triangular": True}
+
+        # Distance to reach v_max from rest: d_acc = v_max^2 / (2 * a_max)
+        d_acc = (self.v_max ** 2) / (2.0 * self.a_max)
+
+        if 2.0 * d_acc > d:
+            # Triangular profile: v_max is not reached
+            v_peak = math.sqrt(d * self.a_max)
+            t_acc = v_peak / self.a_max
+            t_cruise = 0.0
+            total_time = 2.0 * t_acc
+            triangular = True
+        else:
+            # Standard trapezoidal profile
+            v_peak = self.v_max
+            t_acc = self.v_max / self.a_max
+            d_cruise = d - 2.0 * d_acc
+            t_cruise = d_cruise / self.v_max
+            total_time = 2.0 * t_acc + t_cruise
+            triangular = False
+
+        return {
+            "total_time": round(total_time, 4),
+            "t_acc": round(t_acc, 4),
+            "t_cruise": round(t_cruise, 4),
+            "v_peak": round(v_peak, 4),
+            "triangular": triangular,
+        }
+
+    def sample(self, distance: float, t: float) -> Dict[str, float]:
+        """Evaluates position, velocity, and acceleration at time t."""
+        plan = self.plan(distance)
+        t_acc = plan["t_acc"]
+        t_cruise = plan["t_cruise"]
+        v_peak = plan["v_peak"]
+        total_t = plan["total_time"]
+        sign = 1.0 if distance >= 0 else -1.0
+
+        if t <= 0.0:
+            return {"position": 0.0, "velocity": 0.0, "acceleration": 0.0}
+        elif t >= total_t:
+            return {"position": float(distance), "velocity": 0.0, "acceleration": 0.0}
+
+        if t < t_acc:
+            # Acceleration phase
+            pos = 0.5 * self.a_max * (t ** 2)
+            vel = self.a_max * t
+            acc = self.a_max
+        elif t < t_acc + t_cruise:
+            # Cruise phase
+            d_acc = 0.5 * self.a_max * (t_acc ** 2)
+            pos = d_acc + v_peak * (t - t_acc)
+            vel = v_peak
+            acc = 0.0
+        else:
+            # Deceleration phase
+            t_dec = t - (t_acc + t_cruise)
+            d_acc = 0.5 * self.a_max * (t_acc ** 2)
+            d_cruise = v_peak * t_cruise
+            pos = d_acc + d_cruise + v_peak * t_dec - 0.5 * self.a_max * (t_dec ** 2)
+            vel = v_peak - self.a_max * t_dec
+            acc = -self.a_max
+
+        return {
+            "position": round(sign * pos, 4),
+            "velocity": round(sign * vel, 4),
+            "acceleration": round(sign * acc, 4),
+        }
+
+
+# High-level domain entrypoints
+def robotics_rrt_plan(
+    start: List[float],
+    goal: List[float],
+    bounds: List[float],
+    obstacles: Optional[List[Dict[str, float]]] = None,
+    step_size: float = 1.0,
+    seed: int = 42,
+) -> Optional[List[List[float]]]:
+    planner = RRTPlanner2D((start[0], start[1]), (goal[0], goal[1]), (bounds[0], bounds[1], bounds[2], bounds[3]), obstacles, step_size)
+    return planner.plan(seed=seed)
+
+
+def robotics_rrt_star_plan(
+    start: List[float],
+    goal: List[float],
+    bounds: List[float],
+    obstacles: Optional[List[Dict[str, float]]] = None,
+    step_size: float = 1.0,
+    search_radius: float = 2.5,
+    seed: int = 42,
+) -> Optional[List[List[float]]]:
+    planner = RRTPlanner2D((start[0], start[1]), (goal[0], goal[1]), (bounds[0], bounds[1], bounds[2], bounds[3]), obstacles, step_size)
+    return planner.plan_star(search_radius=search_radius, seed=seed)
+
+
+def robotics_apf_forces(
+    position: List[float],
+    goal: List[float],
+    obstacles: Optional[List[Dict[str, float]]] = None,
+    k_att: float = 1.0,
+    k_rep: float = 100.0,
+    influence_radius: float = 3.0,
+) -> Any:
+    apf = ArtificialPotentialField2D((goal[0], goal[1]), obstacles, k_att, k_rep, influence_radius)
+    return Record(apf.compute_force((position[0], position[1])))
+
+
+def robotics_diff_drive_forward(omega_left: float, omega_right: float, wheel_radius: float = 0.05, wheel_base: float = 0.2) -> Tuple[float, float]:
+    dd = DifferentialDriveKinematics(wheel_radius, wheel_base)
+    return dd.forward(omega_left, omega_right)
+
+
+def robotics_diff_drive_odometry(pose: List[float], v: float, w: float, dt: float, wheel_radius: float = 0.05, wheel_base: float = 0.2) -> Tuple[float, float, float]:
+    dd = DifferentialDriveKinematics(wheel_radius, wheel_base)
+    return dd.integrate_odometry((pose[0], pose[1], pose[2]), v, w, dt)
+
+
+def robotics_pure_pursuit(pose: List[float], path: List[List[float]], lookahead: float = 1.0) -> Any:
+    pp = PurePursuitController(lookahead_distance=lookahead)
+    return Record(pp.compute_steering((pose[0], pose[1], pose[2]), path))
+
+
+def robotics_stewart_platform_ik(translation: List[float], rotation_deg: List[float], base_radius: float = 1.0, platform_radius: float = 0.5) -> List[float]:
+    sp = StewartPlatformIK(base_radius, platform_radius)
+    return sp.solve_leg_lengths((translation[0], translation[1], translation[2]), (rotation_deg[0], rotation_deg[1], rotation_deg[2]))
+
+
+def robotics_trapezoidal_profile(distance: float, max_v: float, max_a: float) -> Any:
+    prof = TrapezoidalVelocityProfile(max_v, max_a)
+    return Record(prof.plan(distance))
+

@@ -457,3 +457,137 @@ def spatial_audio_room_impulse_response(
 def spatial_audio_hrtf_binaural(signal: List[float], azimuth_deg: float, elevation_deg: float = 0.0) -> Tuple[List[float], List[float]]:
     """Spatially renders mono signal to binaural stereo via synthetic HRTF."""
     return HRTFConvolution.spatialize(signal, azimuth_deg, elevation_deg)
+
+
+# ==============================================================================
+# VECTOR BASE AMPLITUDE PANNING (VBAP) & ATMOSPHERIC ATTENUATION
+# ==============================================================================
+
+class VectorBaseAmplitudePanning:
+    """Calculates normalized loudspeaker gains for arbitrary 2D/3D speaker layouts."""
+
+    @staticmethod
+    def pan_2d(
+        source_azimuth_deg: float,
+        speaker_angles_deg: List[float],
+    ) -> List[float]:
+        """Calculates normalized VBAP gains for circular speaker array."""
+        num_spk = len(speaker_angles_deg)
+        if num_spk == 0:
+            return []
+        if num_spk == 1:
+            return [1.0]
+
+        theta = math.radians(source_azimuth_deg % 360)
+        spk_rads = [math.radians(a % 360) for a in speaker_angles_deg]
+
+        # Find adjacent speaker pair enclosing source angle
+        spk_indices = list(range(num_spk))
+        # Sort speakers by angle
+        sorted_pairs = sorted(zip(spk_rads, spk_indices))
+        s_rads = [p[0] for p in sorted_pairs]
+        s_idxs = [p[1] for p in sorted_pairs]
+
+        p1_idx = s_idxs[-1]
+        p2_idx = s_idxs[0]
+
+        for i in range(num_spk):
+            ang1 = s_rads[i]
+            ang2 = s_rads[(i + 1) % num_spk]
+            if ang2 < ang1:
+                # Wrap-around across 0
+                if theta >= ang1 or theta <= ang2:
+                    p1_idx = s_idxs[i]
+                    p2_idx = s_idxs[(i + 1) % num_spk]
+                    break
+            else:
+                if ang1 <= theta <= ang2:
+                    p1_idx = s_idxs[i]
+                    p2_idx = s_idxs[(i + 1) % num_spk]
+                    break
+
+        v_source = [math.cos(theta), math.sin(theta)]
+        ang_p1 = math.radians(speaker_angles_deg[p1_idx])
+        ang_p2 = math.radians(speaker_angles_deg[p2_idx])
+        l1 = [math.cos(ang_p1), math.sin(ang_p1)]
+        l2 = [math.cos(ang_p2), math.sin(ang_p2)]
+
+        # Invert 2x2 matrix [l1 l2]
+        det = l1[0] * l2[1] - l1[1] * l2[0]
+        if abs(det) < 1e-9:
+            g1, g2 = 0.5, 0.5
+        else:
+            g1 = (l2[1] * v_source[0] - l2[0] * v_source[1]) / det
+            g2 = (-l1[1] * v_source[0] + l1[0] * v_source[1]) / det
+
+        g1 = max(0.0, g1)
+        g2 = max(0.0, g2)
+        norm = math.sqrt(g1 * g1 + g2 * g2)
+        if norm > 1e-9:
+            g1 /= norm
+            g2 /= norm
+
+        gains = [0.0] * num_spk
+        gains[p1_idx] = round(g1, 4)
+        gains[p2_idx] = round(g2, 4)
+        return gains
+
+
+class AtmosphericAttenuation:
+    """Distance-dependent inverse square law attenuation and frequency-dependent air damping."""
+
+    SPEED_OF_SOUND = 343.0
+
+    @classmethod
+    def apply(
+        cls,
+        signal: List[float],
+        distance_meters: float,
+        ref_distance: float = 1.0,
+        rolloff_factor: float = 1.0,
+        air_absorption_db_per_km: float = 10.0,
+        sample_rate: int = 44100,
+    ) -> List[float]:
+        """Attenuates signal by distance and high-frequency atmospheric absorption."""
+        d = max(0.1, float(distance_meters))
+        d_ref = max(0.1, float(ref_distance))
+
+        # Geometric distance attenuation (Inverse Distance Law)
+        geom_gain = d_ref / (d_ref + rolloff_factor * (d - d_ref))
+        geom_gain = max(0.0, min(1.0, geom_gain))
+
+        # Atmospheric air absorption (dB loss -> linear)
+        dist_km = d / 1000.0
+        loss_db = air_absorption_db_per_km * dist_km
+        abs_gain = 10.0 ** (-loss_db / 20.0)
+
+        # High-frequency damping filter (single-pole IIR)
+        # Higher distance -> lower cutoff
+        cutoff = max(500.0, 20000.0 / (1.0 + 0.1 * d))
+        alpha = (2.0 * math.pi * cutoff / sample_rate) / (2.0 * math.pi * cutoff / sample_rate + 1.0)
+
+        out = []
+        prev = 0.0
+        total_gain = geom_gain * abs_gain
+        for s in signal:
+            filtered = prev + alpha * (s - prev)
+            prev = filtered
+            out.append(round(filtered * total_gain, 6))
+
+        return out
+
+
+def spatial_audio_vbap_2d(source_azimuth_deg: float, speaker_angles_deg: List[float]) -> List[float]:
+    """Calculates 2D VBAP loudspeaker gains."""
+    return VectorBaseAmplitudePanning.pan_2d(source_azimuth_deg, speaker_angles_deg)
+
+
+def spatial_audio_distance_attenuate(
+    signal: List[float],
+    distance: float,
+    ref_distance: float = 1.0,
+    rolloff: float = 1.0,
+) -> List[float]:
+    """Applies distance attenuation and atmospheric air damping."""
+    return AtmosphericAttenuation.apply(signal, distance, ref_distance=ref_distance, rolloff_factor=rolloff)
+

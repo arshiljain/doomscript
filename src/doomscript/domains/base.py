@@ -71,6 +71,14 @@ class DomainContract(ABC):
 
     def can_handle_line(self, line: str) -> bool:
         """Determines if this domain can parse or handle a given standalone line."""
+        if hasattr(self, "parser") and self.parser:
+            try:
+                if hasattr(self.parser, "parse_inspect") and self.parser.parse_inspect(line, 0) is not None:
+                    return True
+                if hasattr(self.parser, "parse_operation") and self.parser.parse_operation(line, 0) is not None:
+                    return True
+            except Exception:
+                pass
         if hasattr(self, "verbs") and self.verbs:
             return any(v.matches(line) for v in self.verbs if hasattr(v, "matches"))
         return False

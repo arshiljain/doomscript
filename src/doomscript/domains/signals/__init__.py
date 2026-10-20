@@ -29,6 +29,16 @@ from doomscript.domains.signals.runtime import (
     SavitzkyGolayFilter,
     signals_stft,
     signals_savitzky_golay,
+    CooleyTukeyFFT,
+    HilbertTransform,
+    CrossCorrelation,
+    PeakDetector,
+    LombScarglePeriodogram,
+    signals_fft,
+    signals_ifft,
+    signals_cross_correlation,
+    signals_detect_pitch,
+    signals_lomb_scargle,
 )
 from doomscript.domains.signals.parser import SignalsDomainParser
 from doomscript.domains.signals.exporter import SignalsASTExporter
@@ -74,6 +84,8 @@ class SignalsDomain(DomainContract):
     blocks = []
 
     def can_handle_line(self, line: str) -> bool:
+        if self.parser.parse_inspect(line, 0) is not None or self.parser.parse_operation(line, 0) is not None:
+            return True
         s = line.strip().lower()
         return (
             s.startswith("decompose signal ")

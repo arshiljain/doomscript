@@ -25,9 +25,13 @@ from doomscript.domains.spatial_audio.runtime import (
     HigherOrderAmbisonics,
     AcousticRaytracer,
     HRTFConvolution,
+    VectorBaseAmplitudePanning,
+    AtmosphericAttenuation,
     spatial_audio_hoa_encode,
     spatial_audio_room_impulse_response,
     spatial_audio_hrtf_binaural,
+    spatial_audio_vbap_2d,
+    spatial_audio_distance_attenuate,
 )
 from doomscript.domains.spatial_audio.parser import SpatialAudioDomainParser
 from doomscript.domains.spatial_audio.exporter import SpatialAudioASTExporter
@@ -69,6 +73,8 @@ class SpatialAudioDomain(DomainContract):
     blocks = []
 
     def can_handle_line(self, line: str) -> bool:
+        if self.parser.parse_inspect(line, 0) is not None or self.parser.parse_operation(line, 0) is not None:
+            return True
         s = line.strip().lower()
         return (
             s.startswith("spatialize audio ")

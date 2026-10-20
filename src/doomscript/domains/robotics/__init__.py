@@ -20,10 +20,25 @@ from doomscript.domains.robotics.runtime import (
     InverseKinematics2D,
     TrajectoryPlanner,
     ExtendedKalmanFilter2D,
+    RRTNode,
+    RRTPlanner2D,
+    ArtificialPotentialField2D,
+    DifferentialDriveKinematics,
+    PurePursuitController,
+    StewartPlatformIK,
+    TrapezoidalVelocityProfile,
     robotics_forward_kinematics,
     robotics_inverse_kinematics_2link,
     robotics_cubic_trajectory,
     robotics_create_ekf,
+    robotics_rrt_plan,
+    robotics_rrt_star_plan,
+    robotics_apf_forces,
+    robotics_diff_drive_forward,
+    robotics_diff_drive_odometry,
+    robotics_pure_pursuit,
+    robotics_stewart_platform_ik,
+    robotics_trapezoidal_profile,
 )
 from doomscript.domains.robotics.parser import RoboticsDomainParser
 from doomscript.domains.robotics.exporter import RoboticsASTExporter
@@ -65,6 +80,8 @@ class RoboticsDomain(DomainContract):
     blocks = []
 
     def can_handle_line(self, line: str) -> bool:
+        if self.parser.parse_inspect(line, 0) is not None or self.parser.parse_operation(line, 0) is not None:
+            return True
         s = line.strip().lower()
         return (
             s.startswith("calculate forward kinematics for dh parameters ")
