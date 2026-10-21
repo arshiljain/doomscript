@@ -33,8 +33,19 @@ def test_vspython_example_count():
     ids=[f"ex_{num:02d}_{re.sub(r'[^a-zA-Z0-9_]', '_', title)[:25]}" for num, title, _ in EXAMPLES]
 )
 def test_vspython_example(example_num, title, code):
+    # Check if example requires lets_plot and it is missing
+    if "use viz" in code or "save chart" in code or "draw scatter" in code or example_num == 10:
+        try:
+            import lets_plot
+        except ImportError:
+            pytest.skip(f"Optional dependency 'lets_plot' is unavailable for Example {example_num} ({title})")
+
     try:
         env = execute(code)
         assert env is not None
     except (urllib.error.URLError, TimeoutError) as net_err:
         pytest.skip(f"Network error in Example {example_num} (likely offline test environment): {net_err}")
+    except ImportError as imp_err:
+        if "lets_plot" in str(imp_err).lower() or "lets-plot" in str(imp_err).lower():
+            pytest.skip(f"Optional dependency 'lets_plot' is unavailable for Example {example_num} ({title}): {imp_err}")
+        raise

@@ -17,17 +17,25 @@ from doomscript import runtime
 
 GRAMMAR_PATH = Path(__file__).parent.parent / "grammar" / "doom.lark"
 
-@lru_cache(maxsize=1)
+import threading
+
+_THREAD_LOCAL = threading.local()
+
 def get_parser() -> Lark:
-    with open(GRAMMAR_PATH, "r", encoding="utf-8") as f:
-        grammar = f.read()
-    return Lark(
-        grammar,
-        parser="lalr",
-        postlex=PythonIndenter(),
-        start="start",
-        propagate_positions=True
-    )
+    """Returns thread-isolated Lark parser instance to guarantee thread safety during concurrent compilations."""
+    parser = getattr(_THREAD_LOCAL, "parser", None)
+    if parser is None:
+        with open(GRAMMAR_PATH, "r", encoding="utf-8") as f:
+            grammar = f.read()
+        parser = Lark(
+            grammar,
+            parser="lalr",
+            postlex=PythonIndenter(),
+            start="start",
+            propagate_positions=True
+        )
+        _THREAD_LOCAL.parser = parser
+    return parser
 
 def compile_to_ast(source: str, filename: str = "<doom>") -> ast.Module:
     """Parses DoomScript source and returns a Python ast.Module."""
@@ -179,6 +187,12 @@ def execute(source: Any, custom_globals: dict = None, filename: str = "<doom>") 
         NOT an isolated security sandbox. Do not execute untrusted scripts
         under the assumption that its English syntax restricts execution capabilities.
     """
+    from doomscript.domains.registry import get_domain_registry
+    with get_domain_registry().compilation_context():
+        return _execute_scoped(source, custom_globals=custom_globals, filename=filename)
+
+
+def _execute_scoped(source: Any, custom_globals: dict = None, filename: str = "<doom>") -> dict:
     if isinstance(source, ast.AST):
         py_ast = source
     else:

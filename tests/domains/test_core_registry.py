@@ -80,12 +80,25 @@ def test_registry_auto_detection():
     reg = DomainRegistry()
     reg.register(MockDomain())
 
-    # Line handler dispatch
+    # Domain isolation: unactivated domain is NOT dispatched during normal routing
+    assert reg.find_domain_for_line("inspect mock dataset") is None
+    assert reg.find_domain_for_block("mock block header:") is None
+
+    # Explicit discovery with active_only=False finds it
+    matched_inactive = reg.find_domain_for_line("inspect mock dataset", active_only=False)
+    assert matched_inactive is not None
+    assert matched_inactive.name == "mock"
+
+    matched_inactive_block = reg.find_domain_for_block("mock block header:", active_only=False)
+    assert matched_inactive_block is not None
+    assert matched_inactive_block.name == "mock"
+
+    # When activated, routing finds it cleanly
+    reg.activate("mock")
     matched = reg.find_domain_for_line("inspect mock dataset")
     assert matched is not None
     assert matched.name == "mock"
 
-    # Block handler dispatch
     matched_block = reg.find_domain_for_block("mock block header:")
     assert matched_block is not None
     assert matched_block.name == "mock"

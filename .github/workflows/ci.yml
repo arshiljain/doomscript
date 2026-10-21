@@ -28,7 +28,7 @@ jobs:
     - name: Install package and dependencies (Core)
       run: |
         python -m pip install --upgrade pip
-        pip install -e .
+        pip install -e ".[viz]"
         pip install pytest
 
     - name: Test CLI entry points

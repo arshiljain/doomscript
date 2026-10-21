@@ -25,17 +25,81 @@ CORE_VERBS = frozenset({
 _ASSIGNMENT_RE = re.compile(r"^[A-Za-z_]\w*\s*=[^=]")
 
 
+import contextlib
+import contextvars
+from dataclasses import dataclass, field
+
+
+@dataclass
+class CompilationState:
+    """Isolated, per-compilation session state supporting safe concurrent compilation."""
+    active_domains: List[str] = field(default_factory=list)
+    specs: Dict[str, DomainIR] = field(default_factory=dict)
+    spec_counter: int = 0
+    last_parsed: Optional[Tuple[str, int, DomainContract, str]] = None
+
+
+_COMPILATION_STATE: contextvars.ContextVar[Optional[CompilationState]] = contextvars.ContextVar(
+    "compilation_state", default=None
+)
+
+
 class DomainRegistry:
     """Registry coordinating available domain packs, namespaces, and dispatch."""
 
     def __init__(self):
         self._domains: Dict[str, DomainContract] = {}
         self._alias_map: Dict[str, str] = {}
-        self._active_domains: List[str] = []
-        self._specs: Dict[str, DomainIR] = {}
-        self._spec_counter: int = 0
         self._verb_index: Dict[str, List[DomainContract]] = {}
-        self._last_parsed: Optional[Tuple[str, int, DomainContract, str]] = None
+        self._default_state = CompilationState()
+
+    def _get_state(self) -> CompilationState:
+        state = _COMPILATION_STATE.get()
+        if state is None:
+            return self._default_state
+        return state
+
+    @property
+    def _active_domains(self) -> List[str]:
+        return self._get_state().active_domains
+
+    @_active_domains.setter
+    def _active_domains(self, val: List[str]) -> None:
+        self._get_state().active_domains = val
+
+    @property
+    def _specs(self) -> Dict[str, DomainIR]:
+        return self._get_state().specs
+
+    @_specs.setter
+    def _specs(self, val: Dict[str, DomainIR]) -> None:
+        self._get_state().specs = val
+
+    @property
+    def _spec_counter(self) -> int:
+        return self._get_state().spec_counter
+
+    @_spec_counter.setter
+    def _spec_counter(self, val: int) -> None:
+        self._get_state().spec_counter = val
+
+    @property
+    def _last_parsed(self) -> Optional[Tuple[str, int, DomainContract, str]]:
+        return self._get_state().last_parsed
+
+    @_last_parsed.setter
+    def _last_parsed(self, val: Optional[Tuple[str, int, DomainContract, str]]) -> None:
+        self._get_state().last_parsed = val
+
+    @contextlib.contextmanager
+    def compilation_context(self):
+        """Context manager providing isolated compilation state for concurrent compilation units."""
+        new_state = CompilationState()
+        token = _COMPILATION_STATE.set(new_state)
+        try:
+            yield new_state
+        finally:
+            _COMPILATION_STATE.reset(token)
 
     def register(self, domain: DomainContract) -> None:
         """Registers a domain pack and its aliases. Disallows conflicting aliases."""
@@ -244,26 +308,26 @@ class DomainRegistry:
         w1 = tokens[0].lower()
         candidates: List[DomainContract] = []
 
-        # Check two-word prefix if available
+        # Check two-word prefix if available (strictly active domains)
         if len(tokens) > 1:
             w2 = f"{w1} {tokens[1].lower()}"
             for d in self._verb_index.get(w2, []):
-                if d not in candidates:
+                if d.name.lower() in self._active_domains and d not in candidates:
                     candidates.append(d)
 
-        # Check single-word prefix
+        # Check single-word prefix (strictly active domains)
         for d in self._verb_index.get(w1, []):
-            if d not in candidates:
+            if d.name.lower() in self._active_domains and d not in candidates:
                 candidates.append(d)
 
         # Special case: tabular queries: <source> where <cond> into <target>
-        if "where" in s and "into" in s and "data" in self._domains:
+        if "where" in s and "into" in s and "data" in self._domains and "data" in self._active_domains:
             d_data = self._domains["data"]
             if d_data not in candidates:
                 candidates.append(d_data)
 
         # Special case: plot/chart exploration
-        if ("explore" in s or "plot" in s or "chart" in s) and "viz" in self._domains:
+        if ("explore" in s or "plot" in s or "chart" in s) and "viz" in self._domains and "viz" in self._active_domains:
             d_viz = self._domains["viz"]
             if d_viz not in candidates:
                 candidates.append(d_viz)
@@ -323,8 +387,8 @@ class DomainRegistry:
 
         return None
 
-    def find_domain_for_line(self, line: str) -> Optional[DomainContract]:
-        """Finds a domain capable of handling the line. Uses single-pass parsing with caching."""
+    def find_domain_for_line(self, line: str, active_only: bool = True) -> Optional[DomainContract]:
+        """Finds a domain capable of handling the line. When active_only=True (default), inactive domains are strictly ignored."""
         if self._last_parsed and self._last_parsed[0] == line:
             return self._last_parsed[2]
 
@@ -332,30 +396,32 @@ class DomainRegistry:
         if parsed is not None and self._last_parsed and self._last_parsed[0] == line:
             return self._last_parsed[2]
 
-        for domain in self._domains.values():
-            if domain.name.lower() not in self._active_domains:
-                try:
-                    res = domain.parser.parse_inspect(line, 0)
-                    if res is not None:
-                        return domain
-                    res = domain.parser.parse_operation(line, 0)
-                    if res is not None:
-                        return domain
-                except Exception:
-                    pass
+        if not active_only:
+            for domain in self._domains.values():
+                if domain.name.lower() not in self._active_domains:
+                    try:
+                        res = domain.parser.parse_inspect(line, 0)
+                        if res is not None:
+                            return domain
+                        res = domain.parser.parse_operation(line, 0)
+                        if res is not None:
+                            return domain
+                    except Exception:
+                        pass
 
         return None
 
-    def find_domain_for_block(self, header: str) -> Optional[DomainContract]:
-        """Finds a domain capable of handling the block header in deterministic order."""
+    def find_domain_for_block(self, header: str, active_only: bool = True) -> Optional[DomainContract]:
+        """Finds a domain capable of handling the block header. When active_only=True (default), inactive domains are strictly ignored."""
         for name in reversed(self._active_domains):
             domain = self._domains.get(name)
             if domain and domain.can_handle_block(header):
                 return domain
 
-        for domain in self._domains.values():
-            if domain.name.lower() not in self._active_domains and domain.can_handle_block(header):
-                return domain
+        if not active_only:
+            for domain in self._domains.values():
+                if domain.name.lower() not in self._active_domains and domain.can_handle_block(header):
+                    return domain
 
         return None
 
