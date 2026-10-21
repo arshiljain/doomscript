@@ -692,12 +692,25 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         masked = f"if ds_none({coll}, lambda x: x is {pred}):"
 
     # Pillar C: Thought Queries & Intuitive Filtering
+    _reserved_query_words = {'and', 'or', 'not', 'is', 'in', 'true', 'false', 'none', 'item', 'x', 'at', 'least', 'most', 'greater', 'less', 'than', 'between', 'outside', 'empty', 'even', 'odd', 'positive', 'negative', 'zero'}
+
+    def _bind_contextual_attrs(cond: str, var_name: str) -> str:
+        if re.search(r"\b(x|item)\b", cond):
+            return cond
+        def _repl(m):
+            w = m.group(1)
+            if w.lower() in _reserved_query_words or w.startswith("__STR_"):
+                return m.group(0)
+            return f"ds_attr({var_name}, '{w}')"
+        return re.sub(r"(?<![\w\.])([A-Za-z_]\w*)(?!\s*\()", _repl, cond)
+
     def _rewrite_keep_only(m):
         coll = m.group(1).strip()
         cond = m.group(2).strip()
         target = m.group(3).strip()
         var_name = "x" if re.search(r"\bx\b", cond) else "item"
-        return f"set {target} to [{var_name} for {var_name} in {coll} if {cond}]"
+        bound_cond = _bind_contextual_attrs(cond, var_name)
+        return f"set {target} to [{var_name} for {var_name} in {coll} if {bound_cond}]"
 
     masked = re.sub(
         r"^\s*keep\s+only\s+(?:items\s+in\s+)?(.+?)\s+where\s+(.+?)\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)$",
@@ -711,7 +724,8 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         cond = m.group(2).strip()
         target = m.group(3).strip()
         var_name = "x" if re.search(r"\bx\b", cond) else "item"
-        return f"set {target} to [{var_name} for {var_name} in {coll} if not ({cond})]"
+        bound_cond = _bind_contextual_attrs(cond, var_name)
+        return f"set {target} to [{var_name} for {var_name} in {coll} if not ({bound_cond})]"
 
     masked = re.sub(
         r"^\s*discard\s+from\s+(.+?)\s+where\s+(.+?)\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)$",
@@ -725,7 +739,8 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         cond = m.group(2).strip()
         target = m.group(3).strip()
         var_name = "x" if re.search(r"\bx\b", cond) else "item"
-        return f"set {target} to ds_find_first({coll}, lambda {var_name}: {cond})"
+        bound_cond = _bind_contextual_attrs(cond, var_name)
+        return f"set {target} to ds_find_first({coll}, lambda {var_name}: {bound_cond})"
 
     masked = re.sub(
         r"^\s*find\s+first\s+in\s+(.+?)\s+where\s+(.+?)\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)$",

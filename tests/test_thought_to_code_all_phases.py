@@ -144,3 +144,26 @@ def test_runtime_attr_and_superlatives():
 
     largest = ds_find_superlative(catalog, order="max", key="price")
     assert largest["name"] == "Widget B"
+
+
+# ---------------------------------------------------------------------------
+# Phase 2, Task 2.2: Contextual Attribute Binding in Thought Queries
+# ---------------------------------------------------------------------------
+
+def test_contextual_attribute_query():
+    from doomscript.compiler.engine import execute
+
+    code = """
+orders = [
+    {"id": 1, "price": 50},
+    {"id": 2, "price": 150},
+    {"id": 3, "price": 250}
+]
+keep only orders where price > 100 into expensive_orders
+discard from orders where price >= 200 into affordable_orders
+"""
+    env = execute(code)
+    assert len(env["expensive_orders"]) == 2
+    assert env["expensive_orders"][0]["id"] == 2
+    assert len(env["affordable_orders"]) == 2
+    assert env["affordable_orders"][1]["id"] == 2
