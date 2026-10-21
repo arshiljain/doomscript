@@ -228,6 +228,49 @@ class FinanceDomainParser(DomainParser):
             target = alpha_m.group(4).strip()
             return f"set {target} to fin_alpha({asset}, {mkt}, risk_free_rate={rf})"
 
+        # calculate black-scholes price for (call|put) option on [asset] <s0> with strike <k> ... into <target>
+        m_bs_calc = re.match(
+            r"^calculate\s+(?:black[- ]scholes\s+)?price\s+for\s+(call|put)\s+option\s+on\s+(?:asset\s+)?(.+?)\s+with\s+strike\s+(.+?)(?:,\s*|\s+)with\s+(?:maturity|expiry|time)\s+(.+?)(?:,\s*|\s+)with\s+(?:risk[- ]free\s+)?rate\s+(.+?)(?:,\s*|\s+)with\s+(?:vol|volatility)\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if not m_bs_calc:
+            m_bs_calc = re.match(
+                r"^calculate\s+(?:black[- ]scholes\s+)?price\s+for\s+(call|put)\s+option\s+on\s+(?:asset\s+)?(.+?)\s+with\s+strike\s+(.+?)(?:,\s*|\s+)(?:maturity|expiry|time)\s+(.+?)(?:,\s*|\s+)(?:risk[- ]free\s+)?rate\s+(.+?)(?:,\s*|\s+)(?:vol|volatility)\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+                s,
+                re.IGNORECASE,
+            )
+        if m_bs_calc:
+            is_call = m_bs_calc.group(1).lower() == "call"
+            spot, strike, t, rate, vol, target = (
+                m_bs_calc.group(2).strip(),
+                m_bs_calc.group(3).strip(),
+                m_bs_calc.group(4).strip(),
+                m_bs_calc.group(5).strip(),
+                m_bs_calc.group(6).strip(),
+                m_bs_calc.group(7).strip(),
+            )
+            fn = "fin_black_scholes_call" if is_call else "fin_black_scholes_put"
+            return f"set {target} to {fn}({spot}, {strike}, {t}, {rate}, {vol})"
+
+        # calculate greeks for [call/put] option on [asset] <s0> with strike <k> ... into <target>
+        m_greeks = re.match(
+            r"^calculate\s+greeks\s+for\s+(?:(call|put)\s+)?option\s+on\s+(?:asset\s+)?(.+?)\s+with\s+strike\s+(.+?)(?:,\s*|\s+)(?:maturity|expiry|time)\s+(.+?)(?:,\s*|\s+)(?:risk[- ]free\s+)?rate\s+(.+?)(?:,\s*|\s+)(?:vol|volatility)\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_greeks:
+            opt_type = f'"{m_greeks.group(1).lower()}"' if m_greeks.group(1) else '"call"'
+            spot, strike, t, rate, vol, target = (
+                m_greeks.group(2).strip(),
+                m_greeks.group(3).strip(),
+                m_greeks.group(4).strip(),
+                m_greeks.group(5).strip(),
+                m_greeks.group(6).strip(),
+                m_greeks.group(7).strip(),
+            )
+            return f"set {target} to finance_analytical_greeks({spot}, {strike}, {t}, {rate}, {vol}, {opt_type})"
+
         price_opt_m = re.match(
             r"^price\s+(call|put)\s+option\s+(?:with|for)\s+spot\s+(.+?)\s+strike\s+(.+?)\s+expiry\s+(.+?)\s+rate\s+(.+?)\s+(?:vol|volatility)\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
             s,

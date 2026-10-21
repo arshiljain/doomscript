@@ -1293,7 +1293,7 @@
     "error_message": "Must be an adult",
     "suggestion": null,
     "python_leakage": [],
-    "details": "Traceback (most recent call last):\n  File \"C:\\Users\\kanha\\.gemini\\antigravity\\scratch\\doomscript\\scratch\\audit_beginner_phrasings.py\", line 735, in run_single_test\n    exec_env = execute(code)\n  File \"C:\\Users\\kanha\\.gemini\\antigravity\\scratch\\doomscript\\src\\doomscript\\compiler\\engine.py\", line 202, in execute\n    return _execute_scoped(source, custom_globals=custom_globals, filename=filename)\n  File \"C:\\Users\\kanha\\.gemini\\antigravity\\scratch\\doomscript\\src\\doomscript\\compiler\\engine.py\", line 421, in _execute_scoped\n    exec(compiled, exec_globals)\n    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<doom>\", line 2, in <module>\nAssertionError: Must be an adult\n"
+    "details": "Traceback (most recent call last):\n  File \"C:\\Users\\kanha\\.gemini\\antigravity\\scratch\\doomscript\\scratch\\audit_beginner_phrasings.py\", line 735, in run_single_test\n    exec_env = execute(code)\n  File \"C:\\Users\\kanha\\.gemini\\antigravity\\scratch\\doomscript\\src\\doomscript\\compiler\\engine.py\", line 202, in execute\n    return _execute_scoped(source, custom_globals=custom_globals, filename=filename)\n  File \"C:\\Users\\kanha\\.gemini\\antigravity\\scratch\\doomscript\\src\\doomscript\\compiler\\engine.py\", line 422, in _execute_scoped\n    exec(compiled, exec_globals)\n    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<doom>\", line 2, in <module>\nAssertionError: Must be an adult\n"
   },
   {
     "id": "IO-09",

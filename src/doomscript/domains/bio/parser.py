@@ -126,6 +126,18 @@ class BioDomainParser(DomainParser):
             target = m_sw.group(3).strip()
             return f"set {target} to bio_smith_waterman({s1}, {s2})"
 
+        # align sequences <s1> and <s2> into <target>
+        m_simple_align = re.match(
+            r"^align\s+sequences\s+([^\s]+)\s+and\s+([^\s]+)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_simple_align:
+            s1 = m_simple_align.group(1).strip()
+            s2 = m_simple_align.group(2).strip()
+            target = m_simple_align.group(3).strip()
+            return f"set {target} to bio_needleman_wunsch({s1}, {s2})"
+
         # parse fasta [string] <text> into <target>
         m_fa = re.match(
             r"^parse\s+fasta\s+(?:string\s+)?(.+?)\s+into\s+([A-Za-z_]\w*)$",

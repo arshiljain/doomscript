@@ -145,7 +145,7 @@ def train_model(model_or_name: Any, scope: Optional[Dict[str, Any]] = None) -> M
 
     # 3. Instantiate and fit algorithm
     algo = spec.algorithm.lower()
-    if algo in ("linear_regression", "ols"):
+    if algo in ("linear_regression", "ols", "regression"):
         model = NativeLinearRegression()
         model.fit(X_train, [float(v) for v in y_train])
     elif algo in ("logistic_regression", "classification"):
@@ -209,7 +209,7 @@ def evaluate_model(model_or_name: Any, scope: Optional[Dict[str, Any]] = None) -
     algo = container.algorithm
 
     metrics = {}
-    if algo in ("linear_regression", "ols"):
+    if algo in ("linear_regression", "ols", "regression"):
         task_type = "regression"
         y_float = [float(v) for v in y_eval]
         preds_float = [float(p) for p in preds]
@@ -330,7 +330,7 @@ def cross_validate_model(
     scores: List[float] = []
 
     algo = spec.algorithm.lower()
-    is_regression = algo in ("linear_regression", "ols")
+    is_regression = algo in ("linear_regression", "ols", "regression")
 
     for k in range(folds):
         val_start = k * fold_size

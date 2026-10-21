@@ -11,6 +11,36 @@ class RoboticsDomainParser(DomainParser):
     def parse_line(self, line: str) -> Optional[str]:
         s = line.strip()
 
+        # move arm to x: <x>, y: <y> [, z: <z>] [into <target>]
+        m_move_arm = re.match(
+            r"^move\s+arm\s+to\s+x:\s*(.+?),\s*y:\s*(.+?)(?:,\s*z:\s*(.+?))?(?:\s+into\s+([A-Za-z_]\w*))?$",
+            s,
+            re.IGNORECASE,
+        )
+        if not m_move_arm:
+            m_move_arm = re.match(
+                r"^move\s+arm\s+to\s+x\s*(?:=|:)?\s*(.+?)(?:,\s*|\s+)y\s*(?:=|:)?\s*(.+?)(?:(?:,\s*|\s+)z\s*(?:=|:)?\s*(.+?))?(?:\s+into\s+([A-Za-z_]\w*))?$",
+                s,
+                re.IGNORECASE,
+            )
+        if m_move_arm:
+            x = m_move_arm.group(1).strip()
+            y = m_move_arm.group(2).strip()
+            z = m_move_arm.group(3).strip() if m_move_arm.group(3) else "None"
+            target = m_move_arm.group(4).strip() if m_move_arm.group(4) else "arm_pose"
+            return f"set {target} to robotics_move_arm({x}, {y}, {z})"
+
+        # read lidar [sensor] [<sensor>] into <target>
+        m_lidar = re.match(
+            r"^read\s+lidar(?:\s+sensor|\s+scan)?(?:\s+([A-Za-z_]\w*))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_lidar:
+            sensor = m_lidar.group(1).strip() if m_lidar.group(1) else "None"
+            target = m_lidar.group(2).strip()
+            return f"set {target} to robotics_read_lidar({sensor})"
+
         # calculate forward kinematics for dh parameters <params> into <target>
         m_fk = re.match(
             r"^calculate\s+forward\s+kinematics\s+for\s+dh\s+parameters\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",

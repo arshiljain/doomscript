@@ -35,6 +35,21 @@ class MLDomainParser(DomainParser):
         return None
 
     def parse_operation(self, line: str, line_no: int) -> Optional[str]:
+        # train (regression|classification|etc) model on <dataset> with target/predicting <target_col> [into <var>]
+        m_train_natural = re.match(
+            r"^train\s+(?:a\s+)?([A-Za-z_][\w\s]*?)\s+model\s+on\s+(?:dataset\s+|data\s+)?([A-Za-z_]\w*)\s+(?:with\s+target|predicting|for)\s+[\"']?([A-Za-z_]\w*)[\"']?(?:\s+(?:with\s+)?features\s+\[(.*?)\])?(?:\s+into\s+([A-Za-z_]\w*))?$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_train_natural:
+            algo_raw = m_train_natural.group(1).strip().lower().replace(" ", "_")
+            dataset = m_train_natural.group(2).strip()
+            target_col = m_train_natural.group(3).strip()
+            feats_raw = m_train_natural.group(4)
+            target_var = m_train_natural.group(5).strip() if m_train_natural.group(5) else "model"
+            feats_arg = f"{[f.strip().strip(chr(34)).strip(chr(39)) for f in feats_raw.split(',') if f.strip()]}" if feats_raw else "None"
+            return f'set {target_var} to train_direct_model("{algo_raw}", {dataset}, "{target_col}", {feats_arg})'
+
         # train model on <dataset> predicting <target_col> using <algo> into <target_var>
         m_train_spoken = re.match(
             r"^train\s+model\s+on\s+([A-Za-z_]\w*)\s+predicting\s+[\"']?([A-Za-z_]\w*)[\"']?\s+using\s+([A-Za-z_]\w*)(?:\s+features\s+\[(.*?)\])?\s+into\s+([A-Za-z_]\w*)$",
@@ -86,9 +101,9 @@ class MLDomainParser(DomainParser):
             target = eval_m.group(2) or f"{model_name}_eval"
             return f"set {target} to evaluate_model({model_name})"
 
-        # predict [with] <model_name> on <features> into <target>
+        # predict [with / using] [model] <model_name> on <features> into <target>
         pred_m = re.match(
-            r"^predict(?:\s+with)?\s+([A-Za-z_]\w*)\s+on\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            r"^predict(?:\s+(?:with|using))?\s+(?:model\s+)?([A-Za-z_]\w*)\s+on\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
             line.strip(),
             re.IGNORECASE,
         )

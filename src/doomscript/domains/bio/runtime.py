@@ -197,11 +197,11 @@ def bio_needleman_wunsch(seq1: Any, seq2: Any, match_score: int = 1, mismatch_pe
         align2.append(s2[j - 1])
         j -= 1
 
-    return {
+    return Record({
         "score": dp[n][m],
         "alignment1": "".join(reversed(align1)),
         "alignment2": "".join(reversed(align2)),
-    }
+    })
 
 
 def bio_smith_waterman(seq1: Any, seq2: Any, match_score: int = 2, mismatch_penalty: int = -1, gap_penalty: int = -1) -> Dict[str, Any]:
@@ -246,11 +246,11 @@ def bio_smith_waterman(seq1: Any, seq2: Any, match_score: int = 2, mismatch_pena
             align2.append(s2[j - 1])
             j -= 1
 
-    return {
+    return Record({
         "score": max_score,
         "alignment1": "".join(reversed(align1)),
         "alignment2": "".join(reversed(align2)),
-    }
+    })
 
 
 def bio_parse_fasta(fasta_text: str) -> List[Dict[str, str]]:

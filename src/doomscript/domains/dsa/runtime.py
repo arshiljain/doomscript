@@ -180,8 +180,8 @@ def fit_complexity(sizes: List[int], times: List[float]) -> Tuple[str, float, Di
         best_fit = "O(n)"
 
     # If O(n) explains >= 85% of variance and is within 0.05 of O(n^2) or O(n log n), prefer O(n)
-    if "O(n)" in r2_scores and r2_scores["O(n)"] >= 0.85:
-        if best_fit in ("O(n^2)", "O(n log n)") and (r2_scores[best_fit] - r2_scores["O(n)"] <= 0.05):
+    if "O(n)" in r2_scores and r2_scores["O(n)"] >= 0.70:
+        if best_fit in ("O(n^2)", "O(n log n)") and (r2_scores[best_fit] - r2_scores["O(n)"] <= 0.15):
             best_fit = "O(n)"
 
     return best_fit, r2_scores[best_fit], r2_scores

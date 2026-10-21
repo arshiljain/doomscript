@@ -20,9 +20,9 @@ class GraphDomainParser(DomainParser):
     def parse_inspect(self, line: str, line_no: int) -> Optional[str]:
         s = line.strip()
 
-        # shortest path from <u> to <v> in [graph] <g> into <target>
+        # [find] shortest path from <u> to <v> in [graph] <g> into <target>
         m_sp = re.match(
-            r"^shortest\s+path\s+from\s+(.+?)\s+to\s+(.+?)\s+in\s+(?:graph\s+)?([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
+            r"^(?:find\s+)?shortest\s+path\s+from\s+(.+?)\s+to\s+(.+?)\s+in\s+(?:graph\s+)?([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )
@@ -33,9 +33,9 @@ class GraphDomainParser(DomainParser):
             target = m_sp.group(4).strip()
             return f"set {target} to graph_shortest_path({g_var}, {u_expr}, {v_expr})"
 
-        # pagerank of [graph] <g> into <target>
+        # [calculate] pagerank of [graph] <g> into <target>
         m_pr = re.match(
-            r"^pagerank\s+of\s+(?:graph\s+)?([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
+            r"^(?:calculate\s+)?pagerank\s+of\s+(?:graph\s+)?([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )

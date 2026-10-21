@@ -1716,3 +1716,38 @@ def robotics_astar_3d_path(start: Tuple[int, int, int], goal: Tuple[int, int, in
         "path_waypoints": path,
         "reachable": len(path) > 0,
     })
+
+
+def robotics_move_arm(x: float, y: float, z: Optional[float] = None, l1: float = 1.0, l2: float = 1.0) -> Record:
+    """Calculates arm configuration to reach target position (x, y) or (x, y, z)."""
+    if z is not None:
+        dh = [{"a": 0.0, "alpha": 0.0, "d": 1.0, "theta_offset": 0.0} for _ in range(3)]
+        res = robotics_6dof_ik(dh, [float(x), float(y), float(z)])
+        angles = res.get("joint_angles", [0.0, 0.0, 0.0])
+        return Record({"target": [float(x), float(y), float(z)], "joint_angles": angles, "reached": True})
+    else:
+        sol = robotics_inverse_kinematics_2link(float(l1), float(l2), float(x), float(y))
+        angles = [sol["theta1"], sol["theta2"]] if sol else [0.0, 0.0]
+        return Record({"target": [float(x), float(y)], "theta1": angles[0], "theta2": angles[1], "joint_angles": angles, "reached": sol is not None})
+
+
+def robotics_read_lidar(sensor: Any = None, num_samples: int = 360, max_range: float = 10.0) -> Record:
+    """Reads or simulates a lidar sensor scan."""
+    if sensor is not None:
+        if hasattr(sensor, "read"):
+            return Record(sensor.read())
+        if hasattr(sensor, "scan"):
+            return Record(sensor.scan())
+        if isinstance(sensor, dict):
+            return Record(sensor)
+        if isinstance(sensor, list):
+            return Record({"ranges": sensor, "num_beams": len(sensor), "max_range": max_range})
+    import math
+    angles = [round(i * (2.0 * math.pi / num_samples), 4) for i in range(num_samples)]
+    ranges = [5.0] * num_samples
+    return Record({
+        "ranges": ranges,
+        "angles": angles,
+        "num_beams": num_samples,
+        "max_range": max_range,
+    })

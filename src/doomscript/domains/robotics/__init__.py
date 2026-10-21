@@ -52,6 +52,8 @@ from doomscript.domains.robotics.runtime import (
     robotics_6dof_fk,
     robotics_6dof_ik,
     robotics_state_lattice_plan,
+    robotics_move_arm,
+    robotics_read_lidar,
 )
 from doomscript.domains.robotics.parser import RoboticsDomainParser
 from doomscript.domains.robotics.exporter import RoboticsASTExporter
@@ -77,6 +79,14 @@ class RoboticsDomain(DomainContract):
     optional_dependencies = {}
 
     verbs = [
+        VerbSpec(
+            pattern="move arm to x: {x:expr}, y: {y:expr} into {target:ident}",
+            description="Computes arm joint configuration to reach Cartesian coordinate",
+        ),
+        VerbSpec(
+            pattern="read lidar sensor into {target:ident}",
+            description="Reads range-bearing distance scans from lidar sensor",
+        ),
         VerbSpec(
             pattern="calculate forward kinematics for dh parameters {params:expr} into {target:ident}",
             description="Calculates end-effector position from DH parameter chain",
@@ -135,4 +145,6 @@ __all__ = [
     "robotics_6dof_fk",
     "robotics_6dof_ik",
     "robotics_state_lattice_plan",
+    "robotics_move_arm",
+    "robotics_read_lidar",
 ]
