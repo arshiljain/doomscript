@@ -838,6 +838,44 @@ def ds_find_first(collection, predicate=None):
     return None
 
 
+def ds_every(collection, predicate_fn):
+    """Universal quantification: checks whether every element in collection matches predicate."""
+    if collection is None:
+        return True
+    try:
+        return all(predicate_fn(item) for item in collection)
+    except TypeError:
+        return bool(predicate_fn(collection))
+
+
+def ds_any(collection, predicate_fn):
+    """Existential quantification: checks whether any element in collection matches predicate."""
+    if not collection:
+        return False
+    try:
+        return any(predicate_fn(item) for item in collection)
+    except TypeError:
+        return bool(predicate_fn(collection))
+
+
+def ds_none(collection, predicate_fn):
+    """Negative quantification: checks whether no element in collection matches predicate."""
+    return not ds_any(collection, predicate_fn)
+
+
+def ds_at_least_n(collection, n, predicate_fn):
+    """Checks whether at least n elements in collection match predicate."""
+    if not collection:
+        return n <= 0
+    count = 0
+    for item in collection:
+        if predicate_fn(item):
+            count += 1
+            if count >= n:
+                return True
+    return count >= n
+
+
 def ds_drop(collection, n):
     """Drop the first n elements from a sequence, string, or collection."""
     if hasattr(collection, "__getitem__"):
