@@ -347,6 +347,82 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"\b(?:my|its)\s+([A-Za-z_]\w*)", r"self.\1", masked, flags=re.IGNORECASE)
 
     # Phase 4: Lambdas and Comprehensions in English
+    # English List Comprehensions and Ranges
+    masked = re.sub(
+        r"^\s*make\s+a\s+list\s+of\s+squares\s+(?:from|of)\s+(.+?)\s+to\s+(.+?)\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
+        r"set \3 to [x * x for x in range_inclusive(\1, \2)]",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"^\s*make\s+a\s+list\s+of\s+(.+?)\s+for\s+each\s+([A-Za-z_]\w*)\s+from\s+(.+?)\s+to\s+(.+?)(?:\s+(?:where|if)\s+(.+?))?\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
+        lambda m: f"set {m.group(6)} to [{m.group(1)} for {m.group(2)} in range_inclusive({m.group(3)}, {m.group(4)}) if {m.group(5)}]" if m.group(5) else f"set {m.group(6)} to [{m.group(1)} for {m.group(2)} in range_inclusive({m.group(3)}, {m.group(4)})]",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"^\s*make\s+a\s+list\s+of\s+(.+?)\s+for\s+each\s+([A-Za-z_]\w*)\s+in\s+([^:\n]+?)(?:\s+(?:where|if)\s+(.+?))?\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
+        lambda m: f"set {m.group(5)} to [{m.group(1)} for {m.group(2)} in {m.group(3)} if {m.group(4)}]" if m.group(4) else f"set {m.group(5)} to [{m.group(1)} for {m.group(2)} in {m.group(3)}]",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"^\s*make\s+a\s+list\s+(?:of\s+numbers\s+)?from\s+(.+?)\s+to\s+(.+?)\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
+        r"set \3 to [x for x in range_inclusive(\1, \2)]",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"\bmake\s+a\s+list\s+of\s+squares\s+(?:from|of)\s+([A-Za-z_]\w*|\d+(?:\.\d+)?)\s+to\s+([A-Za-z_]\w*|\d+(?:\.\d+)?)\b",
+        r"[x * x for x in range_inclusive(\1, \2)]",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"\bmake\s+a\s+list\s+of\s+(.+?)\s+for\s+each\s+([A-Za-z_]\w*)\s+from\s+([A-Za-z_]\w*|\d+)\s+to\s+([A-Za-z_]\w*|\d+)(?:\s+(?:where|if)\s+([^,\)\n]+?))?(?=\s+into\b|[,\)\n]|#|$)",
+        lambda m: f"[{m.group(1)} for {m.group(2)} in range_inclusive({m.group(3)}, {m.group(4)}) if {m.group(5)}]" if m.group(5) else f"[{m.group(1)} for {m.group(2)} in range_inclusive({m.group(3)}, {m.group(4)})]",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"\bmake\s+a\s+list\s+of\s+(.+?)\s+for\s+each\s+([A-Za-z_]\w*)\s+in\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)(?:\s+(?:where|if)\s+([^,\)\n]+?))?(?=\s+into\b|[,\)\n]|#|$)",
+        lambda m: f"[{m.group(1)} for {m.group(2)} in {m.group(3)} if {m.group(4)}]" if m.group(4) else f"[{m.group(1)} for {m.group(2)} in {m.group(3)}]",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"\bmake\s+a\s+list\s+(?:of\s+numbers\s+)?from\s+([A-Za-z_]\w*|\d+(?:\.\d+)?)\s+to\s+([A-Za-z_]\w*|\d+(?:\.\d+)?)\b",
+        r"[x for x in range_inclusive(\1, \2)]",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"\b(?:the\s+)?squares\s+(?:of|from)\s+([A-Za-z_]\w*|\d+(?:\.\d+)?)\s+to\s+([A-Za-z_]\w*|\d+(?:\.\d+)?)\b",
+        r"[x * x for x in range_inclusive(\1, \2)]",
+        masked,
+        flags=re.IGNORECASE
+    )
+
+    # Desugar split and reverse statements to expression assignments
+    masked = re.sub(
+        r"^\s*split\s+(.+?)\s+by\s+(.+?)\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
+        r"set \3 to split \1 by \2",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"^\s*split\s+(.+?)\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
+        r"set \2 to split \1",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"^\s*(?:reverse|reversed)\s+(?:of\s+|in\s+)?(.+?)\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
+        r"set \2 to reversed of \1",
+        masked,
+        flags=re.IGNORECASE
+    )
+
     masked = re.sub(
         r"\ba\s+function\s+of\s+([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*)\s+giving\s+(.+?)(?=[,\n]|\)$|$)",
         r"(lambda \1: \2)",
@@ -595,7 +671,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
 
     # Ergonomic Statistics & Math Statements
     stat_stmt_m = re.match(
-        r"^\s*(?:calculate\s+|compute\s+)?(average|mean|median|total|sum|maximum|highest|minimum|lowest|variance|standard\s+deviation|std_dev|stdev|count|length|summary)\s+of\s+(?!.+?\s+in\s+bytes\b)(.+?)\s+into\s+([A-Za-z_]\w*)$",
+        r"^\s*(?:calculate\s+|compute\s+)?(average|mean|median|total|sum|maximum|highest|minimum|lowest|variance|standard\s+deviation|std_dev|stdev|count|length|summary)\s+(?:of|in)\s+(?!.+?\s+in\s+bytes\b)(.+?)\s+into\s+([A-Za-z_]\w*)$",
         masked,
         re.IGNORECASE
     )
@@ -621,6 +697,8 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
             masked = f"set {target_var} to count of {val_expr}"
         elif fn_word == "summary":
             masked = f"set {target_var} to summary_of({val_expr})"
+
+    masked = re.sub(r"\b(?:reversed|reverse)\s+in\b", "reversed of", masked, flags=re.IGNORECASE)
 
     # Ergonomic String & Collection Operations
     words_m = re.match(r"^\s*words\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
@@ -821,15 +899,15 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"^\s*(?:skip\s+to\s+next|skip\s+(?:this\s+)?iteration|continue\s+loop|next\s+iteration|continue)\s*$", "skip", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\brepeat\s+with\s+([A-Za-z_]\w*)\s+from\s+(.+?)\s+down\s+to\s+(.+?)(?=:|\n|$)", r"repeat with \1 from \2 to \3 by -1", masked, flags=re.IGNORECASE)
 
-    # Phase 3: Class Dunder Methods and Super Constructors
-    masked = re.sub(r"^\s*to\s+start\s+with\s+(.+?):", r"to __init__ with \1:", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"^\s*to\s+start\s*:", r"to __init__:", masked, flags=re.IGNORECASE)
+    # Phase 3: Class Dunder Methods, Constructors, and Super
+    masked = re.sub(r"^\s*(?:to\s+(?:start|init)|constructor)\s+with\s+(.+?):", r"to __init__ with \1:", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*(?:to\s+(?:start|init)|constructor)\s*:", r"to __init__:", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*to\s+describe\s*:", r"to __repr__:", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*to\s+get\s+length\s*:", r"to __len__:", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*to\s+get\s+item\s+with\s+(.+?):", r"to __getitem__ with \1:", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*to\s+set\s+item\s+with\s+(.+?):", r"to __setitem__ with \1:", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"^\s*base\s+start\s+with\s+(.+)$", r"super().__init__(\1)", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"^\s*base\s+start\s*$", r"super().__init__()", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*(?:base|super)\s+(?:start|init|initialize|create|setup|constructor)\s+with\s+(.+)$", r"super().__init__(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*(?:base|super)\s+(?:start|init|initialize|create|setup|constructor)\s*$", r"super().__init__()", masked, flags=re.IGNORECASE)
 
     # Function Definition & Returns
     masked = re.sub(r"^\s*def\s+([A-Za-z_]\w*)\s*\(\s*(.*?)\s*\)\s*:?", lambda m: f"to {m.group(1)} with {m.group(2).strip()}:" if m.group(2).strip() else f"to {m.group(1)}:", masked, flags=re.IGNORECASE)

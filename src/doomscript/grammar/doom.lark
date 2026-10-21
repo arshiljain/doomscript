@@ -346,11 +346,12 @@ CMP_OP: "<="
        | date_fn_expr
        | atom
 
-data_op_expr: "uppercase" "of" factor                     -> expr_uppercase
+data_op_expr: "split" factor "by" factor                -> expr_split
+            | "uppercase" "of" factor                     -> expr_uppercase
             | "lowercase" "of" factor                     -> expr_lowercase
             | ("trim" | "trimmed") "of" factor            -> expr_trim
             | "sorted" "of" factor                        -> expr_sorted
-            | "reversed" "of" factor                      -> expr_reversed
+            | ("reversed" | "reverse") ("of" | "in") factor -> expr_reversed
             | "copy" "of" factor                          -> expr_copy
             | "unique" ["items"] "of" factor              -> expr_unique
             | ("round" | "rounded") "of" factor "to" factor "decimals"  -> expr_round_dec

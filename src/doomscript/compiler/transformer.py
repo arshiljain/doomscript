@@ -428,6 +428,22 @@ class DoomToPython(Transformer):
         )
         return ast.Assign(targets=[target], value=call)
 
+    def expr_split(self, args):
+        if len(args) == 2:
+            text, delimiter = args
+            return ast.Call(
+                func=ast.Name(id='str_split', ctx=ast.Load()),
+                args=[text, delimiter],
+                keywords=[]
+            )
+        else:
+            text = args[0]
+            return ast.Call(
+                func=ast.Name(id='str_split', ctx=ast.Load()),
+                args=[text],
+                keywords=[]
+            )
+
     def string_join(self, args):
         items, delimiter, target = args
         call = ast.Call(
@@ -1040,6 +1056,8 @@ class DoomToPython(Transformer):
             if isinstance(stmt, ast.FunctionDef):
                 if stmt.name.startswith('_var_'):
                     stmt.name = stmt.name[5:]
+                if stmt.name.lower() in ('init', 'initialize', 'create', 'setup', 'constructor', 'start', '__init__'):
+                    stmt.name = '__init__'
                 arg_names = [a.arg for a in stmt.args.args]
                 if not arg_names or arg_names[0] != 'self':
                     stmt.args.args.insert(0, ast.arg(arg='self', annotation=None))
@@ -1235,7 +1253,7 @@ class DoomToPython(Transformer):
         return ast.Call(func=ast.Name(id='sorted_list', ctx=ast.Load()), args=[args[0]], keywords=[])
 
     def expr_reversed(self, args):
-        return ast.Call(func=ast.Name(id='reversed_list', ctx=ast.Load()), args=[args[0]], keywords=[])
+        return ast.Call(func=ast.Name(id='reversed_list', ctx=ast.Load()), args=[args[-1]], keywords=[])
 
     def expr_copy(self, args):
         return ast.Call(func=ast.Name(id='copy_value', ctx=ast.Load()), args=[args[0]], keywords=[])

@@ -520,7 +520,18 @@ def format_syntax_error(
             line_no = len(lines)
         orig_err = getattr(err, "__cause__", None) or err
         explanation, explicit_suggestion = translate_lark_error(orig_err, source_line)
-        suggestion = explicit_suggestion or getattr(err, "suggestion", None)
+        suggestion = getattr(err, "suggestion", None) or explicit_suggestion
+        if not suggestion and source_line.strip():
+            from doomscript.compiler.advisor import DidYouMeanAdvisor, extract_known_variables
+            failing_tok = None
+            if hasattr(orig_err, "token"):
+                failing_tok = getattr(orig_err.token, "value", str(orig_err.token))
+            suggestion = DidYouMeanAdvisor.find_token_suggestion(
+                source_line,
+                known_variables=extract_known_variables(source),
+                failing_token=failing_tok,
+                col=col_no,
+            )
     else:
         raw_line_no = getattr(err, "line", 1)
         col_no = getattr(err, "column", 1) or 1
@@ -545,9 +556,20 @@ def format_syntax_error(
         explanation, explicit_suggestion = translate_lark_error(err, source_line)
         suggestion = explicit_suggestion
         if not suggestion and source_line.strip():
-            closest = find_closest_phrasings(source_line, n=1, cutoff=0.7)
-            if closest:
-                suggestion = closest[0]
+            from doomscript.compiler.advisor import DidYouMeanAdvisor, extract_known_variables
+            failing_tok = None
+            if hasattr(err, "token"):
+                failing_tok = getattr(err.token, "value", str(err.token))
+            suggestion = DidYouMeanAdvisor.find_token_suggestion(
+                source_line,
+                known_variables=extract_known_variables(source),
+                failing_token=failing_tok,
+                col=col_no,
+            )
+            if not suggestion:
+                closest = find_closest_phrasings(source_line, n=1, cutoff=0.7)
+                if closest:
+                    suggestion = closest[0]
 
     # Caret positioning: clamp to length of source_line + 1
     pointer_col = max(1, min(col_no, len(source_line) + 1 if source_line else 1))

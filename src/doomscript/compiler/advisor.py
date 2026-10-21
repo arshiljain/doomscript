@@ -1,9 +1,11 @@
 """
 DidYouMeanAdvisor for DoomScript.
-Provides actionable syntax suggestions when users write near-miss natural English statements.
+Provides actionable syntax suggestions when users write near-miss natural English statements
+or encounter token-level typos in keywords, built-ins, and variables.
 """
 
 from __future__ import annotations
+import difflib
 import re
 from typing import Dict, List, Optional, Set, Tuple
 
@@ -62,9 +64,74 @@ DOMAIN_SIGNATURES: Dict[str, List[str]] = {
     ],
 }
 
+CORE_KEYWORDS: Set[str] = {
+    "say", "show", "set", "to", "let", "put", "into", "from", "with", "by",
+    "if", "else", "elif", "unless", "repeat", "times", "time", "while", "until",
+    "for", "each", "in", "where", "try", "attempt", "fails", "always", "match",
+    "when", "return", "verify", "otherwise", "require", "ensure", "stop", "skip",
+    "call", "class", "define", "ask", "choice", "number", "boolean", "read",
+    "write", "append", "copy", "delete", "file", "create", "directory", "list",
+    "files", "split", "join", "replace", "uppercase", "lowercase", "trim",
+    "round", "clamp", "fetch", "json", "download", "roll", "pick", "random",
+    "shuffle", "length", "count", "sum", "average", "highest", "lowest",
+    "maximum", "minimum", "first", "last", "reversed", "reverse", "sorted",
+    "sort", "unique", "true", "false", "none", "nothing", "not", "and", "or",
+    "is", "starts", "ends", "between", "contains", "empty", "sqrt", "absolute",
+    "value", "today", "now", "constructor", "init", "initialize", "setup",
+    "start", "base", "super", "my", "its", "make", "squares", "words", "lines"
+}
+
+BUILTIN_FUNCS: Set[str] = {
+    "len", "print", "range", "range_inclusive", "abs", "min", "max", "sum",
+    "int", "float", "str", "bool", "list", "dict", "set", "tuple", "open",
+    "input", "all", "any", "sorted", "reversed", "round"
+}
+
+DOMAIN_VOCABULARY: Set[str] = {
+    "price", "option", "spot", "strike", "expiry", "rate", "vol", "call", "put",
+    "greeks", "american", "steps", "train", "knn", "classifier", "features", "labels",
+    "neighbors", "model", "predict", "classes", "f1", "roc", "auc", "score",
+    "simulate", "markov", "chain", "transitions", "matrix", "monte", "carlo", "paths",
+    "haversine", "distance", "convex", "hull", "coords", "chart", "scatter", "line",
+    "bar", "titled", "save", "plot", "wave", "frequency", "duration", "filter", "lowpass",
+    "highpass", "cutoff", "compress", "dynamic", "threshold", "ratio", "connect", "database",
+    "bucket", "lzma", "fft", "ifft", "reaction", "formula", "weight"
+}
+
+
+def extract_known_variables(source: str) -> Set[str]:
+    """Extracts variable names and identifiers defined across prior source lines."""
+    if not source:
+        return set()
+    vars_found: Set[str] = set()
+    patterns = [
+        re.compile(r"^\s*set\s+([A-Za-z_]\w*)\s+to\b", re.IGNORECASE),
+        re.compile(r"^\s*([A-Za-z_]\w*)\s*=(?!=)"),
+        re.compile(r"^\s*([A-Za-z_]\w*)\s*(?:\+=|-=|\*=|/=|//=)"),
+        re.compile(r"^\s*increase\s+([A-Za-z_]\w*)\s+by\b", re.IGNORECASE),
+        re.compile(r"^\s*decrease\s+([A-Za-z_]\w*)\s+by\b", re.IGNORECASE),
+        re.compile(r"\binto\s+([A-Za-z_]\w*)\s*$", re.IGNORECASE),
+        re.compile(r"\bfor\s+(?:each\s+)?([A-Za-z_]\w*)\s+in\b", re.IGNORECASE),
+        re.compile(r"^\s*to\s+[A-Za-z_]\w*\s+with\s+([^:]+):", re.IGNORECASE),
+        re.compile(r"^\s*class\s+([A-Za-z_]\w*)", re.IGNORECASE),
+        re.compile(r"^\s*define\s+(?:a|an)\s+([A-Za-z_]\w*)", re.IGNORECASE),
+    ]
+    for line in source.splitlines():
+        line_clean = line.split("#")[0].strip()
+        if not line_clean:
+            continue
+        for pat in patterns:
+            for match in pat.finditer(line_clean):
+                val = match.group(1).strip()
+                for part in val.split(","):
+                    p = part.strip().split("=")[0].strip()
+                    if p and re.match(r"^[A-Za-z_]\w*$", p) and p.lower() not in ("it", "that", "self"):
+                        vars_found.add(p)
+    return vars_found
+
 
 class DidYouMeanAdvisor:
-    """Matches failed or unparsed source lines against registered domain phrase templates."""
+    """Matches failed or unparsed source lines against registered domain phrase templates and token typos."""
 
     @classmethod
     def _extract_words(cls, text: str) -> List[str]:
@@ -72,12 +139,116 @@ class DidYouMeanAdvisor:
         return [w.lower() for w in cleaned.split() if len(w) > 1]
 
     @classmethod
-    def find_suggestion(cls, line: str, active_domains: Optional[List[str]] = None) -> Optional[str]:
-        """Calculates token overlap and returns the best matching signature if score >= threshold."""
+    def find_token_suggestion(
+        cls,
+        line: str,
+        known_variables: Optional[Set[str]] = None,
+        failing_token: Optional[str] = None,
+        col: Optional[int] = None,
+    ) -> Optional[str]:
+        """
+        Token-level correction for syntax errors.
+        Compares failing token and surrounding tokens against keywords, built-ins,
+        and known variables using difflib with ~0.75 cutoff.
+        Returns the full reconstructed line.
+        """
+        clean = line.strip()
+        if not clean or clean.startswith("#"):
+            return None
+
+        # Build vocabulary
+        vocab_set = set(CORE_KEYWORDS) | set(BUILTIN_FUNCS) | set(DOMAIN_VOCABULARY)
+        if known_variables:
+            vocab_set |= set(known_variables)
+
+        vocab_map = {w.lower(): w for w in vocab_set}
+        vocab_list = list(vocab_map.keys())
+
+        # Extract words and their spans
+        word_spans = [(m.group(0), m.start(), m.end()) for m in re.finditer(r"\b[A-Za-z_]\w*\b", line)]
+        if not word_spans:
+            return None
+
+        target_indices: List[int] = []
+        if col is not None:
+            # 1-based col: find token closest to or covering col
+            for idx, (w, start, end) in enumerate(word_spans):
+                if start <= (col - 1) <= end or (idx > 0 and word_spans[idx - 1][1] <= (col - 1) <= end):
+                    target_indices.append(idx)
+                    if idx > 0:
+                        target_indices.append(idx - 1)
+                    break
+
+        if failing_token:
+            ft_clean = failing_token.strip("'\"")
+            for idx, (w, start, end) in enumerate(word_spans):
+                if w.lower() == ft_clean.lower() and idx not in target_indices:
+                    target_indices.append(idx)
+                    if idx > 0 and (idx - 1) not in target_indices:
+                        target_indices.append(idx - 1)
+
+        ordered_indices: List[int] = []
+        for idx in target_indices:
+            if idx not in ordered_indices and 0 <= idx < len(word_spans):
+                ordered_indices.append(idx)
+        for idx in range(len(word_spans)):
+            if idx not in ordered_indices:
+                ordered_indices.append(idx)
+
+        # Check candidate tokens
+        corrections: List[Tuple[int, int, str]] = []
+        seen_words = set()
+        for idx in ordered_indices:
+            word, start, end = word_spans[idx]
+            word_lower = word.lower()
+
+            if word_lower in vocab_map or word_lower in seen_words:
+                continue
+            seen_words.add(word_lower)
+
+            matches = difflib.get_close_matches(word_lower, vocab_list, n=1, cutoff=0.74)
+            if matches:
+                matched_cand = matches[0]
+                replacement = vocab_map[matched_cand]
+                if word.istitle() and not replacement.startswith("_"):
+                    replacement = replacement.capitalize()
+                corrections.append((start, end, replacement))
+
+        if corrections:
+            corrections.sort(key=lambda c: c[0], reverse=True)
+            res = line
+            for start, end, rep in corrections:
+                res = res[:start] + rep + res[end:]
+            return res
+
+        return None
+
+    @classmethod
+    def find_suggestion(
+        cls,
+        line: str,
+        active_domains: Optional[List[str]] = None,
+        source: Optional[str] = None,
+        failing_token: Optional[str] = None,
+        col: Optional[int] = None,
+    ) -> Optional[str]:
+        """Calculates token overlap and returns the best matching signature or token-corrected line."""
         s = line.strip()
         if not s or s.startswith("#"):
             return None
 
+        # 1. First check token-level typo correction
+        known_vars = extract_known_variables(source) if source else None
+        token_sug = cls.find_token_suggestion(
+            line,
+            known_variables=known_vars,
+            failing_token=failing_token,
+            col=col,
+        )
+        if token_sug:
+            return token_sug
+
+        # 2. Domain signature matching
         line_words = cls._extract_words(s)
         if not line_words:
             return None
@@ -99,12 +270,10 @@ class DidYouMeanAdvisor:
                 continue
             sig_word_set = set(sig_words)
 
-            # Jaccard overlap on content words
             intersection = len(line_word_set.intersection(sig_word_set))
             union = len(line_word_set.union(sig_word_set))
             score = intersection / union if union > 0 else 0.0
 
-            # Bonus for matching leading keywords
             if len(line_words) >= 2 and len(sig_words) >= 2:
                 if line_words[0] == sig_words[0] and line_words[1] == sig_words[1]:
                     score += 0.35

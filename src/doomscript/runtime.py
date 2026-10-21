@@ -371,8 +371,10 @@ def str_replace(source, needle, replacement):
     return str(source).replace(str(needle), str(replacement))
 
 
-def str_split(text, delimiter):
+def str_split(text, delimiter=None):
     """Split text by delimiter into a list."""
+    if delimiter is None:
+        return str(text).split()
     return str(text).split(str(delimiter))
 
 

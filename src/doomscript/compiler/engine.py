@@ -57,8 +57,17 @@ def compile_to_ast(source: str, filename: str = "<doom>") -> ast.Module:
         orig_lines = source.splitlines()
         orig_line = orig_lines[orig_line_num - 1] if 0 < orig_line_num <= len(orig_lines) else ""
         active_dom_names = [d.name for d in get_domain_registry().get_active_domains()]
-        suggestion = DidYouMeanAdvisor.find_suggestion(orig_line, active_dom_names)
         col = getattr(parse_err, "column", None)
+        failing_token = None
+        if hasattr(parse_err, "token"):
+            failing_token = getattr(parse_err.token, "value", str(parse_err.token))
+        suggestion = DidYouMeanAdvisor.find_suggestion(
+            orig_line,
+            active_domains=active_dom_names,
+            source=source,
+            failing_token=failing_token,
+            col=col,
+        )
         raise DoomScriptSyntaxError(
             f"Syntax error at line {orig_line_num}",
             line=orig_line_num,
