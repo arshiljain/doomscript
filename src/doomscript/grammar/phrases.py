@@ -89,7 +89,7 @@ COMPARISON_SYNONYMS: List[Tuple[str, str]] = [
 STATEMENT_START_KEYWORDS = {
     "say", "show", "print", "display", "tell", "echo", "log", "output",
     "set", "let", "make", "put", "assign", "store", "save", "initialize", "reset",
-    "suppose", "assume", "remember", "keep", "find", "what", "does",
+    "suppose", "assume", "remember", "keep", "find", "what", "does", "deposit", "withdraw",
     "increase", "decrease", "increment", "decrement", "bump", "double", "halve", "triple",
     "multiply", "divide",
     "if", "unless", "while", "until", "repeat", "for", "loop",
@@ -658,6 +658,45 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     # Pillar D: Interrogative Inquiries & Collaborative Outputs
     masked = re.sub(r"^\s*what\s+is\s+(?:the\s+)?(.+?)\??$", r"say \1", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*(?:tell|show)\s+(?:me|us)\s+(.+)$", r"say \1", masked, flags=re.IGNORECASE)
+
+    # Spoken Action Invocations:
+    # 1. tell <target> to <action> [args...]
+    tell_action_m = re.match(
+        r"^\s*tell\s+(.+?)\s+to\s+([a-z_]\w*)(?:\s+(.+))?$",
+        masked,
+        re.IGNORECASE,
+    )
+    if tell_action_m and tell_action_m.group(1).lower() not in ("me", "us"):
+        target = tell_action_m.group(1).replace("'s ", ".").strip()
+        action = tell_action_m.group(2).strip()
+        args = tell_action_m.group(3)
+        if args:
+            args_clean = ", ".join(a.strip() for a in args.split(",") if a.strip())
+            masked = f"{target}.{action}({args_clean})"
+        else:
+            masked = f"{target}.{action}()"
+
+    # 2. deposit <amount> into/to <target>
+    deposit_m = re.match(
+        r"^\s*deposit\s+(.+?)\s+(?:into|to)\s+(.+)$",
+        masked,
+        re.IGNORECASE,
+    )
+    if deposit_m:
+        val = deposit_m.group(1).strip()
+        target = deposit_m.group(2).replace("'s ", ".").strip()
+        masked = f"{target}.deposit({val})"
+
+    # 3. withdraw <amount> from <target>
+    withdraw_m = re.match(
+        r"^\s*withdraw\s+(.+?)\s+from\s+(.+)$",
+        masked,
+        re.IGNORECASE,
+    )
+    if withdraw_m:
+        val = withdraw_m.group(1).strip()
+        target = withdraw_m.group(2).replace("'s ", ".").strip()
+        masked = f"{target}.withdraw({val})"
 
     masked = re.sub(
         r"^\s*how\s+many\s+(?:items\s+in|of)\s+(.+?)\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)$",

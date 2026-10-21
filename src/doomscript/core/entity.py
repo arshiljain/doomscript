@@ -94,6 +94,9 @@ class DoomEntity(Record):
             self[k] = v
 
     def __getattr__(self, key: str) -> Any:
+        if key.startswith("_"):
+            raise AttributeError(f"DoomEntity has no field '{key}'")
+
         try:
             return super().__getattr__(key)
         except AttributeError:
@@ -112,11 +115,26 @@ class DoomEntity(Record):
                 self[key] = None
                 return None
 
+            cls = self.__class__
+            # Common banking/workflow action synonyms (e.g. deposit <-> receive)
+            common_synonyms = {
+                "deposit": "receive",
+                "depositing": "receive",
+                "receive": "deposit",
+                "receiving": "deposit",
+                "spend": "withdraw",
+                "spending": "withdraw",
+            }
+            if key in common_synonyms:
+                syn = common_synonyms[key]
+                if hasattr(cls, syn):
+                    return getattr(self, syn)
+
             # Automatic verb participle alias resolution (e.g. acc.receiving -> acc.receive)
             stem = stem_verb(key)
-            if stem != key and hasattr(self, stem):
+            if stem != key and hasattr(cls, stem):
                 return getattr(self, stem)
-            if hasattr(self, key + "ing"):
+            if hasattr(cls, key + "ing"):
                 return getattr(self, key + "ing")
 
             raise

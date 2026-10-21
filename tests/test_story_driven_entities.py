@@ -138,4 +138,25 @@ acc.deposit(200)
     assert env_s["acc"].balance == 200
 
 
+def test_spoken_action_invocations():
+    source = """
+a BankAccount begins with balance = 0:
+    when receiving amount:
+        increase my balance by amount
+        return my balance
+    when withdrawing amount:
+        make sure my balance >= amount otherwise "Insufficient funds"
+        decrease my balance by amount
+        return my balance
+
+create a BankAccount into my_account
+
+deposit 100 into my_account
+tell my_account to withdraw 40
+"""
+    env = execute(source)
+    assert env["my_account"].balance == 60
+
+
+
 
