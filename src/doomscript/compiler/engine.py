@@ -32,12 +32,34 @@ def get_parser() -> Lark:
 def compile_to_ast(source: str, filename: str = "<doom>") -> ast.Module:
     """Parses DoomScript source and returns a Python ast.Module."""
     from doomscript.domains.registry import get_domain_registry
+    from doomscript.compiler.advisor import DidYouMeanAdvisor
+    from doomscript.exceptions import DoomScriptSyntaxError
+    import lark.exceptions
+
     get_domain_registry().reset_active()
     normalized_source, line_map = normalize_with_map(source)
     if not normalized_source.endswith("\n"):
         normalized_source += "\n"
     parser = get_parser()
-    tree = parser.parse(normalized_source)
+    try:
+        tree = parser.parse(normalized_source)
+    except (lark.exceptions.UnexpectedInput, lark.exceptions.LarkError) as parse_err:
+        norm_line_num = getattr(parse_err, "line", 1)
+        orig_line_num = line_map.get(norm_line_num, norm_line_num)
+        orig_lines = source.splitlines()
+        orig_line = orig_lines[orig_line_num - 1] if 0 < orig_line_num <= len(orig_lines) else ""
+        active_dom_names = [d.name for d in get_domain_registry().get_active_domains()]
+        suggestion = DidYouMeanAdvisor.find_suggestion(orig_line, active_dom_names)
+        col = getattr(parse_err, "column", None)
+        raise DoomScriptSyntaxError(
+            f"Syntax error at line {orig_line_num}",
+            line=orig_line_num,
+            column=col,
+            source_line=orig_line.strip(),
+            suggestion=suggestion,
+            file_path=filename,
+        ) from parse_err
+
     transformer = DoomToPython(line_map=line_map)
     return transformer.transform(tree)
 

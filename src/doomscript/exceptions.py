@@ -34,18 +34,24 @@ class DoomError(Exception):
             col = f":{self.column}" if self.column is not None else ""
             loc = f" at {fp}{ln}{col}"
         msg = f"{self.message}{loc}"
-        if self.source_line and self.column:
+        if self.source_line:
             prefix = "    "
-            pointer = " " * (self.column - 1) + "^"
-            msg += f"\n{prefix}{self.source_line}\n{prefix}{pointer}"
+            msg += f"\n{prefix}{self.source_line}"
+            if self.column:
+                pointer = " " * (self.column - 1) + "^"
+                msg += f"\n{prefix}{pointer}"
         if self.suggestion:
-            msg += f"\nDid you mean: {self.suggestion}?"
+            msg += f"\nDid you mean:\n    {self.suggestion}"
         return msg
 
 
 class DoomSyntaxError(DoomError):
     """Raised when source code cannot be parsed or normalized."""
     pass
+
+
+# Alias for readability and spec conformance
+DoomScriptSyntaxError = DoomSyntaxError
 
 
 class DoomIndentationError(DoomSyntaxError):
