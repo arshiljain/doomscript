@@ -343,9 +343,9 @@ def compression_rle_decode(runs: List[Tuple[str, int]]) -> str:
     return RunLengthCodec.decode(runs)
 
 
-def compression_huffman_encode(text: str) -> Dict[str, Any]:
+def compression_huffman_encode(text: str) -> Record:
     """Compresses text with Huffman prefix-free code."""
-    return HuffmanCodec.encode(text)
+    return Record(HuffmanCodec.encode(text))
 
 
 def compression_huffman_decode(encoded: Dict[str, Any]) -> str:

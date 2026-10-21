@@ -11,9 +11,9 @@ class CompilerDomainParser(DomainParser):
     def parse_line(self, line: str) -> Optional[str]:
         s = line.strip()
 
-        # assemble bytecode from text <text> into <target>
+        # assemble bytecode [from text] <text> into <target>
         m_asm = re.match(
-            r"^assemble\s+bytecode\s+from\s+text\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            r"^assemble\s+bytecode(?:\s+from\s+text)?\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )
@@ -21,9 +21,9 @@ class CompilerDomainParser(DomainParser):
             txt, target = m_asm.group(1).strip(), m_asm.group(2).strip()
             return f"set {target} to compiler_assemble_string({txt})"
 
-        # execute bytecode program <prog> into <target>
+        # execute bytecode [program] <prog> into <target>
         m_run = re.match(
-            r"^execute\s+bytecode\s+program\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            r"^execute\s+bytecode(?:\s+program)?\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )

@@ -23,9 +23,9 @@ class SymbolicDomainParser(DomainParser):
                 expr = f'"{expr}"'
             return f"set {target} to symbolic_diff({expr}, var='{var}')"
 
-        # simplify expression <expr> into <target>
+        # simplify [expression] <expr> into <target>
         m_simp = re.match(
-            r"^simplify\s+expression\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            r"^simplify(?:\s+expression)?\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )
@@ -35,9 +35,9 @@ class SymbolicDomainParser(DomainParser):
                 expr = f'"{expr}"'
             return f"set {target} to symbolic_simplify({expr})"
 
-        # evaluate expression <expr> with <subs> into <target>
+        # evaluate [expression] <expr> with <subs> into <target>
         m_eval = re.match(
-            r"^evaluate\s+expression\s+(.+?)\s+with\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            r"^evaluate(?:\s+expression)?\s+(.+?)\s+with\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )

@@ -93,17 +93,21 @@ class GraphDomainParser(DomainParser):
             g_var = m_node.group(2).strip()
             return f"add_graph_node({g_var}, {node_expr})"
 
-        # connect <u> to <v> [with weight <w>] in [graph] <g>
+        # connect <u> to <v> [with weight <w>] in [graph] <g> OR add edge from <u> to <v> to [graph] <g>
         m_edge = re.match(
-            r"^connect\s+(.+?)\s+to\s+(.+?)(?:\s+with\s+weight\s+(\d+(?:\.\d+)?))?\s+in\s+(?:graph\s+)?([A-Za-z_]\w*)$",
+            r"^(?:connect\s+(.+?)\s+to\s+(.+?)|add\s+edge\s+from\s+(.+?)\s+to\s+(.+?))(?:\s+with\s+weight\s+(\d+(?:\.\d+)?))?\s+(?:in|to)\s+(?:graph\s+)?([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )
         if m_edge:
-            u_expr = m_edge.group(1).strip()
-            v_expr = m_edge.group(2).strip()
-            w = m_edge.group(3).strip() if m_edge.group(3) else "1.0"
-            g_var = m_edge.group(4).strip()
+            if m_edge.group(1):
+                u_expr = m_edge.group(1).strip()
+                v_expr = m_edge.group(2).strip()
+            else:
+                u_expr = m_edge.group(3).strip()
+                v_expr = m_edge.group(4).strip()
+            w = m_edge.group(5).strip() if m_edge.group(5) else "1.0"
+            g_var = m_edge.group(6).strip()
             return f"add_graph_edge({g_var}, {u_expr}, {v_expr}, weight={w})"
 
         # degree centrality of <g> into <target>

@@ -106,3 +106,35 @@ say ent > 20
     assert lines[2] == "18.0"
     assert lines[3] == "9.0"
     assert lines[4] == "True"
+
+
+def test_compiler_compression_symbolic_graph_natural_phrases(capsys):
+    code = """
+use compiler
+assemble bytecode "LOAD_CONST 42\\nRETURN" into prog
+execute bytecode prog into res
+say res.halted
+
+use compression
+compress "hello world" with huffman into huff
+say huff.compressed_bits > 0
+
+use symbolic
+simplify "x + x" into simp
+say simp
+
+use graph
+create empty graph into g
+add node "A" to graph g
+add node "B" to graph g
+add edge from "A" to "B" to graph g
+find shortest path from "A" to "B" in graph g into p
+say count of p
+"""
+    execute(code)
+    captured = capsys.readouterr()
+    lines = captured.out.strip().splitlines()
+    assert lines[0] == "True"
+    assert lines[1] == "True"
+    assert lines[2] == "2 * x"
+    assert lines[3] == "2"

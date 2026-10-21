@@ -11,9 +11,9 @@ class CompressionDomainParser(DomainParser):
     def parse_line(self, line: str) -> Optional[str]:
         s = line.strip()
 
-        # compress text <text> with huffman into <target>
+        # compress [text] <text> with huffman into <target>
         m_huff = re.match(
-            r"^compress\s+text\s+(.+?)\s+with\s+huffman\s+into\s+([A-Za-z_]\w*)$",
+            r"^compress(?:\s+text)?\s+(.+?)\s+with\s+huffman\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )
@@ -33,9 +33,9 @@ class CompressionDomainParser(DomainParser):
             var, target = m_dhuff.group(1).strip(), m_dhuff.group(2).strip()
             return f"set {target} to compression_huffman_decode({var})"
 
-        # compress text <text> with lzw into <target>
+        # compress [text] <text> with lzw into <target>
         m_lzw = re.match(
-            r"^compress\s+text\s+(.+?)\s+with\s+lzw\s+into\s+([A-Za-z_]\w*)$",
+            r"^compress(?:\s+text)?\s+(.+?)\s+with\s+lzw\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )

@@ -334,10 +334,10 @@ class PrattParser:
         return parse_expr(0)
 
 
-def compiler_run_bytecode(instructions: List[Instruction], constants: Optional[List[Any]] = None) -> Dict[str, Any]:
+def compiler_run_bytecode(instructions: List[Instruction], constants: Optional[List[Any]] = None) -> Record:
     vm = BytecodeVM()
     vm.load_program(instructions, constants)
-    return vm.run()
+    return Record(vm.run())
 
 
 def compiler_assemble_string(assembly_text: str) -> Dict[str, Any]:
