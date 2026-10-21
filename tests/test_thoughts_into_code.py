@@ -157,4 +157,40 @@ check if blacklist contains target_ip into is_blocked
     assert env["is_blocked"] is True
 
 
+# ---------------------------------------------------------------------------
+# Task 5: Interrogative Inquiries & Collaborative Outputs Tests (Pillar D)
+# ---------------------------------------------------------------------------
+
+def test_interrogative_questions_and_output(capsys):
+    source = """
+scores = [10, 20, 30]
+what is 15 percent of 200
+what is the average of scores
+tell me "All good"
+show me scores
+"""
+    env = execute(source)
+    captured = capsys.readouterr().out
+    assert "30.0" in captured
+    assert "20.0" in captured
+    assert "All good" in captured
+    assert "[10, 20, 30]" in captured
+
+
+def test_conversational_inquiries_into_variables():
+    source = """
+orders = ["order1", "order2", "order3"]
+how many items in orders into total_orders
+
+catalog = ["SKU-01", "SKU-99", "SKU-42"]
+does catalog contain "SKU-99" into has_item
+does catalog contain "SKU-00" into missing_item
+"""
+    env = execute(source)
+    assert env["total_orders"] == 3
+    assert env["has_item"] is True
+    assert env["missing_item"] is False
+
+
+
 

@@ -88,7 +88,7 @@ COMPARISON_SYNONYMS: List[Tuple[str, str]] = [
 STATEMENT_START_KEYWORDS = {
     "say", "show", "print", "display", "tell", "echo", "log", "output",
     "set", "let", "make", "put", "assign", "store", "save", "initialize", "reset",
-    "suppose", "assume", "remember", "keep", "find",
+    "suppose", "assume", "remember", "keep", "find", "what", "does",
     "increase", "decrease", "increment", "decrement", "bump", "double", "halve", "triple",
     "multiply", "divide",
     "if", "unless", "while", "until", "repeat", "for", "loop",
@@ -620,6 +620,24 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(
         r"^\s*check\s+whether\s+(.+?)\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)$",
         r"set \2 to (\1)",
+        masked,
+        flags=re.IGNORECASE
+    )
+
+    # Pillar D: Interrogative Inquiries & Collaborative Outputs
+    masked = re.sub(r"^\s*what\s+is\s+(?:the\s+)?(.+?)\??$", r"say \1", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*(?:tell|show)\s+(?:me|us)\s+(.+)$", r"say \1", masked, flags=re.IGNORECASE)
+
+    masked = re.sub(
+        r"^\s*how\s+many\s+(?:items\s+in|of)\s+(.+?)\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)$",
+        r"set \2 to count of \1",
+        masked,
+        flags=re.IGNORECASE
+    )
+
+    masked = re.sub(
+        r"^\s*does\s+(.+?)\s+contain\s+(.+?)\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)$",
+        r"set \3 to (\2 is inside \1)",
         masked,
         flags=re.IGNORECASE
     )
