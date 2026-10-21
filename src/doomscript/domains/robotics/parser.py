@@ -166,9 +166,9 @@ class RoboticsDomainParser(DomainParser):
             target = m_rrt3.group(4).strip()
             return f"set {target} to robotics_rrt_star_3d({st}, {gl}, step_size={step})"
 
-        # compute dwa velocity for state <state> and goal <goal> [with speed <v>] into <target>
+        # compute / calculate dwa velocity for state <state> and goal <goal> [with speed <v>] into <target>
         m_dwa = re.match(
-            r"^compute\s+dwa\s+velocity\s+for\s+state\s+(.+?)\s+and\s+goal\s+(.+?)(?:\s+with\s+speed\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            r"^(?:calculate|compute)\s+dwa\s+velocity\s+for\s+state\s+(.+?)\s+and\s+goal\s+(.+?)(?:\s+with\s+speed\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )

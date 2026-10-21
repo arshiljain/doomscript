@@ -441,9 +441,9 @@ class GeoDomainParser(DomainParser):
             return f"set {target} to geo_geohash_decode({gh})"
 
         # partition voronoi diagram sites <sites> into <target>
-        # compute voronoi partition [for points|sites] <sites> into <target>
+        # compute / calculate voronoi partition [for points|sites] <sites> into <target>
         m_vor = re.match(
-            r"^(?:partition\s+voronoi\s+diagram\s+sites|compute\s+voronoi\s+partition(?:\s+for\s+(?:points|sites))?)\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            r"^(?:partition\s+voronoi\s+diagram\s+sites|(?:calculate|compute)\s+voronoi\s+partition(?:\s+for\s+(?:points|sites))?)\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )

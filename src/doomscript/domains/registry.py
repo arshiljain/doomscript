@@ -332,6 +332,18 @@ class DomainRegistry:
         if parsed is not None and self._last_parsed and self._last_parsed[0] == line:
             return self._last_parsed[2]
 
+        for domain in self._domains.values():
+            if domain.name.lower() not in self._active_domains:
+                try:
+                    res = domain.parser.parse_inspect(line, 0)
+                    if res is not None:
+                        return domain
+                    res = domain.parser.parse_operation(line, 0)
+                    if res is not None:
+                        return domain
+                except Exception:
+                    pass
+
         return None
 
     def find_domain_for_block(self, header: str) -> Optional[DomainContract]:

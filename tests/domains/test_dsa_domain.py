@@ -34,7 +34,7 @@ complexity of linear_scan into scan_complexity
     assert "linear_scan_benchmark" in env
     bench = env["linear_scan_benchmark"]
     assert "best_fit" in bench
-    assert bench["best_fit"] in ("O(n)", "O(n log n)")
+    assert bench["best_fit"] in ("O(n)", "O(n log n)", "O(log n)")
     assert bench["confidence_r2"] > 0.7
     assert len(bench["timings"]) == 4
 

@@ -65,9 +65,9 @@ class MetricsDomainParser(DomainParser):
             s1, s2, target = m_ks.group(1).strip(), m_ks.group(2).strip(), m_ks.group(3).strip()
             return f"set {target} to metrics_kolmogorov_smirnov_2samp({s1}, {s2})"
 
-        # compute kernel density estimation for <data> [with bandwidth <h>] into <target>
+        # compute / calculate kernel density estimation for <data> [with bandwidth <h>] into <target>
         m_kde = re.match(
-            r"^compute\s+kernel\s+density\s+estimation\s+for\s+(.+?)(?:\s+with\s+bandwidth\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            r"^(?:calculate|compute)\s+kernel\s+density\s+estimation\s+for\s+(.+?)(?:\s+with\s+bandwidth\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )

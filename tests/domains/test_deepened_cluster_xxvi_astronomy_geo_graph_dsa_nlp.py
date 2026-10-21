@@ -87,6 +87,7 @@ class TestDeepenedClusterXXVI(unittest.TestCase):
 
     def test_astronomy_spoken_script(self):
         code = textwrap.dedent("""
+            use astronomy
             set orbit to {"semi_major_axis_km": 7000.0, "eccentricity": 0.01, "inclination_deg": 28.5, "raan_deg": 0.0, "arg_perigee_deg": 0.0, "mean_anomaly_deg": 0.0}
             propagate sgp4 satellite orbit orbit after 60.0 minutes into sat_state
             plan hohmann transfer from 7000.0 to 42000.0 into transfer_plan
@@ -116,6 +117,7 @@ class TestDeepenedClusterXXVI(unittest.TestCase):
 
     def test_geo_spoken_script(self):
         code = textwrap.dedent("""
+            use geo
             set sites to [[0.0, 0.0], [3.0, 0.0], [1.5, 2.5]]
             compute voronoi partition for points sites into vor_res
             set obs to [[0.0, 0.0, 5.0], [2.0, 0.0, 9.0], [1.0, 2.0, 7.0]]
@@ -153,6 +155,7 @@ class TestDeepenedClusterXXVI(unittest.TestCase):
 
     def test_graph_spoken_script(self):
         code = textwrap.dedent("""
+            use graph
             set edge_list to [[0, 1], [1, 2], [2, 3], [3, 4], [4, 0]]
             find maximum matching blossom edges edge_list nodes 5 into match_res
             set g_adj to {"A": ["B", "C"], "B": ["C"], "C": ["A"]}
@@ -197,6 +200,7 @@ class TestDeepenedClusterXXVI(unittest.TestCase):
 
     def test_dsa_spoken_script(self):
         code = textwrap.dedent("""
+            use dsa
             create link cut tree with 4 nodes values [1, 2, 3, 4] into lct
             link lct nodes 0 and 1 in lct into link1
             link lct nodes 1 and 2 in lct into link2
@@ -250,6 +254,7 @@ class TestDeepenedClusterXXVI(unittest.TestCase):
 
     def test_nlp_spoken_script(self):
         code = textwrap.dedent("""
+            use nlp
             set docs to ["quantum computing systems", "high performance compiler design", "relational database indexing"]
             search bm25 corpus docs query "compiler optimization" top 1 into bm25_res
             set g_rules to [{"lhs": "S", "rhs": ["NP", "VP"], "prob": 1.0}, {"lhs": "NP", "rhs": ["cats"], "prob": 1.0}, {"lhs": "VP", "rhs": ["sleep"], "prob": 1.0}]

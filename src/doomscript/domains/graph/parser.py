@@ -387,9 +387,9 @@ class GraphDomainParser(DomainParser):
             g, target = m_lap.group(1).strip(), m_lap.group(2).strip()
             return f"set {target} to graph_laplacian_matrix({g})"
 
-        # compute bipartite matching for edges <edges> into <target>
+        # compute / calculate bipartite matching for edges <edges> into <target>
         m_bm = re.match(
-            r"^compute\s+bipartite\s+matching\s+for\s+edges\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            r"^(?:calculate|compute)\s+bipartite\s+matching\s+for\s+edges\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )
@@ -453,9 +453,9 @@ class GraphDomainParser(DomainParser):
             target = m_clq.group(3).strip()
             return f"set {target} to graph_bron_kerbosch_degeneracy_cliques({edges}, weighted_nodes={weights})"
 
-        # compute dominator tree for entry <entry> with edges <edges> into <target>
+        # compute / calculate dominator tree for entry <entry> with edges <edges> into <target>
         m_dom_lt = re.match(
-            r"^compute\s+dominator\s+tree\s+for\s+entry\s+(.+?)\s+with\s+edges\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            r"^(?:calculate|compute)\s+dominator\s+tree\s+for\s+entry\s+(.+?)\s+with\s+edges\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )
@@ -482,9 +482,9 @@ class GraphDomainParser(DomainParser):
             return f"set {target} to graph_edmonds_blossom_matching({nodes}, {edges})"
 
         # calculate network pagerank for nodes <nodes> edges <edges> [damping <alpha>] into <target>
-        # compute pagerank graph <graph> into <target>
+        # compute / calculate pagerank graph <graph> into <target>
         m_pr = re.match(
-            r"^(?:calculate\s+network\s+pagerank\s+for\s+nodes\s+(.+?)\s+edges\s+(.+?)(?:\s+damping\s+(.+?))?|compute\s+pagerank\s+graph\s+(.+?))\s+into\s+([A-Za-z_]\w*)$",
+            r"^(?:calculate\s+network\s+pagerank\s+for\s+nodes\s+(.+?)\s+edges\s+(.+?)(?:\s+damping\s+(.+?))?|(?:calculate|compute)\s+pagerank\s+graph\s+(.+?))\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )

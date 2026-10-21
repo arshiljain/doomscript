@@ -54,9 +54,9 @@ class SignalsDomainParser(DomainParser):
             target = m_peaks.group(4).strip()
             return f"set {target} to signals_find_peaks({sig}, min_prominence={prom}, min_distance={dist})"
 
-        # compute fft of signal <sig> into <target>
+        # compute / calculate fft of signal <sig> into <target>
         m_fft = re.match(
-            r"^compute\s+fft\s+of\s+(?:signal\s+)?(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            r"^(?:calculate|compute)\s+fft\s+of\s+(?:signal\s+)?(.+?)\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )
@@ -64,9 +64,9 @@ class SignalsDomainParser(DomainParser):
             sig, target = m_fft.group(1).strip(), m_fft.group(2).strip()
             return f"set {target} to signals_fft({sig})"
 
-        # compute ifft of spectrum <spec> into <target>
+        # compute / calculate ifft of spectrum <spec> into <target>
         m_ifft = re.match(
-            r"^compute\s+ifft\s+of\s+(?:spectrum\s+)?(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            r"^(?:calculate|compute)\s+ifft\s+of\s+(?:spectrum\s+)?(.+?)\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )
@@ -96,9 +96,9 @@ class SignalsDomainParser(DomainParser):
             target = m_pitch.group(3).strip()
             return f"set {target} to signals_detect_pitch({sig}, sample_rate={rate})"
 
-        # compute lomb scargle periodogram for times <t> and values <y> at frequencies <f> into <target>
+        # compute / calculate lomb scargle periodogram for times <t> and values <y> at frequencies <f> into <target>
         m_lsp = re.match(
-            r"^compute\s+lomb\s+scargle\s+(?:periodogram\s+)?for\s+times\s+(.+?)\s+and\s+values\s+(.+?)\s+at\s+frequencies\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            r"^(?:calculate|compute)\s+lomb\s+scargle\s+(?:periodogram\s+)?for\s+times\s+(.+?)\s+and\s+values\s+(.+?)\s+at\s+frequencies\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )
@@ -162,9 +162,9 @@ class SignalsDomainParser(DomainParser):
             target = m_emd.group(3).strip()
             return f"set {target} to signals_emd_decompose({sig}, max_imfs={max_imfs})"
 
-        # compute chirp z-transform / czt of <sig> [with <n> bins] into <target>
+        # compute / calculate chirp z-transform / czt of <sig> [with <n> bins] into <target>
         m_czt = re.match(
-            r"^(?:compute\s+chirp\s+z-transform\s+of|compute\s+czt\s+of|czt\s+of)\s+(.+?)(?:\s+with\s+(\d+)\s+bins)?\s+into\s+([A-Za-z_]\w*)$",
+            r"^(?:(?:calculate|compute)\s+chirp\s+z-transform\s+of|(?:calculate|compute)\s+czt\s+of|czt\s+of)\s+(.+?)(?:\s+with\s+(\d+)\s+bins)?\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )
@@ -186,9 +186,9 @@ class SignalsDomainParser(DomainParser):
             target = m_lev.group(3).strip()
             return f"set {target} to signals_levinson_durbin({ac}, order={p})"
 
-        # compute hilbert analytic envelope of [signal] <sig> [sample rate <fs>] into <target>
+        # compute / calculate hilbert analytic envelope of [signal] <sig> [sample rate <fs>] into <target>
         m_hilb = re.match(
-            r"^compute\s+hilbert\s+analytic\s+envelope\s+of\s+(?:signal\s+)?(.+?)(?:\s+sample\s+rate\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            r"^(?:calculate|compute)\s+hilbert\s+analytic\s+envelope\s+of\s+(?:signal\s+)?(.+?)(?:\s+sample\s+rate\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )
@@ -198,9 +198,9 @@ class SignalsDomainParser(DomainParser):
             target = m_hilb.group(3).strip()
             return f"set {target} to signals_hilbert_envelope({sig}, sample_rate={fs})"
 
-        # compute pseudo wigner ville distribution of [signal] <sig> [window <w>] [freq bins <fb>] [sample rate <fs>] into <target>
+        # compute / calculate pseudo wigner ville distribution of [signal] <sig> [window <w>] [freq bins <fb>] [sample rate <fs>] into <target>
         m_pwvd = re.match(
-            r"^compute\s+pseudo\s+wigner\s+ville\s+distribution\s+of\s+(?:signal\s+)?(.+?)(?:\s+window\s+(\d+))?(?:\s+freq\s+bins\s+(\d+))?(?:\s+sample\s+rate\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            r"^(?:calculate|compute)\s+pseudo\s+wigner\s+ville\s+distribution\s+of\s+(?:signal\s+)?(.+?)(?:\s+window\s+(\d+))?(?:\s+freq\s+bins\s+(\d+))?(?:\s+sample\s+rate\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )

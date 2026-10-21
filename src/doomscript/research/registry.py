@@ -320,8 +320,8 @@ def apply_research_normalization(line: str) -> Optional[str]:
     cleaned = masked_line.strip()
 
     # 1. Action verbs without 'into'
-    # compute gradient of <expr> -> <expr>.backward()
-    grad_m = re.match(r"^compute\s+gradient\s+of\s+(.+)$", cleaned, re.IGNORECASE)
+    # compute / calculate gradient of <expr> -> <expr>.backward()
+    grad_m = re.match(r"^(?:compute|calculate)\s+gradient\s+of\s+(.+)$", cleaned, re.IGNORECASE)
     if grad_m:
         raw_res = f"({grad_m.group(1).strip()}).backward()"
         return _unmask_strings(raw_res, strings)

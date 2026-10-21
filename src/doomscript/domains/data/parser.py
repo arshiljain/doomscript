@@ -189,7 +189,7 @@ class DataDomainParser(DomainParser):
 
         # fill missing values in <df> for column <col> with <fill> into <target>
         fill_m = re.match(
-            r"^fill\s+missing\s+values\s+in\s+([A-Za-z_]\w*)\s+for\s+column\s+(.+?)\s+with\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            r"^fill\s+missing(?:\s+values)?\s+in\s+([A-Za-z_]\w*)\s+for\s+column\s+(.+?)\s+with\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
             line.strip(),
             re.IGNORECASE,
         )

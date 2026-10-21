@@ -387,9 +387,9 @@ class ImageDomainParser(DomainParser):
             col_arg = f", color={col.strip()}" if col else ""
             return f"set {target} to image_pad_borders({img}, pad_size={ps}{col_arg})"
 
-        # compute mean color of <img_var> into <target>
+        # compute / calculate mean color of <img_var> into <target>
         m_mean = re.match(
-            r"^(?:compute\s+mean\s+color\s+of|mean\s+color\s+of)\s+(?:image\s+)?(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            r"^(?:(?:calculate|compute)\s+mean\s+color\s+of|mean\s+color\s+of)\s+(?:image\s+)?(.+?)\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )

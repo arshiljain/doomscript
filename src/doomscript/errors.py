@@ -506,33 +506,48 @@ def format_syntax_error(
     caret pointer under the problem, plain explanation, and 'Did you mean: ...?'.
     Never outputs raw Lark error representations.
     """
-    raw_line_no = getattr(err, "line", 1)
-    col_no = getattr(err, "column", 1)
+    from doomscript.exceptions import DoomScriptSyntaxError
 
-    if line_map is None:
-        try:
-            from doomscript.grammar.phrases import normalize_with_map
-            _, line_map = normalize_with_map(source)
-        except Exception:
-            line_map = {}
+    if isinstance(err, DoomScriptSyntaxError):
+        line_no = getattr(err, "line", 1) or 1
+        col_no = getattr(err, "column", 1) or 1
+        lines = source.splitlines()
+        source_line = ""
+        if 1 <= line_no <= len(lines):
+            source_line = lines[line_no - 1]
+        elif lines:
+            source_line = lines[-1]
+            line_no = len(lines)
+        orig_err = getattr(err, "__cause__", None) or err
+        explanation, explicit_suggestion = translate_lark_error(orig_err, source_line)
+        suggestion = explicit_suggestion or getattr(err, "suggestion", None)
+    else:
+        raw_line_no = getattr(err, "line", 1)
+        col_no = getattr(err, "column", 1) or 1
 
-    line_no = line_map.get(raw_line_no, raw_line_no) if line_map else raw_line_no
-    lines = source.splitlines()
+        if line_map is None:
+            try:
+                from doomscript.grammar.phrases import normalize_with_map
+                _, line_map = normalize_with_map(source)
+            except Exception:
+                line_map = {}
 
-    source_line = ""
-    if 1 <= line_no <= len(lines):
-        source_line = lines[line_no - 1]
-    elif lines:
-        source_line = lines[-1]
-        line_no = len(lines)
+        line_no = line_map.get(raw_line_no, raw_line_no) if line_map else raw_line_no
+        lines = source.splitlines()
 
-    explanation, explicit_suggestion = translate_lark_error(err, source_line)
+        source_line = ""
+        if 1 <= line_no <= len(lines):
+            source_line = lines[line_no - 1]
+        elif lines:
+            source_line = lines[-1]
+            line_no = len(lines)
 
-    suggestion = explicit_suggestion
-    if not suggestion and source_line.strip():
-        closest = find_closest_phrasings(source_line, n=1, cutoff=0.7)
-        if closest:
-            suggestion = closest[0]
+        explanation, explicit_suggestion = translate_lark_error(err, source_line)
+        suggestion = explicit_suggestion
+        if not suggestion and source_line.strip():
+            closest = find_closest_phrasings(source_line, n=1, cutoff=0.7)
+            if closest:
+                suggestion = closest[0]
 
     # Caret positioning: clamp to length of source_line + 1
     pointer_col = max(1, min(col_no, len(source_line) + 1 if source_line else 1))

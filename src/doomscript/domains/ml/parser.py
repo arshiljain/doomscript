@@ -297,7 +297,7 @@ class MLDomainParser(DomainParser):
             return f"set {target} to ml_pca_transform({data_var}, n_components={n_comp})"
 
         logloss_m = re.match(
-            r"^compute\s+log\s+loss\s+between\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            r"^(?:calculate|compute)\s+log\s+loss\s+between\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
             line.strip(),
             re.IGNORECASE,
         )
@@ -306,7 +306,7 @@ class MLDomainParser(DomainParser):
             return f"set {target} to ml_log_loss({y_t}, {y_p})"
 
         brier_m = re.match(
-            r"^compute\s+brier\s+score\s+between\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            r"^(?:calculate|compute)\s+brier\s+score\s+between\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
             line.strip(),
             re.IGNORECASE,
         )
@@ -324,7 +324,7 @@ class MLDomainParser(DomainParser):
             return f"set {target} to ml_f1_score({y_t}, {y_p})"
 
         pr_m = re.match(
-            r"^compute\s+precision\s+and\s+recall\s+between\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            r"^(?:calculate|compute)\s+precision\s+and\s+recall\s+between\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
             line.strip(),
             re.IGNORECASE,
         )
@@ -374,7 +374,7 @@ class MLDomainParser(DomainParser):
             return f"set {target} to ml_train_val_test_split({data_var})"
 
         ano_m = re.match(
-            r"^compute\s+anomaly\s+scores\s+in\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
+            r"^(?:calculate|compute)\s+anomaly\s+scores\s+in\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
             line.strip(),
             re.IGNORECASE,
         )
@@ -383,7 +383,7 @@ class MLDomainParser(DomainParser):
             return f"set {target} to ml_one_class_anomaly_score({data_var})"
 
         sil_m = re.match(
-            r"^compute\s+silhouette\s+score\s+for\s+([A-Za-z_]\w*)\s+with\s+labels\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            r"^(?:calculate|compute)\s+silhouette\s+score\s+for\s+([A-Za-z_]\w*)\s+with\s+labels\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
             line.strip(),
             re.IGNORECASE,
         )
@@ -392,7 +392,7 @@ class MLDomainParser(DomainParser):
             return f"set {target} to ml_silhouette_score_sample({data_var}, {lbls})"
 
         hinge_m = re.match(
-            r"^compute\s+hinge\s+loss\s+between\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            r"^(?:calculate|compute)\s+hinge\s+loss\s+between\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
             line.strip(),
             re.IGNORECASE,
         )
@@ -401,7 +401,7 @@ class MLDomainParser(DomainParser):
             return f"set {target} to ml_hinge_loss({y_t}, {y_s})"
 
         lc_m = re.match(
-            r"^compute\s+learning\s+curve\s+points\s+for\s+(.+?)\s+on\s+([A-Za-z_]\w*)\s+predicting\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            r"^(?:calculate|compute)\s+learning\s+curve\s+points\s+for\s+(.+?)\s+on\s+([A-Za-z_]\w*)\s+predicting\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
             line.strip(),
             re.IGNORECASE,
         )
@@ -449,9 +449,9 @@ class MLDomainParser(DomainParser):
             samples, model, target = m_gmm_p.group(1).strip(), m_gmm_p.group(2).strip(), m_gmm_p.group(3).strip()
             return f"set {target} to ml_gmm_predict({model}, {samples})"
 
-        # compute pca with <n_components> components on <data> into <target>
+        # compute / calculate pca with <n_components> components on <data> into <target>
         m_pca = re.match(
-            r"^compute\s+pca\s+with\s+(\d+)\s+components\s+on\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            r"^(?:calculate|compute)\s+pca\s+with\s+(\d+)\s+components\s+on\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
             line.strip(),
             re.IGNORECASE,
         )

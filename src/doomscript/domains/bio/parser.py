@@ -183,9 +183,9 @@ class BioDomainParser(DomainParser):
             mat, taxa, target = m_tree.group(1).strip(), m_tree.group(2).strip(), m_tree.group(3).strip()
             return f"set {target} to bio_upgma_tree({mat}, {taxa})"
 
-        # compute bwt of sequence <text> into <target>
+        # compute / calculate bwt of sequence <text> into <target>
         m_bwt = re.match(
-            r"^compute\s+bwt\s+of\s+sequence\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            r"^(?:calculate|compute)\s+bwt\s+of\s+sequence\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )

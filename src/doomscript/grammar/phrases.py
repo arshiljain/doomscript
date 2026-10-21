@@ -211,9 +211,8 @@ def split_comment(line: str) -> Tuple[str, str]:
 
 
 SYNONYM_REPLACEMENTS = [
-    # Math & Metric Verbs
-    (re.compile(r"\bcalculate\b", re.IGNORECASE), "compute"),
-    (re.compile(r"\bevaluate\b", re.IGNORECASE), "compute"),
+    # Math & Metric Verbs (calculate is the canonical verb across 300+ domain signatures)
+    (re.compile(r"\bcompute\b", re.IGNORECASE), "calculate"),
     # Creation Verbs
     (re.compile(r"\bconstruct\b", re.IGNORECASE), "create"),
     # Data & Imputation Clauses
@@ -224,7 +223,6 @@ SYNONYM_REPLACEMENTS = [
     (re.compile(r"\basc\b", re.IGNORECASE), "ascending"),
     # Inspection Verbs
     (re.compile(r"\bexamine\b", re.IGNORECASE), "inspect"),
-    (re.compile(r"\bpreview\b", re.IGNORECASE), "inspect"),
 ]
 
 
@@ -863,11 +861,11 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"\b([A-Za-z_]\w*(?:\[[^\]]+\])?|\d+)\s+xor\s+([A-Za-z_]\w*(?:\[[^\]]+\])?|\d+)\b", r"\1 ^ \2", masked, flags=re.IGNORECASE)
     
     # Membership 'in' operator: x in y -> x is inside y (excluding for-loops, comprehensions, and statement keywords)
-    if not re.match(r"^\s*(?:set\s+(?:cookie|config)|remember\s+in\s+memory|mask\s+pii|list\s+files|start\s+server|insert\b|replace\b|display\s+colored)\b", masked, re.IGNORECASE):
+    if not re.match(r"^\s*(?:set\s+(?:cookie|config)|remember\s+in\s+memory|mask\s+pii|list\s+files|start\s+server|insert\b|replace\b|display\s+colored|fill\b)\b", masked, re.IGNORECASE):
         def _in_repl(m):
             if m.group(2).lower() in ("background", "bytes", "seconds", "minutes", "hours", "milliseconds", "days"):
                 return m.group(0)
-            if m.group(1).lower() in ("highest", "maximum", "lowest", "minimum", "files", "nulls", "items", "now"):
+            if m.group(1).lower() in ("highest", "maximum", "lowest", "minimum", "files", "nulls", "missing", "items", "now"):
                 return m.group(0)
             full_prefix = masked[:m.start()] + m.group(1)
             if re.search(r"\bfor\s+(?:each\s+)?([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*)$", full_prefix, re.IGNORECASE):
@@ -875,7 +873,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
             if re.search(r"\beach\s+[A-Za-z_]\w*$", full_prefix, re.IGNORECASE):
                 return m.group(0)
             prefix = masked[:m.start()]
-            if re.search(r"\b(?:insert|replace|files|nulls|background|highest|lowest|maximum|minimum|items)\s+(?:[^\n]*\s+)?$", prefix, re.IGNORECASE):
+            if re.search(r"\b(?:insert|replace|fill|files|nulls|missing|background|highest|lowest|maximum|minimum|items)\s+(?:[^\n]*\s+)?$", prefix, re.IGNORECASE):
                 return m.group(0)
             if re.search(r"\b(?:sum|average|avg|count|number)\s+of\s+(?:items\s+)?$", prefix, re.IGNORECASE):
                 return m.group(0)

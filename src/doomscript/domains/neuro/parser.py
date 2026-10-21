@@ -76,9 +76,9 @@ class NeuroDomainParser(DomainParser):
             target = m_eeg.group(3).strip()
             return f"set {target} to neuro_analyze_eeg_bands({sig}, {sr})"
 
-        # compute psth for trials <trials> duration <dur> [with bin width <bw>] into <target>
+        # compute / calculate psth for trials <trials> duration <dur> [with bin width <bw>] into <target>
         m_psth = re.match(
-            r"^compute\s+psth\s+for\s+trials\s+(.+?)\s+duration\s+(.+?)(?:\s+with\s+bin\s+width\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            r"^(?:calculate|compute)\s+psth\s+for\s+trials\s+(.+?)\s+duration\s+(.+?)(?:\s+with\s+bin\s+width\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )

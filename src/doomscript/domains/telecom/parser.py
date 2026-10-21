@@ -106,9 +106,9 @@ class TelecomDomainParser(DomainParser):
             target = m_awgn.group(4).strip()
             return f"set {target} to telecom_awgn_simulate({bits}, scheme={sch}, snr_db={snr})"
 
-        # compute custom crc of <data> with polynomial <poly> into <target>
+        # compute / calculate custom crc of <data> with polynomial <poly> into <target>
         m_ccrc = re.match(
-            r"^compute\s+(?:custom\s+)?crc\s+of\s+(.+?)\s+with\s+polynomial\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            r"^(?:calculate|compute)\s+(?:custom\s+)?crc\s+of\s+(.+?)\s+with\s+polynomial\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )
