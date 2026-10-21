@@ -778,7 +778,13 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         masked,
         flags=re.IGNORECASE
     )
-    masked = re.sub(r"\b(?:my|its)\s+([A-Za-z_]\w*)", r"self.\1", masked, flags=re.IGNORECASE)
+    if scope.in_class:
+        masked = re.sub(r"\b(?:my|its)\s+([A-Za-z_]\w*)", r"self.\1", masked, flags=re.IGNORECASE)
+    else:
+        masked = re.sub(r"\bmy\s+([A-Za-z_]\w*)", r"self.\1", masked, flags=re.IGNORECASE)
+        last_sing = scope.get_last_singular() or scope.get_last_var()
+        if last_sing:
+            masked = re.sub(r"\bits\s+([A-Za-z_]\w*)", rf"{last_sing}.\1", masked, flags=re.IGNORECASE)
 
     # Phase 4: Lambdas and Comprehensions in English
     # English List Comprehensions and Ranges
@@ -1162,9 +1168,21 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"\bif\s+(?:(?:it|that)\s+fails|there\s+is\s+an?\s+error|(?:it|anything)\s+goes\s+wrong)\b", "__IF_FAILS__", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bif\s+it\s+(?:turns\s+out|happens)\s+that\b", "__IF_TURNS_OUT__", masked, flags=re.IGNORECASE)
 
+    # Plural pronoun resolution: 'their count', 'them', 'these', 'those'
+    if re.search(r"\btheir\s+count\b", masked, re.IGNORECASE):
+        last_pl = scope.get_last_plural() or scope.get_last_var()
+        if last_pl:
+            masked = re.sub(r"\btheir\s+count\b", f"count of {last_pl}", masked, flags=re.IGNORECASE)
+
+    # In them / from them / to them / with them
+    if re.search(r"\b(in|from|to|with|for|each)\s+(them|these|those)\b", masked, re.IGNORECASE):
+        last_pl = scope.get_last_plural() or scope.get_last_var()
+        if last_pl:
+            masked = re.sub(r"\b(in|from|to|with|for|each)\s+(?:them|these|those)\b", rf"\1 {last_pl}", masked, flags=re.IGNORECASE)
+
     pronoun_match = re.search(r"\b(it|that)\b", masked, re.IGNORECASE)
     if pronoun_match:
-        last_var = scope.get_last_var()
+        last_var = scope.get_last_singular() or scope.get_last_var()
         if not last_var:
             raise DoomScopeError(
                 f"Cannot resolve pronoun '{pronoun_match.group(1)}' on line {line_num}: no preceding variable assigned in scope.",
@@ -2588,7 +2606,12 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
         # Extract leading indentation
         indent_len = len(raw_line) - len(raw_line.lstrip(" "))
         indent = " " * indent_len
+        if indent_len == 0:
+            scope.in_class = False
         scope.update_indent(indent_len)
+        stripped = raw_line.strip()
+        if (stripped.startswith(("class ", "define a ", "define an ")) or (stripped.startswith(("a ", "an ")) and "begins with" in stripped)) and stripped.endswith(":"):
+            scope.in_class = True
 
         # Pop domain_block_stack if indentation returned to parent level
         while domain_block_stack and indent_len <= domain_block_stack[-1]["indent"]:
