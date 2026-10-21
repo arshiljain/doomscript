@@ -348,9 +348,13 @@ CMP_OP.3: "<="
      | term "/" power -> div
      | term "//" power -> floor_div
      | term "%" power -> mod_op
+     | term PERCENT_OF factor -> expr_percent_of
      | power
 
 ?power: atom "**" power -> pow
+      | atom SQUARED -> expr_squared
+      | atom CUBED -> expr_cubed
+      | atom TO_POWER_OF power -> expr_power_of
       | factor
 
 ?factor: "-" factor -> neg
@@ -384,13 +388,18 @@ file_exists_expr: "file" atom "exists" -> file_exists_factor
 
 aggregate_expr: SUM_OF factor                                      -> agg_sum
               | AVG_OF factor                                      -> agg_avg
+              | MEDIAN_OF factor                                   -> agg_median
+              | VARIANCE_OF factor                                 -> agg_variance
+              | STDEV_OF factor                                    -> agg_stdev
+              | PRODUCT_OF factor                                  -> agg_product
               | ("highest" | "maximum") ("in" | "of") factor       -> agg_max
               | ("lowest" | "minimum") ("in" | "of") factor        -> agg_min
               | "first" ["item"] ("of" | "in") factor              -> agg_first
               | "last" ["item"] ("of" | "in") factor               -> agg_last
 
 math_fn_expr: "absolute" "value" "of" factor -> math_abs
-            | "sqrt" "of" factor -> math_sqrt
+            | SQRT_OF factor -> math_sqrt
+            | CBRT_OF factor -> math_cbrt
 
 date_fn_expr: "today" -> date_today
             | ("now" | "current" "time") -> date_now
@@ -476,3 +485,14 @@ SUM_OF.3: /(sum|total)\s+of/
 AVG_OF.3: /(average|mean)\s+of/
 COUNT_OF.3: /(count|length)\s+of/
 A_LIST_OF.3: /(a\s+)?list\s+of/
+PERCENT_OF.3: /(percent|%)\s+of/
+SQUARED.3: "squared"
+CUBED.3: "cubed"
+TO_POWER_OF.3: /(to\s+the\s+power\s+(of\s+)?|raised\s+to\s+)/
+SQRT_OF.3: /(square\s+root|sqrt)\s+of/
+CBRT_OF.3: /cube\s+root\s+of/
+MEDIAN_OF.3: /median\s+of/
+VARIANCE_OF.3: /variance\s+of/
+STDEV_OF.3: /(standard\s+deviation|stdev)\s+of/
+PRODUCT_OF.3: /product\s+of/
+

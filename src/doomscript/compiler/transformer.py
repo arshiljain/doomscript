@@ -1386,6 +1386,18 @@ class DoomToPython(Transformer):
     def agg_avg(self, args):
         return ast.Call(func=ast.Name(id='agg_avg', ctx=ast.Load()), args=[args[-1]], keywords=[])
 
+    def agg_median(self, args):
+        return ast.Call(func=ast.Name(id='ds_median', ctx=ast.Load()), args=[args[-1]], keywords=[])
+
+    def agg_variance(self, args):
+        return ast.Call(func=ast.Name(id='ds_variance', ctx=ast.Load()), args=[args[-1]], keywords=[])
+
+    def agg_stdev(self, args):
+        return ast.Call(func=ast.Name(id='ds_stdev', ctx=ast.Load()), args=[args[-1]], keywords=[])
+
+    def agg_product(self, args):
+        return ast.Call(func=ast.Name(id='ds_product', ctx=ast.Load()), args=[args[-1]], keywords=[])
+
     def agg_max(self, args):
         return ast.Call(func=ast.Name(id='agg_max', ctx=ast.Load()), args=[args[0]], keywords=[])
 
@@ -1506,10 +1518,17 @@ class DoomToPython(Transformer):
         return ast.Call(func=ast.Name(id='unique_items', ctx=ast.Load()), args=[args[0]], keywords=[])
 
     def math_abs(self, args):
-        return ast.Call(func=ast.Name(id='math_abs', ctx=ast.Load()), args=[args[0]], keywords=[])
+        return ast.Call(func=ast.Name(id='math_abs', ctx=ast.Load()), args=[args[-1]], keywords=[])
 
     def math_sqrt(self, args):
-        return ast.Call(func=ast.Name(id='math_sqrt', ctx=ast.Load()), args=[args[0]], keywords=[])
+        return ast.Call(func=ast.Name(id='math_sqrt', ctx=ast.Load()), args=[args[-1]], keywords=[])
+
+    def math_cbrt(self, args):
+        return ast.BinOp(
+            left=to_load(args[-1]),
+            op=ast.Pow(),
+            right=ast.BinOp(left=ast.Constant(value=1.0), op=ast.Div(), right=ast.Constant(value=3.0))
+        )
 
     def date_today(self, _):
         return ast.Call(func=ast.Name(id='date_today', ctx=ast.Load()), args=[], keywords=[])
@@ -1675,6 +1694,23 @@ class DoomToPython(Transformer):
 
     def pow(self, args):
         return ast.BinOp(left=to_load(args[0]), op=ast.Pow(), right=to_load(args[1]))
+
+    def expr_squared(self, args):
+        return ast.BinOp(left=to_load(args[0]), op=ast.Pow(), right=ast.Constant(value=2))
+
+    def expr_cubed(self, args):
+        return ast.BinOp(left=to_load(args[0]), op=ast.Pow(), right=ast.Constant(value=3))
+
+    def expr_power_of(self, args):
+        return ast.BinOp(left=to_load(args[0]), op=ast.Pow(), right=to_load(args[-1]))
+
+    def expr_percent_of(self, args):
+        pct, total = args[0], args[-1]
+        return ast.Call(
+            func=ast.Name(id='ds_percent_of', ctx=ast.Load()),
+            args=[to_load(pct), to_load(total)],
+            keywords=[]
+        )
 
     def empty_tuple(self, _):
         return ast.Tuple(elts=[], ctx=ast.Load())

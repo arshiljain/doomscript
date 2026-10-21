@@ -41,3 +41,59 @@ def test_runtime_helpers_import():
     assert ds_take([1, 2], 5) == [1, 2]
     assert ds_drop([1, 2, 3, 4, 5], 2) == [3, 4, 5]
     assert ds_drop([1, 2], 5) == []
+
+
+# ---------------------------------------------------------------------------
+# Task 2: Math, Exponents, Roots, Percentages & Statistics Tests
+# ---------------------------------------------------------------------------
+
+def test_powers_squared_cubed():
+    source = """
+x = 5
+sq = x squared
+cb = x cubed
+p = 2 to the power of 4
+r = 3 raised to 3
+"""
+    env = execute(source)
+    assert env["sq"] == 25
+    assert env["cb"] == 125
+    assert env["p"] == 16
+    assert env["r"] == 27
+
+
+def test_roots():
+    source = """
+r1 = square root of 144
+r2 = cube root of 27
+"""
+    env = execute(source)
+    assert env["r1"] == 12.0
+    assert math.isclose(env["r2"], 3.0)
+
+
+def test_percentage_expressions():
+    source = """
+total = 200
+tax = 15 percent of total
+tip = 20 % of 50
+"""
+    env = execute(source)
+    assert env["tax"] == 30.0
+    assert env["tip"] == 10.0
+
+
+def test_statistical_aggregates():
+    source = """
+numbers = [10, 20, 30, 40, 50]
+med = median of numbers
+var = variance of numbers
+std = stdev of numbers
+prod = product of [2, 3, 4]
+"""
+    env = execute(source)
+    assert env["med"] == 30
+    assert math.isclose(env["var"], 250.0)
+    assert math.isclose(env["std"], 15.811388300841896)
+    assert env["prod"] == 24
+

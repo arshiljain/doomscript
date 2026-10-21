@@ -808,6 +808,13 @@ def ds_percent_of(pct, total):
     return (float(pct) / 100.0) * float(total)
 
 
+def ds_product(collection):
+    """Compute product of elements in collection."""
+    import math
+    return math.prod(collection)
+
+
+
 def ds_pipe(initial_value, *functions):
     """Sequentially apply functions to initial_value: pipe x into f1 then f2."""
     val = initial_value
