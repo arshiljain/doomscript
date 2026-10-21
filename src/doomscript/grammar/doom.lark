@@ -217,7 +217,7 @@ repeat_while_stmt: "repeat" "while" expr ":"? _NEWLINE suite -> repeat_while_stm
 repeat_until_stmt: "repeat" "until" expr ":"? _NEWLINE suite -> repeat_until_stmt
 while_stmt: "while" expr ":"? _NEWLINE suite -> repeat_while_stmt
 until_stmt: "until" expr ":"? _NEWLINE suite -> repeat_until_stmt
-for_target: NAME ("," NAME)* -> for_target_names
+for_target: ident ("," ident)* -> for_target_names
 for_range_stmt: "for" ["each"] for_target "from" expr "to" expr ["by" expr] [("where" | "if") expr] ":"? _NEWLINE suite -> for_range_stmt
 for_where_stmt: "for" ["each"] for_target "in" expr ("where" | "if") expr ":"? _NEWLINE suite -> for_where_stmt
 for_stmt: "for" ["each"] for_target "in" expr ":"? _NEWLINE suite -> for_stmt
@@ -230,7 +230,7 @@ param_item: call_arg_name ["=" atom | atom]
 param_list: param_item ("," param_item)*
 arg_list: expr ("," expr)*
 
-call_arg_name: NAME
+call_arg_name: ident
 call_arg: call_arg_name "=" expr -> kw_call_arg
         | expr                   -> pos_call_arg
 call_arg_list: call_arg ("," call_arg)*
@@ -262,6 +262,7 @@ call_arg_list: call_arg ("," call_arg)*
              | compare_expr ENDS_WITH bitwise_or -> str_ends_with
              | compare_expr MATCHES_PATTERN bitwise_or -> str_matches_pattern
              | compare_expr IS_BETWEEN bitwise_or "and" bitwise_or -> is_between
+             | compare_expr IS_OUTSIDE bitwise_or "and" bitwise_or -> is_outside
              | compare_expr IS_ONE_OF factor -> is_one_of
              | compare_expr IS_NUMBER -> is_type_number
              | compare_expr IS_NOT_NUMBER -> is_type_not_number
@@ -277,8 +278,8 @@ call_arg_list: call_arg ("," call_arg)*
              | compare_expr CMP_OP bitwise_or -> compare
              | bitwise_or
 
-IS_EMPTY.3: "is empty"
-IS_NOT_EMPTY.3: "is not empty"
+IS_EMPTY.4: /\bis\s+empty\b/
+IS_NOT_EMPTY.4: /\b(is\s+not|isn't)\s+empty\b/
 IS_EVEN.4: /\bis\s+even\b/
 IS_NOT_EVEN.4: /\b(is\s+not|isn't)\s+even\b/
 IS_ODD.4: /\bis\s+odd\b/
@@ -289,20 +290,21 @@ IS_NEGATIVE.4: /\bis\s+negative\b/
 IS_NOT_NEGATIVE.4: /\b(is\s+not|isn't)\s+negative\b/
 IS_ZERO.4: /\bis\s+zero\b/
 IS_NOT_ZERO.4: /\b(is\s+not\s+zero|isn't\s+zero|is\s+non-?zero)\b/
-IS_BETWEEN.3: "is between"
-IS_ONE_OF.3: "is one of"
-IS_NUMBER.3: "is a number" | "is number"
-IS_NOT_NUMBER.3: "is not a number" | "is not number"
-IS_TEXT.3: "is text" | "is a string" | "is string"
-IS_NOT_TEXT.3: "is not text" | "is not a string" | "is not string"
-IS_BOOLEAN.3: "is a boolean" | "is boolean" | "is a bool" | "is bool"
-IS_NOT_BOOLEAN.3: "is not a boolean" | "is not boolean" | "is not a bool" | "is not bool"
-IS_LIST.3: "is a list" | "is list"
-IS_NOT_LIST.3: "is not a list" | "is not list"
-IS_RECORD.3: "is a record" | "is record" | "is a dictionary" | "is dictionary"
-IS_NOT_RECORD.3: "is not a record" | "is not record" | "is not a dictionary" | "is not dictionary"
-STARTS_WITH.3: "starts with"
-ENDS_WITH.3: "ends with"
+IS_BETWEEN.4: /\bis\s+between\b/
+IS_OUTSIDE.4: /\bis\s+(outside|not\s+between)\b/
+IS_ONE_OF.4: /\bis\s+one\s+of\b/
+IS_NUMBER.4: /\bis\s+(a\s+)?number\b/
+IS_NOT_NUMBER.4: /\b(is\s+not|isn't)\s+(a\s+)?number\b/
+IS_TEXT.4: /\bis\s+(text|(a\s+)?string)\b/
+IS_NOT_TEXT.4: /\b(is\s+not|isn't)\s+(text|(a\s+)?string)\b/
+IS_BOOLEAN.4: /\bis\s+(a\s+)?bool(ean)?\b/
+IS_NOT_BOOLEAN.4: /\b(is\s+not|isn't)\s+(a\s+)?bool(ean)?\b/
+IS_LIST.4: /\bis\s+(a\s+)?list\b/
+IS_NOT_LIST.4: /\b(is\s+not|isn't)\s+(a\s+)?list\b/
+IS_RECORD.4: /\bis\s+(a\s+)?(record|dictionary)\b/
+IS_NOT_RECORD.4: /\b(is\s+not|isn't)\s+(a\s+)?(record|dictionary)\b/
+STARTS_WITH.4: /\bstarts\s+with\b/
+ENDS_WITH.4: /\bends\s+with\b/
 MATCHES_PATTERN.3: "matches pattern"
 DESCENDING_ORDER.3: "descending" | "desc"
 ASCENDING_ORDER.3: "ascending" | "asc"
@@ -413,7 +415,8 @@ slice_item: expr ":" [expr] [":" [expr]] -> slice_full
           | ":" [expr] [":" [expr]]      -> slice_lead
           | expr                         -> index_expr
 
-?base_atom: NAME           -> var
+?ident: NAME | "file"
+?base_atom: ident          -> var
           | NUMBER         -> num
           | STRING         -> str
           | "true"         -> const_true
@@ -448,7 +451,7 @@ brace_items: brace_item ("," brace_item)* [","]
 brace_item: expr ":" expr -> dict_pair
           | expr          -> set_item
 
-?target: NAME             -> target_var
+?target: ident            -> target_var
        | atom "." NAME    -> target_attr
        | atom "'s" NAME   -> target_attr
        | atom "[" subscript_index "]" -> target_subscript

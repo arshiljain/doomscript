@@ -43,6 +43,67 @@ from doomscript.introspection import (
     preview_of,
     summary_of,
 )
+from doomscript.exceptions import (
+    DoomAssertionError,
+    DoomIndexError,
+    DoomTypeError,
+    DoomValueError,
+    DoomAttributeError,
+)
+
+
+def make_entity(entity_type_name: str, **kwargs):
+    """Creates a class instance if type exists in scope, or a typed Record otherwise."""
+    cls = globals().get(entity_type_name)
+    if cls and callable(cls):
+        try:
+            return cls(**kwargs)
+        except Exception:
+            pass
+    r = Record(kwargs)
+    r["_type"] = entity_type_name
+    return r
+
+
+def ds_add(target, item):
+    """Polymorphic add: numbers sum, lists append, sets add, strings concat."""
+    if isinstance(target, (int, float)) and isinstance(item, (int, float)):
+        return target + item
+    elif isinstance(target, list):
+        target.append(item)
+        return target
+    elif isinstance(target, set):
+        target.add(item)
+        return target
+    elif isinstance(target, str):
+        return target + str(item)
+    elif isinstance(target, dict):
+        if isinstance(item, dict):
+            target.update(item)
+            return target
+        raise DoomTypeError(f"Cannot add non-dictionary to record: {type(item).__name__}")
+    else:
+        try:
+            return target + item
+        except Exception:
+            raise DoomTypeError(f"Cannot add {type(item).__name__} to {type(target).__name__}")
+
+
+def ds_remove(target, item):
+    """Polymorphic remove: lists remove (or no-op if absent), sets discard, dicts pop."""
+    if isinstance(target, list):
+        if item in target:
+            target.remove(item)
+        return target
+    elif isinstance(target, set):
+        target.discard(item)
+        return target
+    elif isinstance(target, dict):
+        target.pop(item, None)
+        return target
+    else:
+        raise DoomTypeError(f"Cannot remove items from {type(target).__name__}")
+
 
 
 def sleep(seconds):
@@ -781,11 +842,19 @@ def ask_boolean(prompt: str = "") -> bool:
 
 
 def item_of(index, collection):
-    """Access item in collection using natural 1-based indexing."""
-    idx = int(index)
-    if idx > 0:
-        return collection[idx - 1]
-    return collection[idx]
+    """Access item in collection using natural 1-based indexing. Returns None if index out of bounds."""
+    try:
+        idx = int(index)
+        if idx > 0:
+            if idx <= len(collection):
+                return collection[idx - 1]
+            return None
+        if abs(idx) <= len(collection):
+            return collection[idx]
+        return None
+    except (IndexError, KeyError, TypeError):
+        return None
+
 
 
 def set_item(index, collection, value):

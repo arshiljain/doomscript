@@ -617,7 +617,19 @@ class DoomToPython(Transformer):
 
     def verify_assertion(self, args):
         test, msg = args
-        return ast.Assert(test=test, msg=msg)
+        raise_node = ast.Raise(
+            exc=ast.Call(
+                func=ast.Name(id='DoomAssertionError', ctx=ast.Load()),
+                args=[to_load(msg)],
+                keywords=[]
+            ),
+            cause=None
+        )
+        return ast.If(
+            test=ast.UnaryOp(op=ast.Not(), operand=to_load(test)),
+            body=[raise_node],
+            orelse=[]
+        )
 
     def fetch_json(self, args):
         url, target = args
@@ -768,23 +780,21 @@ class DoomToPython(Transformer):
 
     def add_to_list(self, args):
         item, target = args
-        load_target = to_load(target)
         call = ast.Call(
-            func=ast.Attribute(value=load_target, attr="append", ctx=ast.Load()),
-            args=[item],
+            func=ast.Name(id='ds_add', ctx=ast.Load()),
+            args=[to_load(target), to_load(item)],
             keywords=[]
         )
-        return ast.Expr(value=call)
+        return ast.Assign(targets=[target], value=call)
 
     def remove_from_list(self, args):
         item, target = args
-        load_target = to_load(target)
         call = ast.Call(
-            func=ast.Attribute(value=load_target, attr="remove", ctx=ast.Load()),
-            args=[item],
+            func=ast.Name(id='ds_remove', ctx=ast.Load()),
+            args=[to_load(target), to_load(item)],
             keywords=[]
         )
-        return ast.Expr(value=call)
+        return ast.Assign(targets=[target], value=call)
 
     def wait_seconds(self, args):
         sec = args[0]
@@ -1214,7 +1224,15 @@ class DoomToPython(Transformer):
             val, _, low, high = args
         else:
             val, low, high = args
-        return ast.Compare(left=low, ops=[ast.LtE(), ast.LtE()], comparators=[val, high])
+        return ast.Compare(left=to_load(low), ops=[ast.LtE(), ast.LtE()], comparators=[to_load(val), to_load(high)])
+
+    def is_outside(self, args):
+        if len(args) == 4:
+            val, _, low, high = args
+        else:
+            val, low, high = args
+        inner = ast.Compare(left=to_load(low), ops=[ast.LtE(), ast.LtE()], comparators=[to_load(val), to_load(high)])
+        return ast.UnaryOp(op=ast.Not(), operand=inner)
 
     def is_one_of(self, args):
         if len(args) == 3:

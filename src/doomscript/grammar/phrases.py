@@ -367,11 +367,38 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         flags=re.IGNORECASE
     )
     masked = re.sub(
-        r"^\s*make\s+a\s+list\s+(?:of\s+numbers\s+)?from\s+(.+?)\s+to\s+(.+?)\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
+        r"^\s*(?:make|create)\s+a\s+list\s+(?:of\s+numbers\s+)?from\s+(.+?)\s+to\s+(.+?)\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
         r"set \3 to [x for x in range_inclusive(\1, \2)]",
         masked,
         flags=re.IGNORECASE
     )
+
+    # Standalone statement form of make/create a list
+    standalone_sq_m = re.match(
+        r"^\s*(?:make|create)\s+a\s+list\s+of\s+squares\s+(?:from|of)\s+([A-Za-z_]\w*|\d+(?:\.\d+)?)\s+to\s+([A-Za-z_]\w*|\d+(?:\.\d+)?)\s*$",
+        masked,
+        re.IGNORECASE
+    )
+    if standalone_sq_m:
+        start_v = standalone_sq_m.group(1)
+        stop_v = standalone_sq_m.group(2)
+        tmp_v = f"__it_{line_num}"
+        masked = f"set {tmp_v} to [x * x for x in range_inclusive({start_v}, {stop_v})]"
+        scope.record_assignment(tmp_v)
+
+    standalone_rng_m = re.match(
+        r"^\s*(?:make|create)\s+a\s+list\s+(?:of\s+([A-Za-z_]\w*)\s+)?from\s+([A-Za-z_]\w*|\d+(?:\.\d+)?)\s+to\s+([A-Za-z_]\w*|\d+(?:\.\d+)?)\s*$",
+        masked,
+        re.IGNORECASE
+    )
+    if standalone_rng_m:
+        noun = standalone_rng_m.group(1)
+        start_v = standalone_rng_m.group(2)
+        stop_v = standalone_rng_m.group(3)
+        tmp_v = noun if noun else f"__it_{line_num}"
+        masked = f"set {tmp_v} to [x for x in range_inclusive({start_v}, {stop_v})]"
+        scope.record_assignment(tmp_v)
+
     masked = re.sub(
         r"\bmake\s+a\s+list\s+of\s+squares\s+(?:from|of)\s+([A-Za-z_]\w*|\d+(?:\.\d+)?)\s+to\s+([A-Za-z_]\w*|\d+(?:\.\d+)?)\b",
         r"[x * x for x in range_inclusive(\1, \2)]",
@@ -391,7 +418,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         flags=re.IGNORECASE
     )
     masked = re.sub(
-        r"\bmake\s+a\s+list\s+(?:of\s+numbers\s+)?from\s+([A-Za-z_]\w*|\d+(?:\.\d+)?)\s+to\s+([A-Za-z_]\w*|\d+(?:\.\d+)?)\b",
+        r"\b(?:make|create)\s+a\s+list\s+(?:of\s+numbers\s+)?from\s+([A-Za-z_]\w*|\d+(?:\.\d+)?)\s+to\s+([A-Za-z_]\w*|\d+(?:\.\d+)?)\b",
         r"[x for x in range_inclusive(\1, \2)]",
         masked,
         flags=re.IGNORECASE
@@ -399,6 +426,22 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(
         r"\b(?:the\s+)?squares\s+(?:of|from)\s+([A-Za-z_]\w*|\d+(?:\.\d+)?)\s+to\s+([A-Za-z_]\w*|\d+(?:\.\d+)?)\b",
         r"[x * x for x in range_inclusive(\1, \2)]",
+        masked,
+        flags=re.IGNORECASE
+    )
+
+    # Desugar change/modify/update to set
+    masked = re.sub(
+        r"^\s*(?:change|modify|update)\s+(.+?)\s+to\s+(.+)$",
+        r"set \1 to \2",
+        masked,
+        flags=re.IGNORECASE
+    )
+
+    # Expression sort: sorted <var> -> sorted of <var>
+    masked = re.sub(
+        r"\bsorted\s+(?!of\b)([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)(?!\s*[\(=])\b",
+        r"sorted of \1",
         masked,
         flags=re.IGNORECASE
     )
@@ -470,6 +513,87 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         masked,
         flags=re.IGNORECASE
     )
+
+    # Standalone data operations (implicit target __it_{line_num})
+    replace_inplace_m = re.match(
+        r"^\s*replace\s+(.+?)\s+with\s+(.+?)\s+in\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
+        masked,
+        re.IGNORECASE,
+    )
+    if replace_inplace_m and not re.search(r"\binto\b", masked, re.IGNORECASE):
+        old_v = replace_inplace_m.group(1).strip()
+        new_v = replace_inplace_m.group(2).strip()
+        tgt = replace_inplace_m.group(3).strip()
+        masked = f"set {tgt} to replace {old_v} with {new_v} in {tgt}"
+        scope.record_assignment(tgt)
+
+    join_standalone_m = re.match(
+        r"^\s*join\s+(.+?)\s+(?:with|by)\s+(.+?)\s*$",
+        masked,
+        re.IGNORECASE,
+    )
+    if join_standalone_m and not re.search(r"\binto\b", masked, re.IGNORECASE):
+        coll = join_standalone_m.group(1).strip()
+        delim = join_standalone_m.group(2).strip()
+        tmp_var = f"__it_{line_num}"
+        masked = f"set {tmp_var} to join {coll} with {delim}"
+        scope.record_assignment(tmp_var)
+
+    how_many_m = re.match(
+        r"^\s*how\s+many\s+items\s+in\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
+        masked,
+        re.IGNORECASE,
+    )
+    if how_many_m and not re.search(r"\binto\b", masked, re.IGNORECASE):
+        coll = how_many_m.group(1).strip()
+        tmp_var = f"__it_{line_num}"
+        masked = f"set {tmp_var} to count of {coll}"
+        scope.record_assignment(tmp_var)
+
+    trim_standalone_m = re.match(r"^\s*trim\s+(.+?)\s*$", masked, re.IGNORECASE)
+    if trim_standalone_m and not re.search(r"\binto\b", masked, re.IGNORECASE):
+        val = trim_standalone_m.group(1).strip()
+        tmp_var = f"__it_{line_num}"
+        masked = f"set {tmp_var} to trim {val}"
+        scope.record_assignment(tmp_var)
+
+    upper_standalone_m = re.match(r"^\s*(?:convert\s+(.+?)\s+to\s+uppercase|uppercase\s+(.+?))\s*$", masked, re.IGNORECASE)
+    if upper_standalone_m and not re.search(r"\binto\b", masked, re.IGNORECASE):
+        val = (upper_standalone_m.group(1) or upper_standalone_m.group(2)).strip()
+        tmp_var = f"__it_{line_num}"
+        masked = f"set {tmp_var} to uppercase {val}"
+        scope.record_assignment(tmp_var)
+
+    lower_standalone_m = re.match(r"^\s*(?:convert\s+(.+?)\s+to\s+lowercase|lowercase\s+(.+?))\s*$", masked, re.IGNORECASE)
+    if lower_standalone_m and not re.search(r"\binto\b", masked, re.IGNORECASE):
+        val = (lower_standalone_m.group(1) or lower_standalone_m.group(2)).strip()
+        tmp_var = f"__it_{line_num}"
+        masked = f"set {tmp_var} to lowercase {val}"
+        scope.record_assignment(tmp_var)
+
+    make_squares_standalone_m = re.match(
+        r"^\s*(?:make|create)\s+a\s+list\s+of\s+squares\s+(?:from|of)\s+(.+?)\s+to\s+(.+?)\s*$",
+        masked,
+        re.IGNORECASE,
+    )
+    if make_squares_standalone_m and not re.search(r"\binto\b", masked, re.IGNORECASE):
+        start = make_squares_standalone_m.group(1).strip()
+        stop = make_squares_standalone_m.group(2).strip()
+        tmp_var = f"__it_{line_num}"
+        masked = f"set {tmp_var} to [x * x for x in range_inclusive({start}, {stop})]"
+        scope.record_assignment(tmp_var)
+
+    make_range_standalone_m = re.match(
+        r"^\s*(?:make|create)\s+a\s+list\s+(?:of\s+numbers\s+)?from\s+(.+?)\s+to\s+(.+?)\s*$",
+        masked,
+        re.IGNORECASE,
+    )
+    if make_range_standalone_m and not re.search(r"\binto\b", masked, re.IGNORECASE):
+        start = make_range_standalone_m.group(1).strip()
+        stop = make_range_standalone_m.group(2).strip()
+        tmp_var = f"__it_{line_num}"
+        masked = f"set {tmp_var} to [x for x in range_inclusive({start}, {stop})]"
+        scope.record_assignment(tmp_var)
 
     masked = re.sub(
         r"\ba\s+function\s+of\s+([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*)\s+giving\s+(.+?)(?=[,\n]|\)$|$)",
@@ -563,7 +687,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     legacy_is_assign = re.match(
         r"^(?!result\b)(?!the\s+result\b)([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s+is\s+"
         r"(?!even\b|odd\b|positive\b|negative\b|zero\b|blank\b|empty\b|"
-        r"a\s+(?:number|string|text|boolean|bool|list|record|dictionary|dict|multiple\s+of)\b|"
+        r"a\s+(?:number|string|text|boolean|bool|list(?!\s+of\b)|record|dictionary|dict|multiple\s+of)\b|"
         r"an\s+(?:empty\b|integer\b)|not\b|between\b|"
         r"one\s+of\b|inside\b|in\b|divisible\b|greater\b|less\b|equal\b|more\b|smaller\b|above\b|"
         r"below\b|at\s+least\b|at\s+most\b|no\s+more\b|no\s+less\b)(.+)$",
@@ -593,7 +717,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     # 4. Pronoun Resolution ('it' / 'that')
     # Temporarily protect grammar keywords that contain 'that' or 'it'
     masked = re.sub(r"\bverify\s+that\b", "__VERIFY_THAT__", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\bif\s+(?:it|that)\s+fails\b", "__IF_FAILS__", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bif\s+(?:(?:it|that)\s+fails|there\s+is\s+an?\s+error)\b", "__IF_FAILS__", masked, flags=re.IGNORECASE)
 
     pronoun_match = re.search(r"\b(it|that)\b", masked, re.IGNORECASE)
     if pronoun_match:
@@ -648,6 +772,23 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"^\s*random\s+number\b", "roll", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*open\s+window\b", "open_window", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*with\s+(.+?)\s+(?:as|into)\s+([A-Za-z_]\w*)\s*:?", r"with \1 into \2:", masked, flags=re.IGNORECASE)
+        # Trailing input type cast: ask "..." into target as number/boolean/text
+    ask_as_m = re.match(
+        r"^\s*ask\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s+as\s+(number|boolean|bool|text|string)\s*$",
+        masked,
+        re.IGNORECASE,
+    )
+    if ask_as_m:
+        prompt = ask_as_m.group(1).strip()
+        t_var = ask_as_m.group(2).strip()
+        as_type = ask_as_m.group(3).lower()
+        if as_type == "number":
+            masked = f"ask number {prompt} into {t_var}"
+        elif as_type in ("boolean", "bool"):
+            masked = f"ask boolean {prompt} into {t_var}"
+        else:
+            masked = f"ask {prompt} into {t_var}"
+
     masked = re.sub(r"\bask\s+(?:for\s+)?number\b", "ask number", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bask\s+(?:for\s+)?(?:boolean|yes/no|confirmation)\b", "ask boolean", masked, flags=re.IGNORECASE)
     # Ergonomic timing
@@ -953,8 +1094,8 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s+does\s+not\s+contain\s+(.+?)(?=\s+and\b|\s+or\b|:|\n|$)", r"not (\1 contains \2)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s+does\s+not\s+start\s+with\s+(.+?)(?=\s+and\b|\s+or\b|:|\n|$)", r"not (\1 starts with \2)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s+does\s+not\s+end\s+with\s+(.+?)(?=\s+and\b|\s+or\b|:|\n|$)", r"not (\1 ends with \2)", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s+is\s+not\s+between\s+(.+?)\s+and\s+([^\s;,\n]+)", r"not (\1 is between \2 and \3)", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s+is\s+outside\s+(.+?)\s+and\s+([^\s;,\n]+)", r"not (\1 is between \2 and \3)", masked, flags=re.IGNORECASE)
+    # Handled natively in Lark grammar via IS_BETWEEN and IS_OUTSIDE
+    pass
     masked = re.sub(r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s+is\s+neither\s+(.+?)\s+nor\s+([^\s;,\n]+)", r"not (\1 is \2 or \1 is \3)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"(\b\w+(?:'s\s+[A-Za-z_]\w*)?|\))\s+is\s+(?:inside|in)\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?|\[[^\]]*\]|\{[^\}]*\})", r"\1 is inside \2", masked, flags=re.IGNORECASE)
     masked = re.sub(r"(\b\w+(?:'s\s+[A-Za-z_]\w*)?|\))\s+(?:is\s+)?not\s+(?:inside|in)\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?|\[[^\]]*\]|\{[^\}]*\})", r"\1 is not inside \2", masked, flags=re.IGNORECASE)
@@ -1337,7 +1478,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
                 kwargs.append(f'{m_f.group(1)}="{m_f.group(2).lower()}"')
         masked = f'orm_define("{ename}", {", ".join(kwargs)})'
 
-    orm_save_m = re.match(r"^save\s+new\s+([A-Za-z_]\w*)\s+with\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    orm_save_m = re.match(r"^(?:save\s+new|create\s+(?:a|an\s+)?)\s*([A-Za-z_]\w*)\s+with\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
     if orm_save_m:
         ename = orm_save_m.group(1)
         vals_str = orm_save_m.group(2)
@@ -1348,7 +1489,10 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
             m_vp = re.match(r"^([A-Za-z_]\w*)[:\s]+(.+)$", vp)
             if m_vp:
                 kwargs.append(f'{m_vp.group(1)}={m_vp.group(2).strip()}')
-        masked = f'set {target} to orm_save("{ename}", {", ".join(kwargs)})'
+        if masked.lower().startswith("save new"):
+            masked = f'set {target} to orm_save("{ename}", {", ".join(kwargs)})'
+        else:
+            masked = f'set {target} to make_entity("{ename}", {", ".join(kwargs)})' 
 
     orm_find_all_m = re.match(r"^find\s+all\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
     if orm_find_all_m:
@@ -1933,6 +2077,22 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
             if domain_name == "research":
                 in_research_mode = True
             emit(f"{indent}# use {domain_name}", line_idx)
+            continue
+
+                # Declarative Entity: a Person has name, age / Person has name, age
+        ent_schema_m = re.match(
+            r"^(?:(?:a|an)\s+)?([A-Z]\w*)\s+has\s+([A-Za-z_][A-Za-z0-9_,\s]*)$",
+            code.strip(),
+            re.IGNORECASE,
+        )
+        if ent_schema_m:
+            cname = ent_schema_m.group(1)
+            raw_fields = [f.strip() for f in ent_schema_m.group(2).split(",") if f.strip()]
+            params = ", ".join(f"{f}=None" for f in raw_fields)
+            emit(f"{indent}class {cname}:", line_idx)
+            emit(f"{indent}    to init with {params}:", line_idx)
+            for f in raw_fields:
+                emit(f"{indent}        self.{f} = {f}", line_idx)
             continue
 
         if re.match(r"^target\s+leetcode$", code.strip(), re.IGNORECASE):

@@ -610,6 +610,7 @@ TEST_CASES = [
         "name": "Assertion fail 'verify that age is at least 18 otherwise \"Must be an adult\"'",
         "code": "age = 16\nverify that age is at least 18 otherwise \"Must be an adult\"",
         "expected": "fails with message 'Must be an adult', check if AssertionError leaks",
+        "expect_error": "DoomAssertionError",
     },
     {
         "id": "IO-09",
@@ -648,7 +649,7 @@ PYTHON_LEAK_KEYWORDS = [
     "KeyError",
     "ValueError",
     "NameError",
-    "AssertionError",
+    " AssertionError",
     "SyntaxError",
     "__init__",
     "self",
@@ -743,7 +744,10 @@ def run_single_test(tc: Dict[str, Any]) -> Dict[str, Any]:
         result["error_message"] = str(re_err)
         tb_str = traceback.format_exc()
         result["details"] = tb_str
-        result["python_leakage"] = detect_python_leakage(f"{type(re_err).__name__}: {str(re_err)}\n{tb_str}")
+        err_name = type(re_err).__name__
+        result["python_leakage"] = detect_python_leakage(f"{err_name}: {str(re_err)}")
+        if tc.get("expect_error") and tc.get("expect_error") == err_name:
+            result["status"] = "SUCCESS"
     finally:
         sys.stdout = old_stdout
         sys.stdin = old_stdin

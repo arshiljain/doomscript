@@ -216,6 +216,14 @@ def _execute_scoped(source: Any, custom_globals: dict = None, filename: str = "<
         
     runtime_helpers = {
         "Record": runtime.Record,
+        "make_entity": runtime.make_entity,
+        "ds_add": runtime.ds_add,
+        "ds_remove": runtime.ds_remove,
+        "DoomAssertionError": runtime.DoomAssertionError,
+        "DoomIndexError": runtime.DoomIndexError,
+        "DoomTypeError": runtime.DoomTypeError,
+        "DoomValueError": runtime.DoomValueError,
+        "DoomAttributeError": runtime.DoomAttributeError,
         "sleep": runtime.sleep,
         "percent_of": runtime.percent_of,
         "write_file": runtime.write_file,

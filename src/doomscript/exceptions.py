@@ -77,3 +77,29 @@ class DoomCompilationError(DoomError):
 class DoomCompilerWarning(UserWarning):
     """Warning emitted during compilation or AST export transformations."""
     pass
+
+
+class DoomAssertionError(DoomError):
+    """Raised when a verification/assertion check fails."""
+    pass
+
+
+class DoomIndexError(DoomError):
+    """Raised when an indexing operation is out of bounds."""
+    pass
+
+
+class DoomTypeError(DoomError):
+    """Raised when an operation is performed on incompatible types."""
+    pass
+
+
+class DoomValueError(DoomError):
+    """Raised when an operation receives an invalid argument value."""
+    pass
+
+
+class DoomAttributeError(DoomError):
+    """Raised when accessing a missing object attribute or record field."""
+    pass
+
