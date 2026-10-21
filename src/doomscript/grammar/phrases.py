@@ -210,6 +210,32 @@ def split_comment(line: str) -> Tuple[str, str]:
     return unmask_strings(masked, strings), ""
 
 
+SYNONYM_REPLACEMENTS = [
+    # Math & Metric Verbs
+    (re.compile(r"\bcalculate\b", re.IGNORECASE), "compute"),
+    (re.compile(r"\bevaluate\b", re.IGNORECASE), "compute"),
+    # Creation Verbs
+    (re.compile(r"\bconstruct\b", re.IGNORECASE), "create"),
+    # Data & Imputation Clauses
+    (re.compile(r"\bmissing\s+values?\b", re.IGNORECASE), "missing"),
+    (re.compile(r"\bfill\s+nulls\b", re.IGNORECASE), "fill missing"),
+    # Sorting Direction
+    (re.compile(r"\bdesc\b", re.IGNORECASE), "descending"),
+    (re.compile(r"\basc\b", re.IGNORECASE), "ascending"),
+    # Inspection Verbs
+    (re.compile(r"\bexamine\b", re.IGNORECASE), "inspect"),
+    (re.compile(r"\bpreview\b", re.IGNORECASE), "inspect"),
+]
+
+
+def canonicalize_synonyms(text: str) -> str:
+    """Standardizes synonymous English keywords and verbs outside string literals."""
+    masked, strings = mask_strings(text)
+    for pat, repl in SYNONYM_REPLACEMENTS:
+        masked = pat.sub(repl, masked)
+    return unmask_strings(masked, strings)
+
+
 # ---------------------------------------------------------------------------
 # SCOPE & PRONOUN TRACKER
 # ---------------------------------------------------------------------------
@@ -1788,6 +1814,8 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
             # Comment-only line
             emit(raw_line, line_idx)
             continue
+
+        code = canonicalize_synonyms(code)
 
         # Domain Activation: use <domain>, using <domain>, import <domain>, enable <domain>
         use_domain_m = re.match(

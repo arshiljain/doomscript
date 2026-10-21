@@ -106,9 +106,9 @@ class GeoDomainParser(DomainParser):
             target = m_gj.group(2).strip()
             return f"set {target} to to_geojson({geom})"
 
-        # calculate haversine distance from <p1> to <p2> [in <unit>] into <target>
+        # calculate / compute haversine distance from <p1> to <p2> [in <unit>] into <target>
         hav_m = re.match(
-            r"^(?:calculate\s+)?haversine\s+distance\s+from\s+(.+?)\s+to\s+(.+?)(?:\s+in\s+([A-Za-z]+))?\s+into\s+([A-Za-z_]\w*)$",
+            r"^(?:calculate\s+|compute\s+)?haversine\s+distance\s+from\s+(.+?)\s+to\s+(.+?)(?:\s+in\s+([A-Za-z]+))?\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )

@@ -154,6 +154,7 @@ class GeoDomain(DomainContract):
             or s.startswith("spatial join ")
             or (s.startswith("convert ") and "to geojson" in s)
             or s.startswith("calculate haversine distance ")
+            or s.startswith("compute haversine distance ")
             or s.startswith("haversine distance ")
             or s.startswith("check if bounding box ")
             or s.startswith("calculate centroid ")
