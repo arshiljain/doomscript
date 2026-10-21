@@ -403,7 +403,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         flags=re.IGNORECASE
     )
 
-    # Desugar split and reverse statements to expression assignments
+    # Desugar data operations to canonical expression assignments
     masked = re.sub(
         r"^\s*split\s+(.+?)\s+by\s+(.+?)\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
         r"set \3 to split \1 by \2",
@@ -413,6 +413,54 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(
         r"^\s*split\s+(.+?)\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
         r"set \2 to split \1",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"^\s*join\s+(.+?)\s+(?:with|by)\s+(.+?)\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
+        r"set \3 to join \1 with \2",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"^\s*replace\s+(.+?)\s+with\s+(.+?)\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
+        r"set \4 to replace \1 with \2 in \3",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"^\s*trim\s+(.+?)\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
+        r"set \2 to trim \1",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"^\s*capitalize\s+(.+?)\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
+        r"set \2 to capitalize \1",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"^\s*(?:convert\s+(.+?)\s+to\s+uppercase|uppercase\s+(.+?))\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
+        lambda m: f"set {m.group(3)} to uppercase {m.group(1) or m.group(2)}",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"^\s*(?:convert\s+(.+?)\s+to\s+lowercase|lowercase\s+(.+?))\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
+        lambda m: f"set {m.group(3)} to lowercase {m.group(1) or m.group(2)}",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"^\s*sort\s+(.+?)\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
+        r"set \2 to sorted of \1",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"^\s*(?:unique\s+items\s+of|unique\s+of|unique)\s+(.+?)\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
+        r"set \2 to unique items of \1",
         masked,
         flags=re.IGNORECASE
     )
@@ -728,18 +776,6 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         flags=re.IGNORECASE
     )
 
-    upper_m = re.match(r"^\s*uppercase\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
-    if upper_m:
-        masked = f"set {upper_m.group(2)} to str_uppercase({upper_m.group(1).strip()})"
-
-    lower_m = re.match(r"^\s*lowercase\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
-    if lower_m:
-        masked = f"set {lower_m.group(2)} to str_lowercase({lower_m.group(1).strip()})"
-
-    rev_m = re.match(r"^\s*reverse\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
-    if rev_m:
-        masked = f"set {rev_m.group(2)} to reversed_list({rev_m.group(1).strip()})"
-
     # Ergonomic Visualization Short Forms
     viz_chart_m = re.match(
         r"^\s*(?:chart\s+)?(scatter(?:\s+plot)?|line(?:\s+chart)?|bar(?:\s+chart)?|histogram|box(?:\s+plot)?)\s+of\s+([A-Za-z_]\w*)\s+with\s+(.+?)(?:\s+into\s+([A-Za-z_]\w*))?$",
@@ -815,14 +851,6 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"\bitem\s+(\d+|[A-Za-z_]\w*)\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"item_of(\1, \2)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bfirst\s+(\d+|[A-Za-z_]\w*)\s+items\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"first_n_items(\1, \2)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\blast\s+(\d+|[A-Za-z_]\w*)\s+items\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"last_n_items(\1, \2)", masked, flags=re.IGNORECASE)
-    unique_into_m = re.match(r"^\s*unique\s+(?:items\s+)?(?:of\s+)?(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
-    if unique_into_m:
-        masked = f"{unique_into_m.group(2)} = unique_items({unique_into_m.group(1).strip()})"
-
-    masked = re.sub(r"\bunique\s+(?:items\s+)?(?:of\s+)?(\[[^\]]*\]|[A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"unique_items(\1)", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\bsorted\s*\((.+?)\)", r"sorted_list(\1)", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\bsorted\s+(?:of\s+)?(\[[^\]]*\]|[A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"sorted_list(\1)", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\breversed\s+(?:of\s+)?(\[[^\]]*\]|[A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"reversed_list(\1)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\b(?:title|titlecase)\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"str_title(\1)", masked, flags=re.IGNORECASE)
 
     # Chained possessives: A's B's C -> get_field(get_field(A, "B"), "C")
@@ -977,11 +1005,8 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"\b(?:how\s+many|number\s+of)\s+items\s+in\s+(\[[^\]]*\]|[A-Za-z_]\w*)", r"count of \1", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bthe\s+count\s+of\s+([A-Za-z_]\w*)", r"count of \1", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\b(?:the\s+)?(?:length|size)\s+of\s+([A-Za-z_]\w*)", r"count of \1", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\b(?:the\s+)?reverse\s+of\s+(\[[^\]]*\]|[A-Za-z_]\w*)", r"reversed_list(\1)", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\buppercase\s+of\s+(.+?)(?=\s+and\s+then|\s+into\b|\s*$)", r"str_uppercase(\1)", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\blowercase\s+of\s+(.+?)(?=\s+and\s+then|\s+into\b|\s*$)", r"str_lowercase(\1)", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\b(?:the\s+)?average\s+of\s+(\[[^\]]*\]|[A-Za-z_]\w+)(?!\s+in\b)", r"agg_avg(\1)", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\bmean\s+of\s+(\[[^\]]*\]|[A-Za-z_]\w+)", r"agg_avg(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(?:the\s+)?reverse\s+of\s+(\[[^\]]*\]|[A-Za-z_]\w*)", r"reversed of \1", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bmean\s+of\s+(\[[^\]]*\]|[A-Za-z_]\w+)", r"average of \1", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\b(?:the\s+)?sum\s+of\s+all\s+(\[[^\]]*\]|[A-Za-z_]\w+)", r"sum of \1", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bthe\s+sum\s+of\s+(\[[^\]]*\]|[A-Za-z_]\w+)(?!\s+in\b)", r"sum of \1", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\btotal\s+of\s+(\[[^\]]*\]|[A-Za-z_]\w*)(?!\s+in\b)", r"sum of \1", masked, flags=re.IGNORECASE)

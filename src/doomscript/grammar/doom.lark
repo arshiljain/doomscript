@@ -44,13 +44,8 @@ start: (_NEWLINE | stmt)*
                  | create_dir_stmt
                  | list_files_stmt
                  | check_file_stmt
-                 | string_replace_stmt
-                 | string_split_stmt
-                 | string_join_stmt
                  | string_upper_stmt
                  | string_lower_stmt
-                 | string_capitalize_stmt
-                 | string_trim_stmt
                  | spawn_stmt
                  | wait_thread_stmt
                  | route_stmt
@@ -136,13 +131,8 @@ create_dir_stmt: "create" "directory" expr -> create_dir
 list_files_stmt: "list" "files" "in" expr "into" target -> list_files
 check_file_stmt: "check" "if" "file" expr "exists" "into" target -> check_file_exists
 
-string_replace_stmt: "replace" expr "with" expr "in" expr "into" target -> string_replace
-string_split_stmt: "split" expr "by" expr "into" target -> string_split
-string_join_stmt: "join" expr "with" expr "into" target -> string_join
 string_upper_stmt: "convert" expr "to" "uppercase" "into" target -> string_uppercase
 string_lower_stmt: "convert" expr "to" "lowercase" "into" target -> string_lowercase
-string_capitalize_stmt: "capitalize" expr "into" target -> string_capitalize
-string_trim_stmt: "trim" expr "into" target -> string_trim
 
 spawn_stmt: "spawn" NAME "with" arg_list "into" target -> spawn_thread_args
           | "spawn" NAME "into" target               -> spawn_thread_noargs
@@ -238,51 +228,9 @@ param_item: call_arg_name ["=" atom | atom]
 param_list: param_item ("," param_item)*
 arg_list: expr ("," expr)*
 
-call_arg_name: NAME        -> arg_name
-             | "reverse"  -> arg_kw_reverse
-             | "reversed" -> arg_kw_reversed
-             | "count"    -> arg_kw_count
-             | "by"       -> arg_kw_by
-             | "of"       -> arg_kw_of
-             | "split"    -> arg_kw_split
-             | "key"      -> arg_kw_key
-             | "type"     -> arg_kw_type
-             | "mode"     -> arg_kw_mode
-             | "format"   -> arg_kw_format
-             | "step"     -> arg_kw_step
-             | "start"    -> arg_kw_start
-             | "stop"     -> arg_kw_stop
-             | "into"     -> arg_kw_into
-             | "from"     -> arg_kw_from
-             | "to"       -> arg_kw_to
-             | "with"     -> arg_kw_with
-             | "sort"     -> arg_kw_sort
-             | "sorted"   -> arg_kw_sorted
-             | "filter"   -> arg_kw_filter
-             | "sum"      -> arg_kw_sum
-             | "average"  -> arg_kw_average
-             | "first"    -> arg_kw_first
-             | "last"     -> arg_kw_last
-             | "round"    -> arg_kw_round
-             | "repeat"   -> arg_kw_repeat
-             | "copy"     -> arg_kw_copy
-             | "unique"   -> arg_kw_unique
-             | "item"     -> arg_kw_item
-             | "items"    -> arg_kw_items
-             | "when"     -> arg_kw_when
-             | "match"    -> arg_kw_match
-             | "where"    -> arg_kw_where
-             | "file"     -> arg_kw_file
-             | "files"    -> arg_kw_files
-             | "line"     -> arg_kw_line
-             | "lines"    -> arg_kw_lines
-             | "word"     -> arg_kw_word
-             | "words"    -> arg_kw_words
-             | "text"     -> arg_kw_text
-             | "number"   -> arg_kw_number
-             | "default"  -> arg_kw_default
-
-call_arg: [call_arg_name "="] expr
+call_arg_name: NAME
+call_arg: call_arg_name "=" expr -> kw_call_arg
+        | expr                   -> pos_call_arg
 call_arg_list: call_arg ("," call_arg)*
 
 ?expr: logic_or
@@ -337,7 +285,7 @@ MATCHES_PATTERN.3: "matches pattern"
 DESCENDING_ORDER.3: "descending" | "desc"
 ASCENDING_ORDER.3: "ascending" | "asc"
 
-CMP_OP: "<="
+CMP_OP.3: "<="
       | ">="
       | "!="
       | "=="
@@ -391,28 +339,31 @@ CMP_OP: "<="
        | date_fn_expr
        | atom
 
-data_op_expr: "split" factor "by" factor                -> expr_split
-            | "uppercase" "of" factor                     -> expr_uppercase
-            | "lowercase" "of" factor                     -> expr_lowercase
-            | ("trim" | "trimmed") "of" factor            -> expr_trim
-            | "sorted" "of" factor                        -> expr_sorted
-            | "reversed" "of" factor                        -> expr_reversed
-            | "copy" "of" factor                          -> expr_copy
-            | "unique" ["items"] "of" factor              -> expr_unique
-            | ("round" | "rounded") "of" factor "to" factor "decimals"  -> expr_round_dec
-            | ("round" | "rounded") "of" factor                         -> expr_round
-            | atom "as" TYPE_COERCE   -> expr_cast
+data_op_expr: "split" atom ["by" atom]                                 -> expr_split
+            | "join" atom ("with" | "by") atom                         -> expr_join
+            | "replace" atom "with" atom "in" atom                   -> expr_replace
+            | ("trim" | "trimmed") ["of"] atom                           -> expr_trim
+            | "uppercase" ["of"] atom                                    -> expr_uppercase
+            | "lowercase" ["of"] atom                                    -> expr_lowercase
+            | ("capitalize" | "capitalized") ["of"] atom                 -> expr_capitalize
+            | SORTED_OF atom                                           -> expr_sorted
+            | REVERSED_OF atom                                         -> expr_reversed
+            | "copy" "of" atom                                           -> expr_copy
+            | UNIQUE_OF atom                                           -> expr_unique
+            | ROUND_OF atom "to" atom "decimals"                       -> expr_round_dec
+            | ROUND_OF atom                                            -> expr_round
+            | atom "as" TYPE_COERCE                                        -> expr_cast
 
 TYPE_COERCE.3: "number" | "text" | "string" | "boolean" | "bool"
 
 file_exists_expr: "file" atom "exists" -> file_exists_factor
 
-aggregate_expr: "sum" "of" factor -> agg_sum
-              | "average" "of" factor -> agg_avg
-              | ("highest" | "maximum") ("in" | "of") factor -> agg_max
-              | ("lowest" | "minimum") ("in" | "of") factor -> agg_min
-              | "first" "item" "of" factor -> agg_first
-              | "last" "item" "of" factor -> agg_last
+aggregate_expr: SUM_OF factor                                      -> agg_sum
+              | AVG_OF factor                                      -> agg_avg
+              | ("highest" | "maximum") ("in" | "of") factor       -> agg_max
+              | ("lowest" | "minimum") ("in" | "of") factor        -> agg_min
+              | "first" ["item"] ("of" | "in") factor              -> agg_first
+              | "last" ["item"] ("of" | "in") factor               -> agg_last
 
 math_fn_expr: "absolute" "value" "of" factor -> math_abs
             | "sqrt" "of" factor -> math_sqrt
@@ -425,7 +376,7 @@ relative_time_expr: atom TIME_UNIT "from" "now" -> time_future
 
 TIME_UNIT: "days" | "day" | "hours" | "hour" | "minutes" | "minute" | "seconds" | "second"
 
-count_expr: ("count" | "length") "of" factor -> count_of
+count_expr: COUNT_OF factor -> count_of
 
 call_expr: atom "(" [call_arg_list] ")" -> call_expr
 
@@ -485,3 +436,11 @@ NAME: /[^\W\d]\w*/
 COMMENT: /#[^\n]*/
 NUMBER: /\d+(\.\d+)?([eE][+-]?\d+)?/
 STRING: /"""[\s\S]*?"""|'''[\s\S]*?'''|"([^"\r\n\\]|\\.)*"|'([^'\r\n\\]|\\.)*'/
+
+SORTED_OF.3: /sort(ed)?\s+of/
+REVERSED_OF.3: /reverse(d)?\s+of/
+ROUND_OF.3: /round(ed)?\s+of/
+UNIQUE_OF.3: /unique(\s+items)?\s+of/
+SUM_OF.3: /(sum|total)\s+of/
+AVG_OF.3: /(average|mean)\s+of/
+COUNT_OF.3: /(count|length)\s+of/

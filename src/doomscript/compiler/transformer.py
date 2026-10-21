@@ -1036,10 +1036,20 @@ class DoomToPython(Transformer):
     def param_list(self, args):
         return list(args)
 
+    def kw_call_arg(self, args):
+        arg_name = getattr(args[0], "value", str(args[0]))
+        return ast.keyword(arg=str(arg_name), value=to_load(args[1]))
+
+    def pos_call_arg(self, args):
+        return args[0]
+
+    def call_arg_name(self, args):
+        return getattr(args[0], "value", str(args[0]))
+
     def call_arg(self, args):
         if len(args) == 2 and args[0] is not None:
             arg_name = getattr(args[0], "value", str(args[0]))
-            return ast.keyword(arg=str(arg_name), value=args[1])
+            return ast.keyword(arg=str(arg_name), value=to_load(args[1]))
         elif len(args) == 2:
             return args[1]
         return args[0]
@@ -1259,7 +1269,7 @@ class DoomToPython(Transformer):
         return ast.Compare(left=len_call, ops=[ast.Gt()], comparators=[ast.Constant(value=0)])
 
     def count_of(self, args):
-        target = args[0]
+        target = args[-1]
         return ast.Call(
             func=ast.Name(id='len', ctx=ast.Load()),
             args=[target],
@@ -1267,10 +1277,10 @@ class DoomToPython(Transformer):
         )
 
     def agg_sum(self, args):
-        return ast.Call(func=ast.Name(id='agg_sum', ctx=ast.Load()), args=[args[0]], keywords=[])
+        return ast.Call(func=ast.Name(id='agg_sum', ctx=ast.Load()), args=[args[-1]], keywords=[])
 
     def agg_avg(self, args):
-        return ast.Call(func=ast.Name(id='agg_avg', ctx=ast.Load()), args=[args[0]], keywords=[])
+        return ast.Call(func=ast.Name(id='agg_avg', ctx=ast.Load()), args=[args[-1]], keywords=[])
 
     def agg_max(self, args):
         return ast.Call(func=ast.Name(id='agg_max', ctx=ast.Load()), args=[args[0]], keywords=[])
@@ -1283,6 +1293,25 @@ class DoomToPython(Transformer):
 
     def agg_last(self, args):
         return ast.Call(func=ast.Name(id='agg_last', ctx=ast.Load()), args=[args[0]], keywords=[])
+
+    def expr_join(self, args):
+        items, delimiter = args[0], args[-1]
+        return ast.Call(
+            func=ast.Name(id='str_join', ctx=ast.Load()),
+            args=[to_load(items), to_load(delimiter)],
+            keywords=[]
+        )
+
+    def expr_replace(self, args):
+        needle, replacement, source = args[0], args[1], args[2]
+        return ast.Call(
+            func=ast.Name(id='str_replace', ctx=ast.Load()),
+            args=[to_load(source), to_load(needle), to_load(replacement)],
+            keywords=[]
+        )
+
+    def expr_capitalize(self, args):
+        return ast.Call(func=ast.Name(id='str_capitalize', ctx=ast.Load()), args=[to_load(args[0])], keywords=[])
 
     def expr_uppercase(self, args):
         return ast.Call(func=ast.Name(id='str_uppercase', ctx=ast.Load()), args=[args[0]], keywords=[])
@@ -1297,22 +1326,24 @@ class DoomToPython(Transformer):
         return ast.Call(func=ast.Name(id='str_title', ctx=ast.Load()), args=[args[0]], keywords=[])
 
     def expr_sorted(self, args):
-        return ast.Call(func=ast.Name(id='sorted_list', ctx=ast.Load()), args=[args[0]], keywords=[])
+        return ast.Call(func=ast.Name(id='sorted_list', ctx=ast.Load()), args=[args[-1]], keywords=[])
 
     def expr_reversed(self, args):
         return ast.Call(func=ast.Name(id='reversed_list', ctx=ast.Load()), args=[args[-1]], keywords=[])
 
     def expr_copy(self, args):
-        return ast.Call(func=ast.Name(id='copy_value', ctx=ast.Load()), args=[args[0]], keywords=[])
+        return ast.Call(func=ast.Name(id='copy_value', ctx=ast.Load()), args=[args[-1]], keywords=[])
 
     def expr_unique(self, args):
-        return ast.Call(func=ast.Name(id='unique_items', ctx=ast.Load()), args=[args[0]], keywords=[])
+        return ast.Call(func=ast.Name(id='unique_items', ctx=ast.Load()), args=[args[-1]], keywords=[])
 
     def expr_round(self, args):
-        return ast.Call(func=ast.Name(id='math_round', ctx=ast.Load()), args=[args[0]], keywords=[])
+        return ast.Call(func=ast.Name(id='math_round', ctx=ast.Load()), args=[args[-1]], keywords=[])
 
     def expr_round_dec(self, args):
-        return ast.Call(func=ast.Name(id='math_round', ctx=ast.Load()), args=[args[0], args[1]], keywords=[])
+        val = args[1] if len(args) > 2 else args[0]
+        dec = args[-1]
+        return ast.Call(func=ast.Name(id='math_round', ctx=ast.Load()), args=[val, dec], keywords=[])
 
     def expr_cast(self, args):
         val, type_tok = args
