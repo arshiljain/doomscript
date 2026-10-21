@@ -4824,30 +4824,22 @@ def geo_compute_isochrone(
 # EXPLICIT RUNTIME EXPORT REGISTRY
 # ===========================================================================
 
-_EXCLUDED_MODULE_NAMES = frozenset({
-    "sys", "os", "re", "subprocess", "time", "json", "random", "sqlite3",
-    "urllib", "shutil", "threading", "csv", "math", "statistics", "ctypes",
-    "email", "smtplib", "BaseHTTPRequestHandler", "HTTPServer", "HTMLParser",
-    "ZoneInfo", "datetime", "timedelta", "date", "Path", "itertools",
-    "struct", "binascii", "configparser", "concurrent", "secrets", "hashlib",
-    "base64", "hmac", "types", "typing"
+import types
+from doomscript.core.exports import ALL_RUNTIME_EXPORT_NAMES
+
+# Deliberate, immutable internal mapping of supported runtime exports
+_CORE_RUNTIME_EXPORTS: types.MappingProxyType = types.MappingProxyType({
+    k: globals()[k] for k in ALL_RUNTIME_EXPORT_NAMES if k in globals()
 })
 
 
 def get_runtime_exports() -> Dict[str, Any]:
-    """Returns the explicit, curated dictionary of language runtime functions and types.
+    """Returns a defensive copy of the explicit, immutable runtime exports registry.
 
-    Excludes standard library modules, internal parsers, and typing artifacts
-    to maintain a clean execution namespace.
+    Security Notice:
+        The runtime export registry enforces clean language API boundaries
+        and maintainability. It is NOT an isolated security sandbox. Do not
+        execute untrusted scripts under the assumption that this restricts
+        execution capabilities.
     """
-    import types
-    exports: Dict[str, Any] = {}
-    for k, v in globals().items():
-        if k.startswith("_") or k in _EXCLUDED_MODULE_NAMES:
-            continue
-        if isinstance(v, types.ModuleType):
-            continue
-        if getattr(v, "__module__", "") in ("typing", "typing_extensions"):
-            continue
-        exports[k] = v
-    return exports
+    return dict(_CORE_RUNTIME_EXPORTS)
