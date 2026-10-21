@@ -31,6 +31,8 @@ def get_parser() -> Lark:
 
 def compile_to_ast(source: str, filename: str = "<doom>") -> ast.Module:
     """Parses DoomScript source and returns a Python ast.Module."""
+    from doomscript.domains.registry import get_domain_registry
+    get_domain_registry().reset_active()
     normalized_source, line_map = normalize_with_map(source)
     if not normalized_source.endswith("\n"):
         normalized_source += "\n"

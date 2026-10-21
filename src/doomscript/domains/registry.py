@@ -303,22 +303,23 @@ class DomainRegistry:
                 except Exception:
                     pass
 
-        # 2. Check candidate domains via verb index
-        candidates = self._get_candidate_domains_for_line(line)
-        for domain in candidates:
-            if domain.name.lower() in self._active_domains:
-                continue
-            try:
-                res = domain.parser.parse_inspect(line, line_no)
-                if res is not None:
-                    self._last_parsed = (line, line_no, domain, res)
-                    return res
-                res = domain.parser.parse_operation(line, line_no)
-                if res is not None:
-                    self._last_parsed = (line, line_no, domain, res)
-                    return res
-            except Exception:
-                pass
+        # 2. Check explicitly namespaced domains (e.g. "db.find ...")
+        if "." in first_token:
+            prefix = first_token.split(".")[0]
+            dom = self.get_domain(prefix)
+            if dom:
+                stripped_line = line.replace(f"{prefix}.", "", 1)
+                try:
+                    res = dom.parser.parse_inspect(stripped_line, line_no)
+                    if res is not None:
+                        self._last_parsed = (line, line_no, dom, res)
+                        return res
+                    res = dom.parser.parse_operation(stripped_line, line_no)
+                    if res is not None:
+                        self._last_parsed = (line, line_no, dom, res)
+                        return res
+                except Exception:
+                    pass
 
         return None
 
