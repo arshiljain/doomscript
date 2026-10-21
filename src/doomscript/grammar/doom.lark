@@ -190,6 +190,7 @@ expr_stmt: call_expr -> expr_stmt
               | repeat_range_stmt
               | repeat_while_stmt
               | repeat_until_stmt
+              | for_range_stmt
               | for_where_stmt
               | for_stmt
               | while_stmt
@@ -217,8 +218,9 @@ repeat_until_stmt: "repeat" "until" expr ":"? _NEWLINE suite -> repeat_until_stm
 while_stmt: "while" expr ":"? _NEWLINE suite -> repeat_while_stmt
 until_stmt: "until" expr ":"? _NEWLINE suite -> repeat_until_stmt
 for_target: NAME ("," NAME)* -> for_target_names
-for_where_stmt: "for" "each" for_target "in" expr "where" expr ":"? _NEWLINE suite -> for_where_stmt
-for_stmt: "for" "each" for_target "in" expr ":"? _NEWLINE suite -> for_stmt
+for_range_stmt: "for" ["each"] for_target "from" expr "to" expr ["by" expr] [("where" | "if") expr] ":"? _NEWLINE suite -> for_range_stmt
+for_where_stmt: "for" ["each"] for_target "in" expr ("where" | "if") expr ":"? _NEWLINE suite -> for_where_stmt
+for_stmt: "for" ["each"] for_target "in" expr ":"? _NEWLINE suite -> for_stmt
 attempt_stmt: "attempt" ":"? _NEWLINE suite "if" "it" "fails" ":"? _NEWLINE suite -> attempt_stmt
 func_def: "to" NAME [NAME ["with" param_list] | "with" param_list] ":"? _NEWLINE suite -> func_def
 
@@ -430,12 +432,17 @@ slice_item: expr ":" [expr] [":" [expr]] -> slice_full
 
 list_expr: "[" [expr ("," expr)* [","]] "]" -> list_val
          | "[" expr comp_clause+ "]"        -> list_comp
+         | "[" expr "from" expr "to" expr ["by" expr] "]" -> natural_list_range_comp
+         | A_LIST_OF expr comp_clause+ -> natural_list_comp
+         | A_LIST_OF expr "from" expr "to" expr ["by" expr] -> natural_list_range_comp
+         | A_LIST_OF expr ("," expr)* -> natural_list_val
 
 dict_or_set: "{" [brace_items] "}"          -> dict_or_set_val
            | "{" expr ":" expr comp_clause+ "}" -> dict_comp
            | "{" expr comp_clause+ "}"      -> set_comp
 
 comp_clause: "for" ["each"] for_target "in" expr [("if" | "where") expr] -> comp_clause
+           | "for" ["each"] for_target "from" expr "to" expr ["by" expr] [("if" | "where") expr] -> comp_clause_range
 lambda_expr: "lambda" [for_target] ":" expr -> lambda_expr
 brace_items: brace_item ("," brace_item)* [","]
 brace_item: expr ":" expr -> dict_pair
@@ -464,3 +471,4 @@ UNIQUE_OF.3: /unique(\s+items)?\s+of/
 SUM_OF.3: /(sum|total)\s+of/
 AVG_OF.3: /(average|mean)\s+of/
 COUNT_OF.3: /(count|length)\s+of/
+A_LIST_OF.3: /(a\s+)?list\s+of/

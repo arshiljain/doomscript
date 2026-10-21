@@ -934,6 +934,30 @@ class DoomToPython(Transformer):
         if_node = ast.If(test=condition, body=suite, orelse=[])
         return ast.For(target=target, iter=collection, body=[if_node], orelse=[])
 
+    def for_range_stmt(self, args):
+        target = args[0]
+        start = to_load(args[1])
+        stop = to_load(args[2])
+        suite = args[-1]
+
+        step = None
+        cond = None
+        if len(args) == 6:
+            step = to_load(args[3]) if args[3] is not None else None
+            cond = to_load(args[4]) if args[4] is not None else None
+        elif len(args) == 5:
+            step = to_load(args[3]) if args[3] is not None else None
+
+        range_args = [start, stop] if step is None else [start, stop, step]
+        iter_call = ast.Call(
+            func=ast.Name(id='range_inclusive', ctx=ast.Load()),
+            args=range_args,
+            keywords=[]
+        )
+        if cond is not None:
+            suite = [ast.If(test=cond, body=suite, orelse=[])]
+        return ast.For(target=target, iter=iter_call, body=suite, orelse=[])
+
     def repeat_stmt(self, args):
         times, body = args
         iter_call = ast.Call(
@@ -1708,10 +1732,53 @@ class DoomToPython(Transformer):
         ifs = [to_load(cond_expr)] if cond_expr is not None else []
         return ast.comprehension(target=target, iter=to_load(iter_expr), ifs=ifs, is_async=0)
 
+    def comp_clause_range(self, args):
+        target = args[0]
+        start = to_load(args[1])
+        stop = to_load(args[2])
+        step = to_load(args[3]) if len(args) > 3 and args[3] is not None else None
+        cond = to_load(args[4]) if len(args) > 4 and args[4] is not None else None
+
+        range_args = [start, stop] if step is None else [start, stop, step]
+        iter_call = ast.Call(
+            func=ast.Name(id='range_inclusive', ctx=ast.Load()),
+            args=range_args,
+            keywords=[]
+        )
+        ifs = [cond] if cond is not None else []
+        return ast.comprehension(target=target, iter=iter_call, ifs=ifs, is_async=0)
+
     def list_comp(self, args):
         elt = to_load(args[0])
         generators = args[1:]
         return ast.ListComp(elt=elt, generators=generators)
+
+    def natural_list_comp(self, args):
+        offset = 1 if hasattr(args[0], 'type') and args[0].type == 'A_LIST_OF' else 0
+        elt = to_load(args[offset])
+        generators = args[offset + 1:]
+        return ast.ListComp(elt=elt, generators=generators)
+
+    def natural_list_range_comp(self, args):
+        offset = 1 if hasattr(args[0], 'type') and args[0].type == 'A_LIST_OF' else 0
+        elt = to_load(args[offset])
+        start = to_load(args[offset + 1])
+        stop = to_load(args[offset + 2])
+        step = to_load(args[offset + 3]) if len(args) > (offset + 3) and args[offset + 3] is not None else None
+        range_args = [start, stop] if step is None else [start, stop, step]
+        iter_call = ast.Call(
+            func=ast.Name(id='range_inclusive', ctx=ast.Load()),
+            args=range_args,
+            keywords=[]
+        )
+        var_id = elt.id if isinstance(elt, ast.Name) else 'x'
+        gen = ast.comprehension(target=ast.Name(id=var_id, ctx=ast.Store()), iter=iter_call, ifs=[], is_async=0)
+        return ast.ListComp(elt=elt, generators=[gen])
+
+    def natural_list_val(self, args):
+        offset = 1 if hasattr(args[0], 'type') and args[0].type == 'A_LIST_OF' else 0
+        elts = [to_load(a) for a in args[offset:] if a is not None]
+        return ast.List(elts=elts, ctx=ast.Load())
 
     def set_comp(self, args):
         elt = to_load(args[0])
