@@ -3,7 +3,26 @@ DoomScript: An English-First Programming Language that compiles to Python AST.
 """
 
 from doomscript.compiler.engine import compile_to_ast, transpile, execute
-from doomscript.exceptions import DoomError, DoomSyntaxError, DoomIndentationError
+from doomscript.exceptions import (
+    DoomError,
+    DoomSyntaxError,
+    DoomIndentationError,
+    DoomAssertionError,
+    DoomIndexError,
+    DoomTypeError,
+    DoomValueError,
+    DoomAttributeError,
+    DoomZeroDivisionError,
+    DoomKeyError,
+    DoomNameError,
+    DoomFileNotFoundError,
+    DoomPermissionError,
+    DoomRuntimeError,
+    DoomRecursionError,
+    DoomLookupError,
+    DoomImportError,
+    DoomOverflowError,
+)
 from doomscript.runtime import (
     Record, sleep, percent_of, write_file, append_file, read_file, count_of,
     beep, play_sound, open_window, draw_circle, draw_rectangle, draw_text,

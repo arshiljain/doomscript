@@ -2551,6 +2551,32 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
         # Mask strings for statement splitting
         masked_code, code_strings = mask_strings(code)
 
+        # Multi-clause natural sentence chaining desugaring
+        s_trimmed = masked_code.strip()
+        s_lower = s_trimmed.lower()
+        if not s_trimmed.endswith(":") and not s_lower.startswith(("if ", "unless ", "while ", "repeat ", "for each ", "to ", "target ")):
+            # Rule 1: '... into <var> and <verb> ...'
+            masked_code = re.sub(
+                r"\b(into\s+[A-Za-z_]\w*)\s+and\s+((?:[A-Za-z_]\w*)\b)",
+                lambda m: f"{m.group(1)} and then {m.group(2)}" if m.group(2).lower() in STATEMENT_START_KEYWORDS else m.group(0),
+                masked_code,
+                flags=re.IGNORECASE,
+            )
+            # Rule 2: '... then <verb> ...' (where not preceded by 'and ')
+            masked_code = re.sub(
+                r"(?<!\band\s)\bthen\s+([A-Za-z_]\w*)",
+                lambda m: f"and then {m.group(1)}" if m.group(1).lower() in STATEMENT_START_KEYWORDS else m.group(0),
+                masked_code,
+                flags=re.IGNORECASE,
+            )
+            # Rule 3: '... and <imperative_verb> ...' (say, show, print, ask, set, put, create, make, change, modify, update, verify, tell, or var =)
+            masked_code = re.sub(
+                r"(?<!\band\sthen)\s+and\s+((?:say|show|display|print|ask|set|put|create|make|change|modify|update|verify|tell)\b|[A-Za-z_]\w*\s*=[^=])",
+                r" and then \1",
+                masked_code,
+                flags=re.IGNORECASE,
+            )
+
         # 1. Statement chaining via 'and then'
         chain_parts = re.split(r"\s+and\s+then\s+", masked_code, flags=re.IGNORECASE)
 

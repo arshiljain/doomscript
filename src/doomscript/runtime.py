@@ -49,6 +49,16 @@ from doomscript.exceptions import (
     DoomTypeError,
     DoomValueError,
     DoomAttributeError,
+    DoomZeroDivisionError,
+    DoomKeyError,
+    DoomNameError,
+    DoomFileNotFoundError,
+    DoomPermissionError,
+    DoomRuntimeError,
+    DoomRecursionError,
+    DoomLookupError,
+    DoomImportError,
+    DoomOverflowError,
 )
 
 

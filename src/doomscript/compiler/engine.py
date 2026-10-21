@@ -13,6 +13,7 @@ import math
 from functools import lru_cache
 from doomscript.compiler.transformer import DoomToPython
 from doomscript.grammar.phrases import normalize, normalize_with_map
+from doomscript.exceptions import DoomError, wrap_runtime_exception
 from doomscript import runtime
 
 GRAMMAR_PATH = Path(__file__).parent.parent / "grammar" / "doom.lark"
@@ -225,6 +226,16 @@ def _execute_scoped(source: Any, custom_globals: dict = None, filename: str = "<
         "DoomTypeError": runtime.DoomTypeError,
         "DoomValueError": runtime.DoomValueError,
         "DoomAttributeError": runtime.DoomAttributeError,
+        "DoomZeroDivisionError": runtime.DoomZeroDivisionError,
+        "DoomKeyError": runtime.DoomKeyError,
+        "DoomNameError": runtime.DoomNameError,
+        "DoomFileNotFoundError": runtime.DoomFileNotFoundError,
+        "DoomPermissionError": runtime.DoomPermissionError,
+        "DoomRuntimeError": runtime.DoomRuntimeError,
+        "DoomRecursionError": runtime.DoomRecursionError,
+        "DoomLookupError": runtime.DoomLookupError,
+        "DoomImportError": runtime.DoomImportError,
+        "DoomOverflowError": runtime.DoomOverflowError,
         "sleep": runtime.sleep,
         "percent_of": runtime.percent_of,
         "write_file": runtime.write_file,
@@ -419,5 +430,30 @@ def _execute_scoped(source: Any, custom_globals: dict = None, filename: str = "<
     for k, v in runtime_helpers.items():
         exec_globals.setdefault(k, v)
         
-    exec(compiled, exec_globals)
+    try:
+        exec(compiled, exec_globals)
+    except DoomError:
+        raise
+    except Exception as exc:
+        doom_lineno = None
+        curr_tb = exc.__traceback__
+        while curr_tb:
+            code_fn = curr_tb.tb_frame.f_code.co_filename
+            if code_fn == filename or code_fn in ("<doom>", "<string>"):
+                doom_lineno = curr_tb.tb_lineno
+            curr_tb = curr_tb.tb_next
+
+        src_line = None
+        if isinstance(source, str) and doom_lineno is not None:
+            source_lines = source.splitlines()
+            if 1 <= doom_lineno <= len(source_lines):
+                src_line = source_lines[doom_lineno - 1]
+
+        wrapped = wrap_runtime_exception(
+            exc,
+            line=doom_lineno,
+            source_line=src_line,
+            file_path=filename if filename != "<doom>" else None,
+        )
+        raise wrapped.with_traceback(exc.__traceback__)
     return exec_globals

@@ -1132,7 +1132,7 @@ s = (r + c * x) % q
 use chain
 
 secret_x = 987654321
-public_y = chain_schnorr_public_key(secret_x)
+derive schnorr public key for secret_x into public_y
 
 # Prove and verify zero knowledge in spoken English
 prove knowledge of secret secret_x for public public_y into proof
@@ -1158,12 +1158,10 @@ from qiskit import QuantumCircuit
 ```doomscript
 use quantum
 
-# 3-Qubit quantum error correction
-encoded = QuantumErrorCorrection's encode_bit_flip(0.6, 0.8)
-corrupted = QuantumErrorCorrection's inject_error(encoded, "X", target_qubit=1)
-recovered, error_qubit = QuantumErrorCorrection's detect_and_correct_bit_flip(corrupted)
-
-say "Recovered Qubit, Error on Pin: ", error_qubit
+# Steane 7-Qubit CSS Quantum Error Correction Syndrome Diagnosis
+diagnose steane syndrome for bit errors [0, 0, 1, 0, 0, 0, 0] and phase errors [0, 0, 0, 0, 0, 0, 0] into steane_res
+say "Bit Flip Error Identified on Physical Qubit: ", steane_res's bit_flip_error_qubit
+say "Syndrome Detected: ", steane_res's syndrome_detected
 
 # Grover quantum database search with quadratic speedup
 grover search with 3 qubits for target 6 into search_res
@@ -1196,11 +1194,12 @@ select css "div#main ul > li.active" from html html_text into elements
 for el in elements:
     say "Found Node: ", el's text
 
-# RFC 6265 Cookie Jar
-create cookie jar into jar
-jar.set_cookie("session=token123; Domain=example.com; Path=/; Secure", "https://example.com/api")
-cookie_header = jar.get_cookie_header("https://example.com/api/v1", is_secure=True)
-say "Outgoing Cookie Header: ", cookie_header
+# RFC 6265 Cookie Header Management in spoken English
+parse cookie header "session=token123; user=alice; theme=dark" into user_cookies
+say "Active Session: ", user_cookies's session
+
+build cookie header from user_cookies into outgoing_header
+say "Outgoing Cookie Header: ", outgoing_header
 ```
 > **Why DoomScript is easier:** Clean, native CSS selector parsing and standard cookie state handling with zero external HTML dependencies.
 

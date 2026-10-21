@@ -94,6 +94,7 @@ class QuantumDomain(DomainContract):
             or s.startswith("calculate state probabilities for ")
             or s.startswith("create bell state in ")
             or s.startswith("grover search ")
+            or s.startswith("diagnose steane syndrome ")
             or super().can_handle_line(line)
         )
 

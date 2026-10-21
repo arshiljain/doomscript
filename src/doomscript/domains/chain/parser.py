@@ -223,6 +223,17 @@ class ChainDomainParser(DomainParser):
             target = m_rec.group(3).strip()
             return f"set {target} to chain_threshold_reconstruct({shares}, {t})"
 
+        # derive schnorr public key for <secret> into <target>
+        m_schnorr_pk = re.match(
+            r"^derive\s+schnorr\s+public\s+key\s+(?:for\s+)?(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_schnorr_pk:
+            sec_x = m_schnorr_pk.group(1).strip()
+            target = m_schnorr_pk.group(2).strip()
+            return f"set {target} to chain_schnorr_public_key({sec_x})"
+
         # threshold sign message <msg_expr> with shares <shares_expr> and threshold <t_expr> into <target>
         m_tsign = re.match(
             r"^threshold\s+sign\s+message\s+(.+?)\s+with\s+shares\s+(.+?)\s+and\s+threshold\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",

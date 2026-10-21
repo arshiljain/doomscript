@@ -230,6 +230,18 @@ class QuantumDomainParser(DomainParser):
                 b_type = f"'{b_type}'"
             return f"set {target} to quantum_bell_state({b_type})"
 
+        # diagnose steane syndrome for bit errors <bit_errors> and phase errors <phase_errors> into <target>
+        m_steane = re.match(
+            r"^diagnose\s+steane\s+syndrome\s+for\s+bit\s+errors\s+(.+?)\s+and\s+phase\s+errors\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_steane:
+            bits = m_steane.group(1).strip()
+            phases = m_steane.group(2).strip()
+            target = m_steane.group(3).strip()
+            return f"set {target} to quantum_steane_diagnose({bits}, {phases})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

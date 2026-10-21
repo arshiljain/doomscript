@@ -113,7 +113,15 @@ doom check app.doom --strict
 2. **Subject-Verb-Object (SVO) Phrasing**: Commands follow natural English verb phrases (`write X to Y`, `read X into Y`, `filter X where Y into Z`).
 3. **Prepositional Parameters**: Keywords such as `with`, `from`, `to`, `into`, `using`, `by`, `for`, `at` specify arguments naturally.
 4. **Zero Semicolons**: Semicolons are never needed.
-5. **No Mandatory External Dependencies**: Standard library fallbacks ensure all algorithms execute in clean Python environments.
+5. **Multi-Clause Sentence Chaining (`and`, `then`)**:
+   Compound English statements can be chained sequentially using `and` or `then` without forced newlines:
+   ```doomscript
+   read file "data.csv" into raw and split raw by "\n" into lines
+   create a Person with name "Bob", age 25 into p and say p's name
+   set x to 10 then say x
+   ```
+   Conditional `and` (`if x > 10 and y < 20:`) and expression operands (`between 10 and 20`) remain strictly protected.
+6. **No Mandatory External Dependencies**: Standard library fallbacks ensure all algorithms execute in clean Python environments.
 
 ---
 
@@ -319,6 +327,12 @@ verify that balance >= 0 otherwise "Account cannot be negative"
 # Unit testing expectation
 expect balance to be 50
 ```
+
+#### Plain-English Runtime Exception Shield
+DoomScript protects beginners from raw Python stack traces. All standard runtime exceptions (`ZeroDivisionError`, `IndexError`, `KeyError`, `TypeError`, `ValueError`, `AttributeError`, `FileNotFoundError`, `PermissionError`, etc.) are caught and translated into dual-inheritance `DoomError` instances.
+- **Source Context**: Pinpoints the exact script file, line number, and caret position.
+- **Human Guidance**: Conversational diagnosis of the root cause.
+- **Dual-Inheritance**: Inherits from both `DoomError` and the underlying Python exception, maintaining complete interoperability with existing Python `try/except` handlers and test suites.
 
 ---
 

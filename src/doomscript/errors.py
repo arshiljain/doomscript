@@ -403,6 +403,8 @@ def get_traceback_variables(err: Exception) -> List[str]:
 
 def translate_runtime_error(err: Exception) -> str:
     """Translates Python runtime exceptions into beginner-friendly explanations."""
+    if isinstance(err, DoomError) and hasattr(err, "message") and err.message:
+        return err.message
     err_str = str(err)
     if isinstance(err, NameError):
         m = re.search(r"name '([^']+)' is not defined", err_str)
@@ -476,10 +478,12 @@ def translate_runtime_error(err: Exception) -> str:
         return f"I couldn't find the file '{path}'. Check that the name and folder are correct."
     elif isinstance(err, PermissionError):
         path = getattr(err, "filename", None)
-        if not path:
-            m = re.search(r"'(.*?)'", err_str)
-            path = m.group(1) if m else "this file"
-        return f"I don't have permission to access '{path}'."
+        if path:
+            return f"I don't have permission to access '{path}'."
+        m = re.search(r"'(.*?)'", err_str)
+        if m:
+            return f"I don't have permission to access '{m.group(1)}'."
+        return f"Permission error: {err_str}"
     elif isinstance(err, ValueError):
         m = re.search(r"(?:not enough|too many) values to unpack \(expected (\d+)(?:,\s*got\s*(\d+))?\)", err_str)
         if m:
@@ -489,6 +493,14 @@ def translate_runtime_error(err: Exception) -> str:
         return f"Invalid value: {err_str}."
     elif isinstance(err, RecursionError):
         return "This function called itself too many times. Did you forget a base case?"
+    elif isinstance(err, (ImportError, ModuleNotFoundError)):
+        m = re.search(r"No module named '([^']+)'", err_str)
+        mod = m.group(1) if m else err_str
+        return f"Could not find module '{mod}'. Check that it is installed or spelled correctly."
+    elif isinstance(err, OverflowError):
+        return "Number too large to calculate. The result exceeded numeric limits."
+    elif isinstance(err, StopIteration):
+        return "Reached the end of items. No more values are available."
     elif isinstance(err, AssertionError):
         return f"Check failed: {err_str}"
     return f"{type(err).__name__}: {err_str}"
@@ -532,6 +544,19 @@ def format_syntax_error(
                 failing_token=failing_tok,
                 col=col_no,
             )
+    elif isinstance(err, DoomError):
+        line_no = getattr(err, "line", 1) or 1
+        col_no = getattr(err, "column", 1) or 1
+        lines = source.splitlines()
+        source_line = getattr(err, "source_line", None) or ""
+        if not source_line and lines:
+            if 1 <= line_no <= len(lines):
+                source_line = lines[line_no - 1]
+            else:
+                source_line = lines[-1]
+                line_no = len(lines)
+        explanation = getattr(err, "message", str(err))
+        suggestion = getattr(err, "suggestion", None)
     else:
         raw_line_no = getattr(err, "line", 1) or 1
         col_no = getattr(err, "column", 1) or 1

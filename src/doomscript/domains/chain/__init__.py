@@ -99,6 +99,7 @@ class ChainDomain(DomainContract):
             or s.startswith("generate checksum address from ")
             or s.startswith("prove knowledge of secret ")
             or s.startswith("prove schnorr secret ")
+            or s.startswith("derive schnorr public key ")
             or s.startswith("verify proof ")
             or s.startswith("verify schnorr proof ")
             or s.startswith("execute evm bytecode ")
