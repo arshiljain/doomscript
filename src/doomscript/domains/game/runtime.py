@@ -1571,3 +1571,123 @@ def game_hfsm_trigger(machine_record: Any, event: str) -> Record:
     return Record(res)
 
 
+
+
+# ==============================================================================
+# GAME THEORY: MINIMAX SEARCH WITH ALPHA-BETA PRUNING & TRANSPOSITION TABLE
+# ==============================================================================
+
+class MinimaxAlphaBetaTransposition:
+    """Adversarial game-tree minimax solver with alpha-beta cutoffs and transposition cache."""
+
+    def __init__(
+        self,
+        get_legal_moves: Callable[[Any, bool], List[Any]],
+        apply_move: Callable[[Any, Any], Any],
+        is_terminal: Callable[[Any], bool],
+        evaluate_state: Callable[[Any], float],
+        hash_state: Optional[Callable[[Any], int]] = None,
+    ):
+        self.get_legal_moves = get_legal_moves
+        self.apply_move = apply_move
+        self.is_terminal = is_terminal
+        self.evaluate_state = evaluate_state
+        self.hash_state = hash_state or (lambda s: hash(str(s)))
+        self.transposition_table: Dict[int, Tuple[float, int, str]] = {}  # hash -> (val, depth, flag)
+        self.nodes_visited = 0
+
+    def search_best_move(self, state: Any, max_depth: int = 4, is_maximizing: bool = True) -> Tuple[Optional[Any], float]:
+        """Finds best minimax action up to max_depth."""
+        self.nodes_visited = 0
+        alpha = float('-inf')
+        beta = float('inf')
+
+        moves = self.get_legal_moves(state, is_maximizing)
+        if not moves or self.is_terminal(state):
+            return None, self.evaluate_state(state)
+
+        best_move = None
+        if is_maximizing:
+            best_val = float('-inf')
+            for m in moves:
+                next_st = self.apply_move(state, m)
+                val = self._minimax(next_st, max_depth - 1, alpha, beta, False)
+                if val > best_val:
+                    best_val = val
+                    best_move = m
+                alpha = max(alpha, best_val)
+                if beta <= alpha:
+                    break
+            return best_move, best_val
+        else:
+            best_val = float('inf')
+            for m in moves:
+                next_st = self.apply_move(state, m)
+                val = self._minimax(next_st, max_depth - 1, alpha, beta, True)
+                if val < best_val:
+                    best_val = val
+                    best_move = m
+                beta = min(beta, best_val)
+                if beta <= alpha:
+                    break
+            return best_move, best_val
+
+    def _minimax(self, state: Any, depth: int, alpha: float, beta: float, is_max: bool) -> float:
+        self.nodes_visited += 1
+        st_hash = self.hash_state(state)
+
+        # Check transposition table
+        if st_hash in self.transposition_table:
+            cached_val, cached_depth, flag = self.transposition_table[st_hash]
+            if cached_depth >= depth:
+                if flag == "EXACT":
+                    return cached_val
+                elif flag == "LOWER" and cached_val > alpha:
+                    alpha = cached_val
+                elif flag == "UPPER" and cached_val < beta:
+                    beta = cached_val
+                if alpha >= beta:
+                    return cached_val
+
+        if depth <= 0 or self.is_terminal(state):
+            return self.evaluate_state(state)
+
+        moves = self.get_legal_moves(state, is_max)
+        if not moves:
+            return self.evaluate_state(state)
+
+        if is_max:
+            max_eval = float('-inf')
+            for m in moves:
+                next_st = self.apply_move(state, m)
+                eval_score = self._minimax(next_st, depth - 1, alpha, beta, False)
+                max_eval = max(max_eval, eval_score)
+                alpha = max(alpha, eval_score)
+                if beta <= alpha:
+                    break
+            # Save to transposition table
+            flag = "EXACT" if alpha < max_eval < beta else ("LOWER" if max_eval >= beta else "UPPER")
+            self.transposition_table[st_hash] = (max_eval, depth, flag)
+            return max_eval
+        else:
+            min_eval = float('inf')
+            for m in moves:
+                next_st = self.apply_move(state, m)
+                eval_score = self._minimax(next_st, depth - 1, alpha, beta, True)
+                min_eval = min(min_eval, eval_score)
+                beta = min(beta, eval_score)
+                if beta <= alpha:
+                    break
+            flag = "EXACT" if alpha < min_eval < beta else ("UPPER" if min_eval <= alpha else "LOWER")
+            self.transposition_table[st_hash] = (min_eval, depth, flag)
+            return min_eval
+
+
+def game_minimax_solver(
+    get_moves: Callable,
+    apply_move: Callable,
+    is_terminal: Callable,
+    eval_state: Callable,
+) -> MinimaxAlphaBetaTransposition:
+    """Instantiates a Minimax Alpha-Beta game tree search engine."""
+    return MinimaxAlphaBetaTransposition(get_moves, apply_move, is_terminal, eval_state)

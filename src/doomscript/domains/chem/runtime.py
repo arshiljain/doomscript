@@ -1511,3 +1511,121 @@ def chem_lennard_jones_md(
 
 
 
+
+
+# ==============================================================================
+# COMPUTATIONAL CHEMISTRY: 3D MOLECULAR CONFORMER & FORCE-FIELD GENERATOR
+# ==============================================================================
+
+class MolecularConformerGenerator3D:
+    """Distance Geometry and Harmonic Force-Field relaxation for 3D atomic coordinates."""
+
+    STANDARD_BOND_LENGTHS = {
+        ("C", "C"): 1.54,
+        ("C", "H"): 1.09,
+        ("C", "O"): 1.43,
+        ("C", "N"): 1.47,
+        ("O", "H"): 0.96,
+        ("N", "H"): 1.01,
+        ("C", "=", "C"): 1.34,
+        ("C", "=", "O"): 1.22,
+    }
+
+    @classmethod
+    def generate_conformer(cls, atoms: List[str], bonds: List[Tuple[int, int, int]], steps: int = 150, lr: float = 0.05) -> Dict[str, Any]:
+        """Generates 3D coordinates (x, y, z) for each atom via force-field gradient descent."""
+        import math
+        import random
+        n = len(atoms)
+        if n == 0:
+            return {"atoms": [], "energy": 0.0}
+
+        # Initialize randomized 3D positions
+        coords = [[random.uniform(-1.0, 1.0), random.uniform(-1.0, 1.0), random.uniform(-1.0, 1.0)] for _ in range(n)]
+
+        # Target bond distances lookup
+        target_bonds = {}
+        for i, j, order in bonds:
+            a1, a2 = sorted([atoms[i], atoms[j]])
+            t_len = cls.STANDARD_BOND_LENGTHS.get((a1, "=", a2) if order == 2 else (a1, a2), 1.50)
+            target_bonds[(min(i, j), max(i, j))] = t_len
+
+        # Gradient descent relaxation
+        k_bond = 10.0   # Bond stretching constant
+        vdw_radius = 1.7  # Non-bonded exclusion distance
+
+        for step in range(steps):
+            grads = [[0.0, 0.0, 0.0] for _ in range(n)]
+
+            # 1. Bond stretching forces: E_bond = 0.5 * k * (r_ij - r0)^2
+            for (i, j), r0 in target_bonds.items():
+                dx = coords[i][0] - coords[j][0]
+                dy = coords[i][1] - coords[j][1]
+                dz = coords[i][2] - coords[j][2]
+                dist = math.sqrt(dx * dx + dy * dy + dz * dz) + 1e-9
+                diff = dist - r0
+                force_mag = k_bond * diff / dist
+
+                grads[i][0] += force_mag * dx
+                grads[i][1] += force_mag * dy
+                grads[i][2] += force_mag * dz
+
+                grads[j][0] -= force_mag * dx
+                grads[j][1] -= force_mag * dy
+                grads[j][2] -= force_mag * dz
+
+            # 2. Non-bonded steric clash repulsion (van der Waals)
+            for i in range(n):
+                for j in range(i + 1, n):
+                    if (i, j) in target_bonds:
+                        continue
+                    dx = coords[i][0] - coords[j][0]
+                    dy = coords[i][1] - coords[j][1]
+                    dz = coords[i][2] - coords[j][2]
+                    dist = math.sqrt(dx * dx + dy * dy + dz * dz) + 1e-9
+                    if dist < vdw_radius:
+                        # Repulsive harmonic push
+                        overlap = vdw_radius - dist
+                        rep_mag = 5.0 * overlap / dist
+                        grads[i][0] += rep_mag * dx
+                        grads[i][1] += rep_mag * dy
+                        grads[i][2] += rep_mag * dz
+                        grads[j][0] -= rep_mag * dx
+                        grads[j][1] -= rep_mag * dy
+                        grads[j][2] -= rep_mag * dz
+
+            # Update coordinates
+            for i in range(n):
+                coords[i][0] -= lr * grads[i][0]
+                coords[i][1] -= lr * grads[i][1]
+                coords[i][2] -= lr * grads[i][2]
+
+        # Calculate final energy
+        total_energy = 0.0
+        for (i, j), r0 in target_bonds.items():
+            dx = coords[i][0] - coords[j][0]
+            dy = coords[i][1] - coords[j][1]
+            dz = coords[i][2] - coords[j][2]
+            dist = math.sqrt(dx * dx + dy * dy + dz * dz)
+            total_energy += 0.5 * k_bond * ((dist - r0) ** 2)
+
+        conformer_atoms = []
+        for idx, (sym, pos) in enumerate(zip(atoms, coords)):
+            conformer_atoms.append({
+                "index": idx,
+                "symbol": sym,
+                "x": round(pos[0], 4),
+                "y": round(pos[1], 4),
+                "z": round(pos[2], 4),
+            })
+
+        return {
+            "atoms": conformer_atoms,
+            "bonds": [{"source": i, "target": j, "order": o} for i, j, o in bonds],
+            "total_steric_energy": round(total_energy, 4),
+        }
+
+
+def chem_generate_3d_conformer(atoms: List[str], bonds: List[Tuple[int, int, int]]) -> Record:
+    """Generates 3D Cartesian coordinates for a molecular graph."""
+    return Record(MolecularConformerGenerator3D.generate_conformer(atoms, bonds))
