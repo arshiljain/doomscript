@@ -651,6 +651,46 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"\bnone\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+is\s+negative\b", r"ds_none_negative(\1)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bnone\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+is\s+zero\b", r"ds_none_zero(\1)", masked, flags=re.IGNORECASE)
 
+    # Phase 1, Task 1.4: Universal, Existential & Negative Set Quantifiers
+    all_are_m = re.match(r"^\s*if\s+all\s+(?:items\s+in\s+)?(.+?)\s+are\s+(.+?):?$", masked, re.IGNORECASE)
+    if all_are_m:
+        coll = all_are_m.group(1).strip()
+        pred = all_are_m.group(2).strip()
+        masked = f"if ds_every({coll}, lambda x: x is {pred}):"
+
+    every_in_m = re.match(r"^\s*if\s+every\s+([A-Za-z_]\w*)\s+in\s+(.+?)\s+is\s+(.+?):?$", masked, re.IGNORECASE)
+    if every_in_m:
+        var = every_in_m.group(1).strip()
+        coll = every_in_m.group(2).strip()
+        pred = every_in_m.group(3).strip()
+        masked = f"if ds_every({coll}, lambda {var}: {var} is {pred}):"
+
+    any_in_m = re.match(r"^\s*if\s+any\s+([A-Za-z_]\w*)\s+in\s+(.+?)\s+is\s+(.+?):?$", masked, re.IGNORECASE)
+    if any_in_m:
+        var = any_in_m.group(1).strip()
+        coll = any_in_m.group(2).strip()
+        pred = any_in_m.group(3).strip()
+        masked = f"if ds_any({coll}, lambda {var}: {var} is {pred}):"
+
+    any_of_m = re.match(r"^\s*if\s+any\s+of\s+(.+?)\s+is\s+(.+?):?$", masked, re.IGNORECASE)
+    if any_of_m:
+        coll = any_of_m.group(1).strip()
+        pred = any_of_m.group(2).strip()
+        masked = f"if ds_any({coll}, lambda x: x is {pred}):"
+
+    no_in_m = re.match(r"^\s*if\s+no\s+([A-Za-z_]\w*)\s+in\s+(.+?)\s+is\s+(.+?):?$", masked, re.IGNORECASE)
+    if no_in_m:
+        var = no_in_m.group(1).strip()
+        coll = no_in_m.group(2).strip()
+        pred = no_in_m.group(3).strip()
+        masked = f"if ds_none({coll}, lambda {var}: {var} is {pred}):"
+
+    none_of_m = re.match(r"^\s*if\s+none\s+of\s+(.+?)\s+(?:are|is)\s+(.+?):?$", masked, re.IGNORECASE)
+    if none_of_m:
+        coll = none_of_m.group(1).strip()
+        pred = none_of_m.group(2).strip()
+        masked = f"if ds_none({coll}, lambda x: x is {pred}):"
+
     # Pillar C: Thought Queries & Intuitive Filtering
     def _rewrite_keep_only(m):
         coll = m.group(1).strip()

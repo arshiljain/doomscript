@@ -85,3 +85,37 @@ for each item in them:
     env = execute(code)
     assert env["client_status"] == "preferred"
     assert env["collected"] == ["Laptop", "Mouse"]
+
+
+# ---------------------------------------------------------------------------
+# Phase 1, Task 1.4: Universal, Existential & Negative Set Quantifiers
+# ---------------------------------------------------------------------------
+
+def test_set_quantifiers_execution():
+    from doomscript.compiler.engine import execute
+
+    code = """
+numbers = [2, 4, 6, 8]
+all_even = False
+if all numbers are even:
+    all_even = True
+
+all_positive = False
+if every n in numbers is positive:
+    all_positive = True
+
+mixed = [1, 2, 3]
+has_odd = False
+if any n in mixed is odd:
+    has_odd = True
+
+clean_list = [10, 20, 30]
+no_negatives = False
+if no x in clean_list is negative:
+    no_negatives = True
+"""
+    env = execute(code)
+    assert env["all_even"] is True
+    assert env["all_positive"] is True
+    assert env["has_odd"] is True
+    assert env["no_negatives"] is True
