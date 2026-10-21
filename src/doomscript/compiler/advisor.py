@@ -8,6 +8,12 @@ from __future__ import annotations
 import difflib
 import re
 from typing import Dict, List, Optional, Set, Tuple
+from doomscript.grammar.phrases import (
+    mask_strings,
+    unmask_strings,
+    CORE_COMMAND_VERBS,
+    VERB_SYNONYMS,
+)
 
 
 # Canonical signatures catalog for common domains
@@ -150,9 +156,11 @@ class DidYouMeanAdvisor:
         Token-level correction for syntax errors.
         Compares failing token and surrounding tokens against keywords, built-ins,
         and known variables using difflib with ~0.75 cutoff.
+        Preserves string contents untouched by masking before inspection.
         Returns the full reconstructed line.
         """
-        clean = line.strip()
+        masked_line, strings = mask_strings(line)
+        clean = masked_line.strip()
         if not clean or clean.startswith("#"):
             return None
 
@@ -164,8 +172,12 @@ class DidYouMeanAdvisor:
         vocab_map = {w.lower(): w for w in vocab_set}
         vocab_list = list(vocab_map.keys())
 
-        # Extract words and their spans
-        word_spans = [(m.group(0), m.start(), m.end()) for m in re.finditer(r"\b[A-Za-z_]\w*\b", line)]
+        # Extract words and their spans from masked_line, strictly ignoring placeholder strings
+        word_spans = [
+            (m.group(0), m.start(), m.end())
+            for m in re.finditer(r"\b[A-Za-z_]\w*\b", masked_line)
+            if not m.group(0).startswith("__STR_LITERAL_")
+        ]
         if not word_spans:
             return None
 
@@ -195,12 +207,38 @@ class DidYouMeanAdvisor:
             if idx not in ordered_indices:
                 ordered_indices.append(idx)
 
+        candidate_verbs = list(set(CORE_COMMAND_VERBS) | set(VERB_SYNONYMS.keys()) | {"print", "println"})
+
         # Check candidate tokens
         corrections: List[Tuple[int, int, str]] = []
         seen_words = set()
         for idx in ordered_indices:
             word, start, end = word_spans[idx]
             word_lower = word.lower()
+
+            if word_lower.startswith("__str_literal_"):
+                continue
+
+            # First token special check: command verb typos
+            if idx == 0:
+                if word_lower in {"sya", "sy"}:
+                    corrections.append((start, end, "Say" if word.istitle() else "say"))
+                    seen_words.add(word_lower)
+                    continue
+                if word_lower in {"prnt", "prntln", "print", "println"}:
+                    corrections.append((start, end, "Say" if word.istitle() else "say"))
+                    seen_words.add(word_lower)
+                    continue
+                if word_lower not in vocab_map and word_lower not in seen_words:
+                    close_verbs = difflib.get_close_matches(word_lower, candidate_verbs, n=1, cutoff=0.6)
+                    if close_verbs:
+                        v_match = close_verbs[0]
+                        canon_v = VERB_SYNONYMS.get(v_match, v_match)
+                        if word.istitle():
+                            canon_v = canon_v.capitalize()
+                        corrections.append((start, end, canon_v))
+                        seen_words.add(word_lower)
+                        continue
 
             if word_lower in vocab_map or word_lower in seen_words:
                 continue
@@ -216,10 +254,10 @@ class DidYouMeanAdvisor:
 
         if corrections:
             corrections.sort(key=lambda c: c[0], reverse=True)
-            res = line
+            res = masked_line
             for start, end, rep in corrections:
                 res = res[:start] + rep + res[end:]
-            return res
+            return unmask_strings(res, strings)
 
         return None
 

@@ -66,6 +66,17 @@ def test_typo_keyword_sya():
     assert 'say "hello world"' in formatted
 
 
+def test_typo_string_content_never_mutated():
+    """String contents inside failing lines are preserved completely without corruption."""
+    source = 'sya "world scroe lenght test"'
+    with pytest.raises(Exception) as exc_info:
+        compile_to_ast(source)
+
+    formatted = format_syntax_error(source, exc_info.value)
+    assert "Did you mean:" in formatted
+    assert 'say "world scroe lenght test"' in formatted
+
+
 def test_typo_keyword_prnt():
     """Typing 'prnt' suggests 'say'."""
     source = 'prnt "hello world"'

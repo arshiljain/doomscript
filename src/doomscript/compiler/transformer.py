@@ -982,17 +982,64 @@ class DoomToPython(Transformer):
             finalbody=[]
         )
 
+    def arg_name(self, args):
+        return str(args[0])
+
+    def arg_kw_reverse(self, _): return "reverse"
+    def arg_kw_reversed(self, _): return "reversed"
+    def arg_kw_count(self, _): return "count"
+    def arg_kw_by(self, _): return "by"
+    def arg_kw_of(self, _): return "of"
+    def arg_kw_split(self, _): return "split"
+    def arg_kw_key(self, _): return "key"
+    def arg_kw_type(self, _): return "type"
+    def arg_kw_mode(self, _): return "mode"
+    def arg_kw_format(self, _): return "format"
+    def arg_kw_step(self, _): return "step"
+    def arg_kw_start(self, _): return "start"
+    def arg_kw_stop(self, _): return "stop"
+    def arg_kw_into(self, _): return "into"
+    def arg_kw_from(self, _): return "from"
+    def arg_kw_to(self, _): return "to"
+    def arg_kw_with(self, _): return "with"
+    def arg_kw_sort(self, _): return "sort"
+    def arg_kw_sorted(self, _): return "sorted"
+    def arg_kw_filter(self, _): return "filter"
+    def arg_kw_sum(self, _): return "sum"
+    def arg_kw_average(self, _): return "average"
+    def arg_kw_first(self, _): return "first"
+    def arg_kw_last(self, _): return "last"
+    def arg_kw_round(self, _): return "round"
+    def arg_kw_repeat(self, _): return "repeat"
+    def arg_kw_copy(self, _): return "copy"
+    def arg_kw_unique(self, _): return "unique"
+    def arg_kw_item(self, _): return "item"
+    def arg_kw_items(self, _): return "items"
+    def arg_kw_when(self, _): return "when"
+    def arg_kw_match(self, _): return "match"
+    def arg_kw_where(self, _): return "where"
+    def arg_kw_file(self, _): return "file"
+    def arg_kw_files(self, _): return "files"
+    def arg_kw_line(self, _): return "line"
+    def arg_kw_lines(self, _): return "lines"
+    def arg_kw_word(self, _): return "word"
+    def arg_kw_words(self, _): return "words"
+    def arg_kw_text(self, _): return "text"
+    def arg_kw_number(self, _): return "number"
+    def arg_kw_default(self, _): return "default"
+
     def param_item(self, args):
-        name = str(args[0])
+        name = getattr(args[0], "value", str(args[0]))
         default = args[1] if len(args) > 1 and args[1] is not None else None
-        return (name, default)
+        return (str(name), default)
 
     def param_list(self, args):
         return list(args)
 
     def call_arg(self, args):
         if len(args) == 2 and args[0] is not None:
-            return ast.keyword(arg=str(args[0]), value=args[1])
+            arg_name = getattr(args[0], "value", str(args[0]))
+            return ast.keyword(arg=str(arg_name), value=args[1])
         elif len(args) == 2:
             return args[1]
         return args[0]

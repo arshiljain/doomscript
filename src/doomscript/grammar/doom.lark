@@ -234,10 +234,55 @@ func_def: "to" NAME [NAME ["with" param_list] | "with" param_list] ":"? _NEWLINE
 
 suite: _INDENT stmt+ _DEDENT
 
-param_item: NAME ["=" atom | atom]
+param_item: call_arg_name ["=" atom | atom]
 param_list: param_item ("," param_item)*
 arg_list: expr ("," expr)*
-call_arg: [NAME "="] expr
+
+call_arg_name: NAME        -> arg_name
+             | "reverse"  -> arg_kw_reverse
+             | "reversed" -> arg_kw_reversed
+             | "count"    -> arg_kw_count
+             | "by"       -> arg_kw_by
+             | "of"       -> arg_kw_of
+             | "split"    -> arg_kw_split
+             | "key"      -> arg_kw_key
+             | "type"     -> arg_kw_type
+             | "mode"     -> arg_kw_mode
+             | "format"   -> arg_kw_format
+             | "step"     -> arg_kw_step
+             | "start"    -> arg_kw_start
+             | "stop"     -> arg_kw_stop
+             | "into"     -> arg_kw_into
+             | "from"     -> arg_kw_from
+             | "to"       -> arg_kw_to
+             | "with"     -> arg_kw_with
+             | "sort"     -> arg_kw_sort
+             | "sorted"   -> arg_kw_sorted
+             | "filter"   -> arg_kw_filter
+             | "sum"      -> arg_kw_sum
+             | "average"  -> arg_kw_average
+             | "first"    -> arg_kw_first
+             | "last"     -> arg_kw_last
+             | "round"    -> arg_kw_round
+             | "repeat"   -> arg_kw_repeat
+             | "copy"     -> arg_kw_copy
+             | "unique"   -> arg_kw_unique
+             | "item"     -> arg_kw_item
+             | "items"    -> arg_kw_items
+             | "when"     -> arg_kw_when
+             | "match"    -> arg_kw_match
+             | "where"    -> arg_kw_where
+             | "file"     -> arg_kw_file
+             | "files"    -> arg_kw_files
+             | "line"     -> arg_kw_line
+             | "lines"    -> arg_kw_lines
+             | "word"     -> arg_kw_word
+             | "words"    -> arg_kw_words
+             | "text"     -> arg_kw_text
+             | "number"   -> arg_kw_number
+             | "default"  -> arg_kw_default
+
+call_arg: [call_arg_name "="] expr
 call_arg_list: call_arg ("," call_arg)*
 
 ?expr: logic_or
@@ -351,7 +396,7 @@ data_op_expr: "split" factor "by" factor                -> expr_split
             | "lowercase" "of" factor                     -> expr_lowercase
             | ("trim" | "trimmed") "of" factor            -> expr_trim
             | "sorted" "of" factor                        -> expr_sorted
-            | ("reversed" | "reverse") ("of" | "in") factor -> expr_reversed
+            | "reversed" "of" factor                        -> expr_reversed
             | "copy" "of" factor                          -> expr_copy
             | "unique" ["items"] "of" factor              -> expr_unique
             | ("round" | "rounded") "of" factor "to" factor "decimals"  -> expr_round_dec

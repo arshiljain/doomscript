@@ -272,20 +272,23 @@ class DomainRegistry:
         self._spec_counter += 1
         spec_id = f"ds_spec_{self._spec_counter}"
         self._specs[spec_id] = ir
+        self._default_state.specs[spec_id] = ir
         return spec_id
 
     def get_spec(self, spec_id: str) -> Optional[DomainIR]:
         """Retrieves a DomainIR spec by its unique identifier."""
-        return self._specs.get(spec_id)
+        return self._specs.get(spec_id) or self._default_state.specs.get(spec_id)
 
     @property
     def specs(self) -> Dict[str, DomainIR]:
         """Returns dictionary of stored specs."""
-        return self._specs
+        combined = dict(self._default_state.specs)
+        combined.update(self._specs)
+        return combined
 
     def get_spec_by_name(self, name: str) -> Optional[DomainIR]:
         """Retrieves a spec by its human-assigned name attribute."""
-        for s in self._specs.values():
+        for s in list(self._specs.values()) + list(self._default_state.specs.values()):
             if hasattr(s, "name") and s.name == name:
                 return s
         return None
@@ -293,6 +296,7 @@ class DomainRegistry:
     def clear_specs(self) -> None:
         """Clears stored DomainIR specs."""
         self._specs.clear()
+        self._default_state.specs.clear()
 
     def get_active_domains(self) -> List[DomainContract]:
         """Returns all currently active domain instances in LIFO precedence order."""
