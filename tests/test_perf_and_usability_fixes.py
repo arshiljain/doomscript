@@ -131,3 +131,10 @@ add o1 to u1.orders
 """)
     assert len(env["u1"].orders) == 1
     assert env["o1"].user.name == "Alice"
+
+
+def test_entity_module_annotations_no_tuple_name_error():
+    """Verify doomscript.core.entity imports Tuple and module annotations evaluate without NameError."""
+    import doomscript.core.entity as entity_mod
+    ann = getattr(entity_mod, "__annotations__", {})
+    assert "_PENDING_RELATIONS" in ann

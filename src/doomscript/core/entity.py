@@ -4,7 +4,8 @@ Provides DoomEntity and RelationshipList to support story-driven domain entities
 declarative relationships (has many, belongs to, has one), and bidirectional sync.
 """
 
-from typing import Any, Dict, List, Optional
+from __future__ import annotations
+from typing import Any, Dict, List, Optional, Tuple
 import copy
 
 from doomscript.core.record import Record
