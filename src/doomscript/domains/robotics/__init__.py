@@ -5,6 +5,7 @@ polynomial trajectories, and 2D Kalman filters via 'use robotics'.
 """
 
 from typing import List, Optional, Dict, Any
+from doomscript.core.record import Record
 from doomscript.domains.base import (
     DomainContract,
     DomainParser,
@@ -79,7 +80,11 @@ class RoboticsRuntime(DomainRuntime):
             if method == "dubins":
                 s3 = (start[0], start[1], start[2] if len(start) > 2 else 0.0)
                 g3 = (goal[0], goal[1], goal[2] if len(goal) > 2 else 0.0)
-                return robotics_dubins_path(s3, g3, turning_radius=float(ir.turning_radius))
+                res = robotics_dubins_path(s3, g3, turning_radius=float(ir.turning_radius))
+                if isinstance(res, Record):
+                    res["name"] = ir.name
+                    res["total_waypoints"] = res.get("waypoints_count", len(res.get("waypoints", [])))
+                return res
             elif method == "rrt":
                 bounds = [[-50.0, 50.0], [-50.0, 50.0]]
                 return robotics_rrt_plan(start[:2], goal[:2], bounds=bounds, obstacles=ir.obstacles, step_size=float(ir.step_size))

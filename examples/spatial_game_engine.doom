@@ -1,0 +1,57 @@
+# =============================================================================
+# DoomScript Showcase 3: Spatial Game, Physics & 3D Audio Engine
+# Combines: physics, game, graphics, spatial_audio
+# =============================================================================
+
+use physics
+use game
+use graphics
+use spatial_audio
+
+say "--- Step 1: Classical Physics & Ballistics ---"
+
+calculate kinetic energy with mass 5.0 and velocity 20.0 into projectile_ke
+say "Projectile kinetic energy (Joules): ", projectile_ke
+
+escape velocity for mass 5.972e24 at radius 6.371e6 into earth_escape_v
+say "Earth escape velocity (m/s): ", earth_escape_v
+
+say "--- Step 2: Game World, Combatants & Procedural Dice ---"
+
+create combatant "Paladin" with hp 120 attack 18 defense 8 into hero
+say "Hero created: ", hero.name
+say "Hero max health: ", hero.hp
+
+create combatant "RedDragon" with hp 250 attack 24 defense 12 into boss
+say "Boss spawned: ", boss.name
+
+roll dice "3d6+4" into initiative_roll
+say "Rolled initiative: ", initiative_roll
+
+create tilemap with width 20 and height 20 into arena_grid
+say "Tilemap arena initialized: ", arena_grid is not None
+
+say "--- Step 3: Software 2D Graphics Canvas Rasterization ---"
+
+create canvas width 800 height 600 into game_canvas
+draw circle on game_canvas at 200, 150 radius 30 with color (255, 200, 50)
+draw line on game_canvas from 10, 10 to 790, 10 with color (100, 100, 100)
+
+say "Rasterized canvas width: ", game_canvas.width
+say "Rasterized canvas height: ", game_canvas.height
+
+say "--- Step 4: 3D Spatial Audio, HRTF Binaural & Doppler ---"
+
+spell_sound = [0.1, 0.3, 0.5, 0.6, 0.5, 0.3, 0.1]
+
+spatialize audio spell_sound at azimuth 45.0 elevation 15.0 into binaural_spell
+say "Binaural left ear samples: ", len(binaural_spell[0])
+say "Binaural right ear samples: ", len(binaural_spell[1])
+
+simulate doppler effect on spell_sound with velocity 25.0 into doppler_spell
+say "Doppler shifted spell samples: ", len(doppler_spell)
+
+apply reverb to spell_sound with rt60 0.8 into room_reverb
+say "Reverberant room audio length: ", len(room_reverb)
+
+say "Spatial Game, Physics and 3D Audio Engine executed successfully!"

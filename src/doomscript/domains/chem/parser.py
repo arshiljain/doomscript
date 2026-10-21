@@ -155,7 +155,7 @@ class ChemDomainParser(DomainParser):
             formula, target = m_elem.group(1).strip(), m_elem.group(2).strip()
             if not (formula.startswith('"') or formula.startswith("'") or formula.isidentifier()):
                 formula = f'"{formula}"'
-            return f"set {target} to chem_elemental_composition({formula})"
+            return f"set {target} to Record(chem_elemental_composition({formula}))"
 
         # generate morgan fingerprint for <smiles> [radius <r>] [bits <n>] into <target>
         m_mfp = re.match(

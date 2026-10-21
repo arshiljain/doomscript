@@ -1637,4 +1637,5 @@ def chem_generate_3d_conformer(atoms: Any, bonds: Optional[List[Tuple[int, int, 
         raw = MolecularConformerGenerator3D.generate_conformer(atoms, bonds or [])
     coords = [[a["x"], a["y"], a["z"]] for a in raw.get("atoms", [])]
     raw["coordinates"] = coords
+    raw["num_atoms"] = len(coords)
     return Record(raw)

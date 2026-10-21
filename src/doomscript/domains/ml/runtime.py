@@ -34,6 +34,8 @@ class ModelContainer:
         self.spec = spec
         self.name = spec.name
         self.algorithm = spec.algorithm.lower()
+        self.target = spec.target
+        self.features = spec.features
         self.model: Any = None
         self.is_trained: bool = False
         self.X_train: List[List[float]] = []

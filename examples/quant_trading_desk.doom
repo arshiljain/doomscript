@@ -1,0 +1,60 @@
+# =============================================================================
+# DoomScript Showcase 2: Algorithmic Trading, Forecasting & Quant Desk
+# Combines: finance, time_series, agent, office
+# =============================================================================
+
+use finance
+use time_series
+use agent
+use office
+
+say "--- Step 1: Time Series Analysis & Forecasting ---"
+
+asset_history = [100.0, 102.5, 101.0, 104.2, 103.8, 106.5, 108.0, 107.2]
+
+forecast time series asset_history with period 2 with steps 3 into future_forecast
+say "Forecasted future steps count: ", len(future_forecast.forecasts)
+
+calculate acf for asset_history with lags 2 into price_acf
+say "Autocorrelation lags calculated: ", len(price_acf)
+
+say "--- Step 2: Derivatives Valuation & Portfolio Allocation ---"
+
+current_spot = 108.0
+calculate black-scholes price for call option on asset current_spot strike 110.0 expiry 0.25 rate 0.05 volatility 0.22 into call_price
+say "Black-Scholes call option premium: ", call_price
+
+portfolio "QuantAlpha" into desk_port:
+    asset "AAPL" with weight 0.35
+    asset "NVDA" with weight 0.45
+    asset "MSFT" with weight 0.20
+
+say "Active portfolio name: ", desk_port.name
+say "Number of allocated assets: ", desk_port.num_assets
+say "NVDA weight: ", desk_port.weights["NVDA"]
+
+say "--- Step 3: Multi-Agent Trading Desk Collaboration ---"
+
+define agent QuantAnalyst with role "MarketForecaster":
+    instructions: "Analyze time series trend and volatility."
+
+define agent RiskManager with role "RiskAuditor":
+    instructions: "Audit portfolio leverage and option exposure."
+
+team "QuantOperations" into desk_team:
+    member QuantAnalyst
+    member RiskManager
+
+say "Formed agent trading team: ", desk_team.name
+say "Number of team agents: ", len(desk_team.agents)
+
+say "--- Step 4: Office Spreadsheet Generation ---"
+
+create spreadsheet into blotter
+add row ["Ticker", "Weight", "RiskStatus"] to spreadsheet blotter
+add row ["AAPL", 0.35, "PASSED"] to spreadsheet blotter
+add row ["NVDA", 0.45, "PASSED"] to spreadsheet blotter
+add row ["MSFT", 0.20, "PASSED"] to spreadsheet blotter
+
+say "Trade blotter rows generated: ", len(blotter.rows)
+say "Quant trading desk showcase executed successfully!"

@@ -1,0 +1,53 @@
+# =============================================================================
+# DoomScript Showcase 1: Autonomous Lab & Bio-Chemical Desk
+# Combines: chem, bio, robotics, ml
+# =============================================================================
+
+use chem
+use bio
+use robotics
+use ml
+
+say "--- Step 1: Chemistry (Aspirin Conformer & Elemental Analysis) ---"
+
+calculate elemental composition of "C9H8O4" into aspirin_comp
+say "Aspirin carbon count: ", aspirin_comp.C
+
+generate 3d conformer for smiles "CC(=O)OC1=CC=CC=C1C(=O)O" into conformer
+say "Conformer atom count: ", conformer.num_atoms
+
+say "--- Step 2: Biology (Genomic Digestion & CpG Island Analysis) ---"
+
+digest dna sequence "GAATTCATGCGAATTC" with enzyme "EcoRI" into frags
+say "Digestion fragment count: ", len(frags)
+
+find cpg islands in sequence "CGCGCGCGCGATCGATC" window 5 into cpgs
+say "CpG islands found: ", len(cpgs)
+
+say "--- Step 3: Robotics (Robotic Arm Trajectory & Lidar Scan) ---"
+
+read lidar sensor into scan
+say "Lidar sensor initialized: ", scan.readings is not None
+
+trajectory "PipettePlate" into pipette_plan:
+    move to x 10 y 20 z 5 at speed 1.5
+    grip gripper
+    move to x 30 y 40 z 10
+    release gripper
+
+say "Executed trajectory plan: ", pipette_plan.name
+say "Total waypoints executed: ", pipette_plan.total_waypoints
+
+say "--- Step 4: Machine Learning (Biochemical Reaction Yield Model) ---"
+
+calibration_data = [
+    {"temp": 20.0, "ph": 6.5, "yield": 45.0},
+    {"temp": 25.0, "ph": 7.0, "yield": 65.0},
+    {"temp": 30.0, "ph": 7.2, "yield": 85.0},
+    {"temp": 35.0, "ph": 7.4, "yield": 78.0},
+    {"temp": 40.0, "ph": 7.5, "yield": 60.0}
+]
+
+train regression model on calibration_data with target "yield" into yield_model
+say "Trained model target: ", yield_model.target
+say "Autonomous biochemical lab pipeline completed successfully!"
