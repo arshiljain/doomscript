@@ -1157,3 +1157,234 @@ def research_multiple_testing_correction(
 
 
 
+
+
+# ==============================================================================
+# MULTIVARIATE & INFERENTIAL RESEARCH ENGINES: PCA, LDA, BOOTSTRAP & ANOVA
+# ==============================================================================
+
+class PrincipalComponentAnalysis:
+    """Principal Component Analysis (PCA) using power iteration for eigen-decomposition."""
+
+    @classmethod
+    def fit_transform(cls, matrix: List[List[float]], n_components: int = 2) -> Dict[str, Any]:
+        import math
+        n_samples = len(matrix)
+        if n_samples == 0:
+            return {"components": [], "transformed": [], "explained_variance_ratio": []}
+        n_features = len(matrix[0])
+        n_components = min(n_components, n_features, n_samples)
+
+        # 1. Center data
+        means = [sum(matrix[i][j] for i in range(n_samples)) / n_samples for j in range(n_features)]
+        centered = [[matrix[i][j] - means[j] for j in range(n_features)] for i in range(n_samples)]
+
+        # 2. Covariance matrix (n_features x n_features)
+        cov = [[0.0] * n_features for _ in range(n_features)]
+        denom = max(1, n_samples - 1)
+        for i in range(n_features):
+            for j in range(i, n_features):
+                val = sum(centered[k][i] * centered[k][j] for k in range(n_samples)) / denom
+                cov[i][j] = val
+                cov[j][i] = val
+
+        # 3. Power iteration with deflation to find top eigenvectors
+        components = []
+        eigenvalues = []
+        cov_def = [list(row) for row in cov]
+
+        for _ in range(n_components):
+            v = [1.0 / math.sqrt(n_features)] * n_features
+            for _iter in range(100):
+                # Matrix-vector multiplication Av
+                Av = [sum(cov_def[r][c] * v[c] for c in range(n_features)) for r in range(n_features)]
+                norm = math.sqrt(sum(x * x for x in Av))
+                if norm < 1e-12:
+                    break
+                v = [x / norm for x in Av]
+            # Eigenvalue Rayleigh quotient
+            Av = [sum(cov_def[r][c] * v[c] for c in range(n_features)) for r in range(n_features)]
+            eigenval = sum(v[r] * Av[r] for r in range(n_features))
+            components.append(v)
+            eigenvalues.append(max(0.0, eigenval))
+
+            # Hotelling Deflation: A' = A - lambda * (v v^T)
+            for r in range(n_features):
+                for c in range(n_features):
+                    cov_def[r][c] -= eigenval * v[r] * v[c]
+
+        # 4. Project data onto principal axes
+        transformed = [
+            [sum(centered[i][f] * components[c][f] for f in range(n_features)) for c in range(n_components)]
+            for i in range(n_samples)
+        ]
+
+        total_var = sum(cov[i][i] for i in range(n_features))
+        ratio = [ev / total_var if total_var > 1e-12 else 0.0 for ev in eigenvalues]
+
+        return {
+            "means": means,
+            "components": components,
+            "eigenvalues": eigenvalues,
+            "explained_variance_ratio": ratio,
+            "transformed": transformed,
+        }
+
+
+class LinearDiscriminantAnalysis:
+    """Fisher's Linear Discriminant Analysis (LDA) for 1D/2D optimal class separation."""
+
+    @classmethod
+    def fit_transform(cls, X: List[List[float]], y: List[Any]) -> Dict[str, Any]:
+        import math
+        classes = sorted(list(set(y)))
+        if len(classes) < 2 or not X:
+            return {"weights": [], "transformed": []}
+
+        n_samples = len(X)
+        n_features = len(X[0])
+        overall_mean = [sum(X[i][j] for i in range(n_samples)) / n_samples for j in range(n_features)]
+
+        # Class means and within-class scatter Sw
+        Sw = [[0.0] * n_features for _ in range(n_features)]
+        class_means = {}
+
+        for c in classes:
+            c_indices = [i for i, label in enumerate(y) if label == c]
+            c_len = len(c_indices)
+            c_mean = [sum(X[i][j] for i in c_indices) / max(1, c_len) for j in range(n_features)]
+            class_means[c] = c_mean
+
+            for i in c_indices:
+                diff = [X[i][j] - c_mean[j] for j in range(n_features)]
+                for r in range(n_features):
+                    for col in range(n_features):
+                        Sw[r][col] += diff[r] * diff[col]
+
+        # Regularize Sw diagonal for numerical invertibility
+        for i in range(n_features):
+            Sw[i][i] += 1e-4
+
+        # For 2 classes, optimal w = Sw^-1 (mean1 - mean0)
+        c0, c1 = classes[0], classes[1]
+        mean_diff = [class_means[c1][j] - class_means[c0][j] for j in range(n_features)]
+
+        # Solve Sw * w = mean_diff via Gauss-Jordan
+        w = cls._solve_linear(Sw, mean_diff)
+        w_norm = math.sqrt(sum(x * x for x in w))
+        if w_norm > 1e-12:
+            w = [x / w_norm for x in w]
+
+        transformed = [[sum(X[i][j] * w[j] for j in range(n_features))] for i in range(n_samples)]
+        return {
+            "projection_vector": w,
+            "transformed": transformed,
+            "classes": classes,
+        }
+
+    @classmethod
+    def _solve_linear(cls, A: List[List[float]], b: List[float]) -> List[float]:
+        n = len(A)
+        aug = [A[i] + [b[i]] for i in range(n)]
+        for i in range(n):
+            pivot = aug[i][i]
+            if abs(pivot) < 1e-12:
+                for r in range(i + 1, n):
+                    if abs(aug[r][i]) > abs(pivot):
+                        aug[i], aug[r] = aug[r], aug[i]
+                        pivot = aug[i][i]
+                        break
+            if abs(pivot) > 1e-12:
+                aug[i] = [x / pivot for x in aug[i]]
+            for r in range(n):
+                if r != i and abs(aug[r][i]) > 1e-12:
+                    factor = aug[r][i]
+                    aug[r] = [aug[r][c] - factor * aug[i][c] for c in range(n + 1)]
+        return [aug[i][n] for i in range(n)]
+
+
+class ConfidenceIntervalBootstrap:
+    """Non-parametric percentile bootstrap confidence interval estimator."""
+
+    @classmethod
+    def compute(cls, data: List[float], statistic_func, n_bootstraps: int = 1000, alpha: float = 0.05, seed: int = 42) -> Dict[str, Any]:
+        import random
+        rng = random.Random(seed)
+        n = len(data)
+        if n == 0:
+            return {"point_estimate": 0.0, "lower": 0.0, "upper": 0.0}
+
+        point_est = float(statistic_func(data))
+        bootstrap_stats = []
+        for _ in range(n_bootstraps):
+            sample = [data[rng.randint(0, n - 1)] for _ in range(n)]
+            bootstrap_stats.append(float(statistic_func(sample)))
+
+        bootstrap_stats.sort()
+        idx_lower = int((alpha / 2.0) * n_bootstraps)
+        idx_upper = int((1.0 - alpha / 2.0) * n_bootstraps)
+        idx_upper = min(n_bootstraps - 1, idx_upper)
+
+        return {
+            "point_estimate": point_est,
+            "ci_lower": bootstrap_stats[idx_lower],
+            "ci_upper": bootstrap_stats[idx_upper],
+            "confidence_level": 1.0 - alpha,
+            "bootstrap_mean": sum(bootstrap_stats) / n_bootstraps,
+        }
+
+
+class ANOVAOneWay:
+    """One-Way Analysis of Variance (ANOVA) between multiple groups."""
+
+    @classmethod
+    def test(cls, *groups: List[float]) -> Dict[str, Any]:
+        clean_groups = [g for g in groups if len(g) > 0]
+        k = len(clean_groups)
+        if k < 2:
+            return {"f_stat": 0.0, "p_value": 1.0, "df_between": 0, "df_within": 0}
+
+        all_values = [x for g in clean_groups for x in g]
+        N = len(all_values)
+        grand_mean = sum(all_values) / N
+
+        ss_between = sum(len(g) * ((sum(g) / len(g)) - grand_mean) ** 2 for g in clean_groups)
+        ss_within = sum(sum((x - (sum(g) / len(g))) ** 2 for x in g) for g in clean_groups)
+
+        df_between = k - 1
+        df_within = N - k
+
+        ms_between = ss_between / max(1, df_between)
+        ms_within = ss_within / max(1e-12, df_within)
+
+        f_stat = ms_between / ms_within if ms_within > 1e-12 else 0.0
+
+        return {
+            "f_statistic": f_stat,
+            "ss_between": ss_between,
+            "ss_within": ss_within,
+            "df_between": df_between,
+            "df_within": df_within,
+            "ms_between": ms_between,
+            "ms_within": ms_within,
+        }
+
+
+def research_pca_fit_transform(data: List[List[float]], n_components: int = 2) -> Record:
+    """Performs Principal Component Analysis dimensionality reduction."""
+    return Record(PrincipalComponentAnalysis.fit_transform(data, n_components=n_components))
+
+
+def research_lda_fit_transform(X: List[List[float]], y: List[Any]) -> Record:
+    """Performs Fisher's Linear Discriminant Analysis supervised projection."""
+    return Record(LinearDiscriminantAnalysis.fit_transform(X, y))
+
+
+def research_bootstrap_ci(data: List[float], n_bootstraps: int = 1000, alpha: float = 0.05) -> Record:
+    """Computes bootstrap confidence interval for the sample mean."""
+    return Record(ConfidenceIntervalBootstrap.compute(data, lambda s: sum(s) / len(s), n_bootstraps=n_bootstraps, alpha=alpha))
+
+
+def research_anova_oneway(*groups: List[float]) -> Record:
+    """Computes one-way ANOVA F-statistic across multiple comparison groups."""
+    return Record(ANOVAOneWay.test(*groups))

@@ -901,3 +901,121 @@ def quantum_bb84_simulate(num_bits: int = 64, eve_present: bool = False, seed: O
 def quantum_teleport(alpha: complex, beta: complex) -> Dict[str, Any]:
     """Simulates quantum state teleportation over an entangled EPR channel."""
     return QuantumTeleportation.teleport(alpha, beta)
+
+
+# ==============================================================================
+# GOTTESMAN-KNILL STABILIZER TABLEAU & STEANE 7-QUBIT CSS QUANTUM CODE
+# ==============================================================================
+
+class StabilizerTableauSimulator:
+    """Gottesman-Knill stabilizer tableau for polynomial-time Clifford circuit simulation."""
+
+    def __init__(self, num_qubits: int):
+        self.n = max(1, min(64, int(num_qubits)))
+        self.total_rows = 2 * self.n
+        # 2n rows x 2n cols of Pauli operators (X-block, Z-block) plus 1 sign column (r)
+        # rows 0..n-1: destabilizers, rows n..2n-1: stabilizers
+        self.x = [[0] * self.n for _ in range(self.total_rows)]
+        self.z = [[0] * self.n for _ in range(self.total_rows)]
+        self.r = [0] * self.total_rows
+
+        # Initialize to ground state |0...0>: destabilizer X_i, stabilizer Z_i
+        for i in range(self.n):
+            self.x[i][i] = 1
+            self.z[self.n + i][i] = 1
+
+    def hadamard(self, target: int) -> None:
+        """Applies Hadamard gate H on target qubit."""
+        for i in range(self.total_rows):
+            self.r[i] ^= (self.x[i][target] & self.z[i][target])
+            self.x[i][target], self.z[i][target] = self.z[i][target], self.x[i][target]
+
+    def phase(self, target: int) -> None:
+        """Applies Phase gate S on target qubit."""
+        for i in range(self.total_rows):
+            self.r[i] ^= (self.x[i][target] & self.z[i][target])
+            self.z[i][target] ^= self.x[i][target]
+
+    def cnot(self, control: int, target: int) -> None:
+        """Applies Controlled-NOT (CNOT) gate."""
+        for i in range(self.total_rows):
+            self.r[i] ^= (self.x[i][control] & self.z[i][target] & (self.x[i][target] ^ self.z[i][control] ^ 1))
+            self.x[i][target] ^= self.x[i][control]
+            self.z[i][control] ^= self.z[i][target]
+
+    def get_stabilizer_strings(self) -> List[str]:
+        """Returns Pauli strings of all n stabilizers."""
+        strings = []
+        for i in range(self.n, self.total_rows):
+            sign = "-" if self.r[i] else "+"
+            paulis = []
+            for j in range(self.n):
+                xj = self.x[i][j]
+                zj = self.z[i][j]
+                if xj == 1 and zj == 0:
+                    paulis.append("X")
+                elif xj == 1 and zj == 1:
+                    paulis.append("Y")
+                elif xj == 0 and zj == 1:
+                    paulis.append("Z")
+                else:
+                    paulis.append("I")
+            strings.append(f"{sign}{''.join(paulis)}")
+        return strings
+
+
+class Steane7QubitCode:
+    """Steane [[7, 1, 3]] Calderbank-Shor-Steane (CSS) quantum error correction code."""
+
+    # Classical [7, 4, 3] Hamming parity-check matrix H
+    H = [
+        [0, 0, 0, 1, 1, 1, 1],
+        [0, 1, 1, 0, 0, 1, 1],
+        [1, 0, 1, 0, 1, 0, 1],
+    ]
+
+    @classmethod
+    def diagnose_syndrome(cls, bit_errors: List[int], phase_errors: List[int]) -> Dict[str, Any]:
+        """Diagnoses X and Z error positions using classical Hamming parity check."""
+        x_syn = 0
+        z_syn = 0
+        for row_idx, row in enumerate(cls.H):
+            s_x = sum(row[i] * bit_errors[i] for i in range(7)) % 2
+            s_z = sum(row[i] * phase_errors[i] for i in range(7)) % 2
+            if s_x:
+                x_syn |= (1 << (2 - row_idx))
+            if s_z:
+                z_syn |= (1 << (2 - row_idx))
+
+        bit_corrected_idx = x_syn - 1 if x_syn > 0 else None
+        phase_corrected_idx = z_syn - 1 if z_syn > 0 else None
+
+        return {
+            "x_syndrome": x_syn,
+            "z_syndrome": z_syn,
+            "bit_flip_error_qubit": bit_corrected_idx,
+            "phase_flip_error_qubit": phase_corrected_idx,
+            "success": True,
+        }
+
+
+def quantum_stabilizer_simulate(num_qubits: int, gates: List[Tuple[str, List[int]]]) -> Dict[str, Any]:
+    """Simulates Clifford quantum circuit using Gottesman-Knill stabilizer tableau."""
+    tab = StabilizerTableauSimulator(num_qubits)
+    for gate_type, targets in gates:
+        g = gate_type.upper()
+        if g == "H":
+            tab.hadamard(targets[0])
+        elif g == "S":
+            tab.phase(targets[0])
+        elif g == "CNOT":
+            tab.cnot(targets[0], targets[1])
+    return {
+        "num_qubits": num_qubits,
+        "stabilizers": tab.get_stabilizer_strings(),
+    }
+
+
+def quantum_steane_diagnose(bit_errors: List[int], phase_errors: List[int]) -> Record:
+    """Diagnoses error syndromes under Steane 7-qubit CSS code."""
+    return Record(Steane7QubitCode.diagnose_syndrome(bit_errors, phase_errors))

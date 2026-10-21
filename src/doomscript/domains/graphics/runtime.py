@@ -756,3 +756,108 @@ def graphics_ray_march_sdf(
     ))
 
 
+
+
+# ==============================================================================
+# ADVANCED PROCEDURAL & GEOMETRIC GRAPHICS: PERLIN NOISE & BEZIER EVALUATOR
+# ==============================================================================
+
+class PerlinNoiseGenerator:
+    """Classic 2D/3D gradient Perlin noise with fractional Brownian motion (fBm)."""
+
+    PERMUTATION = [
+        151,160,137,91,90,15,131,13,201,95,96,53,194,233,7,225,140,36,103,30,69,142,
+        8,99,37,240,21,10,23,190,6,148,247,120,234,75,0,26,197,62,94,252,219,203,117,
+        35,11,32,57,177,33,88,237,149,56,87,174,20,125,136,171,168,68,175,74,165,71,
+        134,139,48,27,166,77,146,158,231,83,111,229,122,60,211,133,230,220,105,92,41,
+        55,46,245,40,244,102,143,54,65,25,63,161,1,216,80,73,209,76,132,187,208,89,
+        18,169,200,196,135,130,116,188,159,86,164,100,109,198,173,186,3,64,52,217,226,
+        250,124,123,5,202,38,147,118,126,255,82,85,212,207,206,59,227,47,16,58,17,182,
+        189,28,42,223,183,170,213,119,248,152,2,44,154,163,70,221,153,101,155,167,43,
+        172,9,129,22,39,253,19,98,108,110,79,113,224,232,178,185,112,104,218,246,97,
+        228,251,34,242,193,238,210,144,12,191,179,162,241,81,51,145,235,249,14,239,
+        107,49,192,214,31,181,199,106,157,184,84,204,176,115,121,50,45,127,4,150,254,
+        138,236,205,93,222,114,67,29,24,72,243,141,128,195,78,66,215,61,156,180
+    ]
+    P = PERMUTATION + PERMUTATION
+
+    @classmethod
+    def _fade(cls, t: float) -> float:
+        return t * t * t * (t * (t * 6.0 - 15.0) + 10.0)
+
+    @classmethod
+    def _grad2(cls, hash_val: int, x: float, y: float) -> float:
+        h = hash_val & 3
+        u = x if h in (0, 1) else -x
+        v = y if h in (0, 2) else -y
+        return u + v
+
+    @classmethod
+    def noise2d(cls, x: float, y: float) -> float:
+        import math
+        xi = int(math.floor(x)) & 255
+        yi = int(math.floor(y)) & 255
+        xf = x - math.floor(x)
+        yf = y - math.floor(y)
+
+        u = cls._fade(xf)
+        v = cls._fade(yf)
+
+        aa = cls.P[cls.P[xi] + yi]
+        ab = cls.P[cls.P[xi] + yi + 1]
+        ba = cls.P[cls.P[xi + 1] + yi]
+        bb = cls.P[cls.P[xi + 1] + yi + 1]
+
+        x1 = (1.0 - u) * cls._grad2(aa, xf, yf) + u * cls._grad2(ba, xf - 1.0, yf)
+        x2 = (1.0 - u) * cls._grad2(ab, xf, yf - 1.0) + u * cls._grad2(bb, xf - 1.0, yf - 1.0)
+        return (1.0 - v) * x1 + v * x2
+
+    @classmethod
+    def fbm2d(cls, x: float, y: float, octaves: int = 4, persistence: float = 0.5, lacunarity: float = 2.0) -> float:
+        total = 0.0
+        frequency = 1.0
+        amplitude = 1.0
+        max_val = 0.0
+        for _ in range(octaves):
+            total += cls.noise2d(x * frequency, y * frequency) * amplitude
+            max_val += amplitude
+            amplitude *= persistence
+            frequency *= lacunarity
+        return total / max_val if max_val > 0 else 0.0
+
+
+class BezierSplineEvaluator:
+    """Cubic Bezier curve evaluator with tangent, curvature, and arc length."""
+
+    @classmethod
+    def evaluate(cls, p0: Tuple[float, float], p1: Tuple[float, float], p2: Tuple[float, float], p3: Tuple[float, float], t: float) -> Tuple[float, float]:
+        t = max(0.0, min(1.0, float(t)))
+        u = 1.0 - t
+        x = u**3 * p0[0] + 3 * u**2 * t * p1[0] + 3 * u * t**2 * p2[0] + t**3 * p3[0]
+        y = u**3 * p0[1] + 3 * u**2 * t * p1[1] + 3 * u * t**2 * p2[1] + t**3 * p3[1]
+        return (x, y)
+
+    @classmethod
+    def tangent(cls, p0: Tuple[float, float], p1: Tuple[float, float], p2: Tuple[float, float], p3: Tuple[float, float], t: float) -> Tuple[float, float]:
+        import math
+        t = max(0.0, min(1.0, float(t)))
+        u = 1.0 - t
+        dx = 3 * u**2 * (p1[0] - p0[0]) + 6 * u * t * (p2[0] - p1[0]) + 3 * t**2 * (p3[0] - p2[0])
+        dy = 3 * u**2 * (p1[1] - p0[1]) + 6 * u * t * (p2[1] - p1[1]) + 3 * t**2 * (p3[1] - p2[1])
+        length = math.sqrt(dx * dx + dy * dy)
+        return (dx / length, dy / length) if length > 1e-12 else (1.0, 0.0)
+
+
+def graphics_perlin_noise_2d(x: float, y: float) -> float:
+    """Evaluates 2D Perlin gradient noise at coordinate (x, y)."""
+    return PerlinNoiseGenerator.noise2d(x, y)
+
+
+def graphics_fbm_noise_2d(x: float, y: float, octaves: int = 4) -> float:
+    """Evaluates 2D Fractional Brownian Motion multi-octave noise."""
+    return PerlinNoiseGenerator.fbm2d(x, y, octaves=octaves)
+
+
+def graphics_bezier_evaluate(p0: Tuple[float, float], p1: Tuple[float, float], p2: Tuple[float, float], p3: Tuple[float, float], t: float) -> Tuple[float, float]:
+    """Evaluates point on cubic Bezier curve at parameter t in [0, 1]."""
+    return BezierSplineEvaluator.evaluate(p0, p1, p2, p3, t)

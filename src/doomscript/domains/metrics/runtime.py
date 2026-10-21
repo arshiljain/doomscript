@@ -1053,3 +1053,186 @@ def metrics_precision_recall_ap(
     return Record(PrecisionRecallCurveAP.compute(y_true, scores, pos_label=pos_label))
 
 
+
+
+# ==============================================================================
+# ADVANCED STREAMING SKETCHES: T-DIGEST, HYPERLOGLOG++ & COUNT-MIN SKETCH
+# ==============================================================================
+
+class TDigestQuantileEstimator:
+    """T-Digest algorithm for extreme streaming quantiles with dynamic centroid clustering."""
+
+    def __init__(self, delta: float = 100.0):
+        self.delta = max(10.0, float(delta))
+        self.centroids: List[List[float]] = []  # [[mean, weight], ...]
+        self.total_weight = 0.0
+
+    def add(self, x: float, weight: float = 1.0) -> None:
+        if weight <= 0.0:
+            return
+        x = float(x)
+        weight = float(weight)
+        if not self.centroids:
+            self.centroids.append([x, weight])
+            self.total_weight += weight
+            return
+
+        # Find closest centroid
+        closest_idx = min(range(len(self.centroids)), key=lambda i: abs(self.centroids[i][0] - x))
+        c_mean, c_weight = self.centroids[closest_idx]
+
+        # Calculate quantile approximation for centroid
+        cum_w = sum(self.centroids[i][1] for i in range(closest_idx)) + c_weight / 2.0
+        q = cum_w / (self.total_weight + weight)
+        max_weight = 4.0 * (self.total_weight + weight) * q * (1.0 - q) / self.delta
+
+        if c_weight + weight <= max(1.0, max_weight):
+            # Merge into closest centroid
+            new_weight = c_weight + weight
+            new_mean = (c_mean * c_weight + x * weight) / new_weight
+            self.centroids[closest_idx] = [new_mean, new_weight]
+        else:
+            self.centroids.append([x, weight])
+
+        self.total_weight += weight
+        if len(self.centroids) > 5 * int(self.delta):
+            self.compress()
+
+    def compress(self) -> None:
+        if len(self.centroids) <= 1:
+            return
+        sorted_centroids = sorted(self.centroids, key=lambda c: c[0])
+        merged: List[List[float]] = []
+        cur_mean, cur_weight = sorted_centroids[0]
+
+        cum_w = 0.0
+        for i in range(1, len(sorted_centroids)):
+            next_mean, next_weight = sorted_centroids[i]
+            q = (cum_w + cur_weight / 2.0) / self.total_weight
+            max_w = 4.0 * self.total_weight * q * (1.0 - q) / self.delta
+
+            if cur_weight + next_weight <= max(1.0, max_w):
+                new_w = cur_weight + next_weight
+                cur_mean = (cur_mean * cur_weight + next_mean * next_weight) / new_w
+                cur_weight = new_w
+            else:
+                merged.append([cur_mean, cur_weight])
+                cum_w += cur_weight
+                cur_mean, cur_weight = next_mean, next_weight
+        merged.append([cur_mean, cur_weight])
+        self.centroids = merged
+
+    def quantile(self, q: float) -> float:
+        if not self.centroids:
+            return 0.0
+        q = min(1.0, max(0.0, float(q)))
+        self.compress()
+        if len(self.centroids) == 1:
+            return self.centroids[0][0]
+
+        target_w = q * self.total_weight
+        cum_w = 0.0
+        for i, (m, w) in enumerate(self.centroids):
+            if cum_w + w >= target_w:
+                if i == 0:
+                    return m
+                prev_m, prev_w = self.centroids[i - 1]
+                t = (target_w - cum_w) / max(1e-9, w)
+                return prev_m + t * (m - prev_m)
+            cum_w += w
+        return self.centroids[-1][0]
+
+
+class HyperLogLogPlusPlus:
+    """HyperLogLog++ 64-bit probabilistic cardinality estimator."""
+
+    def __init__(self, p: int = 14):
+        self.p = min(16, max(4, int(p)))
+        self.m = 1 << self.p
+        self.registers = [0] * self.m
+        # Alpha constant
+        if self.m == 16:
+            self.alpha = 0.673
+        elif self.m == 32:
+            self.alpha = 0.697
+        elif self.m == 64:
+            self.alpha = 0.709
+        else:
+            self.alpha = 0.7213 / (1.0 + 1.079 / self.m)
+
+    def _hash64(self, val: Any) -> int:
+        import hashlib
+        h = hashlib.sha256(str(val).encode("utf-8")).digest()
+        return int.from_bytes(h[:8], "little")
+
+    def add(self, item: Any) -> None:
+        x = self._hash64(item)
+        idx = x & (self.m - 1)
+        w = x >> self.p
+        leading_zeros = 1
+        while w > 0 and (w & 1) == 0:
+            leading_zeros += 1
+            w >>= 1
+        if leading_zeros > self.registers[idx]:
+            self.registers[idx] = leading_zeros
+
+    def count(self) -> float:
+        import math
+        z = sum(2.0 ** (-reg) for reg in self.registers)
+        raw_est = self.alpha * (self.m ** 2) / z
+        if raw_est <= 2.5 * self.m:
+            zeros = self.registers.count(0)
+            if zeros != 0:
+                return float(self.m * math.log(self.m / zeros))
+            return raw_est
+        return raw_est
+
+
+class CountMinSketch:
+    """Count-Min Sketch frequency and heavy hitters estimator."""
+
+    def __init__(self, width: int = 1000, depth: int = 7):
+        self.width = max(10, int(width))
+        self.depth = max(1, int(depth))
+        self.table = [[0] * self.width for _ in range(self.depth)]
+
+    def _hashes(self, item: str) -> List[int]:
+        import hashlib
+        res = []
+        b = str(item).encode("utf-8")
+        for i in range(self.depth):
+            seed_b = i.to_bytes(4, "little")
+            h = int.from_bytes(hashlib.md5(b + seed_b).digest()[:8], "little")
+            res.append(h % self.width)
+        return res
+
+    def add(self, item: str, count: int = 1) -> None:
+        for row, col in enumerate(self._hashes(item)):
+            self.table[row][col] += int(count)
+
+    def estimate(self, item: str) -> int:
+        return min(self.table[row][col] for row, col in enumerate(self._hashes(item)))
+
+
+def metrics_tdigest_estimate(values: List[float], quantiles: List[float], delta: float = 100.0) -> Dict[str, float]:
+    """Estimates multiple quantiles over a stream of values using T-Digest."""
+    td = TDigestQuantileEstimator(delta=delta)
+    for v in values:
+        td.add(v)
+    return {f"p{int(q*100)}": td.quantile(q) for q in quantiles}
+
+
+def metrics_hyperloglog_count(items: List[Any], p: int = 14) -> int:
+    """Estimates distinct cardinality using HyperLogLog++."""
+    hll = HyperLogLogPlusPlus(p=p)
+    for item in items:
+        hll.add(item)
+    return int(round(hll.count()))
+
+
+def metrics_count_min_frequencies(items: List[str], query_items: List[str], width: int = 1000, depth: int = 5) -> Dict[str, int]:
+    """Estimates frequency counts using Count-Min Sketch."""
+    cms = CountMinSketch(width=width, depth=depth)
+    for it in items:
+        cms.add(it)
+    return {it: cms.estimate(it) for it in query_items}
