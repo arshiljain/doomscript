@@ -280,3 +280,29 @@ set count to count of data, then if count > 0:
 """
     env = execute(code)
     assert env["status"] == "non-empty"
+
+
+# ---------------------------------------------------------------------------
+# Phase 4, Task 4.1: Runtime Set Reshaping Builtins
+# ---------------------------------------------------------------------------
+
+def test_runtime_set_reshaping():
+    from doomscript.runtime import ds_pair, ds_partition, ds_flatten, ds_pluck
+
+    names = ["Alice", "Bob"]
+    scores = [95, 88]
+    pairs = ds_pair(names, scores)
+    assert pairs == [("Alice", 95), ("Bob", 88)]
+    pair_dict = ds_pair(names, scores, as_dict=True)
+    assert pair_dict == {"Alice": 95, "Bob": 88}
+
+    nums = [1, 2, 3, 4, 5, 6]
+    evens, odds = ds_partition(nums, lambda x: x % 2 == 0)
+    assert evens == [2, 4, 6]
+    assert odds == [1, 3, 5]
+
+    nested = [[1, 2], [3, 4]]
+    assert ds_flatten(nested) == [1, 2, 3, 4]
+
+    records = [{"age": 20}, {"age": 30}]
+    assert ds_pluck(records, "age") == [20, 30]

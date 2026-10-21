@@ -956,6 +956,46 @@ def ds_cached_call(cache_key, action_fn, ttl_seconds=300.0):
     return val
 
 
+def ds_pair(list_a, list_b, as_dict=False):
+    """Pairs two sequences together into a list of tuples or a dictionary."""
+    a = list(list_a) if list_a is not None else []
+    b = list(list_b) if list_b is not None else []
+    pairs = list(zip(a, b))
+    return dict(pairs) if as_dict else pairs
+
+
+def ds_partition(collection, predicate_fn):
+    """Partitions collection into two lists: (matching, non_matching)."""
+    yes = []
+    no = []
+    if collection is not None:
+        for item in collection:
+            if predicate_fn(item):
+                yes.append(item)
+            else:
+                no.append(item)
+    return yes, no
+
+
+def ds_flatten(iterable):
+    """Flattens a nested iterable (one level deep)."""
+    flat = []
+    if iterable is not None:
+        for item in iterable:
+            if isinstance(item, (list, tuple)):
+                flat.extend(item)
+            else:
+                flat.append(item)
+    return flat
+
+
+def ds_pluck(collection, key):
+    """Extracts a specific attribute or key from each element in collection."""
+    if not collection:
+        return []
+    return [ds_attr(item, key) for item in collection]
+
+
 def ds_at_least_n(collection, n, predicate_fn):
     """Checks whether at least n elements in collection match predicate."""
     if not collection:
