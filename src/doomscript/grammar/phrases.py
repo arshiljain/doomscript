@@ -3439,6 +3439,20 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
             emit(f"{indent}    {norm_then}", line_idx)
             continue
 
+        # Compound sentence chaining into block statement: e.g. 'do something, then if cond:'
+        compound_chain_m = re.match(r"^(.+?)(?:,\s*then|\s+and\s+then)\s+((?:if|unless|for|while|repeat)\s+.+?:)$", code, re.IGNORECASE)
+        if compound_chain_m:
+            first_stmt = compound_chain_m.group(1).strip()
+            second_hdr = compound_chain_m.group(2).strip()
+            norm_first = normalize_statement_text(first_stmt, scope, line_idx)
+            assigned_first = extract_assigned_var(norm_first)
+            if assigned_first:
+                scope.record_assignment(assigned_first)
+            norm_second = normalize_statement_text(second_hdr, scope, line_idx)
+            emit(f"{indent}{norm_first}", line_idx)
+            emit(f"{indent}{norm_second}", line_idx)
+            continue
+
         # Mask strings for statement splitting
         masked_code, code_strings = mask_strings(code)
 

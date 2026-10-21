@@ -263,3 +263,20 @@ call fetch_data retrying 3 times with 0.01 seconds backoff into res
     env = execute(code)
     assert env["res"] == "ok"
     assert env["attempts"][0] == 2
+
+
+# ---------------------------------------------------------------------------
+# Phase 3, Task 3.3: Compound Multi-Action Sentences with Block Continuation
+# ---------------------------------------------------------------------------
+
+def test_compound_sentence_block_chaining():
+    from doomscript.compiler.engine import execute
+
+    code = """
+data = [10, 20]
+status = ""
+set count to count of data, then if count > 0:
+    status = "non-empty"
+"""
+    env = execute(code)
+    assert env["status"] == "non-empty"
