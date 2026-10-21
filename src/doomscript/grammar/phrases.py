@@ -211,6 +211,36 @@ def split_comment(line: str) -> Tuple[str, str]:
     return unmask_strings(masked, strings), ""
 
 
+def _split_respecting_delimiters(s: str, delimiter: str = ",") -> List[str]:
+    """Splits a string by delimiter while respecting quotes and nested brackets."""
+    parts = []
+    current = []
+    depth = 0
+    in_quote = None
+    for ch in s:
+        if in_quote:
+            current.append(ch)
+            if ch == in_quote:
+                in_quote = None
+        elif ch in ('"', "'"):
+            in_quote = ch
+            current.append(ch)
+        elif ch in ("(", "[", "{"):
+            depth += 1
+            current.append(ch)
+        elif ch in (")", "]", "}"):
+            depth = max(0, depth - 1)
+            current.append(ch)
+        elif ch == delimiter and depth == 0:
+            parts.append("".join(current).strip())
+            current = []
+        else:
+            current.append(ch)
+    if current:
+        parts.append("".join(current).strip())
+    return [p for p in parts if p]
+
+
 SYNONYM_REPLACEMENTS = [
     # Math & Metric Verbs (calculate is the canonical verb across 300+ domain signatures)
     (re.compile(r"\bcompute\b", re.IGNORECASE), "calculate"),
@@ -1799,21 +1829,23 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
                 kwargs.append(f'{m_f.group(1)}="{m_f.group(2).lower()}"')
         masked = f'orm_define("{ename}", {", ".join(kwargs)})'
 
-    orm_save_m = re.match(r"^(?:save\s+new|create\s+(?:a\s+|an\s+)?)\s*(?!jwt\b)([A-Za-z_]\w*)\s+with\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    orm_save_m = re.match(r"^(?:save\s+new|create\s+(?:a\s+|an\s+)?)\s*(?!jwt\b)([A-Za-z_]\w*)(?:\s+with\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
     if orm_save_m:
         ename = orm_save_m.group(1)
         vals_str = orm_save_m.group(2)
         target = orm_save_m.group(3)
-        val_pairs = [v.strip() for v in re.split(r",\s*", vals_str)]
         kwargs = []
-        for vp in val_pairs:
-            m_vp = re.match(r"^([A-Za-z_]\w*)[:\s]+(.+)$", vp)
-            if m_vp:
-                kwargs.append(f'{m_vp.group(1)}={m_vp.group(2).strip()}')
+        if vals_str:
+            val_pairs = [v.strip() for v in re.split(r",\s*", vals_str)]
+            for vp in val_pairs:
+                m_vp = re.match(r"^([A-Za-z_]\w*)[:\s]+(.+)$", vp)
+                if m_vp:
+                    kwargs.append(f'{m_vp.group(1)}={m_vp.group(2).strip()}')
+        kwargs_str = f', {", ".join(kwargs)}' if kwargs else ""
         if masked.lower().startswith("save new"):
-            masked = f'set {target} to orm_save("{ename}", {", ".join(kwargs)})'
+            masked = f'set {target} to orm_save("{ename}"{kwargs_str})'
         else:
-            masked = f'set {target} to make_entity("{ename}", {", ".join(kwargs)})' 
+            masked = f'set {target} to make_entity("{ename}"{kwargs_str})' 
 
     orm_find_all_m = re.match(r"^find\s+all\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
     if orm_find_all_m:
@@ -2411,7 +2443,38 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
             emit(f"{indent}# use {domain_name}", line_idx)
             continue
 
-                # Declarative Entity: a Person has name, age / Person has name, age
+        # Declarative Entity with initial lifecycle:
+        # a BankAccount begins with balance = 100, status = "active", transactions = []
+        begins_with_m = re.match(
+            r"^(?:(?:a|an)\s+)?([A-Z]\w*)\s+begins\s+with\s+(.+?)(:)?$",
+            code.strip(),
+            re.IGNORECASE,
+        )
+        if begins_with_m:
+            cname = begins_with_m.group(1)
+            defaults_str = begins_with_m.group(2)
+            has_colon = bool(begins_with_m.group(3))
+
+            raw_parts = _split_respecting_delimiters(defaults_str, ",")
+            field_pairs = []
+            for part in raw_parts:
+                if "=" in part:
+                    f, def_expr = part.split("=", 1)
+                    field_pairs.append((f.strip(), def_expr.strip()))
+                else:
+                    field_pairs.append((part.strip(), "None"))
+
+            params = ", ".join(f"{f}=None" for f, _ in field_pairs)
+            emit(f"{indent}class {cname}(DoomEntity):", line_idx)
+            emit(f"{indent}    to init with {params}:", line_idx)
+            for f, def_expr in field_pairs:
+                emit(f"{indent}        if {f} is not None:", line_idx)
+                emit(f"{indent}            self.{f} = {f}", line_idx)
+                emit(f"{indent}        else:", line_idx)
+                emit(f"{indent}            self.{f} = {def_expr}", line_idx)
+            continue
+
+        # Declarative Entity: a Person has name, age / Person has name, age
         ent_schema_m = re.match(
             r"^(?:(?:a|an)\s+)?([A-Z]\w*)\s+has\s+([A-Za-z_][A-Za-z0-9_,\s]*)$",
             code.strip(),
@@ -2421,7 +2484,7 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
             cname = ent_schema_m.group(1)
             raw_fields = [f.strip() for f in ent_schema_m.group(2).split(",") if f.strip()]
             params = ", ".join(f"{f}=None" for f in raw_fields)
-            emit(f"{indent}class {cname}:", line_idx)
+            emit(f"{indent}class {cname}(DoomEntity):", line_idx)
             emit(f"{indent}    to init with {params}:", line_idx)
             for f in raw_fields:
                 emit(f"{indent}        self.{f} = {f}", line_idx)

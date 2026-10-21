@@ -38,3 +38,21 @@ def test_entity_inverse_assignment_sync():
 
     o.user = u
     assert o in u.orders
+
+
+def test_entity_begins_with_defaults():
+    source = """
+a BankAccount begins with balance = 100, status = "active", transactions = []
+
+create a BankAccount into acc1
+create a BankAccount with balance 500 into acc2
+
+add 50 to acc1.transactions
+"""
+    env = execute(source)
+    assert env["acc1"].balance == 100
+    assert env["acc1"].status == "active"
+    assert env["acc1"].transactions == [50]
+    assert env["acc2"].balance == 500
+    assert env["acc2"].transactions == []
+

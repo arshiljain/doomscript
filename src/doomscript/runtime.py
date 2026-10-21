@@ -66,6 +66,17 @@ from doomscript.exceptions import (
 
 def make_entity(entity_type_name: str, **kwargs):
     """Creates a class instance if type exists in scope, or a typed Record otherwise."""
+    import inspect
+    frame = inspect.currentframe()
+    if frame and frame.f_back:
+        caller_scope = dict(frame.f_back.f_globals)
+        caller_scope.update(frame.f_back.f_locals)
+        cls = caller_scope.get(entity_type_name)
+        if cls and callable(cls):
+            try:
+                return cls(**kwargs)
+            except Exception:
+                pass
     cls = globals().get(entity_type_name)
     if cls and callable(cls):
         try:
