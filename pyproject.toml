@@ -67,3 +67,6 @@ where = ["src"]
 "doomscript" = ["grammar/*.lark", "**/*.lark"]
 "doomscript.grammar" = ["*.lark"]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+

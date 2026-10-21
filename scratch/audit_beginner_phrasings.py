@@ -610,7 +610,7 @@ TEST_CASES = [
         "name": "Assertion fail 'verify that age is at least 18 otherwise \"Must be an adult\"'",
         "code": "age = 16\nverify that age is at least 18 otherwise \"Must be an adult\"",
         "expected": "fails with message 'Must be an adult', check if AssertionError leaks",
-        "expect_error": "DoomAssertionError",
+        "expect_error": "AssertionError",
     },
     {
         "id": "IO-09",

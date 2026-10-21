@@ -79,27 +79,27 @@ class DoomCompilerWarning(UserWarning):
     pass
 
 
-class DoomAssertionError(DoomError):
+class DoomAssertionError(DoomError, AssertionError):
     """Raised when a verification/assertion check fails."""
     pass
 
 
-class DoomIndexError(DoomError):
+class DoomIndexError(DoomError, IndexError):
     """Raised when an indexing operation is out of bounds."""
     pass
 
 
-class DoomTypeError(DoomError):
+class DoomTypeError(DoomError, TypeError):
     """Raised when an operation is performed on incompatible types."""
     pass
 
 
-class DoomValueError(DoomError):
+class DoomValueError(DoomError, ValueError):
     """Raised when an operation receives an invalid argument value."""
     pass
 
 
-class DoomAttributeError(DoomError):
+class DoomAttributeError(DoomError, AttributeError):
     """Raised when accessing a missing object attribute or record field."""
     pass
 

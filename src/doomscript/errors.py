@@ -533,7 +533,7 @@ def format_syntax_error(
                 col=col_no,
             )
     else:
-        raw_line_no = getattr(err, "line", 1)
+        raw_line_no = getattr(err, "line", 1) or 1
         col_no = getattr(err, "column", 1) or 1
 
         if line_map is None:
@@ -543,7 +543,7 @@ def format_syntax_error(
             except Exception:
                 line_map = {}
 
-        line_no = line_map.get(raw_line_no, raw_line_no) if line_map else raw_line_no
+        line_no = (line_map.get(raw_line_no, raw_line_no) if line_map else raw_line_no) or 1
         lines = source.splitlines()
 
         source_line = ""

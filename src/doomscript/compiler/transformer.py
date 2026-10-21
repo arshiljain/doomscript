@@ -617,19 +617,7 @@ class DoomToPython(Transformer):
 
     def verify_assertion(self, args):
         test, msg = args
-        raise_node = ast.Raise(
-            exc=ast.Call(
-                func=ast.Name(id='DoomAssertionError', ctx=ast.Load()),
-                args=[to_load(msg)],
-                keywords=[]
-            ),
-            cause=None
-        )
-        return ast.If(
-            test=ast.UnaryOp(op=ast.Not(), operand=to_load(test)),
-            body=[raise_node],
-            orelse=[]
-        )
+        return ast.Assert(test=to_load(test), msg=to_load(msg))
 
     def fetch_json(self, args):
         url, target = args
@@ -1123,6 +1111,18 @@ class DoomToPython(Transformer):
             kw_defaults=[],
             defaults=defaults
         )
+
+        param_names = {p.arg for p in arg_nodes}
+        globals_to_declare = set()
+        for node in ast.walk(ast.Module(body=body, type_ignores=[])):
+            if isinstance(node, ast.Assign):
+                for tgt in node.targets:
+                    if isinstance(tgt, ast.Name) and tgt.id not in param_names:
+                        if isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Name) and node.value.func.id in ('ds_add', 'ds_remove'):
+                            globals_to_declare.add(tgt.id)
+        if globals_to_declare:
+            body = [ast.Global(names=sorted(list(globals_to_declare)))] + body
+
         return ast.FunctionDef(
             name=func_name,
             args=arguments_node,

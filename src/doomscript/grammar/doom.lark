@@ -405,7 +405,7 @@ count_expr: COUNT_OF factor -> count_of
 call_expr: atom "(" [call_arg_list] ")" -> call_expr
 
 ?atom: atom "." NAME -> attr_access
-     | atom "'s" NAME -> possessive
+     | atom _POSSESSIVE NAME -> possessive
      | call_expr
      | atom "[" subscript_index "]" -> subscript_expr
      | base_atom
@@ -453,7 +453,7 @@ brace_item: expr ":" expr -> dict_pair
 
 ?target: ident            -> target_var
        | atom "." NAME    -> target_attr
-       | atom "'s" NAME   -> target_attr
+       | atom _POSSESSIVE NAME   -> target_attr
        | atom "[" subscript_index "]" -> target_subscript
 
 // Lexer & Whitespace rules
@@ -462,13 +462,14 @@ _NEWLINE: ( /\r?\n[\t ]*/ | COMMENT )+
 %ignore COMMENT
 %declare _INDENT _DEDENT
 
+_POSSESSIVE.5: /'s\b|’s\b/
 NAME: /[^\W\d]\w*/
 COMMENT: /#[^\n]*/
 NUMBER: /\d+(\.\d+)?([eE][+-]?\d+)?/
 STRING: /"""[\s\S]*?"""|'''[\s\S]*?'''|"([^"\r\n\\]|\\.)*"|'([^'\r\n\\]|\\.)*'/
 
 SORTED_OF.3: /sort(ed)?\s+of/
-REVERSED_OF.3: /reverse(d)?\s+of/
+REVERSED_OF.3: /reverse(d)?\s+(of|in)/
 ROUND_OF.3: /round(ed)?\s+of/
 UNIQUE_OF.3: /unique(\s+items)?\s+of/
 SUM_OF.3: /(sum|total)\s+of/

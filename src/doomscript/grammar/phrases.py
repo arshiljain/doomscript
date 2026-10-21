@@ -446,6 +446,14 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         flags=re.IGNORECASE
     )
 
+    # Expression reverse: reversed <var> -> reversed of <var>
+    masked = re.sub(
+        r"\breversed\s+(?!of\b)(?!in\b)([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)(?!\s*[\(=])\b",
+        r"reversed of \1",
+        masked,
+        flags=re.IGNORECASE
+    )
+
     # Desugar data operations to canonical expression assignments
     masked = re.sub(
         r"^\s*split\s+(.+?)\s+by\s+(.+?)\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
@@ -496,7 +504,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         flags=re.IGNORECASE
     )
     masked = re.sub(
-        r"^\s*sort\s+(.+?)\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
+        r"^\s*sort\s+(?!.*\bby\b)(.+?)\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
         r"set \2 to sorted of \1",
         masked,
         flags=re.IGNORECASE
@@ -1478,7 +1486,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
                 kwargs.append(f'{m_f.group(1)}="{m_f.group(2).lower()}"')
         masked = f'orm_define("{ename}", {", ".join(kwargs)})'
 
-    orm_save_m = re.match(r"^(?:save\s+new|create\s+(?:a|an\s+)?)\s*([A-Za-z_]\w*)\s+with\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    orm_save_m = re.match(r"^(?:save\s+new|create\s+(?:a\s+|an\s+)?)\s*(?!jwt\b)([A-Za-z_]\w*)\s+with\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
     if orm_save_m:
         ename = orm_save_m.group(1)
         vals_str = orm_save_m.group(2)

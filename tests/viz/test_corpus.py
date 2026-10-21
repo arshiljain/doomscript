@@ -4,6 +4,17 @@ from pathlib import Path
 import pytest
 from doomscript.compiler.engine import execute
 
+try:
+    import lets_plot
+    HAS_LETS_PLOT = True
+except ImportError:
+    HAS_LETS_PLOT = False
+
+pytestmark = pytest.mark.skipif(
+    not HAS_LETS_PLOT,
+    reason="Optional visualization dependency 'lets_plot' is not installed",
+)
+
 CORPUS_DIR = Path(__file__).parent / "corpus"
 CORPUS_FILES = sorted(list(CORPUS_DIR.glob("*.doom")))
 
