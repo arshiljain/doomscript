@@ -1446,6 +1446,90 @@ def extract_json_field(source: Any, field_path: str) -> Any:
     return cur
 
 
+def load_json_file(filepath: str) -> Any:
+    """Reads a JSON file from disk into a Record, list of Records, or primitive data."""
+    p = Path(str(filepath))
+    if not p.exists():
+        raise DoomFileNotFoundError(f"File not found: '{filepath}'")
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict):
+            return Record(data)
+        elif isinstance(data, list):
+            return [Record(item) if isinstance(item, dict) else item for item in data]
+        return data
+    except DoomFileNotFoundError:
+        raise
+    except Exception as e:
+        raise DoomRuntimeError(f"Failed to load JSON file '{filepath}': {e}") from e
+
+
+def summarize_data(table: Any, metric_col: str, group_col: str, agg_fn: str = "sum") -> List[Record]:
+    """
+    Groups tabular records by group_col and computes aggregation (sum, avg/average/mean, count, min, max)
+    on metric_col, returning a list of summary Records.
+    """
+    if table is None:
+        return []
+
+    rows = list(table)
+    if not rows:
+        return []
+
+    metric_key = str(metric_col).strip("'\"")
+    group_key = str(group_col).strip("'\"")
+    fn = str(agg_fn).lower().strip("'\"")
+
+    grouped: Dict[Any, List[Any]] = {}
+    for row in rows:
+        if isinstance(row, dict):
+            gk = row.get(group_key)
+            val = row.get(metric_key, 0)
+        elif isinstance(row, Record):
+            gk = row.get(group_key)
+            val = row.get(metric_key, 0)
+        else:
+            gk = getattr(row, group_key, None)
+            val = getattr(row, metric_key, 0)
+
+        if gk is not None:
+            grouped.setdefault(gk, []).append(val)
+
+    summaries = []
+    for g_val, vals in grouped.items():
+        num_vals = []
+        for v in vals:
+            try:
+                num_vals.append(float(v))
+            except (ValueError, TypeError):
+                pass
+
+        if fn in ("sum", "total"):
+            res_val = sum(num_vals) if num_vals else 0
+            if all(v.is_integer() for v in num_vals):
+                res_val = int(res_val)
+        elif fn in ("avg", "average", "mean"):
+            res_val = round(sum(num_vals) / len(num_vals), 4) if num_vals else 0.0
+        elif fn in ("count", "length", "len"):
+            res_val = len(vals)
+        elif fn in ("min", "minimum", "lowest"):
+            res_val = min(num_vals) if num_vals else 0
+        elif fn in ("max", "maximum", "highest"):
+            res_val = max(num_vals) if num_vals else 0
+        else:
+            res_val = sum(num_vals) if num_vals else 0
+
+        rec = Record({
+            group_key: g_val,
+            metric_key: res_val,
+            "count": len(vals)
+        })
+        summaries.append(rec)
+
+    return summaries
+
+
 def combine_tables(left: list, right: list, on_key: str, how: str = "inner") -> list:
     """
     Performs a relational join on two lists of dictionaries/Records.

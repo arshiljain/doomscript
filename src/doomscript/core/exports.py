@@ -230,6 +230,8 @@ CORE_EXPORT_NAMES: frozenset[str] = frozenset([
     "extract_html_links",
     "extract_html_text",
     "extract_json_field",
+    "load_json_file",
+    "summarize_data",
     "extract_zip_archive",
     "f_cdf",
     "f_sf",

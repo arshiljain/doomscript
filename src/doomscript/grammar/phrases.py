@@ -1185,6 +1185,15 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     # Ergonomic timing
     masked = re.sub(r"^\s*(?:sleep|delay|pause)\s+(?!for\b)(.+)$", r"wait \1", masked, flags=re.IGNORECASE)
 
+    # Conversational Data File Ingestion:
+    load_csv_m = re.match(r"^\s*load\s+csv\s+(?:from\s+)?(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if load_csv_m:
+        masked = f"read csv file {load_csv_m.group(1).strip()} into {load_csv_m.group(2).strip()}"
+
+    load_json_m = re.match(r"^\s*load\s+json\s+(?:from\s+)?(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if load_json_m:
+        masked = f"{load_json_m.group(2).strip()} = load_json_file({load_json_m.group(1).strip()})"
+
     # Ergonomic File I/O (omitting 'file' keyword)
     read_m = re.match(r"^\s*read\s+(?!file\b|csv\b|records\b)(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
     if read_m:
@@ -1303,6 +1312,23 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
             masked = f"set {target_var} to summary_of({val_expr})"
 
     masked = re.sub(r"\b(?:reversed|reverse)\s+in\b", "reversed of", masked, flags=re.IGNORECASE)
+
+    # Conversational Data Summaries:
+    summ_col_m = re.match(
+        r"^\s*summarize\s+column\s+(.+?)\s+by\s+(.+?)\s+(?:in|from)\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+        masked,
+        re.IGNORECASE,
+    )
+    if summ_col_m:
+        masked = f"{summ_col_m.group(4).strip()} = summarize_data({summ_col_m.group(3).strip()}, {summ_col_m.group(1).strip()}, {summ_col_m.group(2).strip()}, agg_fn='sum')"
+
+    summ_fn_m = re.match(
+        r"^\s*summarize\s+(.+?)\s+by\s+(.+?)\s+calculating\s+([A-Za-z_]\w*)\s+of\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+        masked,
+        re.IGNORECASE,
+    )
+    if summ_fn_m:
+        masked = f"{summ_fn_m.group(5).strip()} = summarize_data({summ_fn_m.group(1).strip()}, {summ_fn_m.group(4).strip()}, {summ_fn_m.group(2).strip()}, agg_fn='{summ_fn_m.group(3).strip().lower()}')"
 
     # Ergonomic String & Collection Operations
     words_m = re.match(r"^\s*words\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
@@ -2815,6 +2841,23 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
                 emit(f"{indent}write csv {target_var} into file {path_str}", line_idx)
             else:
                 emit(f"{indent}write {target_var} into file {path_str}", line_idx)
+            continue
+
+        # Conversational single-line chart: plot <data> as [a] <geom> chart [titled <title>] [into <target>]
+        plot_chart_m = re.match(
+            r"^plot\s+([A-Za-z_]\w*)\s+as\s+(?:a\s+)?([A-Za-z_]\w+)\s+chart(?:\s+titled\s+(.+?))?(?:\s+into\s+([A-Za-z_]\w*))?$",
+            code,
+            re.IGNORECASE,
+        )
+        if plot_chart_m:
+            dataset = plot_chart_m.group(1)
+            geom = plot_chart_m.group(2).lower()
+            title_part = plot_chart_m.group(3)
+            target = plot_chart_m.group(4) or "plot"
+            if title_part:
+                emit(f'{indent}set {target} to PlotBuilder({dataset}, title={title_part.strip()}).draw("{geom}")', line_idx)
+            else:
+                emit(f'{indent}set {target} to PlotBuilder({dataset}).draw("{geom}")', line_idx)
             continue
 
         # 4. Level 2 single-line: plot <data> as <geom> with <params> [into <target>]

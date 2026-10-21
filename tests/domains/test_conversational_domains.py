@@ -117,3 +117,66 @@ extract field "user.profile.score" from raw into user_score
     env = execute(code)
     assert env["user_name"] == "Alice"
     assert env["user_score"] == 98
+
+
+# ---------------------------------------------------------------------------
+# Task 2: Data & Analytics Conversational Tests
+# ---------------------------------------------------------------------------
+
+def test_conversational_load_csv_and_json(tmp_path):
+    csv_file = tmp_path / "sales.csv"
+    csv_file.write_text("region,revenue,units\nNorth,500,10\nSouth,300,5\nNorth,700,15\nSouth,400,8\n", encoding="utf-8")
+    json_file = tmp_path / "config.json"
+    json_file.write_text('{"app": "DoomScript", "version": "0.6.0"}', encoding="utf-8")
+
+    csv_path_str = str(csv_file).replace("\\", "/")
+    json_path_str = str(json_file).replace("\\", "/")
+
+    code = f"""
+load csv from "{csv_path_str}" into sales_table
+load json from "{json_path_str}" into app_config
+"""
+    env = execute(code)
+    assert "sales_table" in env
+    assert len(env["sales_table"]) == 4
+    assert env["app_config"]["version"] == "0.6.0"
+
+
+def test_conversational_summarize_data(tmp_path):
+    csv_file = tmp_path / "sales.csv"
+    csv_file.write_text("region,revenue,units\nNorth,500,10\nSouth,300,5\nNorth,700,15\nSouth,400,8\n", encoding="utf-8")
+    csv_path_str = str(csv_file).replace("\\", "/")
+
+    code = f"""
+load csv from "{csv_path_str}" into sales_table
+summarize column "revenue" by "region" in sales_table into regional_sales
+summarize sales_table by "region" calculating average of "revenue" into avg_sales
+"""
+    env = execute(code)
+    assert "regional_sales" in env
+    rs = env["regional_sales"]
+    # Check that North sum is 1200 and South sum is 700
+    by_region = {r["region"]: r["revenue"] for r in rs}
+    assert by_region["North"] == 1200
+    assert by_region["South"] == 700
+
+    avg_rs = env["avg_sales"]
+    avg_by_region = {r["region"]: r["revenue"] for r in avg_rs}
+    assert avg_by_region["North"] == 600.0
+    assert avg_by_region["South"] == 350.0
+
+
+def test_conversational_plot_chart(tmp_path):
+    csv_file = tmp_path / "sales.csv"
+    csv_file.write_text("region,revenue\nNorth,1200\nSouth,700\n", encoding="utf-8")
+    csv_path_str = str(csv_file).replace("\\", "/")
+
+    code = f"""
+load csv from "{csv_path_str}" into regional_sales
+plot regional_sales as a bar chart titled "Q4 Regional Sales" into my_chart
+"""
+    env = execute(code)
+    assert "my_chart" in env
+    chart = env["my_chart"]
+    assert chart._labels.title == "Q4 Regional Sales"
+
