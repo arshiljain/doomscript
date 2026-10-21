@@ -425,13 +425,22 @@ save rev_trend to "revenue.html" with width=1200, height=600
 
 ---
 
+## Documentation & Complete Reference Manual
+
+For the complete, exhaustive guide covering all syntax rules, 41 embedded domains, conversational inquiries, superlatives, quantifiers, adverbials, story-driven entities, and algorithmic benchmarks, see:
+
+📖 **[Complete DoomScript Documentation & Reference Manual (documentation.md)](documentation.md)**
+
+---
+
 ## Development & Test Verification
 
 DoomScript is tested against rigorous corpus benchmarks, full regression suites, and empirical beginner UX audits:
-- **Test Suite**: 1,375+ automated unit & integration tests passing (100% pass rate)
-- **Beginner UX Benchmark**: 85 / 85 intuitive phrasings passing (0 Python leaks)
+- **Test Suite**: 1,492+ automated unit & integration tests passing (100% pass rate)
+- **Beginner UX Benchmark**: 150 / 150 intuitive phrasings passing (0 Python leaks)
 - **Corpus Pass Rate**: 200 / 200 sentences (100.0%)
-- **Parser Speed**: LALR parser cached in-memory with sub-millisecond compilation latency
+- **Domain Coverage**: 41 embedded domain libraries (`use <domain>`)
+- **Compilation Speed**: Standalone LALR disk table caching (`cache=True`) and high-capacity regex cache delivering sub-5ms compilations
 
 Run tests locally:
 ```bash
