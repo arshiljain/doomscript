@@ -91,7 +91,7 @@ STATEMENT_START_KEYWORDS = {
     "set", "let", "make", "put", "assign", "store", "save", "initialize", "reset",
     "suppose", "assume", "remember", "keep", "find", "what", "does", "deposit", "withdraw",
     "increase", "decrease", "increment", "decrement", "bump", "double", "halve", "triple",
-    "multiply", "divide",
+    "multiply", "divide", "subtract",
     "if", "unless", "while", "until", "repeat", "for", "loop",
     "try", "attempt", "return", "give", "hand", "yield", "with",
     "to", "def", "how", "define", "function", "require", "ensure", "verify", "assert", "check",
@@ -118,7 +118,7 @@ CORE_COMMAND_VERBS: List[str] = [
     "to", "return", "ask", "read", "write", "append",
     "sort", "reverse", "group", "filter",
     "trim", "uppercase", "lowercase", "capitalize",
-    "round", "clamp", "convert",
+    "round", "clamp", "convert", "subtract",
     "try", "attempt", "verify", "require", "ensure",
     "fetch", "download", "post", "send",
     "spawn", "wait", "start", "stop", "pause",
@@ -1807,6 +1807,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"^\s*increment\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s*$", r"increase \1 by 1", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*decrement\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s+by\s+(.+)$", r"decrease \1 by \2", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*decrement\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s*$", r"decrease \1 by 1", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*subtract\s+(.+?)\s+from\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s*$", r"decrease \2 by \1", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*bump\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s+by\s+(.+)$", r"increase \1 by \2", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*bump\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s*$", r"increase \1 by 1", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*multiply\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s+by\s+(.+)$", r"set \1 to \1 * \2", masked, flags=re.IGNORECASE)
@@ -2777,6 +2778,7 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
     match_stack: List[Dict[str, Any]] = []
     plot_stack: List[Dict[str, Any]] = []
     domain_block_stack: List[Dict[str, Any]] = []
+    scoped_domain_stack: List[Tuple[int, str]] = []
     in_research_mode: bool = False
 
     from doomscript.domains.registry import get_domain_registry
@@ -2810,6 +2812,11 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
         # Pop domain_block_stack if indentation returned to parent level
         while domain_block_stack and indent_len <= domain_block_stack[-1]["indent"]:
             _close_domain_block(domain_block_stack.pop(), line_idx)
+
+        # Pop scoped_domain_stack if indentation returned to parent level
+        while scoped_domain_stack and indent_len <= scoped_domain_stack[-1][0]:
+            _, d_to_pop = scoped_domain_stack.pop()
+            reg.deactivate(d_to_pop)
 
         # If inside active domain block, buffer line and continue
         if domain_block_stack:
@@ -2853,27 +2860,34 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
 
         code = canonicalize_synonyms(code)
 
-        # Domain Activation: use <domain>, using <domain>, import <domain>, enable <domain>
+        # Domain Activation: use <domain>, using <domain>, import <domain>, enable <domain> (supports comma and 'and' lists)
         use_domain_m = re.match(
-            r"^(?:use|using|import|enable)\s+([A-Za-z_]\w*)$",
+            r"^(?:use|using|import|enable)\s+(.+)$",
             code.strip(),
             re.IGNORECASE,
         )
         if use_domain_m:
-            domain_name = use_domain_m.group(1).lower()
-            try:
-                from doomscript.domains.registry import get_domain_registry
-                reg = get_domain_registry()
-                if reg.has_domain(domain_name):
-                    reg.activate(domain_name)
-                    dom = reg.get_domain(domain_name)
-                    if dom and dom.name == "research":
-                        in_research_mode = True
-            except Exception:
-                pass
-            if domain_name == "research":
-                in_research_mode = True
-            emit(f"{indent}# use {domain_name}", line_idx)
+            raw_domains = use_domain_m.group(1).strip()
+            domain_tokens = re.split(r"\s*,\s*|\s+and\s+", raw_domains)
+            activated_any = False
+            for d_tok in domain_tokens:
+                d_name = d_tok.strip().lower()
+                if not d_name:
+                    continue
+                try:
+                    from doomscript.domains.registry import get_domain_registry
+                    reg = get_domain_registry()
+                    if reg.has_domain(d_name):
+                        reg.activate(d_name)
+                        activated_any = True
+                        dom = reg.get_domain(d_name)
+                        if dom and dom.name == "research":
+                            in_research_mode = True
+                except Exception:
+                    pass
+                if d_name == "research":
+                    in_research_mode = True
+            emit(f"{indent}# use {raw_domains}", line_idx)
             continue
 
         # Declarative Entity with initial lifecycle:
@@ -2982,6 +2996,16 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
             emit(f"{indent}with db_transaction():", line_idx)
             continue
 
+        # Scoped domain block: in <domain>: or within <domain>:
+        scoped_dom_m = re.match(r"^(?:in|within)\s+([A-Za-z_]\w*)\s*:$", code.strip(), re.IGNORECASE)
+        if scoped_dom_m:
+            dom_name = scoped_dom_m.group(1).lower()
+            if reg.has_domain(dom_name):
+                reg.activate(dom_name)
+                scoped_domain_stack.append((indent_len, dom_name))
+                emit(f"{indent}if true:  # in {dom_name}", line_idx)
+                continue
+
         # Check domain block header (e.g. pipeline "name" from src into target:)
         if code.rstrip().endswith(":"):
             matched_domain_block = reg.find_domain_for_block(code)
@@ -2997,11 +3021,15 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
                 continue
 
         # Check domain single-line statement (Level 1 / Level 2 inspect, clean, join, etc.)
-        parsed_domain_code = reg.try_parse_domain_line(code, line_idx)
-        if parsed_domain_code is not None:
-            norm_domain_code = normalize_statement_text(parsed_domain_code, scope, line_idx)
-            emit(f"{indent}{norm_domain_code}", line_idx)
-            continue
+        # Skip if line is a compound chained sentence so it splits into sub-statements first
+        masked_check, _ = mask_strings(code)
+        is_chained = bool(re.search(r",\s*(?:and\s+then|then)\s+|\s+and\s+then\s+|;\s*", masked_check, re.IGNORECASE))
+        if not is_chained:
+            parsed_domain_code = reg.try_parse_domain_line(code, line_idx)
+            if parsed_domain_code is not None:
+                norm_domain_code = normalize_statement_text(parsed_domain_code, scope, line_idx)
+                emit(f"{indent}{norm_domain_code}", line_idx)
+                continue
 
         # If in research mode, apply declarative research phrase normalization first
         if in_research_mode:
@@ -3496,12 +3524,25 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
         if compound_chain_m:
             first_stmt = compound_chain_m.group(1).strip()
             second_hdr = compound_chain_m.group(2).strip()
-            norm_first = normalize_statement_text(first_stmt, scope, line_idx)
-            assigned_first = extract_assigned_var(norm_first)
-            if assigned_first:
-                scope.record_assignment(assigned_first)
+            first_masked, first_strings = mask_strings(first_stmt)
+            pre_chain_parts = re.split(r"\s*(?:,\s*and\s+then|,\s*then|\s+and\s+then|;)\s+", first_masked, flags=re.IGNORECASE)
+            for part in pre_chain_parts:
+                for dp in re.split(r"\.\s+", part):
+                    cleaned = dp.strip()
+                    if cleaned.endswith("."):
+                        cleaned = cleaned[:-1].rstrip()
+                    if not cleaned:
+                        continue
+                    unmasked_part = unmask_strings(cleaned, first_strings)
+                    dom_parsed = reg.try_parse_domain_line(unmasked_part, line_idx)
+                    target_part = dom_parsed if dom_parsed is not None else unmasked_part
+                    norm_part = normalize_statement_text(target_part, scope, line_idx)
+                    if norm_part:
+                        assigned = extract_assigned_var(norm_part)
+                        if assigned:
+                            scope.record_assignment(assigned)
+                        emit(f"{indent}{norm_part}", line_idx)
             norm_second = normalize_statement_text(second_hdr, scope, line_idx)
-            emit(f"{indent}{norm_first}", line_idx)
             emit(f"{indent}{norm_second}", line_idx)
             continue
 
@@ -3534,8 +3575,8 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
                 flags=re.IGNORECASE,
             )
 
-        # 1. Statement chaining via 'and then'
-        chain_parts = re.split(r"\s*(?:,\s*and\s+then|,\s*then|\s+and\s+then)\s+", masked_code, flags=re.IGNORECASE)
+        # 1. Statement chaining via 'and then', 'then', and semicolons
+        chain_parts = re.split(r"\s*(?:,\s*and\s+then|,\s*then|\s+and\s+then|;)\s+", masked_code, flags=re.IGNORECASE)
 
         sub_statements: List[str] = []
         for part in chain_parts:
@@ -3553,8 +3594,13 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
         # Process each statement
         for s in sub_statements:
             unmasked_s = unmask_strings(s, code_strings)
-            norm_s = normalize_statement_text(unmasked_s, scope, line_idx)
+            dom_parsed = reg.try_parse_domain_line(unmasked_s, line_idx)
+            target_s = dom_parsed if dom_parsed is not None else unmasked_s
+            norm_s = normalize_statement_text(target_s, scope, line_idx)
             if norm_s:
+                assigned = extract_assigned_var(norm_s)
+                if assigned:
+                    scope.record_assignment(assigned)
                 emit(f"{indent}{norm_s}", line_idx)
 
     while pending_injections:
@@ -3578,6 +3624,10 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
 
     while domain_block_stack:
         _close_domain_block(domain_block_stack.pop(0), len(lines))
+
+    while scoped_domain_stack:
+        _, d_to_pop = scoped_domain_stack.pop(0)
+        reg.deactivate(d_to_pop)
 
     res_str = "\n".join(output_lines) + ("\n" if source.endswith("\n") else "")
     return res_str, line_map

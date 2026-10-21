@@ -393,6 +393,38 @@ class DomainRegistry:
                 except Exception:
                     pass
 
+        # 3. Check unambiguous inactive domains (Zero-Import auto-routing)
+        if len(tokens) > 1:
+            w2 = f"{tokens[0].lower()} {tokens[1].lower()}"
+            candidates = self._verb_index.get(w2, [])
+            if len(candidates) == 1:
+                dom = candidates[0]
+                try:
+                    res = dom.parser.parse_inspect(line, line_no)
+                    if res is None:
+                        res = dom.parser.parse_operation(line, line_no)
+                    if res is not None:
+                        self.activate(dom.name)
+                        self._last_parsed = (line, line_no, dom, res)
+                        return res
+                except Exception:
+                    pass
+        w1 = tokens[0].lower()
+        if w1 not in CORE_VERBS and w1 not in _NON_DOMAIN_STARTS:
+            candidates = self._verb_index.get(w1, [])
+            if len(candidates) == 1:
+                dom = candidates[0]
+                try:
+                    res = dom.parser.parse_inspect(line, line_no)
+                    if res is None:
+                        res = dom.parser.parse_operation(line, line_no)
+                    if res is not None:
+                        self.activate(dom.name)
+                        self._last_parsed = (line, line_no, dom, res)
+                        return res
+                except Exception:
+                    pass
+
         return None
 
     def find_domain_for_line(self, line: str, active_only: bool = True) -> Optional[DomainContract]:
