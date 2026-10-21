@@ -306,3 +306,30 @@ def test_runtime_set_reshaping():
 
     records = [{"age": 20}, {"age": 30}]
     assert ds_pluck(records, "age") == [20, 30]
+
+
+# ---------------------------------------------------------------------------
+# Phase 4, Task 4.2: Relational Set Reshaping Syntax
+# ---------------------------------------------------------------------------
+
+def test_relational_set_syntax():
+    from doomscript.compiler.engine import execute
+
+    code = """
+students = ["Alice", "Bob"]
+mentors = ["Dr. Smith", "Dr. Jones"]
+pair students with mentors into assignments
+pair students with mentors into dictionary mentor_map
+
+numbers = [1, 2, 3, 4, 5, 6]
+partition numbers into evens, odds where x is even
+
+matrix = [[10, 20], [30, 40]]
+flatten matrix into flat_list
+"""
+    env = execute(code)
+    assert env["assignments"] == [("Alice", "Dr. Smith"), ("Bob", "Dr. Jones")]
+    assert env["mentor_map"] == {"Alice": "Dr. Smith", "Bob": "Dr. Jones"}
+    assert env["evens"] == [2, 4, 6]
+    assert env["odds"] == [1, 3, 5]
+    assert env["flat_list"] == [10, 20, 30, 40]

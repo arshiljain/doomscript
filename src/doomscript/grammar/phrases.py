@@ -651,6 +651,49 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"\bnone\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+is\s+negative\b", r"ds_none_negative(\1)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bnone\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+is\s+zero\b", r"ds_none_zero(\1)", masked, flags=re.IGNORECASE)
 
+    _reserved_query_words = {'and', 'or', 'not', 'is', 'in', 'true', 'false', 'none', 'item', 'x', 'at', 'least', 'most', 'greater', 'less', 'than', 'between', 'outside', 'empty', 'even', 'odd', 'positive', 'negative', 'zero'}
+
+    def _bind_contextual_attrs(cond: str, var_name: str) -> str:
+        if re.search(r"\b(x|item)\b", cond):
+            return cond
+        def _repl(m):
+            w = m.group(1)
+            if w.lower() in _reserved_query_words or w.startswith("__STR_"):
+                return m.group(0)
+            return f"ds_attr({var_name}, '{w}')"
+        return re.sub(r"(?<![\w\.])([A-Za-z_]\w*)(?!\s*\()", _repl, cond)
+
+    # Phase 4, Task 4.2: Relational Set Reshaping Syntax (pair, partition, flatten)
+    pair_dict_m = re.match(r"^\s*pair\s+(.+?)\s+with\s+(.+?)\s+into\s+dictionary\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if pair_dict_m:
+        e1 = pair_dict_m.group(1).strip()
+        e2 = pair_dict_m.group(2).strip()
+        tgt = pair_dict_m.group(3).strip()
+        masked = f"set {tgt} to ds_pair({e1}, {e2}, as_dict=True)"
+
+    pair_m = re.match(r"^\s*pair\s+(?!with\b)(.+?)\s+with\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if pair_m:
+        e1 = pair_m.group(1).strip()
+        e2 = pair_m.group(2).strip()
+        tgt = pair_m.group(3).strip()
+        masked = f"set {tgt} to ds_pair({e1}, {e2})"
+
+    part_m = re.match(r"^\s*partition\s+(.+?)\s+into\s+([A-Za-z_]\w*)(?:\s*,\s*|\s+and\s+|\s*,\s*and\s+)([A-Za-z_]\w*)\s+where\s+(.+?)$", masked, re.IGNORECASE)
+    if part_m:
+        coll = part_m.group(1).strip()
+        t1 = part_m.group(2).strip()
+        t2 = part_m.group(3).strip()
+        cond = part_m.group(4).strip()
+        var_name = "x" if re.search(r"\bx\b", cond) else "item"
+        bound_cond = _bind_contextual_attrs(cond, var_name)
+        masked = f"{t1}, {t2} = ds_partition({coll}, lambda {var_name}: {bound_cond})"
+
+    flatten_m = re.match(r"^\s*flatten\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if flatten_m:
+        coll = flatten_m.group(1).strip()
+        tgt = flatten_m.group(2).strip()
+        masked = f"set {tgt} to ds_flatten({coll})"
+
     # Phase 3, Task 3.2: Adverbial Statement Qualifiers (retrying, timeout, caching)
     retry_m = re.match(
         r"^\s*(?:call\s+)?(.+?)\s+retrying\s+(\d+)\s+times(?:\s+with\s+(.+?)\s+backoff)?(?:\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?))?\s*$",
@@ -779,17 +822,6 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         masked = f"if ds_none({coll}, lambda x: x is {pred}):"
 
     # Pillar C: Thought Queries & Intuitive Filtering
-    _reserved_query_words = {'and', 'or', 'not', 'is', 'in', 'true', 'false', 'none', 'item', 'x', 'at', 'least', 'most', 'greater', 'less', 'than', 'between', 'outside', 'empty', 'even', 'odd', 'positive', 'negative', 'zero'}
-
-    def _bind_contextual_attrs(cond: str, var_name: str) -> str:
-        if re.search(r"\b(x|item)\b", cond):
-            return cond
-        def _repl(m):
-            w = m.group(1)
-            if w.lower() in _reserved_query_words or w.startswith("__STR_"):
-                return m.group(0)
-            return f"ds_attr({var_name}, '{w}')"
-        return re.sub(r"(?<![\w\.])([A-Za-z_]\w*)(?!\s*\()", _repl, cond)
 
     def _rewrite_keep_only(m):
         coll = m.group(1).strip()
