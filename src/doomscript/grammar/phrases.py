@@ -275,35 +275,85 @@ def canonicalize_synonyms(text: str) -> str:
 
 class ScopeTracker:
     """
-    Maintains a stack of lexical scopes to track the most recently assigned
-    variable for resolving the pronouns 'it' and 'that'.
+    Maintains a stack of lexical scopes to track discourse referents:
+    both singular ('it', 'that', 'its') and plural ('them', 'these', 'those', 'their').
     """
     def __init__(self):
-        # Stack of indent levels and their last assigned variable
-        # [(indent_level, last_var)]
-        self.scopes: List[Dict[str, Any]] = [{"indent": 0, "last_var": None, "diverged": False}]
+        # Stack of indent levels and their discourse referents
+        self.scopes: List[Dict[str, Any]] = [{
+            "indent": 0,
+            "last_var": None,
+            "last_singular": None,
+            "last_plural": None,
+            "diverged": False,
+            "in_class": False,
+        }]
 
     def update_indent(self, indent: int):
         # If indent decreased, pop deeper scopes
         while len(self.scopes) > 1 and self.scopes[-1]["indent"] > indent:
             popped = self.scopes.pop()
-            # If the current parent had no last_var, inherit if not diverged
             if self.scopes[-1]["last_var"] is None and not popped["diverged"]:
                 self.scopes[-1]["last_var"] = popped["last_var"]
+            if self.scopes[-1]["last_singular"] is None and not popped["diverged"]:
+                self.scopes[-1]["last_singular"] = popped["last_singular"]
+            if self.scopes[-1]["last_plural"] is None and not popped["diverged"]:
+                self.scopes[-1]["last_plural"] = popped["last_plural"]
 
-        # If indent increased, push new scope inheriting current last_var
+        # If indent increased, push new scope inheriting current discourse referents
         if indent > self.scopes[-1]["indent"]:
-            self.scopes.append({"indent": indent, "last_var": self.scopes[-1]["last_var"], "diverged": False})
+            self.scopes.append({
+                "indent": indent,
+                "last_var": self.scopes[-1]["last_var"],
+                "last_singular": self.scopes[-1]["last_singular"],
+                "last_plural": self.scopes[-1]["last_plural"],
+                "diverged": False,
+                "in_class": self.scopes[-1]["in_class"],
+            })
 
-    def record_assignment(self, var_name: str):
+    def record_singular(self, var_name: str):
+        self.scopes[-1]["last_singular"] = var_name
         self.scopes[-1]["last_var"] = var_name
+
+    def record_plural(self, var_name: str):
+        self.scopes[-1]["last_plural"] = var_name
+        self.scopes[-1]["last_var"] = var_name
+
+    def record_assignment(self, var_name: str, is_plural: Optional[bool] = None):
+        self.scopes[-1]["last_var"] = var_name
+        if is_plural is True:
+            self.scopes[-1]["last_plural"] = var_name
+        elif is_plural is False:
+            self.scopes[-1]["last_singular"] = var_name
+        else:
+            lower = var_name.lower()
+            if lower.endswith(("s", "list", "array", "collection", "batch", "data", "records", "items", "results", "table")) and not lower.endswith(("is", "ss", "us")):
+                self.scopes[-1]["last_plural"] = var_name
+            else:
+                self.scopes[-1]["last_singular"] = var_name
 
     def mark_diverged(self):
         self.scopes[-1]["diverged"] = True
         self.scopes[-1]["last_var"] = None
+        self.scopes[-1]["last_singular"] = None
+        self.scopes[-1]["last_plural"] = None
 
     def get_last_var(self) -> Optional[str]:
         return self.scopes[-1]["last_var"]
+
+    def get_last_singular(self) -> Optional[str]:
+        return self.scopes[-1]["last_singular"]
+
+    def get_last_plural(self) -> Optional[str]:
+        return self.scopes[-1]["last_plural"]
+
+    @property
+    def in_class(self) -> bool:
+        return self.scopes[-1].get("in_class", False)
+
+    @in_class.setter
+    def in_class(self, val: bool):
+        self.scopes[-1]["in_class"] = val
 
 
 # Helper regex to detect variable assignment targets

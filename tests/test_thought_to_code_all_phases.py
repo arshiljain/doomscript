@@ -32,3 +32,31 @@ def test_runtime_quantifiers():
     assert ds_at_least_n(numbers, 2, lambda x: x >= 6) is True
     assert ds_at_least_n(numbers, 3, lambda x: x >= 6) is False
     assert ds_at_least_n([], 0, lambda x: True) is True
+
+
+# ---------------------------------------------------------------------------
+# Phase 1, Task 1.2: Dual-Referent Discourse Memory
+# ---------------------------------------------------------------------------
+
+def test_scope_tracker_dual_referents():
+    from doomscript.grammar.phrases import ScopeTracker
+
+    tracker = ScopeTracker()
+    assert tracker.get_last_singular() is None
+    assert tracker.get_last_plural() is None
+
+    tracker.record_singular('client')
+    assert tracker.get_last_singular() == 'client'
+
+    tracker.record_plural('orders')
+    assert tracker.get_last_plural() == 'orders'
+    assert tracker.get_last_singular() == 'client'  # Preserved
+
+    # Nested block inherits
+    tracker.update_indent(4)
+    assert tracker.get_last_singular() == 'client'
+    assert tracker.get_last_plural() == 'orders'
+
+    tracker.update_indent(0)
+    assert tracker.get_last_singular() == 'client'
+    assert tracker.get_last_plural() == 'orders'
