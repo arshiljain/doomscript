@@ -219,4 +219,57 @@ set expr_res to pipe "  clean me  " into trim_str then make_upper
     assert env["expr_res"] == "CLEAN ME"
 
 
+# ---------------------------------------------------------------------------
+# Task 5: Deepened Looping & English Quantifiers Tests
+# ---------------------------------------------------------------------------
+
+def test_loop_with_index():
+    source = """
+items = ["apple", "banana", "cherry"]
+indices = []
+collected = []
+for each item and its index in items:
+    add index to indices
+    add item to collected
+"""
+    env = execute(source)
+    assert env["indices"] == [1, 2, 3]
+    assert env["collected"] == ["apple", "banana", "cherry"]
+
+
+def test_down_to_ranges():
+    source = """
+countdown = []
+for each n from 5 down to 1:
+    add n to countdown
+"""
+    env = execute(source)
+    assert env["countdown"] == [5, 4, 3, 2, 1]
+
+
+def test_english_quantifiers():
+    source = """
+nums1 = [2, 4, 6, 8]
+nums2 = [1, 2, -3, 4]
+nums3 = [5, 10, 15]
+
+all_pos = False
+if all of nums1 are positive:
+    all_pos = True
+
+has_neg = False
+if any of nums2 is negative:
+    has_neg = True
+
+no_zeros = False
+if none of nums3 is zero:
+    no_zeros = True
+"""
+    env = execute(source)
+    assert env["all_pos"] is True
+    assert env["has_neg"] is True
+    assert env["no_zeros"] is True
+
+
+
 

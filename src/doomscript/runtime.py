@@ -1021,15 +1021,66 @@ def insert_list(collection, index, item):
     return collection
 
 
-def range_inclusive(start, stop, step=1):
+def range_inclusive(start, stop, step=None):
     """Inclusive range generator for English loops."""
     st = int(start)
     sp = int(stop)
-    s = int(step) if step is not None else 1
+    if step is None:
+        s = 1 if st <= sp else -1
+    else:
+        s = int(step)
     if s > 0:
         return range(st, sp + 1, s)
     else:
         return range(st, sp - 1, s)
+
+
+def ds_all_positive(collection):
+    return all(x > 0 for x in collection)
+
+
+def ds_all_negative(collection):
+    return all(x < 0 for x in collection)
+
+
+def ds_all_even(collection):
+    return all(x % 2 == 0 for x in collection)
+
+
+def ds_all_odd(collection):
+    return all(x % 2 != 0 for x in collection)
+
+
+def ds_any_positive(collection):
+    return any(x > 0 for x in collection)
+
+
+def ds_any_negative(collection):
+    return any(x < 0 for x in collection)
+
+
+def ds_any_even(collection):
+    return any(x % 2 == 0 for x in collection)
+
+
+def ds_any_odd(collection):
+    return any(x % 2 != 0 for x in collection)
+
+
+def ds_any_zero(collection):
+    return any(x == 0 for x in collection)
+
+
+def ds_none_zero(collection):
+    return all(x != 0 for x in collection)
+
+
+def ds_none_negative(collection):
+    return all(x >= 0 for x in collection)
+
+
+def ds_none_positive(collection):
+    return all(x <= 0 for x in collection)
 
 
 def sort_records(collection, field: str, descending: bool = False):

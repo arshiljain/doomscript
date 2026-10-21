@@ -218,7 +218,7 @@ repeat_until_stmt: "repeat" "until" expr ":"? _NEWLINE suite -> repeat_until_stm
 while_stmt: "while" expr ":"? _NEWLINE suite -> repeat_while_stmt
 until_stmt: "until" expr ":"? _NEWLINE suite -> repeat_until_stmt
 for_target: ident ("," ident)* -> for_target_names
-for_range_stmt: "for" ["each"] for_target "from" expr "to" expr ["by" expr] [("where" | "if") expr] ":"? _NEWLINE suite -> for_range_stmt
+for_range_stmt: "for" ["each"] for_target "from" expr ("to" | "down" "to") expr ["by" expr] [("where" | "if") expr] ":"? _NEWLINE suite -> for_range_stmt
 for_where_stmt: "for" ["each"] for_target "in" expr ("where" | "if") expr ":"? _NEWLINE suite -> for_where_stmt
 for_stmt: "for" ["each"] for_target "in" expr ":"? _NEWLINE suite -> for_stmt
 attempt_stmt: "attempt" ":"? _NEWLINE suite "if" "it" "fails" ":"? _NEWLINE suite -> attempt_stmt

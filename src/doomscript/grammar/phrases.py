@@ -513,6 +513,32 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"^\s*(?:make\s+sure\s+that|assert\s+that|assert|check\s+that)\s+(.+?)\s+otherwise\s+(.+)$", r"verify that \1 otherwise \2", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*(?:make\s+sure\s+that|assert\s+that|assert|check\s+that)\s+(.+)$", r'verify that \1 otherwise "Check failed"', masked, flags=re.IGNORECASE)
 
+    # For loop with index: 'for each item and its index in items:'
+    masked = re.sub(
+        r"^\s*for\s+(?:each\s+)?([A-Za-z_]\w*)\s+and\s+(?:its|their|his|her)\s+index\s+in\s+(.+?):?$",
+        r"for each index, \1 in ds_enumerate(\2):",
+        masked,
+        flags=re.IGNORECASE
+    )
+
+    # Quantifiers: all of <x> are positive/negative/even/odd
+    masked = re.sub(r"\ball\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+are\s+positive\b", r"ds_all_positive(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\ball\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+are\s+negative\b", r"ds_all_negative(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\ball\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+are\s+even\b", r"ds_all_even(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\ball\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+are\s+odd\b", r"ds_all_odd(\1)", masked, flags=re.IGNORECASE)
+
+    # Quantifiers: any of <x> is positive/negative/even/odd/zero
+    masked = re.sub(r"\bany\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+is\s+positive\b", r"ds_any_positive(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bany\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+is\s+negative\b", r"ds_any_negative(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bany\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+is\s+even\b", r"ds_any_even(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bany\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+is\s+odd\b", r"ds_any_odd(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bany\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+is\s+zero\b", r"ds_any_zero(\1)", masked, flags=re.IGNORECASE)
+
+    # Quantifiers: none of <x> is positive/negative/even/odd/zero
+    masked = re.sub(r"\bnone\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+is\s+positive\b", r"ds_none_positive(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bnone\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+is\s+negative\b", r"ds_none_negative(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bnone\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+is\s+zero\b", r"ds_none_zero(\1)", masked, flags=re.IGNORECASE)
+
     # Phase 3: Classes and Instance Attributes
     masked = re.sub(
         r"^\s*define\s+(?:a|an)\s+([A-Za-z_]\w*)\s+(?:that\s+is\s+(?:a|an)\s+|that\s+extends\s+|inherits\s+from\s+|from\s+)([A-Za-z_]\w*)\s*:",
