@@ -2578,21 +2578,39 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
                 pat = when_m.group(1).strip()
                 m_var = cur_match["var"]
 
-                if re.match(r"^(?:over|greater\s+than)\s+", pat, re.IGNORECASE):
-                    val_rest = re.sub(r"^(?:over|greater\s+than)\s+", "", pat, flags=re.IGNORECASE)
+                if re.match(r"^(?:is\s+)?(?:over|greater\s+than|>)\s+", pat, re.IGNORECASE):
+                    val_rest = re.sub(r"^(?:is\s+)?(?:over|greater\s+than|>)\s+", "", pat, flags=re.IGNORECASE)
                     cond = f"({m_var} is a number) and ({m_var} is greater than {val_rest})"
-                elif re.match(r"^(?:under|less\s+than)\s+", pat, re.IGNORECASE):
-                    val_rest = re.sub(r"^(?:under|less\s+than)\s+", "", pat, flags=re.IGNORECASE)
+                elif re.match(r"^(?:is\s+)?(?:under|less\s+than|<)\s+", pat, re.IGNORECASE):
+                    val_rest = re.sub(r"^(?:is\s+)?(?:under|less\s+than|<)\s+", "", pat, flags=re.IGNORECASE)
                     cond = f"({m_var} is a number) and ({m_var} is less than {val_rest})"
-                elif re.match(r"^at\s+least\s+", pat, re.IGNORECASE):
-                    val_rest = re.sub(r"^at\s+least\s+", "", pat, flags=re.IGNORECASE)
+                elif re.match(r"^(?:is\s+)?(?:at\s+least|>=)\s+", pat, re.IGNORECASE):
+                    val_rest = re.sub(r"^(?:is\s+)?(?:at\s+least|>=)\s+", "", pat, flags=re.IGNORECASE)
                     cond = f"({m_var} is a number) and ({m_var} is at least {val_rest})"
-                elif re.match(r"^at\s+most\s+", pat, re.IGNORECASE):
-                    val_rest = re.sub(r"^at\s+most\s+", "", pat, flags=re.IGNORECASE)
+                elif re.match(r"^(?:is\s+)?(?:at\s+most|<=)\s+", pat, re.IGNORECASE):
+                    val_rest = re.sub(r"^(?:is\s+)?(?:at\s+most|<=)\s+", "", pat, flags=re.IGNORECASE)
                     cond = f"({m_var} is a number) and ({m_var} is at most {val_rest})"
-                elif re.match(r"^between\s+(.+?)\s+and\s+(.+)$", pat, re.IGNORECASE):
-                    b_m = re.match(r"^between\s+(.+?)\s+and\s+(.+)$", pat, re.IGNORECASE)
+                elif re.match(r"^(?:is\s+)?between\s+(.+?)\s+and\s+(.+)$", pat, re.IGNORECASE):
+                    b_m = re.match(r"^(?:is\s+)?between\s+(.+?)\s+and\s+(.+)$", pat, re.IGNORECASE)
                     cond = f"({m_var} is a number) and ({m_var} is between {b_m.group(1)} and {b_m.group(2)})"
+                elif re.match(r"^(?:is\s+)?outside\s+(.+?)\s+and\s+(.+)$", pat, re.IGNORECASE):
+                    b_m = re.match(r"^(?:is\s+)?outside\s+(.+?)\s+and\s+(.+)$", pat, re.IGNORECASE)
+                    cond = f"({m_var} is a number) and ({m_var} is outside {b_m.group(1)} and {b_m.group(2)})"
+                elif re.match(r"^(?:is\s+)?even$", pat, re.IGNORECASE):
+                    cond = f"{m_var} is even"
+                elif re.match(r"^(?:is\s+)?odd$", pat, re.IGNORECASE):
+                    cond = f"{m_var} is odd"
+                elif re.match(r"^(?:is\s+)?positive$", pat, re.IGNORECASE):
+                    cond = f"{m_var} is positive"
+                elif re.match(r"^(?:is\s+)?negative$", pat, re.IGNORECASE):
+                    cond = f"{m_var} is negative"
+                elif re.match(r"^(?:is\s+)?zero$", pat, re.IGNORECASE):
+                    cond = f"{m_var} is zero"
+                elif re.match(r"^(?:is\s+)?empty$", pat, re.IGNORECASE):
+                    cond = f"{m_var} is empty"
+                elif re.match(r"^(?:is\s+)?(?:one\s+of|inside|in)\s+(.+)$", pat, re.IGNORECASE):
+                    in_m = re.match(r"^(?:is\s+)?(?:one\s+of|inside|in)\s+(.+)$", pat, re.IGNORECASE)
+                    cond = f"{m_var} is one of {in_m.group(1)}"
                 elif pat.lower() in ("a number", "number"):
                     cond = f"{m_var} is a number"
                 elif pat.lower() in ("text", "a string", "string"):

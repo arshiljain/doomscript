@@ -97,3 +97,78 @@ prod = product of [2, 3, 4]
     assert math.isclose(env["std"], 15.811388300841896)
     assert env["prod"] == 24
 
+
+# ---------------------------------------------------------------------------
+# Task 3: Pattern Matching & Decision Blocks (match ... when ... otherwise)
+# ---------------------------------------------------------------------------
+
+def test_pattern_matching_literals_and_fallback():
+    source = """
+score = 100
+grade = ""
+match score:
+    when 100:
+        grade = "A+"
+    when 90:
+        grade = "A"
+    otherwise:
+        grade = "F"
+
+fallback_val = 42
+result = ""
+match fallback_val:
+    when 1:
+        result = "one"
+    when 2:
+        result = "two"
+    otherwise:
+        result = "other"
+"""
+    env = execute(source)
+    assert env["grade"] == "A+"
+    assert env["result"] == "other"
+
+
+def test_pattern_matching_predicates():
+    source = """
+score = 85
+evaluation = ""
+match score:
+    when is greater than 90:
+        evaluation = "excellent"
+    when is between 80 and 89:
+        evaluation = "good"
+    otherwise:
+        evaluation = "needs work"
+
+num = 6
+kind = ""
+match num:
+    when is odd:
+        kind = "odd"
+    when is even:
+        kind = "even"
+    otherwise:
+        kind = "unknown"
+"""
+    env = execute(source)
+    assert env["evaluation"] == "good"
+    assert env["kind"] == "even"
+
+
+def test_pattern_matching_membership():
+    source = """
+role = "editor"
+access = ""
+match role:
+    when one of ["admin", "root"]:
+        access = "full"
+    when one of ["editor", "writer"]:
+        access = "edit"
+    otherwise:
+        access = "view"
+"""
+    env = execute(source)
+    assert env["access"] == "edit"
+
+
