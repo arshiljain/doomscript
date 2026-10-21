@@ -1504,3 +1504,88 @@ def signals_pseudo_wigner_ville(
 
 
 
+
+
+# ==============================================================================
+# ADVANCED SIGNAL PROCESSING: WAVELET PACKET DECOMPOSITION & CEPSTRUM
+# ==============================================================================
+
+class WaveletPacketDecomposition:
+    """Complete binary tree Wavelet Packet Transform (WPT) using Haar filter banks."""
+
+    @classmethod
+    def decompose(cls, signal: List[float], levels: int = 3) -> Dict[str, Any]:
+        import math
+        n = len(signal)
+        # Next power of 2
+        p2 = 1
+        while p2 < n:
+            p2 <<= 1
+        padded = list(signal) + [0.0] * (p2 - n)
+
+        # Tree nodes: level -> list of packets
+        tree: Dict[int, List[List[float]]] = {0: [padded]}
+        inv_sqrt2 = 1.0 / math.sqrt(2.0)
+
+        for l in range(levels):
+            tree[l + 1] = []
+            for node in tree[l]:
+                m = len(node)
+                approx = [(node[2 * i] + node[2 * i + 1]) * inv_sqrt2 for i in range(m // 2)]
+                detail = [(node[2 * i] - node[2 * i + 1]) * inv_sqrt2 for i in range(m // 2)]
+                tree[l + 1].append(approx)
+                tree[l + 1].append(detail)
+
+        return {
+            "levels": levels,
+            "terminal_nodes": len(tree[levels]),
+            "packets": tree[levels],
+        }
+
+
+class CepstrumProcessor:
+    """Real cepstrum for homomorphic deconvolution and harmonic pitch/echo detection."""
+
+    @classmethod
+    def real_cepstrum(cls, signal: List[float]) -> List[float]:
+        import math
+        import cmath
+        n = len(signal)
+        if n == 0:
+            return []
+        p2 = 1
+        while p2 < n:
+            p2 <<= 1
+        padded = [complex(x) for x in signal] + [0.0j] * (p2 - n)
+
+        # 1. FFT
+        def fft(a):
+            sz = len(a)
+            if sz <= 1:
+                return a
+            even = fft(a[0::2])
+            odd = fft(a[1::2])
+            out = [0.0j] * sz
+            for k in range(sz // 2):
+                w = cmath.exp(-2.0j * cmath.pi * k / sz) * odd[k]
+                out[k] = even[k] + w
+                out[k + sz // 2] = even[k] - w
+            return out
+
+        spectrum = fft(padded)
+        # 2. Log magnitude: ln(|X(k)|)
+        log_mag = [complex(math.log(max(1e-12, abs(x)))) for x in spectrum]
+        # 3. IFFT: C(q) = IFFT(ln(|X(k)|))
+        conj_log = [s.conjugate() for s in log_mag]
+        f_conj = fft(conj_log)
+        return [(x.conjugate() / p2).real for x in f_conj][:n]
+
+
+def signals_wavelet_packet_decompose(signal: List[float], levels: int = 3) -> Record:
+    """Performs full binary tree wavelet packet decomposition."""
+    return Record(WaveletPacketDecomposition.decompose(signal, levels=levels))
+
+
+def signals_real_cepstrum(signal: List[float]) -> List[float]:
+    """Computes real cepstrum for pitch period and echo delay analysis."""
+    return CepstrumProcessor.real_cepstrum(signal)

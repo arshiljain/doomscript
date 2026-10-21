@@ -1233,3 +1233,83 @@ def spatial_ambisonics_binaural_decode(
 
 
 
+
+
+# ==============================================================================
+# ACOUSTIC SPATIALIZATION: MOORER REVERB NETWORK & OCCLUSION ATTENUATION
+# ==============================================================================
+
+class MoorerReverberationNetwork:
+    """Moorer artificial reverberation model with parallel lowpass-feedback comb filters and allpass diffusor."""
+
+    @classmethod
+    def process(
+        cls,
+        samples: List[float],
+        sample_rate: int = 44100,
+        comb_delays_ms: Optional[List[float]] = None,
+        feedback: float = 0.75,
+        damping: float = 0.25,
+    ) -> List[float]:
+        delays_ms = comb_delays_ms or [29.7, 37.1, 41.1, 43.7]
+        delays = [max(1, int(d_ms * sample_rate / 1000.0)) for d_ms in delays_ms]
+        n = len(samples)
+
+        # Parallel lowpass feedback comb filters
+        comb_outputs = [0.0] * n
+        for d in delays:
+            buf = [0.0] * d
+            lp_state = 0.0
+            for i in range(n):
+                delayed = buf[i % d]
+                # Lowpass filter in feedback loop
+                lp_state = delayed * (1.0 - damping) + lp_state * damping
+                feed = samples[i] + lp_state * feedback
+                buf[i % d] = feed
+                comb_outputs[i] += delayed
+
+        # Scale down sum
+        scale = 1.0 / len(delays)
+        out = [comb_outputs[i] * scale for i in range(n)]
+
+        # All-pass filter stage for diffusion
+        ap_delay = max(1, int(5.0 * sample_rate / 1000.0))
+        ap_buf = [0.0] * ap_delay
+        ap_g = 0.7
+        wet = [0.0] * n
+        for i in range(n):
+            delayed = ap_buf[i % ap_delay]
+            inp = out[i]
+            val = -ap_g * inp + delayed
+            ap_buf[i % ap_delay] = inp + ap_g * val
+            wet[i] = val
+
+        return wet
+
+
+class SoundOcclusionObstruction:
+    """Frequency-dependent acoustic transmission loss for occluded and obstructed sound sources."""
+
+    @classmethod
+    def apply_occlusion(cls, samples: List[float], wall_thickness_meters: float = 0.2, material_density: str = "concrete") -> List[float]:
+        # Transmission loss cutoff frequency
+        cutoffs = {"concrete": 0.05, "wood": 0.2, "glass": 0.15, "drywall": 0.3}
+        alpha = cutoffs.get(material_density.lower(), 0.1)
+        # Apply IIR 1st order lowpass filter: y[i] = y[i-1] * (1-alpha) + x[i] * alpha
+        out = [0.0] * len(samples)
+        state = 0.0
+        attenuation = max(0.05, 1.0 - wall_thickness_meters * 1.5)
+        for i in range(len(samples)):
+            state = state * (1.0 - alpha) + samples[i] * alpha
+            out[i] = state * attenuation
+        return out
+
+
+def spatial_audio_moorer_reverb(samples: List[float], sample_rate: int = 44100, feedback: float = 0.7) -> List[float]:
+    """Applies Moorer reverberation algorithm with lowpass feedback comb filters."""
+    return MoorerReverberationNetwork.process(samples, sample_rate=sample_rate, feedback=feedback)
+
+
+def spatial_audio_occlusion(samples: List[float], wall_thickness: float = 0.2, material: str = "concrete") -> List[float]:
+    """Applies acoustic wall occlusion low-pass transmission filter."""
+    return SoundOcclusionObstruction.apply_occlusion(samples, wall_thickness_meters=wall_thickness, material_density=material)

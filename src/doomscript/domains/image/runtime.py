@@ -1910,3 +1910,91 @@ def image_resample_bicubic(
 
 
 
+
+
+# ==============================================================================
+# ADVANCED COMPUTER VISION: HOUGH CIRCLES & INTEGRAL SUMMED-AREA TABLES
+# ==============================================================================
+
+class HoughTransformCircles:
+    """Hough circle transform voting in accumulator space (a, b, r) for circle detection."""
+
+    @classmethod
+    def detect_circles(
+        cls,
+        edge_pixels: List[Tuple[int, int]],
+        width: int,
+        height: int,
+        min_radius: int = 5,
+        max_radius: int = 25,
+        radius_step: int = 2,
+        threshold: int = 15,
+    ) -> List[Dict[str, Any]]:
+        import math
+        accumulator: Dict[Tuple[int, int, int], int] = {}
+
+        # Vote in (a, b, r) parameter space
+        for x, y in edge_pixels:
+            for r in range(min_radius, max_radius + 1, radius_step):
+                # Sample angles around circle
+                num_thetas = max(16, int(2.0 * math.pi * r / 2.0))
+                for step in range(num_thetas):
+                    theta = 2.0 * math.pi * step / num_thetas
+                    a = int(round(x - r * math.cos(theta)))
+                    b = int(round(y - r * math.sin(theta)))
+                    if 0 <= a < width and 0 <= b < height:
+                        key = (a, b, r)
+                        accumulator[key] = accumulator.get(key, 0) + 1
+
+        circles = []
+        for (a, b, r), votes in accumulator.items():
+            if votes >= threshold:
+                circles.append({"center_x": a, "center_y": b, "radius": r, "votes": votes})
+
+        # Sort by vote count descending
+        circles.sort(key=lambda c: -c["votes"])
+        return circles
+
+
+class IntegralImageHaarCascade:
+    """Integral image (summed-area table) for O(1) rectangular pixel sum evaluation."""
+
+    def __init__(self, grayscale_pixels: List[List[float]]):
+        self.height = len(grayscale_pixels)
+        self.width = len(grayscale_pixels[0]) if self.height > 0 else 0
+        self.table = [[0.0] * (self.width + 1) for _ in range(self.height + 1)]
+
+        for y in range(self.height):
+            row_sum = 0.0
+            for x in range(self.width):
+                row_sum += grayscale_pixels[y][x]
+                self.table[y + 1][x + 1] = self.table[y][x + 1] + row_sum
+
+    def query_rect_sum(self, x1: int, y1: int, x2: int, y2: int) -> float:
+        """Computes sum of pixels in rectangle [x1..x2, y1..y2] inclusive in O(1)."""
+        x1 = max(0, min(self.width - 1, x1))
+        y1 = max(0, min(self.height - 1, y1))
+        x2 = max(0, min(self.width - 1, x2))
+        y2 = max(0, min(self.height - 1, y2))
+        if x1 > x2 or y1 > y2:
+            return 0.0
+        return (
+            self.table[y2 + 1][x2 + 1]
+            - self.table[y1][x2 + 1]
+            - self.table[y2 + 1][x1]
+            + self.table[y1][x1]
+        )
+
+
+def image_hough_circles(edge_pixels: List[Tuple[int, int]], width: int, height: int, min_r: int = 5, max_r: int = 25, threshold: int = 10) -> Record:
+    """Detects geometric circles in edge-detected image coordinates."""
+    circles = HoughTransformCircles.detect_circles(edge_pixels, width, height, min_radius=min_r, max_radius=max_r, threshold=threshold)
+    return Record({
+        "circles_detected": circles,
+        "count": len(circles),
+    })
+
+
+def image_integral_image(grayscale_matrix: List[List[float]]) -> IntegralImageHaarCascade:
+    """Constructs an integral image summed-area table for O(1) box queries."""
+    return IntegralImageHaarCascade(grayscale_matrix)
