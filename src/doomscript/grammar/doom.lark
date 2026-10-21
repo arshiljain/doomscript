@@ -80,6 +80,7 @@ start: (_NEWLINE | stmt)*
                  | stop_stmt
                  | call_stmt
                  | expr_stmt
+                 | global_stmt
 
 say_stmt: "say" expr ("," expr)* -> say_multi
 assign_stmt: target_list "=" expr_list -> assign
@@ -181,6 +182,7 @@ stop_stmt: "stop" -> stop_stmt
 
 call_stmt: "call" NAME [atom] ["with" call_arg_list] -> call_stmt
 expr_stmt: call_expr -> expr_stmt
+global_stmt: ("global" | "global" "variable" | "modify" "global" | "use" "global") NAME ("," NAME)* -> global_stmt
 
 ?compound_stmt: if_stmt
               | unless_stmt

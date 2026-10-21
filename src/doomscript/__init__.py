@@ -2,6 +2,10 @@
 DoomScript: An English-First Programming Language that compiles to Python AST.
 """
 
+import re
+# Expand regex cache for language engine
+re._MAXCACHE = 16384
+
 from doomscript.compiler.engine import compile_to_ast, transpile, execute
 from doomscript.exceptions import (
     DoomError,

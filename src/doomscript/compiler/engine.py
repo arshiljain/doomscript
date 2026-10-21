@@ -4,10 +4,14 @@ Coordinates parsing, AST transformation, transpilation, and execution.
 """
 
 import ast
+import re
 from pathlib import Path
 from typing import Any, Union, Dict, Optional
 from lark import Lark
 from lark.indenter import PythonIndenter
+
+# Expand Python's regex cache to eliminate recompilation thrashing across 2,000+ domain/phrase patterns
+re._MAXCACHE = 16384
 
 import math
 from functools import lru_cache
@@ -33,7 +37,8 @@ def get_parser() -> Lark:
             parser="lalr",
             postlex=PythonIndenter(),
             start="start",
-            propagate_positions=True
+            propagate_positions=True,
+            cache=True
         )
         _THREAD_LOCAL.parser = parser
     return parser
@@ -63,15 +68,20 @@ def compile_to_ast(source: str, filename: str = "<doom>") -> ast.Module:
             failing_token = None
             if hasattr(parse_err, "token"):
                 failing_token = getattr(parse_err.token, "value", str(parse_err.token))
-            suggestion = DidYouMeanAdvisor.find_suggestion(
-                orig_line,
-                active_domains=active_dom_names,
-                source=source,
-                failing_token=failing_token,
-                col=col,
-            )
+            from doomscript.errors import translate_lark_error
+            explanation, explicit_suggestion = translate_lark_error(parse_err, orig_line)
+            suggestion = explicit_suggestion
+            if not suggestion:
+                suggestion = DidYouMeanAdvisor.find_suggestion(
+                    orig_line,
+                    active_domains=active_dom_names,
+                    source=source,
+                    failing_token=failing_token,
+                    col=col,
+                )
+            err_msg = explanation if explanation else f"Syntax error at line {orig_line_num}"
             raise DoomScriptSyntaxError(
-                f"Syntax error at line {orig_line_num}",
+                err_msg,
                 line=orig_line_num,
                 column=col,
                 source_line=orig_line.strip(),

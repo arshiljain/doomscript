@@ -27,7 +27,6 @@ CANONICAL_TEMPLATES = [
     'ask boolean "Do you want to continue?" into confirmed',
     # Assignment
     'set score to 100',
-    'score is 100',
     'let score be 100',
     'put 100 into score',
     'increase count by 1',
@@ -162,7 +161,27 @@ RESERVED_KEYWORDS = {
     "ensure": "used for postconditions ('ensure result > 0').",
     "where": "used for filtering collections ('items where amount > 50').",
     "is": "used for comparisons and assignments ('x is 5').",
-    "into": "used to specify destination variables ('read file ... into content')."
+    "into": "used to specify destination variables ('read file ... into content').",
+    "last": "used in list operations ('last item of list', 'last 3 items of list').",
+    "first": "used in list operations ('first item of list', 'first 3 items of list').",
+    "item": "used in list item access ('item 1 of list').",
+    "items": "used in list slicing ('first 3 items of list').",
+    "count": "used for counting items in collections ('count of items').",
+    "sum": "used for summing items in collections ('sum of numbers').",
+    "average": "used for averaging items in collections ('average of scores').",
+    "min": "used to find minimum values ('min of numbers').",
+    "max": "used to find maximum values ('max of numbers').",
+    "highest": "used to find highest value ('highest score in games').",
+    "lowest": "used to find lowest value ('lowest score in games').",
+    "sort": "used to sort collections ('sort items').",
+    "reverse": "used to reverse collections ('reverse items').",
+    "unique": "used to filter unique items ('unique items of list').",
+    "length": "used to get collection length ('length of list').",
+    "step": "used in loops ('by step 2').",
+    "record": "used for database records ('save record ...').",
+    "table": "used for database tables ('table \\\"users\\\"').",
+    "database": "used for database operations ('database \\\"db.sqlite\\\"').",
+    "global": "used to declare global variables in functions ('global counter')."
 }
 
 
@@ -406,7 +425,13 @@ def translate_runtime_error(err: Exception) -> str:
     if isinstance(err, DoomError) and hasattr(err, "message") and err.message:
         return err.message
     err_str = str(err)
-    if isinstance(err, NameError):
+    if isinstance(err, UnboundLocalError):
+        m = re.search(r"(?:local variable|cannot access local variable) '([^']+)'", err_str)
+        var_name = m.group(1) if m else "this variable"
+        if var_name.startswith("_var_"):
+            var_name = var_name[5:]
+        return f"You tried to modify the global variable '{var_name}' inside a function. In DoomScript, declare 'global {var_name}' at the top of the function to modify it."
+    elif isinstance(err, NameError):
         m = re.search(r"name '([^']+)' is not defined", err_str)
         if m:
             var_name = m.group(1)
@@ -421,6 +446,8 @@ def translate_runtime_error(err: Exception) -> str:
     elif isinstance(err, ZeroDivisionError):
         return "Cannot divide by zero. You tried to divide by zero. Make sure the number you're dividing by is not 0."
     elif isinstance(err, IndexError):
+        if err_str and err_str not in ("list index out of range", "pop from empty list"):
+            return err_str
         tb = getattr(err, "__traceback__", None)
         extracted = None
         while tb:
@@ -613,7 +640,16 @@ def format_syntax_error(
         if suggestion:
             output.append(f"[bold green]Bow before the correct incantation:[/bold green] {suggestion}")
     else:
-        output.append(f"[bold red]DoomScript Syntax Error[/bold red] at [cyan]{file_path}:{line_no}:{pointer_col}[/cyan]")
+        is_syntax_err = isinstance(err, (DoomSyntaxError, UnexpectedToken, UnexpectedCharacters, VisitError))
+        if isinstance(err, DoomError) and not is_syntax_err:
+            err_category = "Runtime Error"
+        elif is_syntax_err:
+            err_category = "Syntax Error"
+        elif isinstance(err, (IndexError, NameError, ZeroDivisionError, TypeError, KeyError, ValueError, AttributeError, RuntimeError, FileNotFoundError, PermissionError)):
+            err_category = "Runtime Error"
+        else:
+            err_category = "Syntax Error"
+        output.append(f"[bold red]DoomScript {err_category}[/bold red] at [cyan]{file_path}:{line_no}:{pointer_col}[/cyan]")
         output.append("")
         output.append(f"{prefix}{source_line}")
         output.append(f"{caret_pad}[bold red]^[/bold red]")

@@ -829,6 +829,15 @@ class DoomToPython(Transformer):
     def skip_stmt(self, _):
         return ast.Continue()
 
+    def global_stmt(self, args):
+        names = []
+        for a in args:
+            if hasattr(a, "value"):
+                names.append(str(a.value))
+            else:
+                names.append(str(a))
+        return ast.Global(names=names)
+
     def call_stmt(self, args):
         func_name = str(args[0])
         remaining = args[1:]

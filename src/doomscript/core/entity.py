@@ -56,6 +56,48 @@ def stem_verb(verb: str) -> str:
     return v
 
 
+_PENDING_RELATIONS: List[Tuple[str, str, str, str, str]] = []
+_ENTITY_REGISTRY: Dict[str, type] = {}
+
+
+def _apply_has_many(owner_cls: type, col_name: str, target_cls: type, inv_name: str) -> None:
+    if "_relations_has_many" not in owner_cls.__dict__:
+        owner_cls._relations_has_many = dict(owner_cls._relations_has_many)
+    owner_cls._relations_has_many[col_name] = inv_name
+
+    if "_relations_belongs_to" not in target_cls.__dict__:
+        target_cls._relations_belongs_to = dict(target_cls._relations_belongs_to)
+    target_cls._relations_belongs_to[inv_name] = col_name
+
+
+def _apply_has_one(owner_cls: type, prop_name: str, target_cls: type, inv_name: str) -> None:
+    if "_relations_has_one" not in owner_cls.__dict__:
+        owner_cls._relations_has_one = dict(owner_cls._relations_has_one)
+    owner_cls._relations_has_one[prop_name] = inv_name
+
+    if "_relations_has_one" not in target_cls.__dict__:
+        target_cls._relations_has_one = dict(target_cls._relations_has_one)
+    target_cls._relations_has_one[inv_name] = prop_name
+
+
+def _resolve_pending_relations() -> None:
+    global _PENDING_RELATIONS
+    remaining = []
+    for rel_type, owner, a, target, b in _PENDING_RELATIONS:
+        o_cls = _ENTITY_REGISTRY.get(owner) if isinstance(owner, str) else owner
+        t_cls = _ENTITY_REGISTRY.get(target) if isinstance(target, str) else target
+        if o_cls is not None and t_cls is not None:
+            if rel_type == "has_many":
+                _apply_has_many(o_cls, a, t_cls, b)
+            elif rel_type == "has_one":
+                _apply_has_one(o_cls, a, t_cls, b)
+            elif rel_type == "belongs_to":
+                _apply_has_many(t_cls, b, o_cls, a)
+        else:
+            remaining.append((rel_type, owner, a, target, b))
+    _PENDING_RELATIONS = remaining
+
+
 class DoomEntity(Record):
     """
     Base class for all story-driven domain entities in DoomScript.
@@ -66,7 +108,13 @@ class DoomEntity(Record):
     _relations_has_many: Dict[str, str] = {}
     _relations_has_one: Dict[str, str] = {}
 
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        _ENTITY_REGISTRY[cls.__name__] = cls
+        _resolve_pending_relations()
+
     def __init__(self, initial_data: Optional[Dict[str, Any]] = None, **kwargs):
+        _resolve_pending_relations()
         object.__setattr__(self, "_in_sync", False)
         # Ensure relation dictionaries are per-class
         if "_relations_belongs_to" not in self.__class__.__dict__:
@@ -172,27 +220,36 @@ class DoomEntity(Record):
 
 
 def ds_register_relation_has_many(owner_cls, col_name: str, target_cls, inv_name: str) -> None:
-    """Registers a one-to-many relationship between owner_cls and target_cls."""
-    if "_relations_has_many" not in owner_cls.__dict__:
-        owner_cls._relations_has_many = dict(owner_cls._relations_has_many)
-    owner_cls._relations_has_many[col_name] = inv_name
-
-    if "_relations_belongs_to" not in target_cls.__dict__:
-        target_cls._relations_belongs_to = dict(target_cls._relations_belongs_to)
-    target_cls._relations_belongs_to[inv_name] = col_name
+    """Registers a one-to-many relationship between owner_cls and target_cls (order-independent)."""
+    o_name = owner_cls.__name__ if isinstance(owner_cls, type) else str(owner_cls)
+    t_name = target_cls.__name__ if isinstance(target_cls, type) else str(target_cls)
+    if isinstance(owner_cls, type):
+        _ENTITY_REGISTRY[o_name] = owner_cls
+    if isinstance(target_cls, type):
+        _ENTITY_REGISTRY[t_name] = target_cls
+    _PENDING_RELATIONS.append(("has_many", o_name, col_name, t_name, inv_name))
+    _resolve_pending_relations()
 
 
 def ds_register_relation_belongs_to(owner_cls, inv_name: str, target_cls, col_name: str) -> None:
-    """Registers a belongs-to relationship between owner_cls and target_cls."""
-    ds_register_relation_has_many(target_cls, col_name, owner_cls, inv_name)
+    """Registers a belongs-to relationship between owner_cls and target_cls (order-independent)."""
+    o_name = owner_cls.__name__ if isinstance(owner_cls, type) else str(owner_cls)
+    t_name = target_cls.__name__ if isinstance(target_cls, type) else str(target_cls)
+    if isinstance(owner_cls, type):
+        _ENTITY_REGISTRY[o_name] = owner_cls
+    if isinstance(target_cls, type):
+        _ENTITY_REGISTRY[t_name] = target_cls
+    _PENDING_RELATIONS.append(("belongs_to", o_name, inv_name, t_name, col_name))
+    _resolve_pending_relations()
 
 
 def ds_register_relation_has_one(owner_cls, prop_name: str, target_cls, inv_name: str) -> None:
-    """Registers a one-to-one relationship between owner_cls and target_cls."""
-    if "_relations_has_one" not in owner_cls.__dict__:
-        owner_cls._relations_has_one = dict(owner_cls._relations_has_one)
-    owner_cls._relations_has_one[prop_name] = inv_name
-
-    if "_relations_has_one" not in target_cls.__dict__:
-        target_cls._relations_has_one = dict(target_cls._relations_has_one)
-    target_cls._relations_has_one[inv_name] = prop_name
+    """Registers a one-to-one relationship between owner_cls and target_cls (order-independent)."""
+    o_name = owner_cls.__name__ if isinstance(owner_cls, type) else str(owner_cls)
+    t_name = target_cls.__name__ if isinstance(target_cls, type) else str(target_cls)
+    if isinstance(owner_cls, type):
+        _ENTITY_REGISTRY[o_name] = owner_cls
+    if isinstance(target_cls, type):
+        _ENTITY_REGISTRY[t_name] = target_cls
+    _PENDING_RELATIONS.append(("has_one", o_name, prop_name, t_name, inv_name))
+    _resolve_pending_relations()

@@ -469,15 +469,15 @@
     "name": "Out of bounds access: 'say item 10 of numbers'",
     "code": "numbers = [10, 20, 30]\nsay item 10 of numbers",
     "expected": "friendly out-of-bounds error or None, NOT raw IndexError",
-    "status": "SUCCESS",
+    "status": "RUNTIME_ERROR",
     "normalized_code": "numbers = [10, 20, 30]\nsay item_of(10, numbers)",
     "transpiled_code": "numbers = [10, 20, 30]\nprint(item_of(10, numbers))",
-    "stdout": "None",
-    "error_type": null,
-    "error_message": "",
+    "stdout": "",
+    "error_type": "DoomIndexError",
+    "error_message": "You asked for item 10, but this list only has 3 items. at <source>:2\n    say item 10 of numbers",
     "suggestion": null,
     "python_leakage": [],
-    "details": ""
+    "details": "Traceback (most recent call last):\n  File \"C:\\Users\\kanha\\.gemini\\antigravity\\scratch\\doomscript\\src\\doomscript\\compiler\\engine.py\", line 447, in _execute_scoped\n    exec(compiled, exec_globals)\n    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<doom>\", line 2, in <module>\n  File \"C:\\Users\\kanha\\.gemini\\antigravity\\scratch\\doomscript\\src\\doomscript\\runtime.py\", line 1169, in item_of\n    raise IndexError(f\"You asked for item {idx}, but this list only has {n} items.\")\nIndexError: You asked for item 10, but this list only has 3 items.\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\kanha\\.gemini\\antigravity\\scratch\\doomscript\\scratch\\audit_beginner_phrasings.py\", line 1208, in run_single_test\n    exec_env = execute(code)\n  File \"C:\\Users\\kanha\\.gemini\\antigravity\\scratch\\doomscript\\src\\doomscript\\compiler\\engine.py\", line 213, in execute\n    return _execute_scoped(source, custom_globals=custom_globals, filename=filename)\n  File \"C:\\Users\\kanha\\.gemini\\antigravity\\scratch\\doomscript\\src\\doomscript\\compiler\\engine.py\", line 471, in _execute_scoped\n    raise wrapped.with_traceback(exc.__traceback__)\n  File \"C:\\Users\\kanha\\.gemini\\antigravity\\scratch\\doomscript\\src\\doomscript\\compiler\\engine.py\", line 447, in _execute_scoped\n    exec(compiled, exec_globals)\n    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<doom>\", line 2, in <module>\n  File \"C:\\Users\\kanha\\.gemini\\antigravity\\scratch\\doomscript\\src\\doomscript\\runtime.py\", line 1169, in item_of\n    raise IndexError(f\"You asked for item {idx}, but this list only has {n} items.\")\ndoomscript.exceptions.DoomIndexError: You asked for item 10, but this list only has 3 items. at <source>:2\n    say item 10 of numbers\n"
   },
   {
     "id": "COLL-19",
@@ -887,7 +887,7 @@
     "expected": "prints CSV",
     "status": "SUCCESS",
     "normalized_code": "file = \"data.csv\"\nif file ends with \".csv\":\n    say \"CSV\"",
-    "transpiled_code": "Tree(Token('RULE', 'ident'), []) = 'data.csv'\nif str_ends_with(Tree(Token('RULE', 'ident'), []), '.csv'):\n    print('CSV')",
+    "transpiled_code": "Tree('ident', []) = 'data.csv'\nif str_ends_with(Tree('ident', []), '.csv'):\n    print('CSV')",
     "stdout": "CSV",
     "error_type": null,
     "error_message": "",
@@ -1293,7 +1293,7 @@
     "error_message": "Check failed: Must be an adult at <source>:2\n    verify that age is at least 18 otherwise \"Must be an adult\"",
     "suggestion": null,
     "python_leakage": [],
-    "details": "Traceback (most recent call last):\n  File \"C:\\Users\\kanha\\.gemini\\antigravity\\scratch\\doomscript\\src\\doomscript\\compiler\\engine.py\", line 437, in _execute_scoped\n    exec(compiled, exec_globals)\n    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<doom>\", line 2, in <module>\nAssertionError: Must be an adult\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\kanha\\.gemini\\antigravity\\scratch\\doomscript\\scratch\\audit_beginner_phrasings.py\", line 1206, in run_single_test\n    exec_env = execute(code)\n  File \"C:\\Users\\kanha\\.gemini\\antigravity\\scratch\\doomscript\\src\\doomscript\\compiler\\engine.py\", line 203, in execute\n    return _execute_scoped(source, custom_globals=custom_globals, filename=filename)\n  File \"C:\\Users\\kanha\\.gemini\\antigravity\\scratch\\doomscript\\src\\doomscript\\compiler\\engine.py\", line 461, in _execute_scoped\n    raise wrapped.with_traceback(exc.__traceback__)\n  File \"C:\\Users\\kanha\\.gemini\\antigravity\\scratch\\doomscript\\src\\doomscript\\compiler\\engine.py\", line 437, in _execute_scoped\n    exec(compiled, exec_globals)\n    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<doom>\", line 2, in <module>\ndoomscript.exceptions.DoomAssertionError: Check failed: Must be an adult at <source>:2\n    verify that age is at least 18 otherwise \"Must be an adult\"\n"
+    "details": "Traceback (most recent call last):\n  File \"C:\\Users\\kanha\\.gemini\\antigravity\\scratch\\doomscript\\src\\doomscript\\compiler\\engine.py\", line 447, in _execute_scoped\n    exec(compiled, exec_globals)\n    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<doom>\", line 2, in <module>\nAssertionError: Must be an adult\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\kanha\\.gemini\\antigravity\\scratch\\doomscript\\scratch\\audit_beginner_phrasings.py\", line 1208, in run_single_test\n    exec_env = execute(code)\n  File \"C:\\Users\\kanha\\.gemini\\antigravity\\scratch\\doomscript\\src\\doomscript\\compiler\\engine.py\", line 213, in execute\n    return _execute_scoped(source, custom_globals=custom_globals, filename=filename)\n  File \"C:\\Users\\kanha\\.gemini\\antigravity\\scratch\\doomscript\\src\\doomscript\\compiler\\engine.py\", line 471, in _execute_scoped\n    raise wrapped.with_traceback(exc.__traceback__)\n  File \"C:\\Users\\kanha\\.gemini\\antigravity\\scratch\\doomscript\\src\\doomscript\\compiler\\engine.py\", line 447, in _execute_scoped\n    exec(compiled, exec_globals)\n    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<doom>\", line 2, in <module>\ndoomscript.exceptions.DoomAssertionError: Check failed: Must be an adult at <source>:2\n    verify that age is at least 18 otherwise \"Must be an adult\"\n"
   },
   {
     "id": "IO-09",

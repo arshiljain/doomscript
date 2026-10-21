@@ -6,6 +6,7 @@ Adding a synonym here requires NO grammar edits.
 
 import difflib
 import re
+re._MAXCACHE = 16384
 from typing import Optional, List, Tuple, Dict, Any
 from doomscript.exceptions import DoomScopeError, DoomSyntaxError
 from doomscript.core.entity import stem_verb
@@ -2936,7 +2937,7 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
             target_cls = target[:-1] if target.endswith("s") and not target.endswith("ss") else target
             target_cls = target_cls[0].upper() + target_cls[1:]
             inv_name = owner_cls.lower()
-            emit(f"{indent}ds_register_relation_has_many({owner_cls}, \"{col_name}\", {target_cls}, \"{inv_name}\")", line_idx)
+            emit(f'{indent}ds_register_relation_has_many("{owner_cls}", "{col_name}", "{target_cls}", "{inv_name}")', line_idx)
             continue
 
         # Declarative Relationship: an Order belongs to a User
@@ -2952,7 +2953,7 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
             col_name = child_cls.lower()
             if not col_name.endswith("s"):
                 col_name = col_name + "s"
-            emit(f"{indent}ds_register_relation_belongs_to({child_cls}, \"{inv_name}\", {parent_cls}, \"{col_name}\")", line_idx)
+            emit(f'{indent}ds_register_relation_belongs_to("{child_cls}", "{inv_name}", "{parent_cls}", "{col_name}")', line_idx)
             continue
 
         # Declarative Relationship: a User has one Profile
@@ -2967,7 +2968,7 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
             prop_name = target.lower()
             target_cls = target[0].upper() + target[1:]
             inv_name = owner_cls.lower()
-            emit(f"{indent}ds_register_relation_has_one({owner_cls}, \"{prop_name}\", {target_cls}, \"{inv_name}\")", line_idx)
+            emit(f'{indent}ds_register_relation_has_one("{owner_cls}", "{prop_name}", "{target_cls}", "{inv_name}")', line_idx)
             continue
 
         # Declarative Entity: a Person has name, age / Person has name, age

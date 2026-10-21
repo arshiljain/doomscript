@@ -1151,28 +1151,56 @@ def ask_boolean(prompt: str = "") -> bool:
 
 
 def item_of(index, collection):
-    """Access item in collection using natural 1-based indexing. Returns None if index out of bounds."""
+    """Access item in collection using natural 1-based indexing. Raises IndexError if out of bounds."""
+    if collection is None:
+        raise TypeError("Cannot get item from None.")
     try:
         idx = int(index)
-        if idx > 0:
-            if idx <= len(collection):
-                return collection[idx - 1]
-            return None
-        if abs(idx) <= len(collection):
+    except (ValueError, TypeError):
+        raise TypeError(f"Index must be an integer, got {repr(index)}.")
+
+    n = len(collection)
+    if n == 0:
+        raise IndexError(f"List is empty. Cannot retrieve item {idx}.")
+
+    if idx > 0:
+        if idx <= n:
+            return collection[idx - 1]
+        raise IndexError(f"You asked for item {idx}, but this list only has {n} items.")
+    elif idx == 0:
+        raise IndexError("List indexing is 1-based: item 1 is the first item (requested item 0).")
+    else:
+        if abs(idx) <= n:
             return collection[idx]
-        return None
-    except (IndexError, KeyError, TypeError):
-        return None
+        raise IndexError(f"You asked for item {idx}, but this list only has {n} items.")
 
 
 
 def set_item(index, collection, value):
     """Mutate item in collection using natural 1-based indexing."""
-    idx = int(index)
+    if collection is None:
+        raise TypeError("Cannot set item on None.")
+    try:
+        idx = int(index)
+    except (ValueError, TypeError):
+        raise TypeError(f"Index must be an integer, got {repr(index)}.")
+
+    n = len(collection)
+    if n == 0:
+        raise IndexError(f"List is empty. Cannot set item {idx}.")
+
     if idx > 0:
-        collection[idx - 1] = value
+        if idx <= n:
+            collection[idx - 1] = value
+        else:
+            raise IndexError(f"You asked for item {idx}, but this list only has {n} items.")
+    elif idx == 0:
+        raise IndexError("List indexing is 1-based: item 1 is the first item (requested item 0).")
     else:
-        collection[idx] = value
+        if abs(idx) <= n:
+            collection[idx] = value
+        else:
+            raise IndexError(f"You asked for item {idx}, but this list only has {n} items.")
 
 
 def pop(collection):

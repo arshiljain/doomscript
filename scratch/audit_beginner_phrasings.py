@@ -9,6 +9,7 @@ import io
 import os
 import json
 import traceback
+import re
 from typing import Dict, Any, List, Optional
 
 # Ensure workspace root is in sys.path
@@ -1134,7 +1135,8 @@ PYTHON_LEAK_KEYWORDS = [
 def detect_python_leakage(text: str) -> List[str]:
     leaks = []
     for kw in PYTHON_LEAK_KEYWORDS:
-        if kw.lower() in text.lower():
+        kw_clean = kw.strip()
+        if re.search(r"(?<!Doom)" + re.escape(kw_clean), text, re.IGNORECASE):
             leaks.append(kw)
     return list(set(leaks))
 
