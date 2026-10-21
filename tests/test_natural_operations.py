@@ -163,3 +163,18 @@ say count of honors
     lines = captured.out.strip().splitlines()
     assert lines[0] == "[92, 88]"
     assert lines[1] == "1"
+
+
+def test_percentage_with_property_access(capsys):
+    code = """
+student = {name: "Alex", midterm: 88}
+part = 40% of student.midterm
+say part
+part2 = 40% of student's midterm
+say part2
+"""
+    execute(code)
+    captured = capsys.readouterr()
+    lines = captured.out.strip().splitlines()
+    assert lines[0] == "35.2"
+    assert lines[1] == "35.2"

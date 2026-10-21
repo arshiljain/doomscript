@@ -1025,7 +1025,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         var = double_m.group(1)
         masked = f"set {var} to {var} * 2"
 
-    masked = re.sub(r"(\d+(?:\.\d+)?)\s*%\s+of\s+([A-Za-z_]\w*|\d+(?:\.\d+)?|\([^)]+\))", r"percent_of(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"(\d+(?:\.\d+)?)\s*%\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])*|\d+(?:\.\d+)?|\([^)]+\))", r"percent_of(\1, \2)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"(\b\w+|\))\s+to\s+(?:the\s+)?power\s+of\s+(\b\w+|\()", r"math_pow(\1, \2)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"(\b\w+|\))\s+squared\b", r"math_pow(\1, 2)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"(\b\w+|\))\s+mod\s+(\b\w+|\()", r"math_mod(\1, \2)", masked, flags=re.IGNORECASE)
