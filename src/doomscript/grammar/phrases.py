@@ -88,6 +88,7 @@ COMPARISON_SYNONYMS: List[Tuple[str, str]] = [
 STATEMENT_START_KEYWORDS = {
     "say", "show", "print", "display", "tell", "echo", "log", "output",
     "set", "let", "make", "put", "assign", "store", "save", "initialize", "reset",
+    "suppose", "assume", "remember",
     "increase", "decrease", "increment", "decrement", "bump", "double", "halve", "triple",
     "multiply", "divide",
     "if", "unless", "while", "until", "repeat", "for", "loop",
@@ -512,6 +513,26 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     # Pre-normalize and protect assert that / make sure that / check that / assert
     masked = re.sub(r"^\s*(?:make\s+sure\s+that|assert\s+that|assert|check\s+that)\s+(.+?)\s+otherwise\s+(.+)$", r"verify that \1 otherwise \2", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*(?:make\s+sure\s+that|assert\s+that|assert|check\s+that)\s+(.+)$", r'verify that \1 otherwise "Check failed"', masked, flags=re.IGNORECASE)
+
+    # Pillar A: Conversational hypotheses and intentional definitions
+    masked = re.sub(
+        r"^\s*(?:suppose|assume|let's\s+say)\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+(?:is|=)\s+(.+)$",
+        r"set \1 to \2",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"^\s*(?:remember|store)\s+(.+?)\s+as\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)$",
+        r"set \2 to \1",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"^\s*(?:how\s+to|in\s+order\s+to|the\s+goal\s+is\s+to)\s+([A-Za-z_]\w*)(?:\s+with\s+(.+?))?:?$",
+        lambda m: f"to {m.group(1)} with {m.group(2)}:" if m.group(2) else f"to {m.group(1)}:",
+        masked,
+        flags=re.IGNORECASE
+    )
 
     # For loop with index: 'for each item and its index in items:'
     masked = re.sub(
