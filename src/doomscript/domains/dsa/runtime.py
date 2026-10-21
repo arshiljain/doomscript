@@ -4432,3 +4432,168 @@ def dsa_deque_pop_left(q: Any) -> Any:
     if isinstance(q, list):
         return q.pop(0) if q else None
     return None
+
+
+# ==============================================================================
+# DISJOINT SPARSE TABLE, 2D SEGMENT TREE & WAVELET MATRIX
+# ==============================================================================
+
+class DisjointSparseTable:
+    """Disjoint Sparse Table for O(1) query time over arbitrary semigroups with O(N log N) preprocessing."""
+
+    def __init__(self, arr: List[Any], op=min):
+        self.op = op
+        self.n = len(arr)
+        if self.n == 0:
+            self.table: List[List[Any]] = []
+            return
+        import math
+        self.levels = max(1, math.ceil(math.log2(max(2, self.n))))
+        p2 = 1 << self.levels
+        padded = list(arr) + [arr[-1]] * (p2 - self.n)
+
+        self.table = [[0] * p2 for _ in range(self.levels)]
+        for level in range(self.levels):
+            half = 1 << level
+            block = half << 1
+            for mid in range(half, p2, block):
+                # Left sweep
+                acc = padded[mid - 1]
+                self.table[level][mid - 1] = acc
+                for i in range(mid - 2, mid - half - 1, -1):
+                    acc = self.op(padded[i], acc)
+                    self.table[level][i] = acc
+                # Right sweep
+                acc = padded[mid]
+                self.table[level][mid] = acc
+                for i in range(mid + 1, min(p2, mid + half)):
+                    acc = self.op(acc, padded[i])
+                    self.table[level][i] = acc
+
+    def query(self, left: int, right: int) -> Any:
+        """Queries interval [left, right] inclusive in O(1) time."""
+        if left < 0 or right >= self.n or left > right:
+            raise IndexError("Query range out of bounds")
+        if left == right:
+            return self.table[0][left]
+        diff = left ^ right
+        level = diff.bit_length() - 1
+        return self.op(self.table[level][left], self.table[level][right])
+
+
+class SegmentTree2D:
+    """2D Segment Tree for subgrid range queries and point updates in O(log N * log M)."""
+
+    def __init__(self, matrix: List[List[float]], op=min, default_val=float("inf")):
+        self.op = op
+        self.default_val = default_val
+        self.rows = len(matrix)
+        self.cols = len(matrix[0]) if self.rows > 0 else 0
+        if self.rows == 0 or self.cols == 0:
+            self.tree: List[List[float]] = []
+            return
+
+        self.tree = [[default_val] * (4 * self.cols) for _ in range(4 * self.rows)]
+        self._build_x(matrix, 1, 0, self.rows - 1)
+
+    def _build_y(self, matrix, vx, lx, rx, vy, ly, ry):
+        if ly == ry:
+            if lx == rx:
+                self.tree[vx][vy] = matrix[lx][ly]
+            else:
+                self.tree[vx][vy] = self.op(self.tree[vx * 2][vy], self.tree[vx * 2 + 1][vy])
+            return
+        mid = (ly + ry) // 2
+        self._build_y(matrix, vx, lx, rx, vy * 2, ly, mid)
+        self._build_y(matrix, vx, lx, rx, vy * 2 + 1, mid + 1, ry)
+        self.tree[vx][vy] = self.op(self.tree[vx][vy * 2], self.tree[vx][vy * 2 + 1])
+
+    def _build_x(self, matrix, vx, lx, rx):
+        if lx != rx:
+            mid = (lx + rx) // 2
+            self._build_x(matrix, vx * 2, lx, mid)
+            self._build_x(matrix, vx * 2 + 1, mid + 1, rx)
+        self._build_y(matrix, vx, lx, rx, 1, 0, self.cols - 1)
+
+    def _query_y(self, vx, vy, ly, ry, qly, qry):
+        if qly > qry:
+            return self.default_val
+        if qly == ly and qry == ry:
+            return self.tree[vx][vy]
+        mid = (ly + ry) // 2
+        left_res = self._query_y(vx, vy * 2, ly, mid, qly, min(qry, mid))
+        right_res = self._query_y(vx, vy * 2 + 1, mid + 1, ry, max(qly, mid + 1), qry)
+        return self.op(left_res, right_res)
+
+    def _query_x(self, vx, lx, rx, qlx, qrx, qly, qry):
+        if qlx > qrx:
+            return self.default_val
+        if qlx == lx and qrx == rx:
+            return self._query_y(vx, 1, 0, self.cols - 1, qly, qry)
+        mid = (lx + rx) // 2
+        left_res = self._query_x(vx * 2, lx, mid, qlx, min(qrx, mid), qly, qry)
+        right_res = self._query_x(vx * 2 + 1, mid + 1, rx, max(qlx, mid + 1), qrx, qly, qry)
+        return self.op(left_res, right_res)
+
+    def query(self, r1: int, c1: int, r2: int, c2: int) -> float:
+        """Queries rectangular region [r1..r2, c1..c2] inclusive."""
+        return self._query_x(1, 0, self.rows - 1, r1, r2, c1, c2)
+
+
+class WaveletMatrix:
+    """Wavelet Matrix for succinct rank, select, and quantile queries over integer sequences."""
+
+    def __init__(self, arr: List[int]):
+        self.n = len(arr)
+        if self.n == 0:
+            self.max_bit = 0
+            self.bitmaps: List[List[int]] = []
+            self.zeros_count: List[int] = []
+            return
+        max_val = max(arr) if arr else 0
+        self.max_bit = max_val.bit_length()
+        self.bitmaps = []
+        self.zeros_count = []
+
+        cur = list(arr)
+        for bit in range(self.max_bit - 1, -1, -1):
+            mask = 1 << bit
+            bitmap = [(1 if (x & mask) else 0) for x in cur]
+            zeros = [x for x in cur if not (x & mask)]
+            ones = [x for x in cur if (x & mask)]
+            self.bitmaps.append(bitmap)
+            self.zeros_count.append(len(zeros))
+            cur = zeros + ones
+
+    def rank(self, val: int, right: int) -> int:
+        """Counts occurrences of val in prefix [0, right)."""
+        if self.n == 0 or right <= 0:
+            return 0
+        l = 0
+        r = min(right, self.n)
+        for level in range(self.max_bit):
+            bit = (val >> (self.max_bit - 1 - level)) & 1
+            bm = self.bitmaps[level]
+            z_cnt = self.zeros_count[level]
+            ones_l = sum(bm[:l])
+            ones_r = sum(bm[:r])
+            if bit == 0:
+                l = l - ones_l
+                r = r - ones_r
+            else:
+                l = z_cnt + ones_l
+                r = z_cnt + ones_r
+        return max(0, r - l)
+
+
+def dsa_disjoint_sparse_table(arr: List[Any], op: str = "min") -> DisjointSparseTable:
+    """Instantiates a Disjoint Sparse Table for O(1) range queries."""
+    op_fn = min if op == "min" else (max if op == "max" else lambda a, b: a + b)
+    return DisjointSparseTable(arr, op=op_fn)
+
+
+def dsa_segment_tree_2d(matrix: List[List[float]], op: str = "min") -> SegmentTree2D:
+    """Instantiates a 2D Segment Tree over a numerical matrix."""
+    op_fn = min if op == "min" else (max if op == "max" else lambda a, b: a + b)
+    def_val = float("inf") if op == "min" else (float("-inf") if op == "max" else 0.0)
+    return SegmentTree2D(matrix, op=op_fn, default_val=def_val)

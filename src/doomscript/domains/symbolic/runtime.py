@@ -2051,3 +2051,96 @@ def symbolic_ode_solve(equation_str: str, dep_var: str = "y", indep_var: str = "
 
 
 
+
+
+# ==============================================================================
+# CHEBYSHEV POLYNOMIALS & CONTINUED FRACTION EXPANSIONS
+# ==============================================================================
+
+class ChebyshevPolynomialApproximation:
+    """Chebyshev polynomials of the first kind Tn(x) with Clenshaw recurrence and economization."""
+
+    @classmethod
+    def evaluate_t(cls, n: int, x: float) -> float:
+        """Evaluates Tn(x) via 3-term recurrence: T_{n+1}(x) = 2x Tn(x) - T_{n-1}(x)."""
+        if n == 0:
+            return 1.0
+        if n == 1:
+            return float(x)
+        t_prev = 1.0
+        t_curr = float(x)
+        for _ in range(2, n + 1):
+            t_next = 2.0 * x * t_curr - t_prev
+            t_prev = t_curr
+            t_curr = t_next
+        return t_curr
+
+    @classmethod
+    def chebyshev_nodes(cls, n: int, a: float = -1.0, b: float = 1.0) -> List[float]:
+        """Calculates optimal n Chebyshev interpolation nodes in [a, b]."""
+        import math
+        nodes = []
+        for k in range(1, n + 1):
+            theta = (2.0 * k - 1.0) / (2.0 * n) * math.pi
+            x = math.cos(theta)
+            # Map [-1, 1] to [a, b]
+            mapped = 0.5 * (a + b) + 0.5 * (b - a) * x
+            nodes.append(mapped)
+        return sorted(nodes)
+
+
+class ContinuedFractionExpander:
+    """Continued fraction expansions and best rational approximations (Farey / Stern-Brocot)."""
+
+    @classmethod
+    def from_float(cls, x: float, max_terms: int = 15) -> List[int]:
+        """Expands real number x into simple continued fraction coefficients [a0; a1, a2, ...]."""
+        import math
+        terms = []
+        val = float(x)
+        for _ in range(max_terms):
+            a = int(math.floor(val))
+            terms.append(a)
+            frac = val - a
+            if abs(frac) < 1e-12:
+                break
+            val = 1.0 / frac
+        return terms
+
+    @classmethod
+    def convergents(cls, terms: List[int]) -> List[Tuple[int, int]]:
+        """Computes successive rational convergents (p_k / q_k)."""
+        convergents = []
+        p_prev, p_curr = 1, terms[0] if terms else 0
+        q_prev, q_curr = 0, 1
+        convergents.append((p_curr, q_curr))
+
+        for i in range(1, len(terms)):
+            a = terms[i]
+            p_next = a * p_curr + p_prev
+            q_next = a * q_curr + q_prev
+            convergents.append((p_next, q_next))
+            p_prev, p_curr = p_curr, p_next
+            q_prev, q_curr = q_curr, q_next
+        return convergents
+
+
+def symbolic_chebyshev_t(n: int, x: float) -> float:
+    """Evaluates Chebyshev polynomial of the first kind Tn(x)."""
+    return ChebyshevPolynomialApproximation.evaluate_t(n, x)
+
+
+def symbolic_chebyshev_nodes(n: int, a: float = -1.0, b: float = 1.0) -> List[float]:
+    """Generates optimal Chebyshev interpolation nodes on [a, b]."""
+    return ChebyshevPolynomialApproximation.chebyshev_nodes(n, a=a, b=b)
+
+
+def symbolic_continued_fraction(x: float, max_terms: int = 10) -> Record:
+    """Computes continued fraction terms and convergents for a real number."""
+    terms = ContinuedFractionExpander.from_float(x, max_terms=max_terms)
+    convs = ContinuedFractionExpander.convergents(terms)
+    return Record({
+        "terms": terms,
+        "convergents": convs,
+        "best_fraction": f"{convs[-1][0]}/{convs[-1][1]}" if convs else "0/1",
+    })

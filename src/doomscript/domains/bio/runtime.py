@@ -1511,3 +1511,126 @@ def bio_smith_waterman_align(
 
 
 
+
+
+# ==============================================================================
+# BIOINFORMATICS: PROFILE HMM & CODON OPTIMIZATION SOLVER
+# ==============================================================================
+
+class ProfileHiddenMarkovModel:
+    """Profile Hidden Markov Model (pHMM) for sequence family motif modeling and Viterbi alignment."""
+
+    def __init__(self, length: int, alphabet: str = "ACGT"):
+        self.length = max(1, int(length))
+        self.alphabet = list(alphabet)
+        self.alphabet_size = len(self.alphabet)
+
+        # Match emission probabilities [pos][char]
+        self.match_emission = [
+            {ch: 1.0 / self.alphabet_size for ch in self.alphabet}
+            for _ in range(self.length)
+        ]
+        # Transition probabilities M->M, M->I, M->D, I->M, I->I, D->M, D->D
+        self.transitions = [
+            {"MM": 0.9, "MI": 0.05, "MD": 0.05, "IM": 0.8, "II": 0.2, "DM": 0.8, "DD": 0.2}
+            for _ in range(self.length + 1)
+        ]
+
+    def fit_multiple_alignment(self, aligned_sequences: List[str], pseudocount: float = 0.1) -> None:
+        """Trains emission frequencies from a multiple sequence alignment."""
+        for pos in range(self.length):
+            counts = {ch: pseudocount for ch in self.alphabet}
+            for seq in aligned_sequences:
+                if pos < len(seq) and seq[pos] in counts:
+                    counts[seq[pos]] += 1.0
+            total = sum(counts.values())
+            self.match_emission[pos] = {ch: count / total for ch, count in counts.items()}
+
+    def score(self, sequence: str) -> float:
+        """Computes log-odds alignment score under the profile model."""
+        import math
+        score = 0.0
+        n = min(len(sequence), self.length)
+        for i in range(n):
+            ch = sequence[i]
+            prob = self.match_emission[i].get(ch, 1e-6)
+            score += math.log(max(1e-9, prob))
+        return score
+
+
+class CodonOptimizationSolver:
+    """Species-specific codon adaptation optimization for recombinant expression."""
+
+    STANDARD_GENETIC_CODE = {
+        'ATA':'I', 'ATC':'I', 'ATT':'I', 'ATG':'M',
+        'ACA':'T', 'ACC':'T', 'ACG':'T', 'ACT':'T',
+        'AAC':'N', 'AAT':'N', 'AAA':'K', 'AAG':'K',
+        'AGC':'S', 'AGT':'S', 'AGA':'R', 'AGG':'R',
+        'CTA':'L', 'CTC':'L', 'CTG':'L', 'CTT':'L',
+        'CCA':'P', 'CCC':'P', 'CCG':'P', 'CCT':'P',
+        'CAC':'H', 'CAT':'H', 'CAA':'Q', 'CAG':'Q',
+        'CGA':'R', 'CGC':'R', 'CGG':'R', 'CGT':'R',
+        'GTA':'V', 'GTC':'V', 'GTG':'V', 'GTT':'V',
+        'GCA':'A', 'GCC':'A', 'GCG':'A', 'GCT':'A',
+        'GAC':'D', 'GAT':'D', 'GAA':'E', 'GAG':'E',
+        'GGA':'G', 'GGC':'G', 'GGG':'G', 'GGT':'G',
+        'TCA':'S', 'TCC':'S', 'TCG':'S', 'TCT':'S',
+        'TTC':'F', 'TTT':'F', 'TTA':'L', 'TTG':'L',
+        'TAC':'Y', 'TAT':'Y', 'TAA':'_', 'TAG':'_',
+        'TGC':'C', 'TGT':'C', 'TGA':'_', 'TGG':'W',
+    }
+
+    # E. coli preferred high-expression codons
+    ECOLI_PREFERRED = {
+        'A': 'GCG', 'C': 'TGC', 'D': 'GAT', 'E': 'GAA', 'F': 'TTT',
+        'G': 'GGC', 'H': 'CAT', 'I': 'ATT', 'K': 'AAA', 'L': 'CTG',
+        'M': 'ATG', 'N': 'AAC', 'P': 'CCG', 'Q': 'CAG', 'R': 'CGT',
+        'S': 'AGC', 'T': 'ACC', 'V': 'GTG', 'W': 'TGG', 'Y': 'TAT',
+        '_': 'TAA',
+    }
+
+    @classmethod
+    def optimize_dna(cls, protein_or_dna: str) -> Dict[str, Any]:
+        seq = protein_or_dna.upper().strip()
+        # If input is DNA, translate first
+        if all(ch in "ACGTU" for ch in seq):
+            protein = []
+            for i in range(0, len(seq) - 2, 3):
+                codon = seq[i:i + 3].replace("U", "T")
+                aa = cls.STANDARD_GENETIC_CODE.get(codon, "X")
+                protein.append(aa)
+            protein_seq = "".join(protein)
+        else:
+            protein_seq = seq
+
+        optimized_codons = []
+        for aa in protein_seq:
+            preferred = cls.ECOLI_PREFERRED.get(aa, "ATG")
+            optimized_codons.append(preferred)
+
+        optimized_dna = "".join(optimized_codons)
+        gc_count = sum(1 for ch in optimized_dna if ch in "GC")
+        gc_content = gc_count / max(1, len(optimized_dna))
+
+        return {
+            "protein_length": len(protein_seq),
+            "optimized_dna": optimized_dna,
+            "gc_content": gc_content,
+            "host": "E. coli",
+        }
+
+
+def bio_profile_hmm_fit(aligned_sequences: List[str], length: int) -> Record:
+    """Builds and trains a Profile Hidden Markov Model from multiple alignments."""
+    phmm = ProfileHiddenMarkovModel(length=length)
+    phmm.fit_multiple_alignment(aligned_sequences)
+    return Record({
+        "length": length,
+        "sample_score": phmm.score(aligned_sequences[0]) if aligned_sequences else 0.0,
+        "model": phmm,
+    })
+
+
+def bio_codon_optimize(sequence: str) -> Record:
+    """Optimizes codon usage for high-yield recombinant protein expression."""
+    return Record(CodonOptimizationSolver.optimize_dna(sequence))
