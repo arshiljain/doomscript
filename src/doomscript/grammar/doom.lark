@@ -162,7 +162,7 @@ shuffle_stmt: "shuffle" target -> shuffle_list
 db_save_stmt: "save" "record" expr "into" "database" expr "table" expr -> db_save
 db_load_stmt: "load" "records" "from" "database" expr "table" expr "into" target -> db_load
 
-beep_stmt: "beep" expr ("hz" | "hertz") "for" expr ("seconds" | "second" | "ms" | "milliseconds") -> beep_action
+beep_stmt: "beep" expr ("hz" | "hertz") "for" expr ("seconds" | "second" | "ms" | "milliseconds")? -> beep_action
 play_sound_stmt: "play" "sound" expr -> play_sound_action
 
 open_window_stmt: "open_window" expr "with" "width" expr [","] "height" expr -> open_window
@@ -174,7 +174,7 @@ refresh_screen_stmt: "refresh" "screen" -> refresh_screen
 
 add_stmt: "add" expr "to" target -> add_to_list
 remove_stmt: "remove" expr "from" target -> remove_from_list
-wait_stmt: "wait" expr ("seconds" | "second" | "ms" | "milliseconds") -> wait_seconds
+wait_stmt: "wait" expr ("seconds" | "second" | "ms" | "milliseconds")? -> wait_seconds
 return_stmt: "return" expr? -> return_val
 yield_stmt: "yield" expr? -> yield_val
 stop_stmt: "stop" -> stop_stmt

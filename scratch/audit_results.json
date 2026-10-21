@@ -1285,15 +1285,15 @@
     "name": "Assertion fail 'verify that age is at least 18 otherwise \"Must be an adult\"'",
     "code": "age = 16\nverify that age is at least 18 otherwise \"Must be an adult\"",
     "expected": "fails with message 'Must be an adult', check if AssertionError leaks",
-    "status": "SUCCESS",
+    "status": "RUNTIME_ERROR",
     "normalized_code": "age = 16\nverify that age is at least 18 otherwise \"Must be an adult\"",
     "transpiled_code": "age = 16\nassert age >= 18, 'Must be an adult'",
     "stdout": "",
-    "error_type": "AssertionError",
-    "error_message": "Must be an adult",
+    "error_type": "DoomAssertionError",
+    "error_message": "Check failed: Must be an adult at <source>:2\n    verify that age is at least 18 otherwise \"Must be an adult\"",
     "suggestion": null,
     "python_leakage": [],
-    "details": "Traceback (most recent call last):\n  File \"C:\\Users\\kanha\\.gemini\\antigravity\\scratch\\doomscript\\scratch\\audit_beginner_phrasings.py\", line 735, in run_single_test\n    exec_env = execute(code)\n  File \"C:\\Users\\kanha\\.gemini\\antigravity\\scratch\\doomscript\\src\\doomscript\\compiler\\engine.py\", line 202, in execute\n    return _execute_scoped(source, custom_globals=custom_globals, filename=filename)\n  File \"C:\\Users\\kanha\\.gemini\\antigravity\\scratch\\doomscript\\src\\doomscript\\compiler\\engine.py\", line 422, in _execute_scoped\n    exec(compiled, exec_globals)\n    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<doom>\", line 2, in <module>\nAssertionError: Must be an adult\n"
+    "details": "Traceback (most recent call last):\n  File \"C:\\Users\\kanha\\.gemini\\antigravity\\scratch\\doomscript\\src\\doomscript\\compiler\\engine.py\", line 437, in _execute_scoped\n    exec(compiled, exec_globals)\n    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<doom>\", line 2, in <module>\nAssertionError: Must be an adult\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\kanha\\.gemini\\antigravity\\scratch\\doomscript\\scratch\\audit_beginner_phrasings.py\", line 735, in run_single_test\n    exec_env = execute(code)\n  File \"C:\\Users\\kanha\\.gemini\\antigravity\\scratch\\doomscript\\src\\doomscript\\compiler\\engine.py\", line 203, in execute\n    return _execute_scoped(source, custom_globals=custom_globals, filename=filename)\n  File \"C:\\Users\\kanha\\.gemini\\antigravity\\scratch\\doomscript\\src\\doomscript\\compiler\\engine.py\", line 461, in _execute_scoped\n    raise wrapped.with_traceback(exc.__traceback__)\n  File \"C:\\Users\\kanha\\.gemini\\antigravity\\scratch\\doomscript\\src\\doomscript\\compiler\\engine.py\", line 437, in _execute_scoped\n    exec(compiled, exec_globals)\n    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<doom>\", line 2, in <module>\ndoomscript.exceptions.DoomAssertionError: Check failed: Must be an adult at <source>:2\n    verify that age is at least 18 otherwise \"Must be an adult\"\n"
   },
   {
     "id": "IO-09",

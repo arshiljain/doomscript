@@ -121,7 +121,9 @@ doom check app.doom --strict
    set x to 10 then say x
    ```
    Conditional `and` (`if x > 10 and y < 20:`) and expression operands (`between 10 and 20`) remain strictly protected.
-6. **No Mandatory External Dependencies**: Standard library fallbacks ensure all algorithms execute in clean Python environments.
+6. **Natural English Units of Measurement & Dimensional Analysis**:
+   Variables and numbers can carry physical, temporal, digital, temperature, and financial quantities (e.g. `60 miles per hour`, `2.5 hours`, `10 kilometers`, `72 degrees fahrenheit`, `500 megabytes`, `$100`). Automatic dimensional analysis computes distance from speed and time, converts compatible dimensions, supports affine temperature scales, and guards against incompatible additions.
+7. **No Mandatory External Dependencies**: Standard library fallbacks ensure all algorithms execute in clean Python environments.
 
 ---
 
@@ -233,6 +235,47 @@ divide counter by 4        # counter = counter / 4
 # Math expressions
 val = square root of 64    # 8.0
 rounded = round 3.14159 to 2 decimals into val_round
+```
+
+---
+
+### Units of Measurement & Dimensional Analysis
+Numbers and variables can carry natural English units with automatic dimensional analysis, conversions, and type safety:
+
+```doomscript
+# Physical & Temporal Quantities
+set speed to 60 miles per hour
+set travel_time to 2.5 hours
+set distance to speed * travel_time
+say distance                                   # "150 miles"
+
+# Unit Conversions (Statement & Expression forms)
+convert distance to kilometers into dist_km
+say dist_km                                    # "241.4016 kilometers"
+say distance in meters                         # "241401.6 meters"
+
+# Temperature Conversions (Affine Fahrenheit / Celsius / Kelvin)
+set room_temp to 72 degrees fahrenheit
+convert room_temp to celsius into temp_c
+say temp_c                                     # "22.2222 celsius"
+
+# Computational Data & Storage
+set storage to 512 megabytes
+convert storage to gigabytes into gb_val
+say gb_val                                     # "0.5 gigabytes"
+
+# Financial Quantities & Currencies
+set price to $100
+set budget to 500 dollars
+set euro_total to €50
+
+# Dimensional Arithmetic & Ratios
+set total_dist to 5 kilometers + 500 meters    # "5.5 kilometers"
+set ratio to 100 meters / 20 meters            # 5.0 (dimensionless float)
+
+# Ergonomic Timing
+sleep 250 milliseconds
+wait 1.5 seconds
 ```
 
 ---

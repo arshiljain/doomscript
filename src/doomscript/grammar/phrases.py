@@ -292,6 +292,185 @@ def extract_assigned_var(code: str) -> Optional[str]:
 
 
 # ---------------------------------------------------------------------------
+# UNITS OF MEASUREMENT DATA & NORMALIZATION
+# ---------------------------------------------------------------------------
+
+COMPOUND_UNITS = [
+    "degrees fahrenheit", "degree fahrenheit",
+    "degrees celsius", "degree celsius",
+    "miles per hour", "mile per hour",
+    "kilometers per hour", "kilometer per hour",
+    "meters per second", "meter per second",
+    "feet per second", "foot per second",
+    "nautical miles", "nautical mile",
+    "fluid ounces", "fluid ounce",
+    "pounds sterling", "pound sterling",
+    "kilowatt hours", "kilowatt hour",
+]
+
+SINGLE_UNITS = [
+    "kilometers", "kilometer", "km",
+    "millimeters", "millimeter", "mm",
+    "centimeters", "centimeter", "cm",
+    "nanometers", "nanometer", "nm",
+    "micrometers", "micrometer", "microns", "micron", "um",
+    "meters", "meter",
+    "inches", "inch",
+    "feet", "foot", "ft",
+    "yards", "yard", "yd",
+    "miles", "mile", "mi",
+    "milliseconds", "millisecond", "ms",
+    "microseconds", "microsecond", "us",
+    "nanoseconds", "nanosecond", "ns",
+    "seconds", "second", "sec",
+    "minutes", "minute", "min",
+    "hours", "hour", "hr",
+    "days", "day",
+    "weeks", "week",
+    "kilograms", "kilogram", "kg",
+    "milligrams", "milligram", "mg",
+    "micrograms", "microgram", "ug",
+    "grams", "gram",
+    "ounces", "ounce", "oz",
+    "pounds", "pound", "lbs", "lb",
+    "tonnes", "tonne",
+    "tons", "ton",
+    "petabytes", "petabyte", "pb",
+    "terabytes", "terabyte", "tb",
+    "gigabytes", "gigabyte", "gb",
+    "megabytes", "megabyte", "mb",
+    "kilobytes", "kilobyte", "kb",
+    "bytes", "byte",
+    "bits", "bit",
+    "celsius", "fahrenheit", "kelvin",
+    "milliliters", "milliliter", "ml",
+    "liters", "liter",
+    "gallons", "gallon", "gal",
+    "quarts", "quart", "qt",
+    "pints", "pint", "pt",
+    "cups", "cup",
+    "fl oz",
+    "dollars", "dollar", "usd",
+    "cents", "cent",
+    "euros", "euro", "eur",
+    "yen", "jpy", "gbp",
+    "kilojoules", "kilojoule", "kj",
+    "joules", "joule",
+    "kilocalories", "kilocalorie", "kcal",
+    "calories", "calorie", "cal",
+    "kilowatts", "kilowatt", "kw",
+    "watts", "watt",
+    "horsepower", "hp", "kwh",
+    "knots", "knot",
+]
+
+ALL_UNITS = sorted(COMPOUND_UNITS + SINGLE_UNITS, key=lambda u: len(u), reverse=True)
+ALL_UNITS_PAT = "|".join(re.escape(u) for u in ALL_UNITS)
+
+
+def normalize_units_sub(text: str) -> str:
+    """Normalizes numbers with units, currency symbols, and conversions inside expressions."""
+    # Currency symbol prefixes: $100 -> make_quantity(100, "dollars")
+    text = re.sub(r"\$([0-9]+(?:\.[0-9]+)?)\b", r'make_quantity(\1, "dollars")', text)
+    text = re.sub(r"€([0-9]+(?:\.[0-9]+)?)\b", r'make_quantity(\1, "euros")', text)
+    text = re.sub(r"£([0-9]+(?:\.[0-9]+)?)\b", r'make_quantity(\1, "pounds sterling")', text)
+
+    # Protect relative time: \d+ days from now, \d+ hours ago
+    rel_saved = []
+    def save_rel(m):
+        rel_saved.append(m.group(0))
+        return f"__REL_TIME_{len(rel_saved)-1}__"
+
+    text = re.sub(
+        r"\b\d+(?:\.\d+)?\s+(?:days?|hours?|minutes?|seconds?|weeks?|months?|years?)\s+(?:from\s+now|ago)\b",
+        save_rel,
+        text,
+        flags=re.IGNORECASE,
+    )
+
+    # Number followed by unit: 60 miles per hour, 2.5 hours, 10 km
+    text = re.sub(
+        rf"\b([0-9]+(?:\.[0-9]+)?)\s+({ALL_UNITS_PAT})\b",
+        lambda m: f'make_quantity({m.group(1)}, "{m.group(2).strip().lower()}")',
+        text,
+        flags=re.IGNORECASE,
+    )
+
+    # Contextual 'in <unit>' conversions
+    # 1. After say / print / display / show / tell: 'say distance in miles'
+    text = re.sub(
+        rf"\b(say|show|print|display|tell)\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s+in\s+({ALL_UNITS_PAT})\b",
+        lambda m: f'{m.group(1)} convert_unit({m.group(2)}, "{m.group(3).strip().lower()}")',
+        text,
+        flags=re.IGNORECASE,
+    )
+
+    # 2. After assignment (to, =): 'set dist_mi to distance in miles', 'dist_mi = distance in miles'
+    text = re.sub(
+        rf"(\bto\s+|=\s*)([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s+in\s+({ALL_UNITS_PAT})\b",
+        lambda m: f'{m.group(1)}convert_unit({m.group(2)}, "{m.group(3).strip().lower()}")',
+        text,
+        flags=re.IGNORECASE,
+    )
+
+    # 3. Inside parentheses: '(distance in miles)'
+    text = re.sub(
+        rf"(\(\s*)([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s+in\s+({ALL_UNITS_PAT})\b",
+        lambda m: f'{m.group(1)}convert_unit({m.group(2)}, "{m.group(3).strip().lower()}")',
+        text,
+        flags=re.IGNORECASE,
+    )
+
+    # 4. In condition before comparison operator: 'if distance in miles > 5:'
+    text = re.sub(
+        rf"\b(if|where|while)\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s+in\s+({ALL_UNITS_PAT})\s*(==|!=|<=|>=|<|>|equals\b|is\b)",
+        lambda m: f'{m.group(1)} convert_unit({m.group(2)}, "{m.group(3).strip().lower()}") {m.group(4)}',
+        text,
+        flags=re.IGNORECASE,
+    )
+
+    # 5. Quantity literal in unit: '72 degrees fahrenheit in celsius' -> make_quantity(...) in celsius
+    text = re.sub(
+        rf"(make_quantity\([^)]+\))\s+in\s+({ALL_UNITS_PAT})\b",
+        lambda m: f'convert_unit({m.group(1)}, "{m.group(2).strip().lower()}")',
+        text,
+        flags=re.IGNORECASE,
+    )
+
+    # Restore relative time
+    for idx, orig in enumerate(rel_saved):
+        text = text.replace(f"__REL_TIME_{idx}__", orig)
+
+    return text
+
+
+def normalize_units(text: str) -> str:
+    """Normalizes units of measurement statements and expressions."""
+    # 1. Statement: convert <expr> to <unit> into <target>
+    m_conv_into = re.match(
+        rf"^\s*convert\s+(.+?)\s+to\s+({ALL_UNITS_PAT})\s+into\s+([A-Za-z_]\w*)\s*$",
+        text,
+        re.IGNORECASE,
+    )
+    if m_conv_into:
+        expr = m_conv_into.group(1).strip()
+        unit = m_conv_into.group(2).strip().lower()
+        target = m_conv_into.group(3).strip()
+        expr_norm = normalize_units_sub(expr)
+        return f'set {target} to convert_unit({expr_norm}, "{unit}")'
+
+    # 2. Expression: convert <expr> to <unit>
+    text = re.sub(
+        rf"\bconvert\s+(.+?)\s+to\s+({ALL_UNITS_PAT})\b",
+        lambda m: f'convert_unit({normalize_units_sub(m.group(1).strip())}, "{m.group(2).strip().lower()}")',
+        text,
+        flags=re.IGNORECASE,
+    )
+
+    return normalize_units_sub(text)
+
+
+# ---------------------------------------------------------------------------
 # STATEMENT NORMALIZATION PIPELINE
 # ---------------------------------------------------------------------------
 
@@ -318,6 +497,9 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         w1_lower = w1.lower()
         if w1_lower in STATEMENT_START_KEYWORDS and w1 != w1_lower:
             masked = w1_lower + first_word_m.group(2)
+
+    # Units of measurement normalization (numbers with units, conversions, currency)
+    masked = normalize_units(masked)
 
     # Normalize 'attempt' to 'try'
     if re.match(r"^attempt\b", masked, re.IGNORECASE):
@@ -800,7 +982,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"\bask\s+(?:for\s+)?number\b", "ask number", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bask\s+(?:for\s+)?(?:boolean|yes/no|confirmation)\b", "ask boolean", masked, flags=re.IGNORECASE)
     # Ergonomic timing
-    masked = re.sub(r"^\s*(?:sleep|delay|pause)\s+(.+?\s+(?:seconds?|ms|milliseconds))\s*$", r"wait \1", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*(?:sleep|delay|pause)\s+(?!for\b)(.+)$", r"wait \1", masked, flags=re.IGNORECASE)
 
     # Ergonomic File I/O (omitting 'file' keyword)
     read_m = re.match(r"^\s*read\s+(?!file\b|csv\b|records\b)(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
@@ -1438,7 +1620,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
             t_var = wait_one_m.group(2)
             masked = f"set {t_var} to wait_background_task({t_task})"
 
-    timeout_m = re.match(r"^timeout\s+(.+?)\s+seconds\s+for\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    timeout_m = re.match(r"^timeout\s+(.+?)(?:\s+seconds?)?\s+for\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
     if timeout_m:
         sec = timeout_m.group(1).strip()
         fn_call = timeout_m.group(2).strip()
@@ -1552,11 +1734,11 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         masked = f"set {doc_rndr_html_m.group(2)} to doc_render_html({doc_rndr_html_m.group(1)})"
 
     # Phase 19: English Cron & Event Scheduling
-    sched_every_m = re.match(r"^schedule\s+every\s+(.+?)\s+seconds?\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    sched_every_m = re.match(r"^schedule\s+every\s+(.+?)(?:\s+seconds?)?\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
     if sched_every_m:
         masked = f"schedule_every_seconds({sched_every_m.group(1).strip()}, {sched_every_m.group(2)})"
 
-    sched_run_m = re.match(r"^run\s+scheduler\s+for\s+(.+?)\s+seconds?$", masked, re.IGNORECASE)
+    sched_run_m = re.match(r"^run\s+scheduler\s+for\s+(.+?)(?:\s+seconds?)?$", masked, re.IGNORECASE)
     if sched_run_m:
         masked = f"run_scheduler_for({sched_run_m.group(1).strip()})"
 

@@ -28,6 +28,7 @@ import statistics
 from typing import Any, Dict, List, Optional, Tuple, Callable, Union
 
 from doomscript.core.record import Record
+from doomscript.core.units import Quantity, make_quantity, convert_unit
 
 from doomscript.taxonomy import (
     Table,
@@ -118,6 +119,8 @@ def ds_remove(target, item):
 
 def sleep(seconds):
     """Pause execution for a given number of seconds."""
+    if hasattr(seconds, "to") and getattr(seconds, "dimension", None) == "time":
+        seconds = seconds.to("seconds").value
     time.sleep(float(seconds))
 
 
@@ -273,6 +276,8 @@ def db_load(db_path, table_name):
 # Audio Primitives (HolyC Style)
 def beep(freq, duration_sec):
     """Emit a tone at a given frequency (Hz) for a duration in seconds."""
+    if hasattr(duration_sec, "to") and getattr(duration_sec, "dimension", None) == "time":
+        duration_sec = duration_sec.to("seconds").value
     freq = int(freq)
     ms = int(float(duration_sec) * 1000)
     try:
@@ -821,6 +826,8 @@ def to_number(val):
     """Convert a value or string to integer or float."""
     if isinstance(val, (int, float)):
         return val
+    if hasattr(val, "value") and hasattr(val, "dimension"):
+        return val.value
     s = str(val).strip()
     try:
         return float(s) if "." in s else int(s)
@@ -1445,8 +1452,10 @@ def wait_all_background_tasks(tasks, timeout=None):
 
 def timeout_call(timeout_seconds, fn, *args, **kwargs):
     """Executes a function with a timeout in seconds."""
+    if hasattr(timeout_seconds, "to") and getattr(timeout_seconds, "dimension", None) == "time":
+        timeout_seconds = timeout_seconds.to("seconds").value
     fut = _GLOBAL_POOL.submit(fn, *args, **kwargs)
-    return fut.result(timeout=timeout_seconds)
+    return fut.result(timeout=float(timeout_seconds))
 
 
 # ---------------------------------------------------------------------------
@@ -1739,9 +1748,13 @@ class DoomScheduler:
 _SCHEDULER = DoomScheduler()
 
 def schedule_every_seconds(seconds: float, fn, *args):
-    _SCHEDULER.schedule_interval(seconds, fn, *args)
+    if hasattr(seconds, "to") and getattr(seconds, "dimension", None) == "time":
+        seconds = seconds.to("seconds").value
+    _SCHEDULER.schedule_interval(float(seconds), fn, *args)
 
 def run_scheduler_for(duration: float):
+    if hasattr(duration, "to") and getattr(duration, "dimension", None) == "time":
+        duration = duration.to("seconds").value
     _SCHEDULER.run_for(float(duration))
 
 

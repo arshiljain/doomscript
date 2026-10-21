@@ -709,6 +709,8 @@ class DoomToPython(Transformer):
     def beep_action(self, args):
         freq = args[0]
         dur = args[1]
+        if len(args) > 2 and str(args[2]).lower() in ("ms", "milliseconds"):
+            dur = ast.BinOp(left=dur, op=ast.Div(), right=ast.Constant(value=1000.0))
         call = ast.Call(
             func=ast.Name(id='beep', ctx=ast.Load()),
             args=[freq, dur],
@@ -800,6 +802,8 @@ class DoomToPython(Transformer):
 
     def wait_seconds(self, args):
         sec = args[0]
+        if len(args) > 1 and str(args[1]).lower() in ("ms", "milliseconds"):
+            sec = ast.BinOp(left=sec, op=ast.Div(), right=ast.Constant(value=1000.0))
         call = ast.Call(
             func=ast.Name(id="sleep", ctx=ast.Load()),
             args=[sec],

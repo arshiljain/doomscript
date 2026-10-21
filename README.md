@@ -275,6 +275,26 @@ from python module datetime use datetime
 say "Square root of 144:", math's sqrt(144)
 ```
 
+### 6. Natural Units of Measurement & Dimensional Analysis
+Numbers and variables carry natural English units with automatic dimensional algebra, conversions, and type-checked safety:
+```doom
+# Speed, Time & Automatic Distance Calculation
+set speed to 60 miles per hour
+set travel_time to 2.5 hours
+set distance to speed * travel_time
+say distance                                 # "150 miles"
+
+# Unit Conversions (Statement & Expression)
+convert distance to kilometers into dist_km  # "241.4016 kilometers"
+say distance in meters                       # "241401.6 meters"
+
+# Affine Temperature Scales & Financials
+set room_temp to 72 degrees fahrenheit
+convert room_temp to celsius into temp_c     # "22.2222 celsius"
+set price to $100
+set budget to 500 dollars
+```
+
 ---
 
 ## English-First Domain Extensions: One Language, Many Domains

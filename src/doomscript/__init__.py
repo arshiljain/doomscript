@@ -27,7 +27,7 @@ from doomscript.runtime import (
     Record, sleep, percent_of, write_file, append_file, read_file, count_of,
     beep, play_sound, open_window, draw_circle, draw_rectangle, draw_text,
     clear_screen, refresh_screen, fetch_json, fetch_text, download_file,
-    time_future, time_past, ask_input
+    time_future, time_past, ask_input, Quantity, make_quantity, convert_unit
 )
 
 __version__ = "1.2.0"
@@ -37,5 +37,6 @@ __all__ = [
     "open_window", "draw_circle", "draw_rectangle", "draw_text",
     "clear_screen", "refresh_screen", "fetch_json", "fetch_text", "download_file",
     "time_future", "time_past", "ask_input",
+    "Quantity", "make_quantity", "convert_unit",
     "DoomError", "DoomSyntaxError", "DoomIndentationError"
 ]
