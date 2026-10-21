@@ -48,6 +48,8 @@ CORE_EXPORT_NAMES: frozenset[str] = frozenset([
     "ds_drop",
     "ds_pipe",
     "ds_find_first",
+    "ds_attr",
+    "ds_find_superlative",
     "ds_every",
     "ds_any",
     "ds_none",

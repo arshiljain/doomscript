@@ -863,6 +863,53 @@ def ds_none(collection, predicate_fn):
     return not ds_any(collection, predicate_fn)
 
 
+def ds_attr(item, attr_name, default=None):
+    """Safely retrieves an attribute or dictionary key from item."""
+    if item is None:
+        return default
+    if isinstance(item, dict):
+        return item.get(attr_name, default)
+    if hasattr(item, attr_name):
+        return getattr(item, attr_name)
+    if hasattr(item, "__getitem__"):
+        try:
+            return item[attr_name]
+        except (KeyError, TypeError, IndexError):
+            pass
+    return default
+
+
+def ds_find_superlative(collection, order="max", key=None):
+    """Finds the superlative element (largest/smallest/highest/cheapest) in collection."""
+    if not collection:
+        return None
+    items = list(collection)
+    if not items:
+        return None
+
+    def key_fn(item):
+        if key is not None:
+            return ds_attr(item, key, default=0)
+        if isinstance(item, dict):
+            for candidate in ("price", "amount", "cost", "value", "score", "total", "balance", "age", "size"):
+                if candidate in item:
+                    return item[candidate]
+        elif hasattr(item, "__dict__"):
+            for candidate in ("price", "amount", "cost", "value", "score", "total", "balance", "age", "size"):
+                if hasattr(item, candidate):
+                    return getattr(item, candidate)
+        return item
+
+    reverse = (order.lower() in ("max", "largest", "biggest", "highest", "maximum", "oldest", "newest"))
+    if order.lower() in ("min", "smallest", "lowest", "cheapest", "minimum"):
+        reverse = False
+
+    try:
+        return max(items, key=key_fn) if reverse else min(items, key=key_fn)
+    except TypeError:
+        return items[0]
+
+
 def ds_at_least_n(collection, n, predicate_fn):
     """Checks whether at least n elements in collection match predicate."""
     if not collection:

@@ -119,3 +119,28 @@ if no x in clean_list is negative:
     assert env["all_positive"] is True
     assert env["has_odd"] is True
     assert env["no_negatives"] is True
+
+
+# ---------------------------------------------------------------------------
+# Phase 2, Task 2.1: Runtime Attribute & Superlatives
+# ---------------------------------------------------------------------------
+
+def test_runtime_attr_and_superlatives():
+    from doomscript.runtime import ds_attr, ds_find_superlative
+
+    d = {"price": 100}
+    class Item: price = 200
+    assert ds_attr(d, "price") == 100
+    assert ds_attr(Item(), "price") == 200
+    assert ds_attr(d, "missing", default=0) == 0
+
+    catalog = [
+        {"name": "Widget A", "price": 20},
+        {"name": "Widget B", "price": 50},
+        {"name": "Widget C", "price": 10},
+    ]
+    cheapest = ds_find_superlative(catalog, order="min", key="price")
+    assert cheapest["name"] == "Widget C"
+
+    largest = ds_find_superlative(catalog, order="max", key="price")
+    assert largest["name"] == "Widget B"
