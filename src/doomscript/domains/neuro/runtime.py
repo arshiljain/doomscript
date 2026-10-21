@@ -1280,3 +1280,171 @@ def neuro_wta_network(
 ) -> WinnerTakeAllNetwork:
     """Instantiates a Winner-Take-All competitive neural circuit."""
     return WinnerTakeAllNetwork(num_neurons=num_neurons, lateral_weight=lateral_weight, self_excitation=self_excitation)
+
+
+# ==============================================================================
+# COMPUTATIONAL NEUROSCIENCE: MORRIS-LECAR NEURON & TSODYKS-MARKRAM SYNAPSE
+# ==============================================================================
+
+class MorrisLecarNeuron:
+    """Morris-Lecar 2-variable biophysical conductance-based neural oscillator."""
+
+    def __init__(
+        self,
+        c_m: float = 20.0,      # Membrane capacitance (uF/cm^2)
+        g_ca: float = 4.4,      # Calcium conductance (mS/cm^2)
+        v_ca: float = 120.0,    # Calcium reversal potential (mV)
+        g_k: float = 8.0,       # Potassium conductance (mS/cm^2)
+        v_k: float = -84.0,     # Potassium reversal potential (mV)
+        g_l: float = 2.0,       # Leak conductance (mS/cm^2)
+        v_l: float = -60.0,     # Leak reversal potential (mV)
+        v1: float = -1.2,       # Midpoint of Ca activation
+        v2: float = 18.0,       # Slope of Ca activation
+        v3: float = 2.0,        # Midpoint of K activation
+        v4: float = 30.0,       # Slope of K activation
+        phi: float = 0.04,      # Potassium rate scale (ms^-1)
+    ):
+        self.c_m = c_m
+        self.g_ca = g_ca
+        self.v_ca = v_ca
+        self.g_k = g_k
+        self.v_k = v_k
+        self.g_l = g_l
+        self.v_l = v_l
+        self.v1 = v1
+        self.v2 = v2
+        self.v3 = v3
+        self.v4 = v4
+        self.phi = phi
+
+    def _m_inf(self, v: float) -> float:
+        import math
+        return 0.5 * (1.0 + math.tanh((v - self.v1) / self.v2))
+
+    def _w_inf(self, v: float) -> float:
+        import math
+        return 0.5 * (1.0 + math.tanh((v - self.v3) / self.v4))
+
+    def _tau_w(self, v: float) -> float:
+        import math
+        return 1.0 / (math.cosh((v - self.v3) / (2.0 * self.v4)))
+
+    def simulate(
+        self,
+        current_injected: List[float],
+        dt_ms: float = 0.1,
+        v_init: float = -60.0,
+        w_init: float = 0.01,
+    ) -> Dict[str, Any]:
+        """Integrates Morris-Lecar dynamics across injected current steps using RK4."""
+        n_steps = len(current_injected)
+        v = v_init
+        w = w_init
+        v_trace = [v]
+        w_trace = [w]
+        spikes = []
+
+        for step in range(n_steps):
+            i_app = current_injected[step]
+
+            # Derivatives
+            def derivatives(v_curr, w_curr):
+                i_ca = self.g_ca * self._m_inf(v_curr) * (v_curr - self.v_ca)
+                i_k = self.g_k * w_curr * (v_curr - self.v_k)
+                i_leak = self.g_l * (v_curr - self.v_l)
+                dv = (i_app - i_ca - i_k - i_leak) / self.c_m
+                dw = self.phi * (self._w_inf(v_curr) - w_curr) / self._tau_w(v_curr)
+                return dv, dw
+
+            # RK4 step
+            k1_v, k1_w = derivatives(v, w)
+            k2_v, k2_w = derivatives(v + 0.5 * dt_ms * k1_v, w + 0.5 * dt_ms * k1_w)
+            k3_v, k3_w = derivatives(v + 0.5 * dt_ms * k2_v, w + 0.5 * dt_ms * k2_w)
+            k4_v, k4_w = derivatives(v + dt_ms * k3_v, w + dt_ms * k3_w)
+
+            v_next = v + (dt_ms / 6.0) * (k1_v + 2.0 * k2_v + 2.0 * k3_v + k4_v)
+            w_next = w + (dt_ms / 6.0) * (k1_w + 2.0 * k2_w + 2.0 * k3_w + k4_w)
+
+            # Detect action potential peak crossing 0 mV upwards
+            if v <= 0.0 < v_next:
+                spikes.append(step * dt_ms)
+
+            v = v_next
+            w = w_next
+            v_trace.append(v)
+            w_trace.append(w)
+
+        return {
+            "v_trace": v_trace,
+            "w_trace": w_trace,
+            "spikes_ms": spikes,
+            "spike_count": len(spikes),
+        }
+
+
+class TsodyksMarkramSynapse:
+    """Phenomenological model of short-term synaptic plasticity (depression & facilitation)."""
+
+    def __init__(
+        self,
+        tau_rec_ms: float = 800.0,   # Recovery time constant from depression
+        tau_facil_ms: float = 50.0,  # Facilitation time constant
+        u_baseline: float = 0.2,     # Baseline neurotransmitter release probability
+    ):
+        self.tau_rec = tau_rec_ms
+        self.tau_facil = tau_facil_ms
+        self.u_baseline = u_baseline
+
+    def simulate_spike_train(
+        self,
+        spike_times_ms: List[float],
+        total_duration_ms: float,
+        dt_ms: float = 1.0,
+    ) -> Dict[str, Any]:
+        """Computes dynamic neurotransmitter availability R and utilization u over time."""
+        import math
+        spikes_set = set(int(round(t / dt_ms)) for t in spike_times_ms)
+        n_steps = int(total_duration_ms / dt_ms)
+
+        r = 1.0  # Fraction of available neurotransmitter resources
+        u = self.u_baseline  # Utilization parameter
+        postsynaptic_current = []
+        r_history = []
+        u_history = []
+
+        for step in range(n_steps):
+            is_spike = step in spikes_set
+            if is_spike:
+                # Spike arrives: facilitate utilization u
+                u = u + self.u_baseline * (1.0 - u)
+                # Released neurotransmitter
+                psc = r * u
+                # Depression: reduce available resources R
+                r = r - psc
+            else:
+                psc = 0.0
+
+            postsynaptic_current.append(psc)
+            r_history.append(r)
+            u_history.append(u)
+
+            # Continuous relaxation between spikes
+            r = r + ((1.0 - r) / self.tau_rec) * dt_ms
+            u = u - ((u - self.u_baseline) / self.tau_facil) * dt_ms
+
+        return {
+            "postsynaptic_current": postsynaptic_current,
+            "resource_r": r_history,
+            "utilization_u": u_history,
+            "total_released": sum(postsynaptic_current),
+        }
+
+
+def neuro_morris_lecar() -> MorrisLecarNeuron:
+    """Creates a Morris-Lecar biophysical neuron model."""
+    return MorrisLecarNeuron()
+
+
+def neuro_tsodyks_markram_synapse(tau_rec: float = 800.0, tau_facil: float = 50.0, u_base: float = 0.2) -> TsodyksMarkramSynapse:
+    """Creates a Tsodyks-Markram dynamic short-term plasticity synapse model."""
+    return TsodyksMarkramSynapse(tau_rec_ms=tau_rec, tau_facil_ms=tau_facil, u_baseline=u_base)

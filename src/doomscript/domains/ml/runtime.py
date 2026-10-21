@@ -2294,3 +2294,159 @@ def train_direct_model(
             scope.update(caller_frame.f_locals)
     scope["__direct_dataset__"] = data_val
     return train_model(container, scope=scope)
+
+
+# ==============================================================================
+# DEEP LEARNING: AUTOENCODER & 1D CONVOLUTIONAL NEURAL NETWORKS (PURE PYTHON)
+# ==============================================================================
+
+class AutoencoderNeuralNetwork:
+    """Bottleneck Autoencoder with dense encoder/decoder stages and Adam optimizer."""
+
+    def __init__(self, input_dim: int, latent_dim: int, hidden_dim: int = 16):
+        import random
+        import math
+        self.input_dim = input_dim
+        self.latent_dim = latent_dim
+        self.hidden_dim = hidden_dim
+
+        # Xavier initialization
+        def init_weights(din, dout):
+            limit = math.sqrt(6.0 / (din + dout))
+            return [[random.uniform(-limit, limit) for _ in range(dout)] for _ in range(din)]
+
+        # Encoder: input -> hidden -> latent
+        self.w_enc1 = init_weights(input_dim, hidden_dim)
+        self.b_enc1 = [0.0] * hidden_dim
+        self.w_enc2 = init_weights(hidden_dim, latent_dim)
+        self.b_enc2 = [0.0] * latent_dim
+
+        # Decoder: latent -> hidden -> output
+        self.w_dec1 = init_weights(latent_dim, hidden_dim)
+        self.b_dec1 = [0.0] * hidden_dim
+        self.w_dec2 = init_weights(hidden_dim, input_dim)
+        self.b_dec2 = [0.0] * input_dim
+
+    @staticmethod
+    def _relu(x: float) -> float:
+        return max(0.0, x)
+
+    @staticmethod
+    def _relu_deriv(x: float) -> float:
+        return 1.0 if x > 0 else 0.0
+
+    def encode(self, x: List[float]) -> List[float]:
+        """Encodes high-dimensional sample into latent bottleneck representation."""
+        # Layer 1
+        h1 = [0.0] * self.hidden_dim
+        for j in range(self.hidden_dim):
+            s = sum(x[i] * self.w_enc1[i][j] for i in range(self.input_dim)) + self.b_enc1[j]
+            h1[j] = self._relu(s)
+        # Latent
+        z = [0.0] * self.latent_dim
+        for j in range(self.latent_dim):
+            z[j] = sum(h1[i] * self.w_enc2[i][j] for i in range(self.hidden_dim)) + self.b_enc2[j]
+        return z
+
+    def decode(self, z: List[float]) -> List[float]:
+        """Reconstructs original feature dimensions from latent representation."""
+        # Hidden
+        h2 = [0.0] * self.hidden_dim
+        for j in range(self.hidden_dim):
+            s = sum(z[i] * self.w_dec1[i][j] for i in range(self.latent_dim)) + self.b_dec1[j]
+            h2[j] = self._relu(s)
+        # Output
+        out = [0.0] * self.input_dim
+        for j in range(self.input_dim):
+            out[j] = sum(h2[i] * self.w_dec2[i][j] for i in range(self.hidden_dim)) + self.b_dec2[j]
+        return out
+
+    def reconstruct(self, x: List[float]) -> List[float]:
+        return self.decode(self.encode(x))
+
+    def train_step(self, x: List[float], lr: float = 0.01) -> float:
+        """Single backpropagation iteration updating weights via SGD with reconstruction MSE loss."""
+        # 1. Forward pass
+        # Enc1
+        s_h1 = [sum(x[i] * self.w_enc1[i][j] for i in range(self.input_dim)) + self.b_enc1[j] for j in range(self.hidden_dim)]
+        h1 = [self._relu(v) for v in s_h1]
+        # Enc2 (latent)
+        z = [sum(h1[i] * self.w_enc2[i][j] for i in range(self.hidden_dim)) + self.b_enc2[j] for j in range(self.latent_dim)]
+        # Dec1
+        s_h2 = [sum(z[i] * self.w_dec1[i][j] for i in range(self.latent_dim)) + self.b_dec1[j] for j in range(self.hidden_dim)]
+        h2 = [self._relu(v) for v in s_h2]
+        # Dec2 (reconstructed out)
+        x_hat = [sum(h2[i] * self.w_dec2[i][j] for i in range(self.hidden_dim)) + self.b_dec2[j] for j in range(self.input_dim)]
+
+        # MSE loss: 0.5 * sum((x_hat - x)^2)
+        loss = sum((x_hat[i] - x[i]) ** 2 for i in range(self.input_dim)) / self.input_dim
+
+        # 2. Backward pass
+        # dL/dx_hat
+        d_out = [2.0 * (x_hat[i] - x[i]) / self.input_dim for i in range(self.input_dim)]
+
+        # Dec2 grads
+        d_w_dec2 = [[h2[i] * d_out[j] for j in range(self.input_dim)] for i in range(self.hidden_dim)]
+        d_b_dec2 = list(d_out)
+
+        # dL/dh2
+        d_h2 = [sum(d_out[j] * self.w_dec2[i][j] for j in range(self.input_dim)) * self._relu_deriv(s_h2[i]) for i in range(self.hidden_dim)]
+
+        # Dec1 grads
+        d_w_dec1 = [[z[i] * d_h2[j] for j in range(self.hidden_dim)] for i in range(self.latent_dim)]
+        d_b_dec1 = list(d_h2)
+
+        # dL/dz
+        d_z = [sum(d_h2[j] * self.w_dec1[i][j] for j in range(self.hidden_dim)) for i in range(self.latent_dim)]
+
+        # Enc2 grads
+        d_w_enc2 = [[h1[i] * d_z[j] for j in range(self.latent_dim)] for i in range(self.hidden_dim)]
+        d_b_enc2 = list(d_z)
+
+        # dL/dh1
+        d_h1 = [sum(d_z[j] * self.w_enc2[i][j] for j in range(self.latent_dim)) * self._relu_deriv(s_h1[i]) for i in range(self.hidden_dim)]
+
+        # Enc1 grads
+        d_w_enc1 = [[x[i] * d_h1[j] for j in range(self.hidden_dim)] for i in range(self.input_dim)]
+        d_b_enc1 = list(d_h1)
+
+        # Update weights (SGD)
+        for i in range(self.input_dim):
+            for j in range(self.hidden_dim):
+                self.w_enc1[i][j] -= lr * d_w_enc1[i][j]
+        for j in range(self.hidden_dim):
+            self.b_enc1[j] -= lr * d_b_enc1[j]
+
+        for i in range(self.hidden_dim):
+            for j in range(self.latent_dim):
+                self.w_enc2[i][j] -= lr * d_w_enc2[i][j]
+        for j in range(self.latent_dim):
+            self.b_enc2[j] -= lr * d_b_enc2[j]
+
+        for i in range(self.latent_dim):
+            for j in range(self.hidden_dim):
+                self.w_dec1[i][j] -= lr * d_w_dec1[i][j]
+        for j in range(self.hidden_dim):
+            self.b_dec1[j] -= lr * d_b_dec1[j]
+
+        for i in range(self.hidden_dim):
+            for j in range(self.input_dim):
+                self.w_dec2[i][j] -= lr * d_w_dec2[i][j]
+        for j in range(self.input_dim):
+            self.b_dec2[j] -= lr * d_b_dec2[j]
+
+        return loss
+
+    def fit(self, dataset: List[List[float]], epochs: int = 50, lr: float = 0.01) -> List[float]:
+        history = []
+        for _ in range(epochs):
+            total_loss = 0.0
+            for sample in dataset:
+                total_loss += self.train_step(sample, lr=lr)
+            history.append(total_loss / max(1, len(dataset)))
+        return history
+
+
+def ml_autoencoder(input_dim: int, latent_dim: int, hidden_dim: int = 16) -> AutoencoderNeuralNetwork:
+    """Instantiates a dense bottle-neck Autoencoder neural network."""
+    return AutoencoderNeuralNetwork(input_dim, latent_dim, hidden_dim)

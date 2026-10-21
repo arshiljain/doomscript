@@ -1384,3 +1384,166 @@ def agent_mcts_search(
 
 
 
+
+
+# ==============================================================================
+# ADVANCED AGENT DECISION ENGINES: HTN PLANNER & MONTE CARLO TREE SEARCH (MCTS)
+# ==============================================================================
+
+class HTNPlanner:
+    """Hierarchical Task Network (HTN) decomposition planner with backtracking."""
+
+    def __init__(self):
+        # primitive_operators: name -> {"preconditions": fn(state), "effects": fn(state) -> new_state}
+        self.operators: Dict[str, Dict[str, Any]] = {}
+        # compound_methods: task_name -> list of {"conditions": fn(state), "subtasks": list_of_tasks}
+        self.methods: Dict[str, List[Dict[str, Any]]] = {}
+
+    def declare_operator(self, name: str, precondition: Callable[[Dict[str, Any]], bool], effect: Callable[[Dict[str, Any]], Dict[str, Any]]):
+        self.operators[name] = {"precondition": precondition, "effect": effect}
+
+    def declare_method(self, task_name: str, condition: Callable[[Dict[str, Any]], bool], subtasks: List[str]):
+        if task_name not in self.methods:
+            self.methods[task_name] = []
+        self.methods[task_name].append({"condition": condition, "subtasks": subtasks})
+
+    def plan(self, initial_state: Dict[str, Any], task_list: List[str]) -> Optional[List[str]]:
+        """Finds an executable sequence of primitive actions to achieve compound tasks."""
+        def seek_plan(state: Dict[str, Any], tasks: List[str], plan_acc: List[str]) -> Optional[Tuple[Dict[str, Any], List[str]]]:
+            if not tasks:
+                return state, plan_acc
+
+            task = tasks[0]
+            rest = tasks[1:]
+
+            # If task is primitive operator
+            if task in self.operators:
+                op = self.operators[task]
+                if op["precondition"](state):
+                    new_state = op["effect"](dict(state))
+                    res = seek_plan(new_state, rest, plan_acc + [task])
+                    if res is not None:
+                        return res
+
+            # If task is compound method
+            elif task in self.methods:
+                for method in self.methods[task]:
+                    if method["condition"](state):
+                        new_tasks = method["subtasks"] + rest
+                        res = seek_plan(state, new_tasks, plan_acc)
+                        if res is not None:
+                            return res
+
+            return None
+
+        result = seek_plan(dict(initial_state), task_list, [])
+        return result[1] if result is not None else None
+
+
+class MCTSNode:
+    """Node in Monte Carlo Search Tree."""
+    def __init__(self, state: Any, parent: Optional['MCTSNode'] = None, action_taken: Any = None):
+        self.state = state
+        self.parent = parent
+        self.action_taken = action_taken
+        self.children: List['MCTSNode'] = []
+        self.visits: int = 0
+        self.value_sum: float = 0.0
+
+    def is_fully_expanded(self, legal_actions: List[Any]) -> bool:
+        return len(self.children) == len(legal_actions)
+
+    def best_child(self, exploration_c: float = 1.414) -> 'MCTSNode':
+        import math
+        def ucb_score(child: MCTSNode) -> float:
+            if child.visits == 0:
+                return float('inf')
+            exploit = child.value_sum / child.visits
+            explore = exploration_c * math.sqrt(math.log(self.visits) / child.visits)
+            return exploit + explore
+        return max(self.children, key=ucb_score)
+
+
+class MonteCarloTreeSearchEngine:
+    """Domain-agnostic Monte Carlo Tree Search (MCTS) with UCB1 decision making."""
+
+    def __init__(
+        self,
+        get_legal_actions: Callable[[Any], List[Any]],
+        apply_action: Callable[[Any, Any], Any],
+        is_terminal: Callable[[Any], bool],
+        evaluate_state: Callable[[Any], float],
+        exploration_weight: float = 1.414,
+    ):
+        self.get_legal_actions = get_legal_actions
+        self.apply_action = apply_action
+        self.is_terminal = is_terminal
+        self.evaluate_state = evaluate_state
+        self.exploration_weight = exploration_weight
+
+    def search(self, root_state: Any, num_simulations: int = 200) -> Any:
+        import random
+        root = MCTSNode(root_state)
+
+        for _ in range(num_simulations):
+            # 1. Selection
+            node = root
+            while not self.is_terminal(node.state) and node.is_fully_expanded(self.get_legal_actions(node.state)):
+                if not node.children:
+                    break
+                node = node.best_child(self.exploration_weight)
+
+            # 2. Expansion
+            curr_state = node.state
+            if not self.is_terminal(curr_state):
+                legal_actions = self.get_legal_actions(curr_state)
+                expanded_actions = set(c.action_taken for c in node.children)
+                unexpanded = [a for a in legal_actions if a not in expanded_actions]
+                if unexpanded:
+                    action = random.choice(unexpanded)
+                    next_state = self.apply_action(curr_state, action)
+                    child_node = MCTSNode(next_state, parent=node, action_taken=action)
+                    node.children.append(child_node)
+                    node = child_node
+
+            # 3. Rollout / Simulation
+            sim_state = node.state
+            rollout_steps = 0
+            while not self.is_terminal(sim_state) and rollout_steps < 30:
+                actions = self.get_legal_actions(sim_state)
+                if not actions:
+                    break
+                sim_action = random.choice(actions)
+                sim_state = self.apply_action(sim_state, sim_action)
+                rollout_steps += 1
+
+            reward = self.evaluate_state(sim_state)
+
+            # 4. Backpropagation
+            curr_back = node
+            while curr_back is not None:
+                curr_back.visits += 1
+                curr_back.value_sum += reward
+                curr_back = curr_back.parent
+
+        if not root.children:
+            return None
+        # Select most visited child
+        best_node = max(root.children, key=lambda c: c.visits)
+        return best_node.action_taken
+
+
+def agent_htn_planner() -> HTNPlanner:
+    """Instantiates a Hierarchical Task Network planner."""
+    return HTNPlanner()
+
+
+def agent_mcts(
+    get_actions: Callable,
+    apply_action: Callable,
+    is_terminal: Callable,
+    eval_state: Callable,
+    c: float = 1.414,
+) -> MonteCarloTreeSearchEngine:
+    """Instantiates an MCTS engine."""
+    return MonteCarloTreeSearchEngine(get_actions, apply_action, is_terminal, eval_state, exploration_weight=c)
