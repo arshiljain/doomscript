@@ -1454,3 +1454,125 @@ def time_series_dtw(series1: List[float], series2: List[float], window: Optional
 def time_series_cusum(series: List[float], threshold_h: float = 4.0) -> Dict[str, Any]:
     """Performs CUSUM change point anomaly detection on time series."""
     return CUSUMDetector.detect(series, threshold_h=threshold_h)
+
+
+# ==============================================================================
+# ADVANCED TIME SERIES: ENGLE-GRANGER COINTEGRATION & PELT CHANGEPOINT
+# ==============================================================================
+
+class CointegrationEngleGranger:
+    """Engle-Granger two-step cointegration test between two non-stationary time series."""
+
+    @classmethod
+    def test(cls, y: List[float], x: List[float]) -> Dict[str, Any]:
+        n = min(len(y), len(x))
+        if n < 10:
+            return {"cointegrated": False, "beta": 0.0, "adf_stat": 0.0}
+
+        y = y[:n]
+        x = x[:n]
+        # Step 1: OLS regression y_t = alpha + beta * x_t + e_t
+        x_mean = sum(x) / n
+        y_mean = sum(y) / n
+        denom = sum((x[i] - x_mean) ** 2 for i in range(n))
+        beta = sum((x[i] - x_mean) * (y[i] - y_mean) for i in range(n)) / max(1e-12, denom)
+        alpha = y_mean - beta * x_mean
+
+        residuals = [y[i] - (alpha + beta * x[i]) for i in range(n)]
+
+        # Step 2: Test residuals for stationarity (DF test: delta_e = gamma * e_{t-1} + u)
+        delta_e = [residuals[i] - residuals[i - 1] for i in range(1, n)]
+        e_lag = residuals[:-1]
+
+        m_num = sum(delta_e[i] * e_lag[i] for i in range(len(delta_e)))
+        m_den = sum(e_lag[i] ** 2 for i in range(len(e_lag)))
+        gamma = m_num / max(1e-12, m_den)
+
+        res_err = [delta_e[i] - gamma * e_lag[i] for i in range(len(delta_e))]
+        sigma_sq = sum(err ** 2 for err in res_err) / max(1, len(delta_e) - 1)
+        se_gamma = (sigma_sq / max(1e-12, m_den)) ** 0.5
+        t_stat = gamma / max(1e-12, se_gamma)
+
+        # Critical value at 5% significance for n ~ 50-100 is approx -3.37
+        is_cointegrated = t_stat < -3.0
+
+        return {
+            "cointegrated": is_cointegrated,
+            "beta": beta,
+            "alpha": alpha,
+            "t_statistic": t_stat,
+            "critical_value_5pct": -3.37,
+        }
+
+
+class PELTChangepointDetection:
+    """Pruned Exact Linear Time (PELT) optimal multiple changepoint segmentation."""
+
+    @classmethod
+    def detect(cls, data: List[float], penalty: float = 3.0) -> Dict[str, Any]:
+        n = len(data)
+        if n < 4:
+            return {"changepoints": []}
+
+        # Cost function: Gaussian negative log-likelihood (variance fixed at 1.0)
+        # Cost(y[s..t]) = sum((x - mean)^2)
+        prefix_sum = [0.0]
+        prefix_sq = [0.0]
+        for x in data:
+            prefix_sum.append(prefix_sum[-1] + x)
+            prefix_sq.append(prefix_sq[-1] + x * x)
+
+        def segment_cost(s: int, t: int) -> float:
+            length = t - s
+            if length <= 0:
+                return 0.0
+            total = prefix_sum[t] - prefix_sum[s]
+            total_sq = prefix_sq[t] - prefix_sq[s]
+            mean = total / length
+            return total_sq - 2.0 * mean * total + length * (mean ** 2)
+
+        F = [-penalty] + [0.0] * n
+        R = [0]
+        cp = {}
+
+        for t in range(1, n + 1):
+            best_val = float("inf")
+            best_tau = 0
+            new_R = []
+            for tau in R:
+                c = segment_cost(tau, t)
+                val = F[tau] + c + penalty
+                if val < best_val:
+                    best_val = val
+                    best_tau = tau
+                if F[tau] + c <= best_val:
+                    new_R.append(tau)
+            F[t] = best_val
+            cp[t] = best_tau
+            new_R.append(t)
+            R = new_R
+
+        # Backtrack changepoints
+        changepoints = []
+        curr = n
+        while curr > 0:
+            tau = cp.get(curr, 0)
+            if tau > 0:
+                changepoints.append(tau)
+            curr = tau
+
+        changepoints.reverse()
+        return {
+            "changepoints": changepoints,
+            "num_segments": len(changepoints) + 1,
+        }
+
+
+def time_series_cointegration(y: List[float], x: List[float]) -> Record:
+    """Performs Engle-Granger two-step cointegration analysis."""
+    return Record(CointegrationEngleGranger.test(y, x))
+
+
+def time_series_pelt_changepoints(data: List[float], penalty: float = 5.0) -> Record:
+    """Detects structural regime changes and changepoints using PELT."""
+    return Record(PELTChangepointDetection.detect(data, penalty=penalty))

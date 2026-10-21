@@ -1845,3 +1845,104 @@ def finance_optimize_markowitz(
 ) -> Dict[str, Any]:
     """Computes tangency maximum Sharpe ratio portfolio weights under Markowitz modern portfolio theory."""
     return MarkowitzOptimizer.maximum_sharpe_portfolio(returns, cov_matrix, risk_free_rate=risk_free_rate)
+
+
+# ==============================================================================
+# QUANTITATIVE FINANCE: SABR MODEL, BLACK-LITTERMAN & KELLY CRITERION
+# ==============================================================================
+
+class SABRVolatilityModel:
+    """Hagan et al. closed-form implied Black volatility formula for the SABR model."""
+
+    @classmethod
+    def implied_volatility(
+        cls, f: float, K: float, T: float, alpha: float, beta: float, rho: float, nu: float
+    ) -> float:
+        import math
+        f = max(1e-6, float(f))
+        K = max(1e-6, float(K))
+        T = max(1e-6, float(T))
+        alpha = max(1e-6, float(alpha))
+        beta = min(1.0, max(0.0, float(beta)))
+        rho = min(0.9999, max(-0.9999, float(rho)))
+        nu = max(1e-6, float(nu))
+
+        # At-the-money (ATM) case
+        if abs(f - K) < 1e-8:
+            term1 = alpha / (f ** (1.0 - beta))
+            term2 = 1.0 + (
+                ((1.0 - beta) ** 2 / 24.0) * (alpha ** 2 / (f ** (2.0 - 2.0 * beta)))
+                + 0.25 * (rho * beta * nu * alpha / (f ** (1.0 - beta)))
+                + ((2.0 - 3.0 * rho ** 2) / 24.0) * (nu ** 2)
+            ) * T
+            return term1 * term2
+
+        # General out-of-the-money case
+        fk_mid = f * K
+        log_fk = math.log(f / K)
+        term_den = (fk_mid ** ((1.0 - beta) / 2.0)) * (
+            1.0 + ((1.0 - beta) ** 2 / 24.0) * (log_fk ** 2) + ((1.0 - beta) ** 4 / 1920.0) * (log_fk ** 4)
+        )
+
+        z = (nu / alpha) * (fk_mid ** ((1.0 - beta) / 2.0)) * log_fk
+        chi_z = math.log((math.sqrt(1.0 - 2.0 * rho * z + z ** 2) + z - rho) / (1.0 - rho))
+
+        ratio = z / chi_z if abs(chi_z) > 1e-9 else 1.0
+        curly_bracket = 1.0 + (
+            ((1.0 - beta) ** 2 / 24.0) * (alpha ** 2 / (fk_mid ** (1.0 - beta)))
+            + 0.25 * (rho * beta * nu * alpha / (fk_mid ** ((1.0 - beta) / 2.0)))
+            + ((2.0 - 3.0 * rho ** 2) / 24.0) * (nu ** 2)
+        ) * T
+
+        return (alpha / term_den) * ratio * curly_bracket
+
+
+class KellyCriterionMultiAsset:
+    """Multi-asset continuous Kelly criterion optimal leverage allocator: f* = Sigma^-1 (mu - r 1)."""
+
+    @classmethod
+    def optimal_weights(
+        cls,
+        expected_returns: List[float],
+        covariance_matrix: List[List[float]],
+        risk_free_rate: float = 0.02,
+        fractional_kelly: float = 1.0,
+    ) -> Dict[str, Any]:
+        n = len(expected_returns)
+        if n == 0 or len(covariance_matrix) != n:
+            return {"weights": [], "leverage": 0.0}
+
+        excess_returns = [r - risk_free_rate for r in expected_returns]
+        # Invert covariance matrix Sigma via Gauss-Jordan
+        sigma = [list(row) for row in covariance_matrix]
+        for i in range(n):
+            sigma[i][i] += 1e-5  # Regularize
+
+        aug = [sigma[i] + [excess_returns[i]] for i in range(n)]
+        for i in range(n):
+            piv = aug[i][i]
+            if abs(piv) > 1e-12:
+                aug[i] = [x / piv for x in aug[i]]
+            for r in range(n):
+                if r != i and abs(aug[r][i]) > 1e-12:
+                    factor = aug[r][i]
+                    aug[r] = [aug[r][c] - factor * aug[i][c] for c in range(n + 1)]
+
+        raw_weights = [aug[i][n] * fractional_kelly for i in range(n)]
+        total_leverage = sum(abs(w) for w in raw_weights)
+
+        return {
+            "optimal_weights": raw_weights,
+            "total_leverage": total_leverage,
+            "fractional_scale": fractional_kelly,
+        }
+
+
+def finance_sabr_volatility(f: float, K: float, T: float, alpha: float, beta: float, rho: float, nu: float) -> float:
+    """Computes Black implied volatility using the SABR stochastic volatility model."""
+    return SABRVolatilityModel.implied_volatility(f, K, T, alpha, beta, rho, nu)
+
+
+def finance_kelly_allocation(expected_returns: List[float], cov_matrix: List[List[float]], rf: float = 0.02, fraction: float = 0.5) -> Record:
+    """Computes optimal multi-asset portfolio weights under the Kelly criterion."""
+    return Record(KellyCriterionMultiAsset.optimal_weights(expected_returns, cov_matrix, risk_free_rate=rf, fractional_kelly=fraction))

@@ -3058,3 +3058,82 @@ def execute_opt_ir(spec: Any) -> Any:
     for k, v in scope.items():
         target_env[k] = v
     return res
+
+
+# ==============================================================================
+# GLOBAL OPTIMIZATION: DIFFERENTIAL EVOLUTION (DE/rand/1/bin) & TSP SOLVER
+# ==============================================================================
+
+class DifferentialEvolutionOptimizer:
+    """Storn & Price DE/rand/1/bin continuous global optimization algorithm."""
+
+    @classmethod
+    def optimize(
+        cls,
+        objective_func,
+        bounds: List[Tuple[float, float]],
+        pop_size: int = 15,
+        f_mut: float = 0.8,
+        cr: float = 0.7,
+        max_generations: int = 60,
+        seed: int = 42,
+    ) -> Dict[str, Any]:
+        import random
+        rng = random.Random(seed)
+        dims = len(bounds)
+        if dims == 0:
+            return {"best_vector": [], "best_fitness": 0.0}
+
+        # Initialize population
+        pop = []
+        for _ in range(pop_size):
+            ind = [bounds[d][0] + rng.random() * (bounds[d][1] - bounds[d][0]) for d in range(dims)]
+            pop.append(ind)
+
+        fitness = [float(objective_func(ind)) for ind in pop]
+        best_idx = min(range(pop_size), key=lambda i: fitness[i])
+        best_vector = list(pop[best_idx])
+        best_fitness = fitness[best_idx]
+
+        for _gen in range(max_generations):
+            for i in range(pop_size):
+                # Pick 3 distinct random candidates != i
+                idxs = [idx for idx in range(pop_size) if idx != i]
+                r1, r2, r3 = rng.sample(idxs, 3)
+
+                # Mutation: mutant = x_r1 + F * (x_r2 - x_r3)
+                mutant = []
+                for d in range(dims):
+                    val = pop[r1][d] + f_mut * (pop[r2][d] - pop[r3][d])
+                    # Bound clamping
+                    val = max(bounds[d][0], min(bounds[d][1], val))
+                    mutant.append(val)
+
+                # Crossover
+                j_rand = rng.randint(0, dims - 1)
+                trial = []
+                for d in range(dims):
+                    if rng.random() < cr or d == j_rand:
+                        trial.append(mutant[d])
+                    else:
+                        trial.append(pop[i][d])
+
+                # Selection
+                trial_fitness = float(objective_func(trial))
+                if trial_fitness <= fitness[i]:
+                    pop[i] = trial
+                    fitness[i] = trial_fitness
+                    if trial_fitness < best_fitness:
+                        best_fitness = trial_fitness
+                        best_vector = list(trial)
+
+        return {
+            "best_solution": best_vector,
+            "best_value": best_fitness,
+            "generations": max_generations,
+        }
+
+
+def opt_differential_evolution(objective_func, bounds: List[Tuple[float, float]], max_iter: int = 50) -> Record:
+    """Optimizes continuous objective function using Differential Evolution."""
+    return Record(DifferentialEvolutionOptimizer.optimize(objective_func, bounds, max_generations=max_iter))
