@@ -769,10 +769,55 @@ mean = ds_mean
 median = ds_median
 std_dev = ds_std_dev
 stdev = ds_std_dev
+ds_stdev = ds_std_dev
 stats_stdev = ds_std_dev
 variance = ds_variance
 stats_variance = ds_variance
 stats_median = ds_median
+
+
+def ds_enumerate(collection, start=1):
+    """1-based default enumerate for natural English loops."""
+    return enumerate(collection, start=start)
+
+
+def ds_take(collection, n):
+    """Take the first n elements from a sequence, string, or collection."""
+    if hasattr(collection, "__getitem__"):
+        try:
+            return collection[:n]
+        except Exception:
+            pass
+    items = list(collection)
+    return items[:n]
+
+
+def ds_drop(collection, n):
+    """Drop the first n elements from a sequence, string, or collection."""
+    if hasattr(collection, "__getitem__"):
+        try:
+            return collection[n:]
+        except Exception:
+            pass
+    items = list(collection)
+    return items[n:]
+
+
+def ds_percent_of(pct, total):
+    """Compute percentage: '15 percent of total' -> (15 / 100) * total."""
+    return (float(pct) / 100.0) * float(total)
+
+
+def ds_pipe(initial_value, *functions):
+    """Sequentially apply functions to initial_value: pipe x into f1 then f2."""
+    val = initial_value
+    for fn in functions:
+        if callable(fn):
+            val = fn(val)
+        else:
+            raise DoomTypeError(f"Pipe target '{fn}' is not callable.")
+    return val
+
 PI = math.pi
 E = math.e
 INF = float("inf")
