@@ -1859,8 +1859,13 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         flags=re.IGNORECASE
     )
     masked = re.sub(r"\b([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s+trimmed\b", r"ds_trim(\1)", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\b([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s+uppercase\b", r"ds_uppercase(\1)", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\b([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s+lowercase\b", r"ds_lowercase(\1)", masked, flags=re.IGNORECASE)
+    # Nominal case: uppercase of X / lowercase of X
+    masked = re.sub(r"\b(?:the\s+)?uppercase\s+of\s+([^\s,;:\)]+)", r"ds_uppercase(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(?:the\s+)?lowercase\s+of\s+([^\s,;:\)]+)", r"ds_lowercase(\1)", masked, flags=re.IGNORECASE)
+
+    # Participle case: X uppercase / X lowercase (excluding keywords & verbs)
+    masked = re.sub(r"\b(?!(?:to|in|into|of|from|as|with|say|show|print|display|set|let|put|the|a|an|ds_\w+)\b)([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s+uppercase\b", r"ds_uppercase(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(?!(?:to|in|into|of|from|as|with|say|show|print|display|set|let|put|the|a|an|ds_\w+)\b)([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s+lowercase\b", r"ds_lowercase(\1)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\b([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s+reversed\b", r"ds_reversed(\1)", masked, flags=re.IGNORECASE)
 
     # Frontier 4: Range Literals and Loops
@@ -1888,9 +1893,42 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     # Disambiguate reserved words used as standalone variable names
     masked = re.sub(r"(?<!'s\s)(?<!\.)(?<!\bto\s)(?<![\"'])\bcount\b(?![\"'])(?!\s+of\b)(?!\s+from\b)(?!\s+into\b)(?!\s*\()", "_var_count", masked)
     masked = re.sub(r"(?<!'s\s)(?<!\.)(?<!\bto\s)(?<![\"'])\bsum\b(?![\"'])(?!\s+of\b)(?!\s*\()", "_var_sum", masked)
-    masked = re.sub(r"(?<!'s\s)(?<!\.)(?<![\"'])\badd\b(?![\"'])(?!\s+(?:.+?\s+)?to\b)", "_var_add", masked)
+    masked = re.sub(r"(?<!'s\s)(?<!\.)(?<![\"'])\badd\b(?![\"'])(?!\s+(?:.+?\s+)?(?:to|into)\b)", "_var_add", masked)
     masked = re.sub(r"(?<!'s\s)(?<!\.)(?<!\bto\s)(?<!\bbullet\s)(?<!\ba\s)(?<!\bempty\s)(?<!\bnew\s)(?<![\"'])\blist\b(?![\"'])(?!\s+files\b)(?!\s+of\b)(?!\s*\()", "_var_list", masked)
     masked = re.sub(r"(?<!'s\s)(?<!\.)(?<!\bto\s)(?<!\bfind\s)(?<!\btake\s)(?<!\bdrop\s)\bfirst\b(?!\s+(?:\d+|[A-Za-z_]\w*)\s+items?\s+(?:of|from)\b|\s+item\s+of\b|\s+[A-Z]\w*)(?!\s*\()", "_var_first", masked)
+    # Preposition flexibility: add <item> into <target>
+    masked = re.sub(
+        r"^\s*add\s+(.+?)\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
+        r"add \1 to \2",
+        masked,
+        flags=re.IGNORECASE
+    )
+
+    # Elliptical branching: if so: / if not:
+    masked = re.sub(r"^\s*if\s+so\s*:", "if that:", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*if\s+not\s*:", "else:", masked, flags=re.IGNORECASE)
+
+    # Imperative & Nominal string case transformations
+    m_up_into = re.match(r"^\s*uppercase\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if m_up_into:
+        masked = f"set {m_up_into.group(2)} to ds_uppercase({m_up_into.group(1).strip()})"
+
+    m_low_into = re.match(r"^\s*lowercase\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if m_low_into:
+        masked = f"set {m_low_into.group(2)} to ds_lowercase({m_low_into.group(1).strip()})"
+
+    if not re.search(r"\binto\b", masked, re.IGNORECASE):
+        m_up_bare = re.match(r"^\s*uppercase\s+([^\s].*)$", masked, re.IGNORECASE)
+        if m_up_bare:
+            masked = f"set that to ds_uppercase({m_up_bare.group(1).strip()})"
+
+        m_low_bare = re.match(r"^\s*lowercase\s+([^\s].*)$", masked, re.IGNORECASE)
+        if m_low_bare:
+            masked = f"set that to ds_lowercase({m_low_bare.group(1).strip()})"
+
+    masked = re.sub(r"\b(?:the\s+)?uppercase\s+of\s+([^\s,;:\)]+)", r"ds_uppercase(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(?:the\s+)?lowercase\s+of\s+([^\s,;:\)]+)", r"ds_lowercase(\1)", masked, flags=re.IGNORECASE)
+
     masked = re.sub(r"\bround\s*\(", "math_round(", masked, flags=re.IGNORECASE)
     masked = re.sub(r"(?<!\.)\bsum\s*\(", "agg_sum(", masked, flags=re.IGNORECASE)
 
