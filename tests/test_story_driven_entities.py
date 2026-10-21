@@ -91,3 +91,51 @@ o2.user = u2
     assert env2["o2"] in env2["u2"].orders
 
 
+def test_embedded_and_standalone_when_handlers():
+    source = """
+a BankAccount begins with balance = 0:
+    when receiving amount:
+        increase my balance by amount
+        return my balance
+
+    when withdrawing amount:
+        make sure my balance >= amount otherwise "Insufficient funds"
+        decrease my balance by amount
+        return my balance
+
+create a BankAccount into acc
+acc.receive(100)
+acc.withdraw(30)
+"""
+    env = execute(source)
+    assert env["acc"].balance == 70
+
+    # Test participle alias calling
+    source_participle = """
+a BankAccount begins with balance = 0:
+    when receiving amount:
+        increase my balance by amount
+        return my balance
+
+create a BankAccount into acc
+acc.receiving(50)
+"""
+    env_p = execute(source_participle)
+    assert env_p["acc"].balance == 50
+
+    # Test standalone story rule
+    source_standalone = """
+a BankAccount begins with balance = 0
+
+when a BankAccount deposits amount:
+    increase my balance by amount
+    return my balance
+
+create a BankAccount into acc
+acc.deposit(200)
+"""
+    env_s = execute(source_standalone)
+    assert env_s["acc"].balance == 200
+
+
+

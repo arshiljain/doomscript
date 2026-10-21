@@ -8,6 +8,7 @@ import difflib
 import re
 from typing import Optional, List, Tuple, Dict, Any
 from doomscript.exceptions import DoomScopeError, DoomSyntaxError
+from doomscript.core.entity import stem_verb
 
 
 # ---------------------------------------------------------------------------
@@ -540,9 +541,9 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     if re.match(r"^(?:if|unless)\s+.+\s+then$", masked, re.IGNORECASE):
         masked = re.sub(r"\s+then$", ":", masked, flags=re.IGNORECASE)
 
-    # Pre-normalize and protect assert that / make sure that / check that / assert
-    masked = re.sub(r"^\s*(?:make\s+sure\s+that|assert\s+that|assert|check\s+that)\s+(.+?)\s+otherwise\s+(.+)$", r"verify that \1 otherwise \2", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"^\s*(?:make\s+sure\s+that|assert\s+that|assert|check\s+that)\s+(.+)$", r'verify that \1 otherwise "Check failed"', masked, flags=re.IGNORECASE)
+    # Pre-normalize and protect assert that / make sure [that] / check that / assert
+    masked = re.sub(r"^\s*(?:make\s+sure(?:\s+that)?|ensure(?:\s+that)?|assert(?:\s+that)?|check\s+that)\s+(.+?)\s+otherwise\s+(.+)$", r"verify that \1 otherwise \2", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*(?:make\s+sure(?:\s+that)?|ensure(?:\s+that)?|assert(?:\s+that)?|check\s+that)\s+(.+)$", r'verify that \1 otherwise "Check failed"', masked, flags=re.IGNORECASE)
 
     # Pillar A: Conversational hypotheses and intentional definitions
     masked = re.sub(
@@ -2351,6 +2352,7 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
     scope = ScopeTracker()
     pending_injections: List[Tuple[int, List[str], int]] = []
     pending_routes: List[Tuple[int, str, int]] = []
+    pending_entity_methods: List[Tuple[int, str, int]] = []
     match_stack: List[Dict[str, Any]] = []
     plot_stack: List[Dict[str, Any]] = []
     domain_block_stack: List[Dict[str, Any]] = []
@@ -2402,6 +2404,11 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
         while pending_routes and indent_len <= pending_routes[-1][0]:
             _, r_stmt, r_line = pending_routes.pop()
             emit(r_stmt, r_line)
+
+        # Check pending entity methods if indentation returned to parent level
+        while pending_entity_methods and indent_len <= pending_entity_methods[-1][0]:
+            _, em_stmt, em_line = pending_entity_methods.pop()
+            emit(em_stmt, em_line)
 
         # Check pending injections from a function header
         if pending_injections and raw_line.strip():
@@ -2900,6 +2907,45 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
                 new_indent_len = max(indent_len - shift, cur_match["match_indent"] + 4)
                 indent = " " * new_indent_len
 
+        # Phase 12b: Event-Driven State Transitions ('when ...')
+        if not (match_stack and indent_len > match_stack[-1]["match_indent"]):
+            # 1. Standalone story rule at top level: when [a|an] <Entity> <action> [with <args>]:
+            if indent_len == 0:
+                when_standalone_m = re.match(
+                    r"^when\s+(?:(?:a|an)\s+)?([A-Za-z_]\w*)\s+([A-Za-z_]\w*)(?:\s+with\s+(.+?)|\s+([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*))?\s*:$",
+                    code,
+                    re.IGNORECASE,
+                )
+                if when_standalone_m:
+                    cname = when_standalone_m.group(1)
+                    raw_action = when_standalone_m.group(2)
+                    args = (when_standalone_m.group(3) or when_standalone_m.group(4) or "").strip()
+                    primary_verb = stem_verb(raw_action)
+                    fn_name = f"__{cname}_{primary_verb}_{line_idx}"
+                    param_str = f"self, {args}" if args else "self"
+                    emit(f"{indent}to {fn_name} with {param_str}:", line_idx)
+                    pending_entity_methods.append((indent_len, f"{indent}set {cname}.{primary_verb} to {fn_name}", line_idx))
+                    if raw_action != primary_verb:
+                        pending_entity_methods.append((indent_len, f"{indent}set {cname}.{raw_action} to {fn_name}", line_idx))
+                    continue
+
+            # 2. Embedded entity method handler inside entity/class block: when <action> [with <args>]:
+            else:
+                when_embedded_m = re.match(
+                    r"^when\s+([A-Za-z_]\w*)(?:\s+with\s+(.+?)|\s+([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*))?\s*:$",
+                    code,
+                    re.IGNORECASE,
+                )
+                if when_embedded_m:
+                    raw_action = when_embedded_m.group(1)
+                    args = (when_embedded_m.group(2) or when_embedded_m.group(3) or "").strip()
+                    primary_verb = stem_verb(raw_action)
+                    if args:
+                        emit(f"{indent}to {primary_verb} with {args}:", line_idx)
+                    else:
+                        emit(f"{indent}to {primary_verb}:", line_idx)
+                    continue
+
         # Phase 13: 'on get|post|put|delete <path>:'
         route_m = re.match(r"^on\s+(get|post|put|delete)\s+(.+?):?$", code, re.IGNORECASE)
         if route_m:
@@ -3063,6 +3109,10 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
     while pending_routes:
         _, r_stmt, r_line = pending_routes.pop(0)
         emit(r_stmt, r_line)
+
+    while pending_entity_methods:
+        _, em_stmt, em_line = pending_entity_methods.pop(0)
+        emit(em_stmt, em_line)
 
     while plot_stack:
         p_info = plot_stack.pop(0)

@@ -39,6 +39,23 @@ class RelationshipList(list):
             self.append(it)
 
 
+def stem_verb(verb: str) -> str:
+    """Stems present participle (-ing) or 3rd-person (-s) verb to base form."""
+    v = verb.lower()
+    if v.endswith("eiving"):
+        return v[:-6] + "eive"
+    if v.endswith("ing"):
+        s = v[:-3]
+        if len(s) > 2 and s[-1] == s[-2]:
+            return s[:-1]
+        if s.endswith(("v", "c", "z", "th", "clos", "creat", "plac", "sav", "updat")):
+            return s + "e"
+        return s
+    if v.endswith("s") and not v.endswith("ss"):
+        return v[:-1]
+    return v
+
+
 class DoomEntity(Record):
     """
     Base class for all story-driven domain entities in DoomScript.
@@ -94,6 +111,14 @@ class DoomEntity(Record):
             if key in has_one_map:
                 self[key] = None
                 return None
+
+            # Automatic verb participle alias resolution (e.g. acc.receiving -> acc.receive)
+            stem = stem_verb(key)
+            if stem != key and hasattr(self, stem):
+                return getattr(self, stem)
+            if hasattr(self, key + "ing"):
+                return getattr(self, key + "ing")
+
             raise
 
     def __setattr__(self, key: str, value: Any) -> None:
