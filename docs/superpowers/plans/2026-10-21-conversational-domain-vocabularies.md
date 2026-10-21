@@ -53,12 +53,12 @@
     - `post <payload> to <url> into <target>`
     - `extract [json] field <path> from <source> into <target>`
 
-- [ ] **Step 1: Write failing unit tests for Web & API conversational syntax**
-- [ ] **Step 2: Run test to verify it fails**
-- [ ] **Step 3: Implement `extract_json_field` in `runtime.py` and exports in `core/exports.py`**
-- [ ] **Step 4: Implement phrase desugaring in `phrases.py`**
-- [ ] **Step 5: Run tests to verify they pass**
-- [ ] **Step 6: Commit Task 1**
+- [x] **Step 1: Write failing unit tests for Web & API conversational syntax**
+- [x] **Step 2: Run test to verify it fails**
+- [x] **Step 3: Implement `extract_json_field` in `runtime.py` and exports in `core/exports.py`**
+- [x] **Step 4: Implement phrase desugaring in `phrases.py`**
+- [x] **Step 5: Run tests to verify they pass**
+- [x] **Step 6: Commit Task 1**
 
 ---
 
@@ -81,12 +81,12 @@
     - `summarize <table> by <group> calculating <fn> of <metric> into <target>`
     - `plot <data> as [a] <geom> chart [titled <title>] [into <target>]`
 
-- [ ] **Step 1: Write failing unit tests for Data & Analytics conversational syntax**
-- [ ] **Step 2: Run test to verify it fails**
-- [ ] **Step 3: Implement `load_json_file` and `summarize_data` in `runtime.py`**
-- [ ] **Step 4: Implement phrase desugaring in `phrases.py` for file loading, summaries, and chart plotting**
-- [ ] **Step 5: Run tests to verify they pass**
-- [ ] **Step 6: Commit Task 2**
+- [x] **Step 1: Write failing unit tests for Data & Analytics conversational syntax**
+- [x] **Step 2: Run test to verify it fails**
+- [x] **Step 3: Implement `load_json_file` and `summarize_data` in `runtime.py`**
+- [x] **Step 4: Implement phrase desugaring in `phrases.py` for file loading, summaries, and chart plotting**
+- [x] **Step 5: Run tests to verify they pass**
+- [x] **Step 6: Commit Task 2**
 
 ---
 
@@ -106,12 +106,12 @@
     - `simulate portfolio with <allocations> into <target>` (handling natural percentage strings e.g. `50% BTC and 50% ETH`)
     - `calculate compound interest on principal <p> at rate <r> [over|for] <y> years into <target>`
 
-- [ ] **Step 1: Write failing unit tests for Finance & Simulation conversational syntax**
-- [ ] **Step 2: Run test to verify it fails**
-- [ ] **Step 3: Implement `simulate_portfolio` and `calculate_compound_interest` in `runtime.py`**
-- [ ] **Step 4: Implement portfolio allocation parsing and compound interest desugaring in `phrases.py`**
-- [ ] **Step 5: Run tests to verify they pass**
-- [ ] **Step 6: Commit Task 3**
+- [x] **Step 1: Write failing unit tests for Finance & Simulation conversational syntax**
+- [x] **Step 2: Run test to verify it fails**
+- [x] **Step 3: Implement `simulate_portfolio` and `calculate_compound_interest` in `runtime.py`**
+- [x] **Step 4: Implement portfolio allocation parsing and compound interest desugaring in `phrases.py`**
+- [x] **Step 5: Run tests to verify they pass**
+- [x] **Step 6: Commit Task 3**
 
 ---
 
@@ -133,12 +133,12 @@
     - `ask the agent <name> <prompt> into <target>`
     - `tell the agent <name> <message>`
 
-- [ ] **Step 1: Write failing unit tests for AI & Agent conversational syntax**
-- [ ] **Step 2: Run test to verify it fails**
-- [ ] **Step 3: Implement `ask_assistant` and `ask_model` in `runtime.py`**
-- [ ] **Step 4: Implement agent and assistant phrase desugaring in `phrases.py`**
-- [ ] **Step 5: Run tests to verify they pass**
-- [ ] **Step 6: Commit Task 4**
+- [x] **Step 1: Write failing unit tests for AI & Agent conversational syntax**
+- [x] **Step 2: Run test to verify it fails**
+- [x] **Step 3: Implement `ask_assistant` and `ask_model` in `runtime.py`**
+- [x] **Step 4: Implement agent and assistant phrase desugaring in `phrases.py`**
+- [x] **Step 5: Run tests to verify they pass**
+- [x] **Step 6: Commit Task 4**
 
 ---
 
@@ -148,8 +148,8 @@
 - Modify: `docs/superpowers/plans/2026-10-21-conversational-domain-vocabularies.ledger.md`
 - Test: Full test suite (`pytest tests/`), 85/85 Beginner UX Audit, 92+ Domain Regression Suite
 
-- [ ] **Step 1: Run complete conversational domain test suite**
-- [ ] **Step 2: Run 85-point Beginner UX Audit benchmark**
-- [ ] **Step 3: Run full 92+ regression suite**
-- [ ] **Step 4: Update execution ledger with commit hashes, test results, and metrics**
-- [ ] **Step 5: Commit and push changes to `main` branch**
+- [x] **Step 1: Run complete conversational domain test suite**
+- [x] **Step 2: Run 85-point Beginner UX Audit benchmark**
+- [x] **Step 3: Run full 92+ regression suite**
+- [x] **Step 4: Update execution ledger with commit hashes, test results, and metrics**
+- [x] **Step 5: Commit and push changes to `main` branch**
