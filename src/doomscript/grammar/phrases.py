@@ -651,6 +651,22 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"\bnone\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+is\s+negative\b", r"ds_none_negative(\1)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bnone\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+is\s+zero\b", r"ds_none_zero(\1)", masked, flags=re.IGNORECASE)
 
+    # Phase 2, Task 2.3: Relative Clauses in Loops ('whose')
+    whose_loop_m = re.match(
+        r"^\s*for\s+(?:each\s+)?([A-Za-z_]\w*)(?:\s+in\s+([A-Za-z_]\w*))?\s+whose\s+([A-Za-z_]\w*)\s+(is|==|equals|is at least|is at most|is greater than|is less than|is over|is under|>=|<=|<|>)\s+(.+?):?$",
+        masked,
+        re.IGNORECASE
+    )
+    if whose_loop_m:
+        item_var = whose_loop_m.group(1).strip()
+        coll_var = whose_loop_m.group(2).strip() if whose_loop_m.group(2) else (scope.get_last_plural() or f"{item_var}s")
+        attr_name = whose_loop_m.group(3).strip()
+        cmp_op = whose_loop_m.group(4).strip()
+        val_expr = whose_loop_m.group(5).strip()
+        if cmp_op.lower() in ("is", "equals"):
+            cmp_op = "=="
+        masked = f"for each {item_var} in {coll_var} where ds_attr({item_var}, '{attr_name}') {cmp_op} {val_expr}:"
+
     # Phase 1, Task 1.4: Universal, Existential & Negative Set Quantifiers
     all_are_m = re.match(r"^\s*if\s+all\s+(?:items\s+in\s+)?(.+?)\s+are\s+(.+?):?$", masked, re.IGNORECASE)
     if all_are_m:

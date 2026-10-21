@@ -167,3 +167,24 @@ discard from orders where price >= 200 into affordable_orders
     assert env["expensive_orders"][0]["id"] == 2
     assert len(env["affordable_orders"]) == 2
     assert env["affordable_orders"][1]["id"] == 2
+
+
+# ---------------------------------------------------------------------------
+# Phase 2, Task 2.3: Relative Clauses in Loops
+# ---------------------------------------------------------------------------
+
+def test_relative_clause_loop():
+    from doomscript.compiler.engine import execute
+
+    code = """
+users = [
+    {"name": "Alice", "role": "admin"},
+    {"name": "Bob", "role": "guest"},
+    {"name": "Charlie", "role": "admin"}
+]
+admins = []
+for each user in users whose role is "admin":
+    add user["name"] to admins
+"""
+    env = execute(code)
+    assert env["admins"] == ["Alice", "Charlie"]
