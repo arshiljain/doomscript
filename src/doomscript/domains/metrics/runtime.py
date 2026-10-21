@@ -249,19 +249,29 @@ def metrics_export_openmetrics() -> str:
 
 def metrics_export_prometheus() -> str:
     """Exports all registered metrics to Prometheus exposition text."""
+    parts = []
     res = _REGISTRY.export_prometheus()
-    if not res or not res.strip():
-        try:
-            from doomscript.runtime_extended import _METRICS
-            return _METRICS.render_prometheus()
-        except Exception:
-            pass
-    return res
+    if res and res.strip():
+        parts.append(res.strip())
+    try:
+        from doomscript.runtime_extended import _METRICS
+        ext = _METRICS.render_prometheus()
+        if ext and ext.strip():
+            parts.append(ext.strip())
+    except Exception:
+        pass
+    return "\n".join(parts)
 
 
 def metrics_clear() -> None:
     """Clears all registered metrics."""
     _REGISTRY.clear()
+    try:
+        from doomscript.runtime_extended import _METRICS
+        _METRICS.counters.clear()
+        _METRICS.gauges.clear()
+    except Exception:
+        pass
 
 
 # ==============================================================================

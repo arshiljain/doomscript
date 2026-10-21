@@ -1346,6 +1346,17 @@ class SeasonalARIMASARIMA:
         }
 
 
+class IMF(list):
+    """Intrinsic Mode Function list with energy property."""
+    @property
+    def energy(self) -> float:
+        return round(sum(v * v for v in self), 4)
+
+    @property
+    def values(self) -> list:
+        return list(self)
+
+
 class EmpiricalModeDecompositionEMD:
     """Empirical Mode Decomposition (EMD) & Hilbert-Huang Transform."""
 
@@ -1381,7 +1392,7 @@ class EmpiricalModeDecompositionEMD:
             if max_cnt < 2 and min_cnt < 2:
                 break
 
-            imfs.append([round(v, 4) for v in h])
+            imfs.append(IMF([round(v, 4) for v in h]))
             r = [r[i] - h[i] for i in range(n)]
 
         return {

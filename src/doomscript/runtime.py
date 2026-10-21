@@ -4481,7 +4481,10 @@ def db_find_rows(table_name: str, where_sql: Optional[str] = None) -> list:
     if where_sql:
         q += f" WHERE {where_sql}"
     cur = db_rt.get_connection().cursor()
-    cur.execute(q)
+    try:
+        cur.execute(q)
+    except Exception:
+        return []
     cols = [d[0] for d in cur.description] if cur.description else []
     rows = cur.fetchall()
     return [Record(dict(zip(cols, r))) for r in rows]

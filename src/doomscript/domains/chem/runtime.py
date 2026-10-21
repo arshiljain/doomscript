@@ -467,6 +467,9 @@ def chem_molecular_weight(formula: str) -> float:
     return FormulaParser.molecular_weight(formula)
 
 
+chem_formula_weight = chem_molecular_weight
+
+
 def chem_elemental_composition(formula: str) -> Dict[str, float]:
     """Calculates percentage mass composition for each element."""
     return FormulaParser.mass_composition(formula)
@@ -1323,6 +1326,7 @@ class ChemicalStoichiometryBalancer:
         prod_dict = {products[j]: coeffs[num_reactants + j] for j in range(len(products))}
 
         return {
+            "equation": balanced_str,
             "balanced_equation": balanced_str,
             "reactant_coefficients": react_dict,
             "product_coefficients": prod_dict,

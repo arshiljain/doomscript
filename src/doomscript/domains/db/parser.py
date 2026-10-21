@@ -91,18 +91,38 @@ class DBDomainParser(DomainParser):
             expr = ins_m.group(2).strip()
             return f'insert_rows("{tbl}", {expr})'
 
-        # find (all)? rows in <table> [where <cond>] into <target>
+        # find (all)? <table_or_rows> [in <db>] [where <cond>] into <target>
         find_m = re.match(
-            r"^find\s+(?:all\s+)?rows\s+in\s+([A-Za-z_]\w*)(?:\s+where\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            r"^find\s+(?:all\s+)?([A-Za-z_]\w*)(?:\s+in\s+([A-Za-z_]\w*))?(?:\s+where\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
             line.strip(),
             re.IGNORECASE,
         )
         if find_m:
-            tbl = find_m.group(1)
-            where_part = find_m.group(2)
-            target = find_m.group(3)
+            w1 = find_m.group(1)
+            w2 = find_m.group(2)
+            if w1.lower() == "rows" and w2:
+                tbl = w2
+            elif w2:
+                tbl = w1
+            else:
+                return None
+            where_part = find_m.group(3)
+            target = find_m.group(4)
             if where_part:
-                clean_where = where_part.strip().replace('"', '\\"')
+                clean_where = where_part.strip()
+                clean_where = re.sub(
+                    r"\bsorted\s+by\s+([A-Za-z_]\w*)(?:\s+(descending|desc))?",
+                    lambda m: f"ORDER BY {m.group(1)} DESC" if m.group(2) else f"ORDER BY {m.group(1)} ASC",
+                    clean_where,
+                    flags=re.IGNORECASE,
+                )
+                clean_where = re.sub(
+                    r"\blimit\s+(\d+)",
+                    r"LIMIT \1",
+                    clean_where,
+                    flags=re.IGNORECASE,
+                )
+                clean_where = clean_where.replace('"', '\\"')
                 return f'set {target} to db_find_rows("{tbl}", "{clean_where}")'
             return f'set {target} to db_find_rows("{tbl}")'
 

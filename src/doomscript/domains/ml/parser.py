@@ -98,6 +98,18 @@ class MLDomainParser(DomainParser):
             target = pred_m.group(3)
             return f"set {target} to predict_model({model_name}, {data_var})"
 
+        # predict classes for <data> with model <model> into <target>
+        pred_cls_m = re.match(
+            r"^predict(?:\s+classes)?\s+(?:for|on)\s+(.+?)\s+with\s+(?:model\s+)?([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if pred_cls_m:
+            data_var = pred_cls_m.group(1).strip()
+            model_var = pred_cls_m.group(2).strip()
+            target = pred_cls_m.group(3).strip()
+            return f"set {target} to predict_model({model_var}, {data_var})"
+
         # accuracy / score of <preds> against <actuals> into <target>
         acc_m = re.match(
             r"^(?:accuracy|score)\s+of\s+(.+?)\s+against\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
@@ -215,6 +227,19 @@ class MLDomainParser(DomainParser):
             return f"set {target} to ml_one_hot_encode({df}, {col})"
 
         # 350-Expansion ML Operations
+        # train knn classifier with features <X> and labels <y> [and neighbors <k>] into <target>
+        knn_feat_m = re.match(
+            r"^train\s+knn\s+classifier\s+with\s+features\s+(.+?)\s+and\s+labels\s+(.+?)(?:\s+and\s+neighbors\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if knn_feat_m:
+            x_var = knn_feat_m.group(1).strip()
+            y_var = knn_feat_m.group(2).strip()
+            k_val = knn_feat_m.group(3).strip() if knn_feat_m.group(3) else "3"
+            target = knn_feat_m.group(4).strip()
+            return f"set {target} to ml_train_knn_classifier({x_var}, {y_var}, k={k_val})"
+
         knn_m = re.match(
             r"^train\s+knn\s+classifier\s+on\s+([A-Za-z_]\w*)\s+predicting\s+(.+?)(?:\s+with\s+(.+?)\s+neighbors)?\s+into\s+([A-Za-z_]\w*)$",
             line.strip(),
@@ -290,7 +315,7 @@ class MLDomainParser(DomainParser):
             return f"set {target} to ml_brier_score({y_t}, {y_p})"
 
         f1_m = re.match(
-            r"^compute\s+f1\s+score\s+between\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            r"^(?:compute|calculate)\s+f1\s+score\s+between\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
             line.strip(),
             re.IGNORECASE,
         )

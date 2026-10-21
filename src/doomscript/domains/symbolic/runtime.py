@@ -677,6 +677,12 @@ def symbolic_eval(expr: Union[str, Expr], subs: Dict[str, float]) -> float:
     return expr.eval(subs)
 
 
+sym_parse = symbolic_parse
+sym_diff = symbolic_diff
+sym_simplify = symbolic_simplify
+sym_to_string = str
+
+
 def symbolic_poly_gcd(p1: List[float], p2: List[float]) -> List[float]:
     """Computes monic Euclidean polynomial GCD."""
     return PolyOps.poly_gcd(p1, p2)

@@ -513,17 +513,17 @@ def sim_coin_tosses(count: Any = 10, p_heads: Any = 0.5) -> List[str]:
 
 def sim_markov_chain_step(current_state: Any, transition_matrix: Any, states: Any) -> Any:
     """Transition to next state in Markov chain according to transition probability matrix."""
-    st_list = list(states)
+    st_list = list(range(len(transition_matrix))) if states is None else list(states)
     curr = current_state if current_state in st_list else st_list[0]
     idx = st_list.index(curr)
     probs = transition_matrix[idx]
     return random.choices(st_list, weights=probs)[0]
 
 
-def sim_markov_chain_walk(start_state: Any, transition_matrix: Any, states: Any, steps: Any) -> List[Any]:
+def sim_markov_chain_walk(start_state: Any, transition_matrix: Any, states: Any = None, steps: Any = 10) -> List[Any]:
     """Simulate N-step walk along Markov chain."""
     n = int(steps)
-    st_list = list(states)
+    st_list = list(range(len(transition_matrix))) if states is None else list(states)
     curr = start_state if start_state in st_list else st_list[0]
     path = [curr]
     for _ in range(n):

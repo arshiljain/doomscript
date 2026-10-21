@@ -172,6 +172,8 @@ class GeoDomain(DomainContract):
             or s.startswith("bounding box intersection ")
             or s.startswith("bounding box union ")
             or s.startswith("convex hull ")
+            or s.startswith("calculate convex hull ")
+            or s.startswith("compute convex hull ")
             or (s.startswith("distance from point ") and " to line segment " in s)
             or s.startswith("simplify polyline ")
             or s.startswith("convert coordinates ")

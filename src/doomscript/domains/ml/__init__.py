@@ -38,6 +38,7 @@ from doomscript.domains.ml.runtime import (
     ml_pca_transform,
     IsolationForestAnomalyDetector,
     DBSCANClusteringEngine,
+    ml_train_knn_classifier,
     ml_isolation_forest,
     ml_dbscan,
 )
@@ -134,7 +135,7 @@ class MLDomain(DomainContract):
             or s.startswith("mean squared error between ")
             or s.startswith("r2 score between ")
             or s.startswith("one-hot encode column ")
-            or s.startswith("train knn classifier on ")
+            or s.startswith("train knn classifier ")
             or s.startswith("fit decision stump on ")
             or s.startswith("train gaussian naive bayes on ")
             or s.startswith("train bernoulli naive bayes on ")
@@ -143,6 +144,8 @@ class MLDomain(DomainContract):
             or s.startswith("compute log loss between ")
             or s.startswith("compute brier score between ")
             or s.startswith("compute f1 score between ")
+            or s.startswith("calculate f1 score between ")
+            or s.startswith("predict ")
             or s.startswith("compute precision and recall between ")
             or s.startswith("generate polynomial features for ")
             or s.startswith("target encode column ")
@@ -208,6 +211,7 @@ __all__ = [
     "ml_pca_transform",
     "IsolationForestAnomalyDetector",
     "DBSCANClusteringEngine",
+    "ml_train_knn_classifier",
     "ml_isolation_forest",
     "ml_dbscan",
 ]

@@ -733,6 +733,28 @@ class LombScarglePeriodogram:
 
 
 # High-level domain entrypoints
+def signals_apply_window(signal: List[float], window_type: str = "hann") -> List[float]:
+    """Applies window function to input signal."""
+    w = STFTSpectrogram.get_window(window_type, len(signal))
+    return [float(s) * win for s, win in zip(signal, w)]
+
+
+def signals_dominant_frequency(spectrum: List[complex], sample_rate: float = 44100.0) -> float:
+    """Finds peak dominant frequency in Hz from complex spectrum."""
+    n = len(spectrum)
+    if n <= 1:
+        return 0.0
+    half_n = n // 2
+    best_bin = 0
+    max_mag = -1.0
+    for k in range(1, half_n):
+        mag = abs(spectrum[k])
+        if mag > max_mag:
+            max_mag = mag
+            best_bin = k
+    return round(best_bin * float(sample_rate) / float(n), 2)
+
+
 def signals_fft(signal: List[float]) -> List[complex]:
     return CooleyTukeyFFT.fft(signal)
 

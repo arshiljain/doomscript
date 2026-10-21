@@ -207,6 +207,23 @@ class SimDomainParser(DomainParser):
             curr, mat, st, target = m_mstep.group(1).strip(), m_mstep.group(2).strip(), m_mstep.group(3).strip(), m_mstep.group(4).strip()
             return f"set {target} to sim_markov_chain_step({curr}, {mat}, {st})"
 
+        # simulate markov chain with transitions <matrix> and steps <steps> from state <start> [states <states>] into <target>
+        m_mchain = re.match(
+            r"^simulate\s+markov\s+chain\s+with\s+transitions\s+(.+?)\s+and\s+steps\s+(.+?)\s+from\s+state\s+(.+?)(?:\s+states\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_mchain:
+            mat, steps, start, st, target = (
+                m_mchain.group(1).strip(),
+                m_mchain.group(2).strip(),
+                m_mchain.group(3).strip(),
+                m_mchain.group(4),
+                m_mchain.group(5).strip(),
+            )
+            st_arg = st.strip() if st else "None"
+            return f"set {target} to sim_markov_chain_walk({start}, {mat}, {st_arg}, {steps})"
+
         # simulate markov walk of <steps> steps from <start> with transitions <matrix> states <states> into <target>
         m_mwalk = re.match(
             r"^simulate\s+markov\s+walk\s+of\s+(.+?)\s+steps\s+from\s+(.+?)\s+with\s+transitions\s+(.+?)\s+states\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",

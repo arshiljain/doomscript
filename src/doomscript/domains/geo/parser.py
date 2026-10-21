@@ -115,6 +115,10 @@ class GeoDomainParser(DomainParser):
         if hav_m:
             p1 = hav_m.group(1).strip()
             p2 = hav_m.group(2).strip()
+            if "," in p1 and not (p1.startswith("(") or p1.startswith("[")):
+                p1 = f"({p1})"
+            if "," in p2 and not (p2.startswith("(") or p2.startswith("[")):
+                p2 = f"({p2})"
             unit = hav_m.group(3) or "km"
             target = hav_m.group(4).strip()
             return f'set {target} to geo_haversine_distance({p1}, {p2}, unit="{unit}")'
@@ -262,7 +266,7 @@ class GeoDomainParser(DomainParser):
 
         # convex hull of <coords> into <target>
         m_hull = re.match(
-            r"^convex\s+hull\s+of\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            r"^(?:calculate\s+|compute\s+)?convex\s+hull\s+of\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )

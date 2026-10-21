@@ -135,6 +135,7 @@ class DBDomain(DomainContract):
             or s.startswith("query db ")
             or s.startswith("query sql ")
             or s.startswith("find rows in ")
+            or (s.startswith("find all ") and " in " in s)
             or s.startswith("find all rows in ")
             or s.startswith("count rows in ")
             or (s.startswith("query ") and (" where " in s or " into " in s))

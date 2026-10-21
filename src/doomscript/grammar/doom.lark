@@ -317,7 +317,7 @@ CMP_OP: "<="
 ?bitwise_or: bitwise_or "|" bitwise_xor -> bitor
            | bitwise_xor
 
-?bitwise_xor: bitwise_xor "^" bitwise_and -> bitxor
+?bitwise_xor: bitwise_xor ("^" | "xor") bitwise_and -> bitxor
             | bitwise_and
 
 ?bitwise_and: bitwise_and "&" sum_expr -> bitand

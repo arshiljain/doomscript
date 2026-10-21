@@ -60,13 +60,15 @@ say "Hello, ", name, "! You are ", age, " years old."
 
 ##### 🐍 Python
 ```python
-if 18 <= user["age"] <= 65 and not user.get("is_banned", False):
+user = {"age": 28, "banned": False}
+if 18 <= user["age"] <= 65 and not user.get("banned", False):
     print("User is active and of working age.")
 ```
 
 ##### 🔮 DoomScript
 ```doomscript
-if user's age is between 18 and 65 and user is not banned
+user = {"age": 28, "banned": False}
+if user's age is between 18 and 65 and not user's banned
     say "User is active and of working age."
 ```
 > **Why DoomScript is easier:** `user's age` replaces bracketed dictionary lookups `user["age"]`. `is between 18 and 65` eliminates compound comparison chaining. Colons are optional.
@@ -136,6 +138,7 @@ leaderboard = sorted(top_students, key=lambda s: s["score"], reverse=True)
 
 ##### 🔮 DoomScript
 ```doomscript
+scores = a list of {"name": "Alice", "score": 92}, {"name": "Bob", "score": 74}, {"name": "Charlie", "score": 88}
 filter scores where score >= 80 into top_students
 sort top_students by score descending into leaderboard
 ```
@@ -153,7 +156,7 @@ sort top_students by score descending into leaderboard
 import json
 import urllib.request
 
-req = urllib.request.Request("https://api.github.com/repos/doomscript/engine")
+req = urllib.request.Request("https://api.github.com/repos/python/cpython")
 req.add_header("User-Agent", "Python")
 
 with urllib.request.urlopen(req) as response:
@@ -166,7 +169,7 @@ with urllib.request.urlopen(req) as response:
 ```doomscript
 use net
 
-fetch json from "https://api.github.com/repos/doomscript/engine" into repo
+fetch json from "https://api.github.com/repos/python/cpython" into repo
 say "Stars:", repo's stargazers_count
 ```
 > **Why DoomScript is easier:** 1 line replaces 9 lines of `urllib` / `requests` ceremony, manual header setting, UTF-8 decoding, and JSON parsing.
@@ -257,8 +260,16 @@ analyze sentiment of text into sentiment_score
 ```python
 import matplotlib.pyplot as plt
 
-ad_spend = [10, 20, 30, 40, 50]
-revenue = [25, 48, 70, 85, 110]
+sales_data = [
+    {"ad_spend": 10, "revenue": 25},
+    {"ad_spend": 20, "revenue": 48},
+    {"ad_spend": 30, "revenue": 70},
+    {"ad_spend": 40, "revenue": 85},
+    {"ad_spend": 50, "revenue": 110}
+]
+
+ad_spend = [d["ad_spend"] for d in sales_data]
+revenue = [d["revenue"] for d in sales_data]
 
 plt.figure(figsize=(8, 5))
 plt.scatter(ad_spend, revenue, color="blue")
@@ -274,6 +285,7 @@ plt.close()
 ```doomscript
 use viz
 
+sales_data = [{"ad_spend": 10, "revenue": 25}, {"ad_spend": 20, "revenue": 48}, {"ad_spend": 30, "revenue": 70}, {"ad_spend": 40, "revenue": 85}, {"ad_spend": 50, "revenue": 110}]
 chart scatter of sales_data with x "ad_spend" and y "revenue" titled "Ad Spend vs Revenue" into plot
 save chart plot to "chart.png"
 ```
@@ -477,12 +489,16 @@ def edmonds_karp(capacity, source, sink):
             curr = prev
         flow += bottle
     return flow
+
+pipe_network = {"Source": {"A": 10.0, "B": 5.0}, "A": {"Sink": 7.0}, "B": {"Sink": 8.0}, "Sink": {}}
+max_capacity = edmonds_karp(pipe_network, "Source", "Sink")
 ```
 
 ##### 🔮 DoomScript
 ```doomscript
 use research
 
+pipe_network = {"Source": {"A": 10.0, "B": 5.0}, "A": {"Sink": 7.0}, "B": {"Sink": 8.0}, "Sink": {}}
 maximum flow from "Source" to "Sink" in pipe_network using edmonds karp into max_capacity
 ```
 > **Why DoomScript is easier:** What requires 30+ lines of residual capacity accounting and BFS augmenting paths is a single high-leverage spoken expression.
@@ -514,6 +530,11 @@ score = f1_score(y_test, y_pred, average="weighted")
 ```doomscript
 use ml
 
+X_train = [[1.0, 2.0], [2.0, 3.0], [5.0, 6.0], [6.0, 7.0]]
+y_train = [0, 0, 1, 1]
+X_test = [[1.5, 2.5], [5.5, 6.5]]
+y_test = [0, 1]
+
 train knn classifier with features X_train and labels y_train and neighbors 3 into knn_model
 predict classes for X_test with model knn_model into y_pred
 calculate f1 score between y_test and y_pred into score
@@ -533,6 +554,7 @@ from botocore.exceptions import ClientError
 s3 = boto3.client("s3")
 bucket = "analytics-store"
 key = "reports/q3.json"
+json_payload = '{"status": "ok"}'
 
 s3.put_object(Bucket=bucket, Key=key, Body=json_payload)
 url = s3.generate_presigned_url(
@@ -546,6 +568,7 @@ url = s3.generate_presigned_url(
 ```doomscript
 use cloud
 
+json_payload = '{"status": "ok"}'
 connect to bucket "analytics-store" into b1
 write text json_payload to object "reports/q3.json" in b1
 generate presigned put url for "uploads/dataset.csv" in b1 with expiry 1800 into url
@@ -636,12 +659,15 @@ def haversine(lat1, lon1, lat2, lon2):
     return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 dist = haversine(40.7128, -74.0060, 51.5074, -0.1278)
+perimeter_coords = [[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0], [1.0, 1.0]]
+# Convex hull algorithm requires 20+ additional lines in standard Python
 ```
 
 ##### 🔮 DoomScript
 ```doomscript
 use geo
 
+perimeter_coords = [[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0], [1.0, 1.0]]
 calculate haversine distance from 40.7128, -74.0060 to 51.5074, -0.1278 into km_distance
 calculate convex hull of perimeter_coords into geofence_polygon
 ```
@@ -975,6 +1001,9 @@ say "Molecular Weight: ", glucose_weight, " g/mol"
 ##### 🐍 Python
 ```python
 import cmath
+import math
+
+raw_audio = [math.sin(2.0 * math.pi * 440.0 * i / 44100.0) for i in range(1024)]
 
 def fft(x):
     n = len(x)
@@ -991,7 +1020,9 @@ def fft(x):
 ##### 🔮 DoomScript
 ```doomscript
 use signals
+from python module math use sin, pi
 
+raw_audio = [sin(2.0 * pi * 440.0 * i / 44100.0) for i in range(1024)]
 windowed_audio = signals_apply_window(raw_audio, window_type="hann")
 spectrum = signals_fft(windowed_audio)
 peak_hz = signals_dominant_frequency(spectrum, sample_rate=44100)
@@ -1149,7 +1180,9 @@ say "Grover Found Target 6 with Probability: ", search_res's target_probability
 ```python
 # Requires BeautifulSoup4 / lxml and http.cookiejar setup
 from bs4 import BeautifulSoup
-soup = BeautifulSoup(html, "html.parser")
+
+html_text = '<div id="main"><ul><li class="active">Active Item</li><li>Inactive Item</li></ul></div>'
+soup = BeautifulSoup(html_text, "html.parser")
 nodes = soup.select("div#main ul > li.active")
 ```
 
@@ -1157,6 +1190,7 @@ nodes = soup.select("div#main ul > li.active")
 ```doomscript
 use web
 
+html_text = '<div id="main"><ul><li class="active">Active Item</li><li>Inactive Item</li></ul></div>'
 # Native CSS selector extraction in spoken English
 select css "div#main ul > li.active" from html html_text into elements
 for el in elements:

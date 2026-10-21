@@ -129,6 +129,8 @@ class FinanceDomain(DomainContract):
             or s.startswith("calmar ratio of returns ")
             or s.startswith("beta coefficient of ")
             or s.startswith("jensen alpha of ")
+            or s.startswith("price call option ")
+            or s.startswith("price put option ")
             or s.startswith("black scholes call price for spot ")
             or s.startswith("black scholes put price for spot ")
             or s.startswith("average true range of ")

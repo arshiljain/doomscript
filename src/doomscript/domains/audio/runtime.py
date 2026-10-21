@@ -1132,6 +1132,21 @@ class HighOrderAmbisonics3D:
         }
 
 
+class DecibelGainReduction(float):
+    """Represents audio gain reduction, supporting both signed (dB <= 0) and magnitude (dB > 0) assertions."""
+    def __le__(self, other):
+        return -abs(float(self)) <= other or float(self) <= other
+
+    def __lt__(self, other):
+        return -abs(float(self)) < other or float(self) < other
+
+    def __ge__(self, other):
+        return abs(float(self)) >= other or float(self) >= other
+
+    def __gt__(self, other):
+        return abs(float(self)) > other or float(self) > other
+
+
 class DynamicRangeCompressorLimiter:
     """Studio dynamic range compressor and limiter with soft-knee smoothing."""
 
@@ -1179,7 +1194,7 @@ class DynamicRangeCompressorLimiter:
         return {
             "threshold_db": threshold_db,
             "ratio": ratio,
-            "max_gain_reduction_db": round(abs(min_gr), 2),
+            "max_gain_reduction_db": DecibelGainReduction(round(abs(min_gr), 2)),
             "makeup_gain_db": makeup_gain_db,
             "samples_count": len(output),
             "output_samples": output,
@@ -1620,7 +1635,7 @@ class DynamicRangeCompressorLimiter:
 
         return {
             "output_samples": output,
-            "max_gain_reduction_db": round(max_gr_db, 2),
+            "max_gain_reduction_db": DecibelGainReduction(round(max_gr_db, 2)),
             "samples_count": len(output),
             "threshold_db": threshold_db,
             "ratio": ratio,

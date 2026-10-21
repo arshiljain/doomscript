@@ -571,7 +571,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
 
     # Ergonomic Statistics & Math Statements
     stat_stmt_m = re.match(
-        r"^\s*(?:calculate\s+|compute\s+)?(average|mean|median|total|sum|maximum|highest|minimum|lowest|variance|standard\s+deviation|std_dev|stdev|count|length)\s+of\s+(?!.+?\s+in\s+bytes\b)(.+?)\s+into\s+([A-Za-z_]\w*)$",
+        r"^\s*(?:calculate\s+|compute\s+)?(average|mean|median|total|sum|maximum|highest|minimum|lowest|variance|standard\s+deviation|std_dev|stdev|count|length|summary)\s+of\s+(?!.+?\s+in\s+bytes\b)(.+?)\s+into\s+([A-Za-z_]\w*)$",
         masked,
         re.IGNORECASE
     )
@@ -595,6 +595,8 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
             masked = f"set {target_var} to lowest in {val_expr}"
         elif fn_word in ("count", "length"):
             masked = f"set {target_var} to count of {val_expr}"
+        elif fn_word == "summary":
+            masked = f"set {target_var} to summary_of({val_expr})"
 
     # Ergonomic String & Collection Operations
     words_m = re.match(r"^\s*words\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
@@ -638,17 +640,33 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
 
     # Ergonomic Visualization Short Forms
     viz_chart_m = re.match(
-        r"^\s*(scatter\s+plot|line\s+chart|bar\s+chart|histogram|box\s+plot)\s+of\s+([A-Za-z_]\w*)\s+with\s+(.+?)(?:\s+into\s+([A-Za-z_]\w*))?$",
+        r"^\s*(?:chart\s+)?(scatter(?:\s+plot)?|line(?:\s+chart)?|bar(?:\s+chart)?|histogram|box(?:\s+plot)?)\s+of\s+([A-Za-z_]\w*)\s+with\s+(.+?)(?:\s+into\s+([A-Za-z_]\w*))?$",
         masked,
         re.IGNORECASE
     )
     if viz_chart_m:
         c_type = viz_chart_m.group(1).lower()
         dataset = viz_chart_m.group(2)
-        params = viz_chart_m.group(3).strip()
+        raw_params = viz_chart_m.group(3).strip()
         target = viz_chart_m.group(4) or "plot"
         geom = "point" if "scatter" in c_type else "line" if "line" in c_type else "bar" if "bar" in c_type else "histogram" if "hist" in c_type else "boxplot"
-        masked = f'set {target} to PlotBuilder({dataset}).kind("{geom}", {params})'
+        p_str = re.sub(r"\b(titled|title)\s+", r" and title=", raw_params, flags=re.IGNORECASE)
+        parts = re.split(r"\s+and\s+|,\s*", p_str)
+        formatted_args = []
+        for part in parts:
+            part = part.strip()
+            if not part:
+                continue
+            if "=" in part:
+                formatted_args.append(part)
+            else:
+                kv_m = re.match(r"^([A-Za-z_]\w*)\s+(.+)$", part)
+                if kv_m:
+                    formatted_args.append(f"{kv_m.group(1)}={kv_m.group(2).strip()}")
+                else:
+                    formatted_args.append(part)
+        with_kwargs = ", ".join(formatted_args)
+        masked = f'set {target} to PlotBuilder({dataset}).kind("{geom}", {with_kwargs})'
 
     masked = re.sub(r"\bread\s+csv\s+(?!file\b)", "read csv file ", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bwrite\s+csv\s+(.+?)\s+to\s+file\b", r"write csv \1 into file", masked, flags=re.IGNORECASE)
@@ -714,7 +732,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         )
 
     # Disambiguate reserved words used as standalone variable names
-    masked = re.sub(r"(?<!'s\s)(?<!\.)(?<!\bto\s)(?<![\"'])\bcount\b(?![\"'])(?!\s+of\b)(?!\s*\()", "_var_count", masked)
+    masked = re.sub(r"(?<!'s\s)(?<!\.)(?<!\bto\s)(?<![\"'])\bcount\b(?![\"'])(?!\s+of\b)(?!\s+from\b)(?!\s+into\b)(?!\s*\()", "_var_count", masked)
     masked = re.sub(r"(?<!'s\s)(?<!\.)(?<!\bto\s)(?<![\"'])\bsum\b(?![\"'])(?!\s+of\b)(?!\s*\()", "_var_sum", masked)
     masked = re.sub(r"(?<!'s\s)(?<!\.)(?<![\"'])\badd\b(?![\"'])(?!\s+(?:.+?\s+)?to\b)", "_var_add", masked)
     masked = re.sub(r"(?<!'s\s)(?<!\.)(?<!\bto\s)(?<!\bbullet\s)(?<!\ba\s)(?<!\bempty\s)(?<!\bnew\s)(?<![\"'])\blist\b(?![\"'])(?!\s+files\b)(?!\s+of\b)(?!\s*\()", "_var_list", masked)
@@ -761,6 +779,12 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"(?<!def\s)(?<!to\s)\bpop\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\b", r"pop(\1)", masked, flags=re.IGNORECASE)
 
     # Loop Controls & Flow
+    masked = re.sub(
+        r"^\s*for\s+(?:each\s+)?([A-Za-z_]\w*)\s+in\s+(.+?)\s+count(?:\s+from\s+(\d+))?\s+into\s+([A-Za-z_]\w*):?\s*$",
+        lambda m: f"for each {m.group(4)}, {m.group(1)} in enumerate({m.group(2)}, {m.group(3)}):" if m.group(3) else f"for each {m.group(4)}, {m.group(1)} in enumerate({m.group(2)}):",
+        masked,
+        flags=re.IGNORECASE,
+    )
     masked = re.sub(r"^\s*for\s+(?:all|each\s+of\s+the|every)\s+([A-Za-z_]\w*)\s+in\b", r"for each \1 in", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*for\s+each\s+([A-Za-z_]\w*)\s+of\b", r"for each \1 in", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*for\s+(?!each\b)(.+?)\s+in\b", r"for each \1 in", masked, flags=re.IGNORECASE)
@@ -810,6 +834,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s+is\s+neither\s+(.+?)\s+nor\s+([^\s;,\n]+)", r"not (\1 is \2 or \1 is \3)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"(\b\w+(?:'s\s+[A-Za-z_]\w*)?|\))\s+is\s+(?:inside|in)\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?|\[[^\]]*\]|\{[^\}]*\})", r"\1 is inside \2", masked, flags=re.IGNORECASE)
     masked = re.sub(r"(\b\w+(?:'s\s+[A-Za-z_]\w*)?|\))\s+(?:is\s+)?not\s+(?:inside|in)\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?|\[[^\]]*\]|\{[^\}]*\})", r"\1 is not inside \2", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b([A-Za-z_]\w*(?:\[[^\]]+\])?|\d+)\s+xor\s+([A-Za-z_]\w*(?:\[[^\]]+\])?|\d+)\b", r"\1 ^ \2", masked, flags=re.IGNORECASE)
     
     # Membership 'in' operator: x in y -> x is inside y (excluding for-loops, comprehensions, and statement keywords)
     if not re.match(r"^\s*(?:set\s+(?:cookie|config)|remember\s+in\s+memory|mask\s+pii|list\s+files|start\s+server|insert\b|replace\b|display\s+colored)\b", masked, re.IGNORECASE):
@@ -1974,7 +1999,7 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
 
         # 3. save <target> to/into <path> [with ...]
         save_stmt_m = re.match(
-            r"^save\s+([A-Za-z_]\w*)\s+(?:to|into)\s+([\"'][^\"']+[\"'])(?:\s+with\s+(.+))?$",
+            r"^save\s+(?:chart\s+)?([A-Za-z_]\w*)\s+(?:to|into)\s+([\"'][^\"']+[\"'])(?:\s+with\s+(.+))?$",
             code,
             re.IGNORECASE,
         )

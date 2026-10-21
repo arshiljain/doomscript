@@ -921,6 +921,7 @@ class DubinsCarShortestPath:
             "total_length": round(best_cost, 4),
             "segment_lengths": [round(l, 4) for l in best_lengths],
             "waypoints": waypoints,
+            "path": waypoints,
             "waypoints_count": len(waypoints),
             "turning_radius": R,
         })
@@ -1374,6 +1375,8 @@ class SixDOFManipulatorKinematics:
         roll = math.atan2(T[2][1], T[2][2])
 
         return {
+            "position": ee_pos,
+            "translation": ee_pos,
             "end_effector_position": ee_pos,
             "rpy_radians": [round(roll, 4), round(pitch, 4), round(yaw, 4)],
             "transform_matrix": [[round(v, 4) for v in row] for row in T],
@@ -1540,6 +1543,7 @@ class StateLatticeMotionPlanner:
         return {
             "success": best_path is not None,
             "waypoints": waypoints,
+            "path": waypoints,
             "path_length": round(sum(step_len for _ in range(max(0, len(waypoints) - 1))), 3),
             "expansions": expansions,
             "start": list(start),

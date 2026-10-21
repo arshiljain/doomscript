@@ -1022,6 +1022,7 @@ class LZMAPureEngine:
             return {
                 "tokens": [],
                 "total_tokens": 0,
+                "token_count": 0,
                 "literal_count": 0,
                 "match_count": 0,
                 "original_length": 0,
@@ -1063,6 +1064,7 @@ class LZMAPureEngine:
         return {
             "tokens": [list(t) for t in tokens],
             "total_tokens": len(tokens),
+            "token_count": len(tokens),
             "literal_count": literal_count,
             "match_count": match_count,
             "original_length": n,

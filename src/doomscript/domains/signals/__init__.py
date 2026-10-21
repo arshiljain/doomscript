@@ -36,6 +36,8 @@ from doomscript.domains.signals.runtime import (
     LombScarglePeriodogram,
     signals_fft,
     signals_ifft,
+    signals_apply_window,
+    signals_dominant_frequency,
     signals_cross_correlation,
     signals_detect_pitch,
     signals_lomb_scargle,
@@ -146,5 +148,9 @@ __all__ = [
     "HilbertTransformAnalyticSignal",
     "PseudoWignerVilleDistribution",
     "signals_hilbert_envelope",
+    "signals_fft",
+    "signals_ifft",
+    "signals_apply_window",
+    "signals_dominant_frequency",
     "signals_pseudo_wigner_ville",
 ]

@@ -337,6 +337,29 @@ class Quat:
         )
 
 
+def math3d_quat_from_euler(pitch: float, yaw: float, roll: float, in_degrees: bool = True) -> Quat:
+    """Creates a unit quaternion from pitch, yaw, roll Euler angles."""
+    if in_degrees:
+        p = math.radians(float(pitch)) * 0.5
+        y = math.radians(float(yaw)) * 0.5
+        r = math.radians(float(roll)) * 0.5
+    else:
+        p, y, r = float(pitch) * 0.5, float(yaw) * 0.5, float(roll) * 0.5
+    cp, sp = math.cos(p), math.sin(p)
+    cy, sy = math.cos(y), math.sin(y)
+    cr, sr = math.cos(r), math.sin(r)
+    w = cr * cp * cy + sr * sp * sy
+    x = sr * cp * cy - cr * sp * sy
+    y_val = cr * sp * cy + sr * cp * sy
+    z = cr * cp * sy - sr * sp * cy
+    return Quat(w, x, y_val, z).normalize()
+
+
+def math3d_quat_slerp(q1: Quat, q2: Quat, t: float) -> Quat:
+    """Spherical linear interpolation between two quaternions."""
+    return Quat.slerp(q1, q2, float(t))
+
+
 class Ray:
     """3D Ray with origin and normalized direction vector."""
 

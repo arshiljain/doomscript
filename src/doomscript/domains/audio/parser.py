@@ -318,7 +318,7 @@ class AudioDomainParser(DomainParser):
 
         # [apply] low pass filter [to] <track> [with] cutoff <fc> into <target>
         m_lpf = re.match(
-            r"^(?:apply\s+)?low\s+pass\s+filter\s+(?:to\s+)?(?:audio\s+)?(.+?)\s+(?:with\s+)?cutoff\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            r"^(?:apply\s+)?low\s*pass\s+filter\s+(?:to\s+)?(?:audio\s+)?(.+?)\s+(?:with\s+)?cutoff\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )
@@ -328,7 +328,7 @@ class AudioDomainParser(DomainParser):
 
         # [apply] high pass filter [to] <track> [with] cutoff <fc> into <target>
         m_hpf = re.match(
-            r"^(?:apply\s+)?high\s+pass\s+filter\s+(?:to\s+)?(?:audio\s+)?(.+?)\s+(?:with\s+)?cutoff\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            r"^(?:apply\s+)?high\s*pass\s+filter\s+(?:to\s+)?(?:audio\s+)?(.+?)\s+(?:with\s+)?cutoff\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )

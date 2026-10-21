@@ -253,9 +253,22 @@ class GeoRuntime(DomainRuntime):
 
 # --- Batch 14 Spoken English Geospatial Verbs ---
 
-def geo_haversine_distance(p1: Any, p2: Any, unit: str = "km") -> float:
+def geo_haversine_distance(*args, **kwargs) -> float:
     """Calculate Haversine great-circle distance between two coordinates."""
-    return distance_between(p1, p2, unit=unit)
+    unit = kwargs.get("unit", "km")
+    if len(args) == 4:
+        lat1, lon1, lat2, lon2 = args
+        return distance_between((lat1, lon1), (lat2, lon2), unit=unit)
+    elif len(args) == 5:
+        lat1, lon1, lat2, lon2, unit = args
+        return distance_between((lat1, lon1), (lat2, lon2), unit=unit)
+    elif len(args) == 2:
+        return distance_between(args[0], args[1], unit=unit)
+    elif len(args) == 3:
+        return distance_between(args[0], args[1], unit=args[2])
+    elif len(args) == 1:
+        return distance_between(args[0][0], args[0][1], unit=unit)
+    raise ValueError("Invalid arguments to geo_haversine_distance")
 
 
 def geo_bounding_box_contains(bbox: Any, pt: Any) -> bool:

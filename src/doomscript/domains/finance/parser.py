@@ -228,6 +228,24 @@ class FinanceDomainParser(DomainParser):
             target = alpha_m.group(4).strip()
             return f"set {target} to fin_alpha({asset}, {mkt}, risk_free_rate={rf})"
 
+        price_opt_m = re.match(
+            r"^price\s+(call|put)\s+option\s+(?:with|for)\s+spot\s+(.+?)\s+strike\s+(.+?)\s+expiry\s+(.+?)\s+rate\s+(.+?)\s+(?:vol|volatility)\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if price_opt_m:
+            is_call = price_opt_m.group(1).lower() == "call"
+            spot, strike, t, rate, vol, target = (
+                price_opt_m.group(2).strip(),
+                price_opt_m.group(3).strip(),
+                price_opt_m.group(4).strip(),
+                price_opt_m.group(5).strip(),
+                price_opt_m.group(6).strip(),
+                price_opt_m.group(7).strip(),
+            )
+            fn = "fin_black_scholes_call" if is_call else "fin_black_scholes_put"
+            return f"set {target} to {fn}({spot}, {strike}, {t}, {rate}, {vol})"
+
         bsc_m = re.match(
             r"^black\s+scholes\s+call\s+price\s+for\s+spot\s+(.+?)\s+strike\s+(.+?)\s+expiry\s+(.+?)\s+rate\s+(.+?)\s+volatility\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
             s,

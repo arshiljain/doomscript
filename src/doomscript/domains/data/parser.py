@@ -403,7 +403,7 @@ class DataDomainParser(DomainParser):
             return f"set {target} to data_string_lower({data_var}, {col})"
 
         ffill_m = re.match(
-            r"^forward\s+fill\s+nulls\s+in\s+column\s+(.+?)\s+of\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
+            r"^forward\s+fill\s+(?:nulls|missing(?:\s+values)?)\s+in\s+column\s+(.+?)\s+(?:of|in)\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
             line.strip(),
             re.IGNORECASE,
         )
@@ -412,7 +412,7 @@ class DataDomainParser(DomainParser):
             return f"set {target} to data_fill_null_forward({data_var}, {col})"
 
         bfill_m = re.match(
-            r"^backward\s+fill\s+nulls\s+in\s+column\s+(.+?)\s+of\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
+            r"^backward\s+fill\s+(?:nulls|missing(?:\s+values)?)\s+in\s+column\s+(.+?)\s+(?:of|in)\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$",
             line.strip(),
             re.IGNORECASE,
         )

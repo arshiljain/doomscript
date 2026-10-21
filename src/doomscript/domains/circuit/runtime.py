@@ -233,7 +233,7 @@ def circuit_resistor_bands(*colors) -> Dict[str, Any]:
         cols = list(colors)
     res = circuit_decode_resistor_bands(cols)
     res["tolerance"] = res.get("tolerance_pct", 5.0)
-    return res
+    return Record(res)
 
 
 class CircuitDivResult(float):

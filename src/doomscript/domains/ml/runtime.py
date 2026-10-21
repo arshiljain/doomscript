@@ -246,11 +246,15 @@ def predict_model(
     model_or_name: Any, features_data: Any, scope: Optional[Dict[str, Any]] = None
 ) -> List[Any]:
     """Level 2: Generates predictions on new feature samples."""
+    if hasattr(model_or_name, "predict"):
+        return model_or_name.predict(features_data)
     if scope is None:
         import sys
         caller_frame = sys._getframe(1)
         scope = dict(caller_frame.f_globals)
         scope.update(caller_frame.f_locals)
+    if isinstance(model_or_name, str) and scope and hasattr(scope.get(model_or_name), "predict"):
+        return scope[model_or_name].predict(features_data)
     container = _resolve_model(model_or_name, scope)
     if not container.is_trained or container.model is None:
         train_model(container, scope)
@@ -599,6 +603,13 @@ def ml_knn_classifier(train_data: Any, target: Any, k: Any = 3, metric: str = "e
     y = [r.get(tgt_col) for r in rows]
     knn = NativeKNNClassifier(k=int(k), metric=metric)
     knn.fit(X, y)
+    return knn
+
+
+def ml_train_knn_classifier(features: Any, labels: Any, k: int = 3, metric: str = "euclidean") -> NativeKNNClassifier:
+    """Train native KNN classifier on feature matrix and labels."""
+    knn = NativeKNNClassifier(k=int(k), metric=metric)
+    knn.fit(features, labels)
     return knn
 
 
