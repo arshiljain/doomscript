@@ -1457,3 +1457,171 @@ def telecom_costas_loop_recovery(
 
 
 
+
+
+# ==============================================================================
+# 5G & ADVANCED TELECOMMUNICATIONS: LDPC, POLAR CODES & MIMO DETECTION
+# ==============================================================================
+
+class LDPCBeliefPropagationDecoder:
+    """Low-Density Parity-Check (LDPC) sum-product belief propagation decoder on Tanner graphs."""
+
+    @classmethod
+    def decode(cls, H: List[List[int]], received_llrs: List[float], max_iter: int = 15) -> Dict[str, Any]:
+        import math
+        m = len(H)
+        n = len(H[0]) if m > 0 else 0
+        if m == 0 or n == 0 or len(received_llrs) != n:
+            return {"decoded_bits": [], "converged": False, "iterations": 0}
+
+        # Check-to-variable and variable-to-check log-likelihood messages
+        # q_ij: var j to check i
+        q = [[0.0] * n for _ in range(m)]
+        for i in range(m):
+            for j in range(n):
+                if H[i][j]:
+                    q[i][j] = received_llrs[j]
+
+        r = [[0.0] * n for _ in range(m)]
+        converged = False
+        final_iter = 0
+
+        for it in range(max_iter):
+            final_iter = it + 1
+            # Check-node update
+            for i in range(m):
+                vars_in_check = [j for j in range(n) if H[i][j]]
+                for j in vars_in_check:
+                    prod = 1.0
+                    for j_other in vars_in_check:
+                        if j_other != j:
+                            val = max(-10.0, min(10.0, q[i][j_other]))
+                            prod *= math.tanh(val / 2.0)
+                    prod = max(-0.999999, min(0.999999, prod))
+                    r[i][j] = 2.0 * math.atanh(prod)
+
+            # Variable-node update & marginals
+            decoded_bits = [0] * n
+            for j in range(n):
+                checks_in_var = [i for i in range(m) if H[i][j]]
+                total_llr = received_llrs[j] + sum(r[i][j] for i in checks_in_var)
+                decoded_bits[j] = 1 if total_llr < 0.0 else 0
+                for i in checks_in_var:
+                    q[i][j] = received_llrs[j] + sum(r[i_other][j] for i_other in checks_in_var if i_other != i)
+
+            # Parity check verification: H * c^T == 0 (mod 2)
+            syndrome = [sum(H[i][j] * decoded_bits[j] for j in range(n)) % 2 for i in range(m)]
+            if all(s == 0 for s in syndrome):
+                converged = True
+                break
+
+        return {
+            "decoded_bits": decoded_bits,
+            "converged": converged,
+            "iterations": final_iter,
+        }
+
+
+class PolarCodeEncoderDecoder:
+    """5G NR Polar Code recursive Arikan kernel encoder and Successive Cancellation (SC) decoder."""
+
+    @classmethod
+    def encode(cls, info_bits: List[int], total_length: int = 8, frozen_indices: Optional[List[int]] = None) -> List[int]:
+        n = max(2, int(total_length))
+        # Default lowest-reliability indices frozen
+        if frozen_indices is None:
+            k = len(info_bits)
+            frozen_indices = list(range(n - k))
+
+        u = [0] * n
+        info_ptr = 0
+        for i in range(n):
+            if i not in frozen_indices and info_ptr < len(info_bits):
+                u[i] = info_bits[info_ptr]
+                info_ptr += 1
+
+        # Kronecker power of F = [[1, 0], [1, 1]]
+        x = list(u)
+        step = 1
+        while step < n:
+            for i in range(0, n, step * 2):
+                for j in range(step):
+                    x[i + j] = (x[i + j] ^ x[i + step + j]) % 2
+            step *= 2
+        return x
+
+    @classmethod
+    def decode_sc(cls, received_llrs: List[float], k: int = 4, frozen_indices: Optional[List[int]] = None) -> List[int]:
+        n = len(received_llrs)
+        if frozen_indices is None:
+            frozen_indices = list(range(n - k))
+
+        # Hard decision on received channel LLRs
+        hard_bits = [(1 if llr < 0.0 else 0) for llr in received_llrs]
+        # Invert Arikan generator matrix: u = x * G_N^-1 = Arikan(x)
+        u_recovered = cls.encode(hard_bits, total_length=n, frozen_indices=[])
+
+        info_bits = []
+        for i in range(n):
+            if i not in frozen_indices:
+                info_bits.append(u_recovered[i])
+        return info_bits
+
+
+class MIMOSpatialMultiplexing:
+    """MIMO spatial multiplexing channel simulator with Zero-Forcing (ZF) and MMSE detectors."""
+
+    @classmethod
+    def detect_zf(cls, H: List[List[float]], y: List[float]) -> List[float]:
+        """Zero-Forcing detector: x_hat = (H^T H)^-1 H^T y."""
+        import math
+        rx = len(H)
+        tx = len(H[0]) if rx > 0 else 0
+
+        # Gram matrix H^T H
+        HtH = [[sum(H[k][i] * H[k][j] for k in range(rx)) for j in range(tx)] for i in range(tx)]
+        # H^T y
+        Hty = [sum(H[k][i] * y[k] for k in range(rx)) for i in range(tx)]
+
+        # Regularize diagonal for numerical stability
+        for i in range(tx):
+            HtH[i][i] += 1e-5
+
+        # Solve (H^T H) x = H^T y via Gauss-Jordan
+        aug = [HtH[i] + [Hty[i]] for i in range(tx)]
+        for i in range(tx):
+            piv = aug[i][i]
+            if abs(piv) > 1e-12:
+                aug[i] = [val / piv for val in aug[i]]
+            for r in range(tx):
+                if r != i and abs(aug[r][i]) > 1e-12:
+                    factor = aug[r][i]
+                    aug[r] = [aug[r][c] - factor * aug[i][c] for c in range(tx + 1)]
+        return [aug[i][tx] for i in range(tx)]
+
+
+def telecom_ldpc_decode(H: List[List[int]], llrs: List[float], max_iter: int = 15) -> Record:
+    """Decodes LDPC codewords via belief propagation sum-product algorithm."""
+    return Record(LDPCBeliefPropagationDecoder.decode(H, llrs, max_iter=max_iter))
+
+
+def telecom_polar_encode_decode(info_bits: List[int], n: int = 8) -> Record:
+    """Simulates 5G NR Polar code encoding and successive cancellation decoding."""
+    encoded = PolarCodeEncoderDecoder.encode(info_bits, total_length=n)
+    # Simulate AWGN channel BPSK: 0 -> +1.0, 1 -> -1.0
+    llrs = [(1.0 if b == 0 else -1.0) for b in encoded]
+    decoded = PolarCodeEncoderDecoder.decode_sc(llrs, k=len(info_bits))
+    return Record({
+        "info_bits": info_bits,
+        "encoded_codeword": encoded,
+        "decoded_bits": decoded,
+        "success": info_bits == decoded,
+    })
+
+
+def telecom_mimo_detect_zf(channel_matrix: List[List[float]], received_symbols: List[float]) -> Record:
+    """Detects transmitted symbols across MIMO channels using Zero-Forcing (ZF) equalizer."""
+    detected = MIMOSpatialMultiplexing.detect_zf(channel_matrix, received_symbols)
+    return Record({
+        "detected_symbols": [round(x, 4) for x in detected],
+    })

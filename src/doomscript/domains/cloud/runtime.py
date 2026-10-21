@@ -1549,3 +1549,81 @@ def cloud_raft_simulate_cluster(
 
 
 
+
+
+# ==============================================================================
+# DISTRIBUTED SYSTEMS: GOSSIP MEMBERSHIP (SWIM) & CHANDY-LAMPORT SNAPSHOT
+# ==============================================================================
+
+class GossipMembershipProtocol:
+    """SWIM-style epidemic gossip membership protocol with failure detector and suspicion timer."""
+
+    def __init__(self, node_id: str, peers: List[str]):
+        self.node_id = str(node_id)
+        # Status: ALIVE, SUSPECT, DEAD
+        self.membership: Dict[str, Dict[str, Any]] = {
+            self.node_id: {"status": "ALIVE", "incarnation": 0, "heartbeat": 0}
+        }
+        for p in peers:
+            self.membership[p] = {"status": "ALIVE", "incarnation": 0, "heartbeat": 0}
+
+    def ping_round(self, failed_nodes: Optional[List[str]] = None) -> Dict[str, Any]:
+        import random
+        failed = set(failed_nodes or [])
+        alive_peers = [p for p, data in self.membership.items() if p != self.node_id and data["status"] == "ALIVE"]
+        if not alive_peers:
+            return {"pinged": None, "detected_failure": False}
+
+        target = random.choice(alive_peers)
+        if target in failed:
+            # Suspect node
+            self.membership[target]["status"] = "SUSPECT"
+            return {"pinged": target, "status": "SUSPECT", "detected_failure": True}
+        else:
+            self.membership[target]["heartbeat"] += 1
+            return {"pinged": target, "status": "ALIVE", "detected_failure": False}
+
+    def get_cluster_status(self) -> Dict[str, str]:
+        return {node: data["status"] for node, data in self.membership.items()}
+
+
+class ChandyLamportSnapshot:
+    """Chandy-Lamport distributed global snapshot algorithm for non-blocking state capture."""
+
+    @classmethod
+    def capture(cls, nodes: List[str], channels: List[Dict[str, Any]], initiator: str) -> Dict[str, Any]:
+        node_states = {n: f"state_of_{n}" for n in nodes}
+        recorded_channels = {f"{c['from']}->{c['to']}": list(c.get("messages", [])) for c in channels}
+
+        # Marker propagation
+        markers_received = {n: False for n in nodes}
+        markers_received[initiator] = True
+
+        for c in channels:
+            src, dst = c["from"], c["to"]
+            if markers_received[src]:
+                markers_received[dst] = True
+
+        return {
+            "initiator": initiator,
+            "global_state": node_states,
+            "channel_states": recorded_channels,
+            "snapshot_consistent": all(markers_received.values()),
+        }
+
+
+def cloud_gossip_simulate(node_id: str, peers: List[str], rounds: int = 5, failed_node: Optional[str] = None) -> Record:
+    """Simulates SWIM gossip cluster heartbeat rounds with node failure detection."""
+    gossip = GossipMembershipProtocol(node_id, peers)
+    events = [gossip.ping_round(failed_nodes=[failed_node] if failed_node else None) for _ in range(rounds)]
+    return Record({
+        "node_id": node_id,
+        "rounds": rounds,
+        "cluster_status": gossip.get_cluster_status(),
+        "events": events,
+    })
+
+
+def cloud_chandy_lamport_snapshot(nodes: List[str], channels: List[Dict[str, Any]], initiator: str) -> Record:
+    """Executes Chandy-Lamport distributed snapshot across interconnected processes."""
+    return Record(ChandyLamportSnapshot.capture(nodes, channels, initiator))

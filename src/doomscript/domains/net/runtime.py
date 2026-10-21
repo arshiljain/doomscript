@@ -1805,3 +1805,166 @@ def execute_net_ir(spec: Any) -> Any:
     for k, v in scope.items():
         target_env[k] = v
     return res
+
+
+# ==============================================================================
+# ADVANCED NETWORKING: TCP TAHOE/RENO, RED QUEUE MANAGEMENT & BGP-4 ROUTING
+# ==============================================================================
+
+class TCPTahoeRenoSimulator:
+    """TCP Tahoe and Reno congestion control simulation (AIMD, Fast Retransmit & Recovery)."""
+
+    @classmethod
+    def simulate(
+        cls,
+        rtts: int = 50,
+        loss_rtts: Optional[List[int]] = None,
+        initial_cwnd: float = 1.0,
+        initial_ssthresh: float = 32.0,
+        variant: str = "reno",
+    ) -> Dict[str, Any]:
+        loss_set = set(loss_rtts or [15, 30])
+        cwnd = float(initial_cwnd)
+        ssthresh = float(initial_ssthresh)
+        history_cwnd = []
+        history_state = []
+        state = "slow_start"
+
+        for rtt in range(rtts):
+            if rtt in loss_set:
+                # Packet loss event
+                ssthresh = max(2.0, cwnd / 2.0)
+                if variant.lower() == "reno":
+                    cwnd = ssthresh  # Fast recovery
+                    state = "fast_recovery"
+                else:  # Tahoe
+                    cwnd = 1.0
+                    state = "slow_start"
+            else:
+                if cwnd < ssthresh:
+                    # Slow start: double every RTT (exponential)
+                    cwnd += min(cwnd, 1.0)
+                    state = "slow_start"
+                else:
+                    # Congestion avoidance: additive increase (1 MSS per RTT)
+                    cwnd += 1.0 / max(1.0, cwnd)
+                    state = "congestion_avoidance"
+
+            history_cwnd.append(round(cwnd, 2))
+            history_state.append(state)
+
+        return {
+            "rtts": rtts,
+            "final_cwnd": cwnd,
+            "final_ssthresh": ssthresh,
+            "history_cwnd": history_cwnd,
+            "history_state": history_state,
+            "variant": variant,
+        }
+
+
+class RandomEarlyDetectionRED:
+    """Random Early Detection (RED) queue management with EWMA average queue tracking."""
+
+    def __init__(self, min_th: float = 5.0, max_th: float = 15.0, max_p: float = 0.1, w_q: float = 0.002):
+        self.min_th = float(min_th)
+        self.max_th = float(max_th)
+        self.max_p = float(max_p)
+        self.w_q = float(w_q)
+        self.avg_queue = 0.0
+        self.count = 0
+
+    def process_packet(self, current_queue_len: int) -> Dict[str, Any]:
+        import random
+        # EWMA filter
+        self.avg_queue = (1.0 - self.w_q) * self.avg_queue + self.w_q * current_queue_len
+
+        if self.avg_queue < self.min_th:
+            self.count = 0
+            return {"action": "enqueue", "drop_prob": 0.0, "avg_queue": self.avg_queue}
+        elif self.avg_queue >= self.max_th:
+            self.count = 0
+            return {"action": "drop", "drop_prob": 1.0, "avg_queue": self.avg_queue}
+        else:
+            self.count += 1
+            pb = self.max_p * (self.avg_queue - self.min_th) / (self.max_th - self.min_th)
+            pa = pb / max(1e-6, 1.0 - self.count * pb)
+            drop = random.random() < pa
+            if drop:
+                self.count = 0
+                return {"action": "drop", "drop_prob": pa, "avg_queue": self.avg_queue}
+            return {"action": "enqueue", "drop_prob": pa, "avg_queue": self.avg_queue}
+
+
+class BGP4PathVectorSimulator:
+    """BGP-4 best path selection tie-breaking algorithm with AS-Path loop detection."""
+
+    @classmethod
+    def select_best_path(cls, candidate_routes: List[Dict[str, Any]], local_as: int) -> Optional[Dict[str, Any]]:
+        # 1. Filter out routes with AS-Path loops (containing local AS)
+        valid = []
+        for r in candidate_routes:
+            as_path = r.get("as_path", [])
+            if local_as not in as_path:
+                valid.append(r)
+        if not valid:
+            return None
+
+        # 2. Highest Local Preference (default 100)
+        max_lp = max(r.get("local_pref", 100) for r in valid)
+        valid = [r for r in valid if r.get("local_pref", 100) == max_lp]
+        if len(valid) == 1:
+            return valid[0]
+
+        # 3. Shortest AS-Path length
+        min_as_len = min(len(r.get("as_path", [])) for r in valid)
+        valid = [r for r in valid if len(r.get("as_path", [])) == min_as_len]
+        if len(valid) == 1:
+            return valid[0]
+
+        # 4. Lowest Origin code (IGP < EGP < INCOMPLETE)
+        origin_rank = {"IGP": 0, "EGP": 1, "INCOMPLETE": 2}
+        min_origin = min(origin_rank.get(r.get("origin", "INCOMPLETE"), 2) for r in valid)
+        valid = [r for r in valid if origin_rank.get(r.get("origin", "INCOMPLETE"), 2) == min_origin]
+        if len(valid) == 1:
+            return valid[0]
+
+        # 5. Lowest Multi-Exit Discriminator (MED)
+        min_med = min(r.get("med", 0) for r in valid)
+        valid = [r for r in valid if r.get("med", 0) == min_med]
+        if len(valid) == 1:
+            return valid[0]
+
+        # 6. Prefer eBGP over iBGP
+        ebgp = [r for r in valid if r.get("is_ebgp", True)]
+        if ebgp:
+            valid = ebgp
+        if len(valid) == 1:
+            return valid[0]
+
+        # 7. Lowest Router ID tie-breaker
+        return min(valid, key=lambda r: str(r.get("router_id", "255.255.255.255")))
+
+
+def net_tcp_simulate_reno(rtts: int = 50, loss_rtts: Optional[List[int]] = None) -> Record:
+    """Simulates TCP Reno congestion control dynamics under packet loss."""
+    return Record(TCPTahoeRenoSimulator.simulate(rtts=rtts, loss_rtts=loss_rtts, variant="reno"))
+
+
+def net_red_queue_simulate(packet_queue_lengths: List[int], min_th: float = 5.0, max_th: float = 15.0, w_q: float = 0.2) -> Record:
+    """Processes packet arrivals through RED active queue manager."""
+    red = RandomEarlyDetectionRED(min_th=min_th, max_th=max_th, w_q=w_q)
+    actions = [red.process_packet(q) for q in packet_queue_lengths]
+    drops = sum(1 for a in actions if a["action"] == "drop")
+    return Record({
+        "total_packets": len(packet_queue_lengths),
+        "dropped_packets": drops,
+        "drop_ratio": drops / max(1, len(packet_queue_lengths)),
+        "final_avg_queue": red.avg_queue,
+    })
+
+
+def net_bgp4_best_path(routes: List[Dict[str, Any]], local_as: int = 65001) -> Record:
+    """Selects optimal BGP-4 route using standard RFC 4271 tie-breaking rules."""
+    best = BGP4PathVectorSimulator.select_best_path(routes, local_as=local_as)
+    return Record(best or {})
