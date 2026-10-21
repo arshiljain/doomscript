@@ -21,6 +21,7 @@ from doomscript.domains.image.runtime import (
     image_width,
     image_height,
     resize_image,
+    image_resize,
     crop_image,
     rotate_image,
     flip_image,

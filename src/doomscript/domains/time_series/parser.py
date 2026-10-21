@@ -21,29 +21,31 @@ class TimeSeriesDomainParser(DomainParser):
             series, period, target = m_dec.group(1).strip(), m_dec.group(2).strip(), m_dec.group(3).strip()
             return f"set {target} to time_series_decompose({series}, period={period})"
 
-        # calculate acf of <series> with lags <lags> into <target>
+        # calculate acf of/for <series> [with lags <lags>] into <target>
         m_acf = re.match(
-            r"^calculate\s+acf\s+of\s+(.+?)\s+with\s+lags\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            r"^calculate\s+acf\s+(?:of|for)\s+(.+?)(?:\s+with\s+lags\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )
         if m_acf:
-            series, lags, target = m_acf.group(1).strip(), m_acf.group(2).strip(), m_acf.group(3).strip()
-            return f"set {target} to time_series_acf({series}, nlags={lags})"
+            series, lags, target = m_acf.group(1).strip(), m_acf.group(2), m_acf.group(3).strip()
+            lags_arg = f", nlags={lags.strip()}" if lags else ""
+            return f"set {target} to time_series_acf({series}{lags_arg})"
 
-        # calculate pacf of <series> with lags <lags> into <target>
+        # calculate pacf of/for <series> [with lags <lags>] into <target>
         m_pacf = re.match(
-            r"^calculate\s+pacf\s+of\s+(.+?)\s+with\s+lags\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            r"^calculate\s+pacf\s+(?:of|for)\s+(.+?)(?:\s+with\s+lags\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )
         if m_pacf:
-            series, lags, target = m_pacf.group(1).strip(), m_pacf.group(2).strip(), m_pacf.group(3).strip()
-            return f"set {target} to time_series_pacf({series}, nlags={lags})"
+            series, lags, target = m_pacf.group(1).strip(), m_pacf.group(2), m_pacf.group(3).strip()
+            lags_arg = f", nlags={lags.strip()}" if lags else ""
+            return f"set {target} to time_series_pacf({series}{lags_arg})"
 
-        # forecast holt winters on <series> [with period <m>] [with steps <steps>] into <target>
+        # forecast [time series | holt winters] [on/for] <series> [with period <m>] [with steps <steps>] into <target>
         m_hw = re.match(
-            r"^forecast\s+holt\s+winters\s+on\s+(.+?)(?:\s+with\s+period\s+(\d+))?(?:\s+with\s+steps\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            r"^forecast\s+(?:time\s+series|holt\s+winters)\s+(?:(?:on|for)\s+)?(.+?)(?:\s+with\s+period\s+(\d+))?(?:\s+with\s+steps\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )

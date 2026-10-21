@@ -68,7 +68,7 @@ class ImageDomainParser(DomainParser):
             w = m_resize.group(2).strip()
             h = m_resize.group(3).strip()
             target = m_resize.group(4).strip()
-            return f"set {target} to image_resize({img}, width={w}, height={h})"
+            return f"set {target} to resize_image({img}, width={w}, height={h})"
 
 
         s = line.strip()

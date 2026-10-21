@@ -99,9 +99,9 @@ class GameDomainParser(DomainParser):
             target = m_los.group(4).strip()
             return f"set {target} to game_line_of_sight({tmap}, {start_p}, {goal_p})"
 
-        # create combatant <name> with hp <hp> and attack <atk> and defense <def> into <target>
+        # create combatant <name> with hp <hp> [and] attack <atk> [and] defense <def> into <target>
         m_comb = re.match(
-            r"^create\s+combatant\s+(.+?)\s+with\s+hp\s+(.+?)\s+and\s+attack\s+(.+?)\s+and\s+defense\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            r"^create\s+combatant\s+(.+?)\s+with\s+hp\s+(.+?)(?:\s*(?:and|,)\s*|\s+)attack\s+(.+?)(?:\s*(?:and|,)\s*|\s+)defense\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )

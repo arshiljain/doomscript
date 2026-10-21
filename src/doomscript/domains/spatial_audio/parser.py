@@ -11,15 +11,28 @@ class SpatialAudioDomainParser(DomainParser):
     def parse_line(self, line: str) -> Optional[str]:
         s = line.strip()
 
-        # spatialize audio <sig> at azimuth <az> into <target>
+        # spatialize audio <sig> at azimuth <az> [elevation <el>] into <target>
         m_bin = re.match(
-            r"^spatialize\s+audio\s+(.+?)\s+at\s+azimuth\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            r"^spatialize\s+audio\s+(.+?)\s+at\s+azimuth\s+(.+?)(?:\s+elevation\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )
         if m_bin:
-            sig, az, target = m_bin.group(1).strip(), m_bin.group(2).strip(), m_bin.group(3).strip()
+            sig, az, el, target = m_bin.group(1).strip(), m_bin.group(2).strip(), m_bin.group(3), m_bin.group(4).strip()
+            if el:
+                return f"set {target} to spatial_audio_hrtf_binaural({sig}, {az}, {el.strip()})"
             return f"set {target} to spatial_audio_binaural({sig}, {az})"
+
+        # simulate doppler [effect|shift] on <sig> with [source]? velocity/speed <vs> [and listener velocity <vl>] into <target>
+        m_dop = re.match(
+            r"^simulate\s+doppler\s+(?:effect|shift)\s+on\s+(.+?)\s+with\s+(?:source\s+)?(?:velocity|speed)\s+(.+?)(?:\s+and\s+(?:listener\s+)?(?:velocity|speed)\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_dop:
+            sig, vs, vl, target = m_dop.group(1).strip(), m_dop.group(2).strip(), m_dop.group(3), m_dop.group(4).strip()
+            vl_arg = f", listener_speed={vl.strip()}" if vl else ""
+            return f"set {target} to spatial_audio_doppler({sig}, {vs}{vl_arg})"
 
         # encode ambisonics <sig> at azimuth <az> elevation <el> into <target>
         m_amb = re.match(

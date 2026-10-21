@@ -22,38 +22,38 @@ class GraphicsDomainParser(DomainParser):
             w, h, target = m_fb.group(1), m_fb.group(2), m_fb.group(3).strip()
             return f"set {target} to graphics_create_framebuffer({w}, {h})"
 
-        # draw line on <fb> from <x0>, <y0> to <x1>, <y1> with color <color>
+        # draw line on <fb> from <x0>, <y0> to <x1>, <y1> [with color <color>]
         m_line = re.match(
-            r"^draw\s+line\s+on\s+([A-Za-z_]\w*)\s+from\s+(.+?),\s*(.+?)\s+to\s+(.+?),\s*(.+?)\s+with\s+color\s+(.+)$",
+            r"^draw\s+line\s+on\s+([A-Za-z_]\w*)\s+from\s+(.+?),\s*(.+?)\s+to\s+(.+?),\s*(.+?)(?:\s+with\s+color\s+(.+))?$",
             s,
             re.IGNORECASE,
         )
         if m_line:
-            fb, x0, y0, x1, y1, color = (
+            fb, x0, y0, x1, y1 = (
                 m_line.group(1).strip(),
                 m_line.group(2).strip(),
                 m_line.group(3).strip(),
                 m_line.group(4).strip(),
                 m_line.group(5).strip(),
-                m_line.group(6).strip(),
             )
-            return f"call graphics_draw_line({fb}, {x0}, {y0}, {x1}, {y1}, {color})"
+            color = m_line.group(6).strip() if m_line.group(6) else "(255, 255, 255)"
+            return f"graphics_draw_line({fb}, {x0}, {y0}, {x1}, {y1}, {color})"
 
-        # draw circle on <fb> at <cx>, <cy> radius <r> with color <color>
+        # draw circle on <fb> at <cx>, <cy> radius <r> [with color <color>]
         m_circ = re.match(
-            r"^draw\s+circle\s+on\s+([A-Za-z_]\w*)\s+at\s+(.+?),\s*(.+?)\s+radius\s+(.+?)\s+with\s+color\s+(.+)$",
+            r"^draw\s+circle\s+on\s+([A-Za-z_]\w*)\s+at\s+(.+?),\s*(.+?)\s+radius\s+(.+?)(?:\s+with\s+color\s+(.+))?$",
             s,
             re.IGNORECASE,
         )
         if m_circ:
-            fb, cx, cy, r, color = (
+            fb, cx, cy, r = (
                 m_circ.group(1).strip(),
                 m_circ.group(2).strip(),
                 m_circ.group(3).strip(),
                 m_circ.group(4).strip(),
-                m_circ.group(5).strip(),
             )
-            return f"call graphics_draw_circle({fb}, {cx}, {cy}, {r}, {color})"
+            color = m_circ.group(5).strip() if m_circ.group(5) else "(255, 255, 255)"
+            return f"graphics_draw_circle({fb}, {cx}, {cy}, {r}, {color})"
 
         # rasterize antialiased line from <x0>, <y0> to <x1>, <y1> [with color <col>] into <target>
         m_wu = re.match(

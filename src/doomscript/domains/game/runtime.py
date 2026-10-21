@@ -225,6 +225,27 @@ class GameCombatant:
     def is_alive(self) -> bool:
         return self.hp > 0
 
+    def __getitem__(self, item: str) -> Any:
+        if hasattr(self, item):
+            return getattr(self, item)
+        raise KeyError(item)
+
+    def get(self, item: str, default: Any = None) -> Any:
+        return getattr(self, item, default)
+
+    def __contains__(self, item: str) -> bool:
+        return hasattr(self, item)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "hp": self.hp,
+            "max_hp": self.max_hp,
+            "attack": self.attack,
+            "defense": self.defense,
+            "buffs": self.buffs,
+        }
+
 
 def game_combatant_create(name: Any, hp: Any, attack: Any, defense: Any) -> GameCombatant:
     """Instantiate a new RPG combatant."""
