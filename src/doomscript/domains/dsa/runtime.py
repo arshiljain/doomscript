@@ -4597,3 +4597,280 @@ def dsa_segment_tree_2d(matrix: List[List[float]], op: str = "min") -> SegmentTr
     op_fn = min if op == "min" else (max if op == "max" else lambda a, b: a + b)
     def_val = float("inf") if op == "min" else (float("-inf") if op == "max" else 0.0)
     return SegmentTree2D(matrix, op=op_fn, default_val=def_val)
+
+
+# ==============================================================================
+# ADVANCED DATA STRUCTURES: SPLAY TREE & COMPACT RADIX TREE (PATRICIA TRIE)
+# ==============================================================================
+
+class SplayTreeNode:
+    def __init__(self, key: Any, value: Any = None):
+        self.key = key
+        self.value = value
+        self.left: Optional['SplayTreeNode'] = None
+        self.right: Optional['SplayTreeNode'] = None
+        self.parent: Optional['SplayTreeNode'] = None
+
+
+class SplayTree:
+    """Self-adjusting Binary Search Tree with zig, zig-zig, and zig-zag splay rotations."""
+
+    def __init__(self):
+        self.root: Optional[SplayTreeNode] = None
+        self.size: int = 0
+
+    def _rotate_right(self, x: SplayTreeNode):
+        y = x.left
+        if not y:
+            return
+        x.left = y.right
+        if y.right:
+            y.right.parent = x
+        y.parent = x.parent
+        if not x.parent:
+            self.root = y
+        elif x == x.parent.right:
+            x.parent.right = y
+        else:
+            x.parent.left = y
+        y.right = x
+        x.parent = y
+
+    def _rotate_left(self, x: SplayTreeNode):
+        y = x.right
+        if not y:
+            return
+        x.right = y.left
+        if y.left:
+            y.left.parent = x
+        y.parent = x.parent
+        if not x.parent:
+            self.root = y
+        elif x == x.parent.left:
+            x.parent.left = y
+        else:
+            x.parent.right = y
+        y.left = x
+        x.parent = y
+
+    def _splay(self, x: SplayTreeNode):
+        while x.parent:
+            if not x.parent.parent:
+                # Zig step
+                if x == x.parent.left:
+                    self._rotate_right(x.parent)
+                else:
+                    self._rotate_left(x.parent)
+            elif x == x.parent.left and x.parent == x.parent.parent.left:
+                # Zig-Zig step
+                self._rotate_right(x.parent.parent)
+                self._rotate_right(x.parent)
+            elif x == x.parent.right and x.parent == x.parent.parent.right:
+                # Zig-Zig step
+                self._rotate_left(x.parent.parent)
+                self._rotate_left(x.parent)
+            elif x == x.parent.right and x.parent == x.parent.parent.left:
+                # Zig-Zag step
+                self._rotate_left(x.parent)
+                self._rotate_right(x.parent)
+            else:
+                # Zig-Zag step
+                self._rotate_right(x.parent)
+                self._rotate_left(x.parent)
+
+    def insert(self, key: Any, value: Any = None):
+        node = SplayTreeNode(key, value)
+        if not self.root:
+            self.root = node
+            self.size += 1
+            return
+
+        curr = self.root
+        parent = None
+        while curr:
+            parent = curr
+            if key < curr.key:
+                curr = curr.left
+            elif key > curr.key:
+                curr = curr.right
+            else:
+                curr.value = value
+                self._splay(curr)
+                return
+
+        node.parent = parent
+        if key < parent.key:
+            parent.left = node
+        else:
+            parent.right = node
+        self._splay(node)
+        self.size += 1
+
+    def search(self, key: Any) -> Optional[Any]:
+        curr = self.root
+        last = None
+        while curr:
+            last = curr
+            if key == curr.key:
+                self._splay(curr)
+                return curr.value
+            elif key < curr.key:
+                curr = curr.left
+            else:
+                curr = curr.right
+        if last:
+            self._splay(last)
+        return None
+
+    def delete(self, key: Any) -> bool:
+        if not self.root:
+            return False
+        # Search to splay node or closest
+        if self.search(key) is None and (not self.root or self.root.key != key):
+            return False
+
+        target = self.root
+        if not target.left:
+            self.root = target.right
+            if self.root:
+                self.root.parent = None
+        else:
+            right_sub = target.right
+            self.root = target.left
+            self.root.parent = None
+            # Splay max element of left subtree to root
+            curr = self.root
+            while curr.right:
+                curr = curr.right
+            self._splay(curr)
+            self.root.right = right_sub
+            if right_sub:
+                right_sub.parent = self.root
+
+        self.size -= 1
+        return True
+
+
+class CompactRadixTreeNode:
+    def __init__(self, edge_label: str = ""):
+        self.edge_label = edge_label
+        self.is_terminal = False
+        self.value: Any = None
+        self.children: Dict[str, 'CompactRadixTreeNode'] = {}  # first_char -> node
+
+
+class CompactRadixTree:
+    """Radix Tree (Patricia Trie) with edge-label compression for fast prefix searches."""
+
+    def __init__(self):
+        self.root = CompactRadixTreeNode()
+        self.count = 0
+
+    def insert(self, key: str, value: Any = None):
+        curr = self.root
+        idx = 0
+        while idx < len(key):
+            ch = key[idx]
+            if ch not in curr.children:
+                new_node = CompactRadixTreeNode(key[idx:])
+                new_node.is_terminal = True
+                new_node.value = value
+                curr.children[ch] = new_node
+                self.count += 1
+                return
+
+            child = curr.children[ch]
+            label = child.edge_label
+            # Find common prefix length
+            common = 0
+            while common < len(label) and idx + common < len(key) and label[common] == key[idx + common]:
+                common += 1
+
+            if common == len(label):
+                # Entire label matched, descend
+                idx += common
+                curr = child
+            else:
+                # Split edge
+                split_node = CompactRadixTreeNode(label[:common])
+                child.edge_label = label[common:]
+                split_node.children[child.edge_label[0]] = child
+
+                if idx + common == len(key):
+                    split_node.is_terminal = True
+                    split_node.value = value
+                else:
+                    new_leaf = CompactRadixTreeNode(key[idx + common:])
+                    new_leaf.is_terminal = True
+                    new_leaf.value = value
+                    split_node.children[new_leaf.edge_label[0]] = new_leaf
+
+                curr.children[ch] = split_node
+                self.count += 1
+                return
+
+        if not curr.is_terminal:
+            curr.is_terminal = True
+            self.count += 1
+        curr.value = value
+
+    def search(self, key: str) -> Optional[Any]:
+        curr = self.root
+        idx = 0
+        while idx < len(key):
+            ch = key[idx]
+            if ch not in curr.children:
+                return None
+            child = curr.children[ch]
+            label = child.edge_label
+            if not key.startswith(label, idx):
+                return None
+            idx += len(label)
+            curr = child
+        return curr.value if curr.is_terminal else None
+
+    def find_by_prefix(self, prefix: str) -> List[Tuple[str, Any]]:
+        curr = self.root
+        idx = 0
+        prefix_path = []
+        while idx < len(prefix):
+            ch = prefix[idx]
+            if ch not in curr.children:
+                return []
+            child = curr.children[ch]
+            label = child.edge_label
+            rem_len = len(prefix) - idx
+            if rem_len < len(label):
+                if label.startswith(prefix[idx:]):
+                    curr = child
+                    prefix_path.append(label)
+                    break
+                else:
+                    return []
+            elif not prefix.startswith(label, idx):
+                return []
+            idx += len(label)
+            prefix_path.append(label)
+            curr = child
+
+        # Collect all descendant terminals
+        results = []
+        def dfs(node: CompactRadixTreeNode, path_str: str):
+            if node.is_terminal:
+                results.append((path_str, node.value))
+            for c_node in node.children.values():
+                dfs(c_node, path_str + c_node.edge_label)
+
+        matched_prefix = "".join(prefix_path)
+        dfs(curr, matched_prefix)
+        return results
+
+
+def dsa_splay_tree() -> SplayTree:
+    """Constructs an empty Splay Tree."""
+    return SplayTree()
+
+
+def dsa_radix_tree() -> CompactRadixTree:
+    """Constructs an empty Compact Radix Tree."""
+    return CompactRadixTree()

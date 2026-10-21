@@ -1725,3 +1725,299 @@ def compiler_earley_parse(grammar: Dict[str, Any], start_symbol: str, tokens: Li
 
 
 
+
+
+# ==============================================================================
+# COMPILER ARCHITECTURE: LR(1) PARSER GENERATOR & AST OPTIMIZATION PASS
+# ==============================================================================
+
+class LR1Item:
+    """Represents an LR(1) item [A -> alpha . beta, lookahead]."""
+    def __init__(self, lhs: str, rhs: Tuple[str, ...], dot: int, lookahead: str):
+        self.lhs = lhs
+        self.rhs = rhs
+        self.dot = dot
+        self.lookahead = lookahead
+
+    def is_complete(self) -> bool:
+        return self.dot >= len(self.rhs)
+
+    def next_symbol(self) -> Optional[str]:
+        if self.dot < len(self.rhs):
+            return self.rhs[self.dot]
+        return None
+
+    def advance(self) -> 'LR1Item':
+        return LR1Item(self.lhs, self.rhs, self.dot + 1, self.lookahead)
+
+    def __hash__(self):
+        return hash((self.lhs, self.rhs, self.dot, self.lookahead))
+
+    def __eq__(self, other):
+        if not isinstance(other, LR1Item):
+            return False
+        return (self.lhs == other.lhs and self.rhs == other.rhs and
+                self.dot == other.dot and self.lookahead == other.lookahead)
+
+    def __repr__(self):
+        rhs_str = list(self.rhs)
+        rhs_str.insert(self.dot, ".")
+        return f"[{self.lhs} -> {' '.join(rhs_str)}, {self.lookahead}]"
+
+
+class LR1ParserGenerator:
+    """Canonical LR(1) Parser Generator with First-Follow sets and Action-Goto tables."""
+
+    def __init__(self, start_symbol: str, rules: List[Tuple[str, List[str]]]):
+        # rules: list of (LHS, [RHS symbols...])
+        self.start_symbol = start_symbol
+        self.rules = [(lhs, tuple(rhs)) for lhs, rhs in rules]
+        self.non_terminals = set(lhs for lhs, _ in self.rules)
+        self.terminals = set()
+        for _, rhs in self.rules:
+            for sym in rhs:
+                if sym not in self.non_terminals:
+                    self.terminals.add(sym)
+        self.terminals.add("$")  # EOF marker
+
+        # Augmented start rule: S' -> start_symbol
+        self.augmented_start = f"{start_symbol}'"
+        self.augmented_rules = [(self.augmented_start, (start_symbol,))] + self.rules
+        self.first_sets: Dict[str, Set[str]] = {}
+        self._compute_first_sets()
+
+        # Build LR(1) DFA states and parse table
+        self.states: List[Set[LR1Item]] = []
+        self.action_table: Dict[Tuple[int, str], Tuple[str, Any]] = {}  # (state, term) -> ("shift", s) or ("reduce", rule_idx) or ("accept", 0)
+        self.goto_table: Dict[Tuple[int, str], int] = {}  # (state, non_term) -> state
+        self._build_tables()
+
+    def _compute_first_sets(self):
+        for term in self.terminals:
+            self.first_sets[term] = {term}
+        for nt in self.non_terminals:
+            self.first_sets[nt] = set()
+        self.first_sets[self.augmented_start] = set()
+
+        changed = True
+        while changed:
+            changed = False
+            for lhs, rhs in self.augmented_rules:
+                before = len(self.first_sets[lhs])
+                if len(rhs) == 0:
+                    self.first_sets[lhs].add("eps")
+                else:
+                    all_nullable = True
+                    for sym in rhs:
+                        sym_first = self.first_sets.get(sym, {sym})
+                        self.first_sets[lhs].update(sym_first - {"eps"})
+                        if "eps" not in sym_first:
+                            all_nullable = False
+                            break
+                    if all_nullable:
+                        self.first_sets[lhs].add("eps")
+                if len(self.first_sets[lhs]) > before:
+                    changed = True
+
+    def first_of_sequence(self, symbols: Tuple[str, ...]) -> Set[str]:
+        result = set()
+        for sym in symbols:
+            sym_first = self.first_sets.get(sym, {sym})
+            result.update(sym_first - {"eps"})
+            if "eps" not in sym_first:
+                return result
+        result.add("eps")
+        return result
+
+    def _closure(self, items: Set[LR1Item]) -> Set[LR1Item]:
+        closure_set = set(items)
+        changed = True
+        while changed:
+            changed = False
+            new_items = set()
+            for item in closure_set:
+                B = item.next_symbol()
+                if B is not None and B in self.non_terminals:
+                    beta_a = item.rhs[item.dot + 1:] + (item.lookahead,)
+                    first_beta_a = self.first_of_sequence(beta_a)
+                    for rule_lhs, rule_rhs in self.augmented_rules:
+                        if rule_lhs == B:
+                            for b in first_beta_a:
+                                if b != "eps":
+                                    cand = LR1Item(B, rule_rhs, 0, b)
+                                    if cand not in closure_set:
+                                        new_items.add(cand)
+            if new_items:
+                closure_set.update(new_items)
+                changed = True
+        return closure_set
+
+    def _goto(self, items: Set[LR1Item], symbol: str) -> Set[LR1Item]:
+        moved = set()
+        for item in items:
+            if item.next_symbol() == symbol:
+                moved.add(item.advance())
+        return self._closure(moved)
+
+    def _build_tables(self):
+        init_item = LR1Item(self.augmented_start, (self.start_symbol,), 0, "$")
+        init_state = self._closure({init_item})
+        self.states = [init_state]
+
+        queue = [0]
+        while queue:
+            state_idx = queue.pop(0)
+            curr_state = self.states[state_idx]
+
+            # All transition symbols
+            symbols = set()
+            for item in curr_state:
+                sym = item.next_symbol()
+                if sym is not None:
+                    symbols.add(sym)
+
+            for sym in symbols:
+                target = self._goto(curr_state, sym)
+                if not target:
+                    continue
+                if target not in self.states:
+                    self.states.append(target)
+                    next_idx = len(self.states) - 1
+                    queue.append(next_idx)
+                else:
+                    next_idx = self.states.index(target)
+
+                if sym in self.non_terminals:
+                    self.goto_table[(state_idx, sym)] = next_idx
+                else:
+                    self.action_table[(state_idx, sym)] = ("shift", next_idx)
+
+            # Reductions
+            for item in curr_state:
+                if item.is_complete():
+                    if item.lhs == self.augmented_start and item.lookahead == "$":
+                        self.action_table[(state_idx, "$")] = ("accept", 0)
+                    else:
+                        for idx, (r_lhs, r_rhs) in enumerate(self.augmented_rules):
+                            if r_lhs == item.lhs and r_rhs == item.rhs:
+                                self.action_table[(state_idx, item.lookahead)] = ("reduce", idx)
+                                break
+
+    def parse(self, tokens: List[str]) -> Dict[str, Any]:
+        """Parses a sequence of tokens using LR(1) shift-reduce parsing."""
+        tokens = list(tokens) + ["$"]
+        state_stack = [0]
+        symbol_stack: List[Any] = []
+        token_idx = 0
+
+        while True:
+            state = state_stack[-1]
+            lookahead = tokens[token_idx]
+
+            action = self.action_table.get((state, lookahead))
+            if action is None:
+                raise SyntaxError(f"LR(1) parse error at token '{lookahead}' (state {state})")
+
+            act_type, target = action
+            if act_type == "shift":
+                state_stack.append(target)
+                symbol_stack.append(lookahead)
+                token_idx += 1
+            elif act_type == "reduce":
+                rule_lhs, rule_rhs = self.augmented_rules[target]
+                reduced_children = []
+                for _ in range(len(rule_rhs)):
+                    state_stack.pop()
+                    reduced_children.insert(0, symbol_stack.pop())
+                top_state = state_stack[-1]
+                next_state = self.goto_table.get((top_state, rule_lhs))
+                if next_state is None:
+                    raise SyntaxError(f"LR(1) goto error for non-terminal '{rule_lhs}' in state {top_state}")
+                state_stack.append(next_state)
+                symbol_stack.append({"type": rule_lhs, "children": reduced_children})
+            elif act_type == "accept":
+                return symbol_stack[0]
+
+
+class ASTOptimizerPass:
+    """Applies algebraic constant folding and dead-branch elimination on AST expressions."""
+
+    @classmethod
+    def optimize(cls, node: Any) -> Any:
+        if not isinstance(node, dict):
+            return node
+
+        ntype = node.get("type")
+        if ntype == "BinaryOp":
+            left = cls.optimize(node.get("left"))
+            right = cls.optimize(node.get("right"))
+            op = node.get("op")
+
+            # Check if both are numeric literals
+            if (isinstance(left, dict) and left.get("type") == "Literal" and
+                isinstance(right, dict) and right.get("type") == "Literal"):
+                lv = left.get("value")
+                rv = right.get("value")
+                if isinstance(lv, (int, float)) and isinstance(rv, (int, float)):
+                    if op == "+":
+                        return {"type": "Literal", "value": lv + rv}
+                    elif op == "-":
+                        return {"type": "Literal", "value": lv - rv}
+                    elif op == "*":
+                        return {"type": "Literal", "value": lv * rv}
+                    elif op == "/" and rv != 0:
+                        return {"type": "Literal", "value": lv / rv}
+                    elif op == "%" and rv != 0:
+                        return {"type": "Literal", "value": lv % rv}
+
+            # Algebraic identity simplifications
+            if op == "+" and isinstance(right, dict) and right.get("value") == 0:
+                return left
+            if op == "+" and isinstance(left, dict) and left.get("value") == 0:
+                return right
+            if op == "*" and ((isinstance(left, dict) and left.get("value") == 0) or (isinstance(right, dict) and right.get("value") == 0)):
+                return {"type": "Literal", "value": 0}
+            if op == "*" and isinstance(right, dict) and right.get("value") == 1:
+                return left
+
+            return {"type": "BinaryOp", "op": op, "left": left, "right": right}
+
+        elif ntype == "IfStatement":
+            cond = cls.optimize(node.get("cond"))
+            then_branch = cls.optimize(node.get("then"))
+            else_branch = cls.optimize(node.get("else"))
+            if isinstance(cond, dict) and cond.get("type") == "Literal":
+                val = bool(cond.get("value"))
+                return then_branch if val else else_branch
+            return {"type": "IfStatement", "cond": cond, "then": then_branch, "else": else_branch}
+
+        elif ntype == "Block":
+            stmts = []
+            for stmt in node.get("statements", []):
+                opt_stmt = cls.optimize(stmt)
+                stmts.append(opt_stmt)
+                if isinstance(opt_stmt, dict) and opt_stmt.get("type") in ("Return", "Halt"):
+                    # Dead code elimination for trailing unreachable statements
+                    break
+            return {"type": "Block", "statements": stmts}
+
+        # Recursively optimize children
+        opt_node = {}
+        for k, v in node.items():
+            if isinstance(v, list):
+                opt_node[k] = [cls.optimize(item) for item in v]
+            elif isinstance(v, dict):
+                opt_node[k] = cls.optimize(v)
+            else:
+                opt_node[k] = v
+        return opt_node
+
+
+def compiler_lr1_parser(start_symbol: str, grammar_rules: List[Tuple[str, List[str]]]) -> LR1ParserGenerator:
+    """Creates a canonical LR(1) parser generator."""
+    return LR1ParserGenerator(start_symbol, grammar_rules)
+
+
+def compiler_optimize_ast(ast_root: Dict[str, Any]) -> Dict[str, Any]:
+    """Applies constant folding and dead code elimination to an AST."""
+    return ASTOptimizerPass.optimize(ast_root)

@@ -1760,3 +1760,184 @@ def automata_ltl_model_check(
 
 
 
+
+
+# ==============================================================================
+# ADVANCED AUTOMATA: TWO-TAPE TURING MACHINE & MEALY-MOORE CONVERTER
+# ==============================================================================
+
+class TwoTapeTuringMachineSimulator:
+    """Multi-tape deterministic Turing machine with 2 independent bidirectional infinite tapes."""
+
+    def __init__(
+        self,
+        states: Set[str],
+        tape_alphabet: Set[str],
+        transitions: Dict[Tuple[str, str, str], Tuple[str, str, str, str, str]],
+        start_state: str,
+        accept_states: Set[str],
+        blank: str = "_",
+    ):
+        # transitions key: (state, s1, s2) -> (next_state, write1, dir1, write2, dir2)
+        # dir in {"L", "R", "S"}
+        self.states = set(states)
+        self.tape_alphabet = set(tape_alphabet)
+        self.blank = blank
+        self.transitions = dict(transitions)
+        self.start_state = start_state
+        self.accept_states = set(accept_states)
+
+    def execute(self, tape1_input: str, max_steps: int = 10000) -> Dict[str, Any]:
+        """Runs the 2-tape TM until accept, reject, or step limit."""
+        tape1 = dict(enumerate(tape1_input))
+        tape2: Dict[int, str] = {}
+        head1 = 0
+        head2 = 0
+        state = self.start_state
+        steps = 0
+        trace = []
+
+        while steps < max_steps:
+            if state in self.accept_states:
+                return {
+                    "accepted": True,
+                    "state": state,
+                    "steps": steps,
+                    "tape1": "".join(tape1.get(i, self.blank) for i in range(min(tape1.keys(), default=0), max(tape1.keys(), default=-1) + 1)).strip(self.blank),
+                    "tape2": "".join(tape2.get(i, self.blank) for i in range(min(tape2.keys(), default=0), max(tape2.keys(), default=-1) + 1)).strip(self.blank),
+                }
+
+            s1 = tape1.get(head1, self.blank)
+            s2 = tape2.get(head2, self.blank)
+            key = (state, s1, s2)
+            if key not in self.transitions:
+                # No transition -> halt / reject
+                return {
+                    "accepted": False,
+                    "state": state,
+                    "steps": steps,
+                    "reason": "Halted without transition",
+                }
+
+            next_state, w1, d1, w2, d2 = self.transitions[key]
+            tape1[head1] = w1
+            tape2[head2] = w2
+
+            if d1 == "L":
+                head1 -= 1
+            elif d1 == "R":
+                head1 += 1
+
+            if d2 == "L":
+                head2 -= 1
+            elif d2 == "R":
+                head2 += 1
+
+            state = next_state
+            steps += 1
+
+        return {"accepted": False, "state": state, "steps": steps, "reason": "Max steps exceeded"}
+
+
+class MealyMachine:
+    """Mealy transducer with output generated along state transitions."""
+
+    def __init__(
+        self,
+        states: Set[str],
+        inputs: Set[str],
+        outputs: Set[str],
+        transitions: Dict[Tuple[str, str], Tuple[str, str]],  # (state, input) -> (next_state, output)
+        start_state: str,
+    ):
+        self.states = set(states)
+        self.inputs = set(inputs)
+        self.outputs = set(outputs)
+        self.transitions = dict(transitions)
+        self.start_state = start_state
+
+    def transduce(self, input_sequence: List[str]) -> List[str]:
+        curr = self.start_state
+        res = []
+        for sym in input_sequence:
+            next_st, out = self.transitions[(curr, sym)]
+            res.append(out)
+            curr = next_st
+        return res
+
+
+class MooreMachine:
+    """Moore transducer with output associated purely with target states."""
+
+    def __init__(
+        self,
+        states: Set[str],
+        inputs: Set[str],
+        outputs: Set[str],
+        transitions: Dict[Tuple[str, str], str],  # (state, input) -> next_state
+        state_outputs: Dict[str, str],  # state -> output
+        start_state: str,
+    ):
+        self.states = set(states)
+        self.inputs = set(inputs)
+        self.outputs = set(outputs)
+        self.transitions = dict(transitions)
+        self.state_outputs = dict(state_outputs)
+        self.start_state = start_state
+
+    def transduce(self, input_sequence: List[str]) -> List[str]:
+        curr = self.start_state
+        res = [self.state_outputs[curr]]
+        for sym in input_sequence:
+            curr = self.transitions[(curr, sym)]
+            res.append(self.state_outputs[curr])
+        return res
+
+
+def automata_mealy_to_moore(mealy: MealyMachine) -> MooreMachine:
+    """Algorithmic conversion from Mealy machine to equivalent Moore machine."""
+    # Each state in Moore machine corresponds to a pair (mealy_state, output)
+    moore_states = set()
+    moore_transitions = {}
+    moore_outputs = {}
+
+    start_moore = f"{mealy.start_state}_init"
+    moore_states.add(start_moore)
+    moore_outputs[start_moore] = ""
+
+    # Map each transition target (q', y) to a Moore state
+    for (q, a), (next_q, y) in mealy.transitions.items():
+        st_name = f"{next_q}_{y}"
+        moore_states.add(st_name)
+        moore_outputs[st_name] = y
+
+    for (q, a), (next_q, y) in mealy.transitions.items():
+        target = f"{next_q}_{y}"
+        # Start state transitions
+        if q == mealy.start_state:
+            moore_transitions[(start_moore, a)] = target
+        # For each incoming version of state q
+        for q_out in mealy.outputs:
+            source = f"{q}_{q_out}"
+            if source in moore_states:
+                moore_transitions[(source, a)] = target
+
+    return MooreMachine(
+        states=moore_states,
+        inputs=mealy.inputs,
+        outputs=mealy.outputs,
+        transitions=moore_transitions,
+        state_outputs=moore_outputs,
+        start_state=start_moore,
+    )
+
+
+def automata_two_tape_tm(
+    states: Set[str],
+    tape_alphabet: Set[str],
+    transitions: Dict[Tuple[str, str, str], Tuple[str, str, str, str, str]],
+    start_state: str,
+    accept_states: Set[str],
+) -> TwoTapeTuringMachineSimulator:
+    """Instantiates a 2-tape deterministic Turing Machine simulator."""
+    return TwoTapeTuringMachineSimulator(states, tape_alphabet, transitions, start_state, accept_states)
