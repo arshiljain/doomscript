@@ -132,3 +132,17 @@ if there is an error:
     execute(code)
     captured = capsys.readouterr()
     assert captured.out.strip() == "RECOVERED"
+
+
+def test_string_literal_f_not_corrupted(capsys):
+    code = """
+say "F"
+say "Grade F"
+say "FFFF"
+say "f"
+say f"hello world"
+"""
+    execute(code)
+    captured = capsys.readouterr()
+    lines = captured.out.strip().splitlines()
+    assert lines == ["F", "Grade F", "FFFF", "f", "hello world"]

@@ -177,17 +177,17 @@ TYPE_CONTRACT_MAP: Dict[str, str] = {
 # STRING & COMMENT MASKING UTILITIES
 # ---------------------------------------------------------------------------
 
-STRING_REGEX = re.compile(r'("""[\s\S]*?"""|\'\'\'[\s\S]*?\'\'\'|"(?:[^"\\]|\\.)*"|(?<!\w)\'(?:[^\'\\]|\\.)*\')')
+STRING_REGEX = re.compile(
+    r'(?<![\w"\'\\])([fF]?)(("""[\s\S]*?"""|\'\'\'[\s\S]*?\'\'\'|"(?:[^"\\]|\\.)*"|(?<!\w)\'(?:[^\'\\]|\\.)*\'))'
+)
 
-F_STRING_PREFIX_REGEX = re.compile(r'(?<!\w)[fF](?=["\'])')
 
 def mask_strings(text: str) -> Tuple[str, List[str]]:
     """Replaces string literals with placeholders to preserve their exact content."""
-    text = F_STRING_PREFIX_REGEX.sub("", text)
     strings = []
     def repl(m):
         idx = len(strings)
-        strings.append(m.group(0))
+        strings.append(m.group(2))
         return f"__STR_LITERAL_{idx}__"
     masked = STRING_REGEX.sub(repl, text)
     return masked, strings
