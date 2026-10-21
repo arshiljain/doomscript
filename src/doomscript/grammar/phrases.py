@@ -651,6 +651,20 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"\bnone\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+is\s+negative\b", r"ds_none_negative(\1)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bnone\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+is\s+zero\b", r"ds_none_zero(\1)", masked, flags=re.IGNORECASE)
 
+    # Phase 2, Task 2.4: Natural Superlatives
+    superlative_m = re.match(
+        r"^\s*find\s+(?:the\s+)?(largest|biggest|highest|maximum|cheapest|smallest|lowest|minimum|oldest|newest)\s+(?:[A-Za-z_]\w*\s+)?in\s+(.+?)(?:\s+by\s+([A-Za-z_]\w*))?\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)$",
+        masked,
+        re.IGNORECASE
+    )
+    if superlative_m:
+        kind = superlative_m.group(1).lower()
+        coll = superlative_m.group(2).strip()
+        key_attr = f"'{superlative_m.group(3).strip()}'" if superlative_m.group(3) else "None"
+        target = superlative_m.group(4).strip()
+        order_arg = "'max'" if kind in ("largest", "biggest", "highest", "maximum", "oldest", "newest") else "'min'"
+        masked = f"set {target} to ds_find_superlative({coll}, order={order_arg}, key={key_attr})"
+
     # Phase 2, Task 2.3: Relative Clauses in Loops ('whose')
     whose_loop_m = re.match(
         r"^\s*for\s+(?:each\s+)?([A-Za-z_]\w*)(?:\s+in\s+([A-Za-z_]\w*))?\s+whose\s+([A-Za-z_]\w*)\s+(is|==|equals|is at least|is at most|is greater than|is less than|is over|is under|>=|<=|<|>)\s+(.+?):?$",

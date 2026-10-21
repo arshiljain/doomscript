@@ -188,3 +188,24 @@ for each user in users whose role is "admin":
 """
     env = execute(code)
     assert env["admins"] == ["Alice", "Charlie"]
+
+
+# ---------------------------------------------------------------------------
+# Phase 2, Task 2.4: Natural Superlatives
+# ---------------------------------------------------------------------------
+
+def test_natural_superlatives_syntax():
+    from doomscript.compiler.engine import execute
+
+    code = """
+orders = [
+    {"id": 101, "amount": 45.0},
+    {"id": 102, "amount": 120.0},
+    {"id": 103, "amount": 15.0}
+]
+find the largest order in orders by amount into top_order
+find the cheapest order in orders by amount into budget_order
+"""
+    env = execute(code)
+    assert env["top_order"]["id"] == 102
+    assert env["budget_order"]["id"] == 103
