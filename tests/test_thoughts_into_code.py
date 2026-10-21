@@ -124,3 +124,37 @@ if it goes wrong as problem:
     assert env["captured_err"] == "handled"
 
 
+# ---------------------------------------------------------------------------
+# Task 4: Thought Queries & Intuitive Filtering Tests (Pillar C)
+# ---------------------------------------------------------------------------
+
+def test_thought_filtering_keep_and_discard():
+    source = """
+numbers = [10, 25, 5, 80, 42]
+keep only numbers where x >= 20 into high_nums
+discard from numbers where x < 20 into filtered_high
+"""
+    env = execute(source)
+    assert env["high_nums"] == [25, 80, 42]
+    assert env["filtered_high"] == [25, 80, 42]
+
+
+def test_thought_find_first_and_check():
+    source = """
+scores = [45, 78, 92, 88, 99]
+find first in scores where x > 90 into top_score
+
+score = 95
+check whether score >= 90 into is_honors
+
+blacklist = ["192.168.1.1", "10.0.0.1"]
+target_ip = "10.0.0.1"
+check if blacklist contains target_ip into is_blocked
+"""
+    env = execute(source)
+    assert env["top_score"] == 92
+    assert env["is_honors"] is True
+    assert env["is_blocked"] is True
+
+
+

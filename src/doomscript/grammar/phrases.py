@@ -88,7 +88,7 @@ COMPARISON_SYNONYMS: List[Tuple[str, str]] = [
 STATEMENT_START_KEYWORDS = {
     "say", "show", "print", "display", "tell", "echo", "log", "output",
     "set", "let", "make", "put", "assign", "store", "save", "initialize", "reset",
-    "suppose", "assume", "remember",
+    "suppose", "assume", "remember", "keep", "find",
     "increase", "decrease", "increment", "decrement", "bump", "double", "halve", "triple",
     "multiply", "divide",
     "if", "unless", "while", "until", "repeat", "for", "loop",
@@ -566,6 +566,63 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"\bnone\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+is\s+positive\b", r"ds_none_positive(\1)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bnone\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+is\s+negative\b", r"ds_none_negative(\1)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bnone\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+is\s+zero\b", r"ds_none_zero(\1)", masked, flags=re.IGNORECASE)
+
+    # Pillar C: Thought Queries & Intuitive Filtering
+    def _rewrite_keep_only(m):
+        coll = m.group(1).strip()
+        cond = m.group(2).strip()
+        target = m.group(3).strip()
+        var_name = "x" if re.search(r"\bx\b", cond) else "item"
+        return f"set {target} to [{var_name} for {var_name} in {coll} if {cond}]"
+
+    masked = re.sub(
+        r"^\s*keep\s+only\s+(?:items\s+in\s+)?(.+?)\s+where\s+(.+?)\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)$",
+        _rewrite_keep_only,
+        masked,
+        flags=re.IGNORECASE
+    )
+
+    def _rewrite_discard(m):
+        coll = m.group(1).strip()
+        cond = m.group(2).strip()
+        target = m.group(3).strip()
+        var_name = "x" if re.search(r"\bx\b", cond) else "item"
+        return f"set {target} to [{var_name} for {var_name} in {coll} if not ({cond})]"
+
+    masked = re.sub(
+        r"^\s*discard\s+from\s+(.+?)\s+where\s+(.+?)\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)$",
+        _rewrite_discard,
+        masked,
+        flags=re.IGNORECASE
+    )
+
+    def _rewrite_find_first(m):
+        coll = m.group(1).strip()
+        cond = m.group(2).strip()
+        target = m.group(3).strip()
+        var_name = "x" if re.search(r"\bx\b", cond) else "item"
+        return f"set {target} to ds_find_first({coll}, lambda {var_name}: {cond})"
+
+    masked = re.sub(
+        r"^\s*find\s+first\s+in\s+(.+?)\s+where\s+(.+?)\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)$",
+        _rewrite_find_first,
+        masked,
+        flags=re.IGNORECASE
+    )
+
+    masked = re.sub(
+        r"^\s*check\s+if\s+(.+?)\s+contains\s+(.+?)\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)$",
+        r"set \3 to (\2 in \1)",
+        masked,
+        flags=re.IGNORECASE
+    )
+
+    masked = re.sub(
+        r"^\s*check\s+whether\s+(.+?)\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)$",
+        r"set \2 to (\1)",
+        masked,
+        flags=re.IGNORECASE
+    )
 
     # Phase 3: Classes and Instance Attributes
     masked = re.sub(
