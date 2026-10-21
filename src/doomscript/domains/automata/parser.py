@@ -162,6 +162,18 @@ class AutomataDomainParser(DomainParser):
                 formula = f'"{formula}"'
             return f"set {target} to automata_ltl_model_check({states}, {init}, {trans}, {labels}, {formula})"
 
+        # check if pda <pda> accepts <inp> into <target>
+        m_pda = re.match(
+            r"^check\s+if\s+pda\s+([A-Za-z_]\w*)\s+accepts\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_pda:
+            pda_var = m_pda.group(1).strip()
+            inp = m_pda.group(2).strip()
+            target = m_pda.group(3).strip()
+            return f"set {target} to automata_pda_accepts({pda_var}, {inp})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

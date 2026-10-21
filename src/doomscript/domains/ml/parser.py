@@ -173,13 +173,14 @@ class MLDomainParser(DomainParser):
 
         # split data <data> into train and test with test_size <ts> into <target>
         m_split = re.match(
-            r"^split\s+data\s+(.+?)\s+into\s+train\s+and\s+test\s+with\s+test_size\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            r"^split\s+(?:data|dataset)\s+(.+?)\s+into\s+train\s+and\s+test(?:\s+with\s+test[_\s]size\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
             line.strip(),
             re.IGNORECASE,
         )
         if m_split:
             data_var, ts, target = m_split.group(1), m_split.group(2), m_split.group(3)
-            return f"set {target} to ml_split_data({data_var}, test_size={ts})"
+            ts_arg = f", test_size={ts.strip()}" if ts else ""
+            return f"set {target} to ml_split_data({data_var}{ts_arg})"
 
         # confusion matrix of <actuals> and <preds> into <target>
         m_cm = re.match(

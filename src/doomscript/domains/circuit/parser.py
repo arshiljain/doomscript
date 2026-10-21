@@ -272,6 +272,18 @@ class CircuitDomainParser(DomainParser):
             target = m_sta.group(3).strip()
             return f"set {target} to circuit_static_timing_analysis({gates}, clock_period_ns={clk})"
 
+        # evaluate logic gate <gate> with inputs <inputs> into <target>
+        m_logic = re.match(
+            r"^evaluate\s+logic\s+gate\s+(.+?)\s+with\s+inputs\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_logic:
+            gate, inputs, target = m_logic.group(1).strip(), m_logic.group(2).strip(), m_logic.group(3).strip()
+            if not (gate.startswith('"') or gate.startswith("'") or gate.isidentifier()):
+                gate = f'"{gate}"'
+            return f"set {target} to circuit_eval_logic({gate}, {inputs})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

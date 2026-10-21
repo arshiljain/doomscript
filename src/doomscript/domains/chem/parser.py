@@ -145,6 +145,43 @@ class ChemDomainParser(DomainParser):
             target = m_md.group(4).strip()
             return f"set {target} to chem_lennard_jones_md(num_particles={n_part}, box_size={b_size}, steps={s_steps})"
 
+        # calculate elemental composition of <formula> into <target>
+        m_elem = re.match(
+            r"^calculate\s+elemental\s+composition\s+of\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_elem:
+            formula, target = m_elem.group(1).strip(), m_elem.group(2).strip()
+            if not (formula.startswith('"') or formula.startswith("'") or formula.isidentifier()):
+                formula = f'"{formula}"'
+            return f"set {target} to chem_elemental_composition({formula})"
+
+        # generate morgan fingerprint for <smiles> [radius <r>] [bits <n>] into <target>
+        m_mfp = re.match(
+            r"^generate\s+morgan\s+fingerprint\s+for\s+(.+?)(?:\s+radius\s+(\d+))?(?:\s+bits\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_mfp:
+            smiles = m_mfp.group(1).strip()
+            r = m_mfp.group(2).strip() if m_mfp.group(2) else "2"
+            n = m_mfp.group(3).strip() if m_mfp.group(3) else "1024"
+            target = m_mfp.group(4).strip()
+            if not (smiles.startswith('"') or smiles.startswith("'") or smiles.isidentifier()):
+                smiles = f'"{smiles}"'
+            return f"set {target} to chem_morgan_fingerprint({smiles}, radius={r}, n_bits={n})"
+
+        # calculate tanimoto similarity between <fp1> and <fp2> into <target>
+        m_tan = re.match(
+            r"^calculate\s+tanimoto\s+similarity\s+between\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_tan:
+            fp1, fp2, target = m_tan.group(1).strip(), m_tan.group(2).strip(), m_tan.group(3).strip()
+            return f"set {target} to chem_tanimoto_similarity({fp1}, {fp2})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

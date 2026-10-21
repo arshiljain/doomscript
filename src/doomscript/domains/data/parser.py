@@ -49,7 +49,18 @@ class DataDomainParser(DomainParser):
         return None
 
     def parse_operation(self, line: str, line_no: int) -> Optional[str]:
-        # clean <data> by removing nulls in "<col>" into <target>
+                # pivot dataset <d> on index <idx> columns <cols> values <vals> into <target>
+        m_piv = re.match(
+            r"""^pivot\s+(?:dataset\s+|table\s+)?([A-Za-z_]\w*)\s+on\s+index\s+([\"\']?[A-Za-z_]\w*[\"\']?)\s+columns\s+([\"\']?[A-Za-z_]\w*[\"\']?)\s+values\s+([\"\']?[A-Za-z_]\w*[\"\']?)\s+into\s+([A-Za-z_]\w*)$""",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_piv:
+            d_var, idx, col, val, target = m_piv.group(1), m_piv.group(2).strip('"\''), m_piv.group(3).strip('"\''), m_piv.group(4).strip('"\''), m_piv.group(5)
+            return f'set {target} to data_pivot_advanced({d_var}, "{idx}", "{col}", "{val}")'
+
+
+# clean <data> by removing nulls in "<col>" into <target>
         clean_null_m = re.match(
             r"^clean\s+([A-Za-z_]\w*)\s+by\s+removing\s+nulls\s+in\s+[\"']([^\"']+)[\"'](?:\s+into\s+([A-Za-z_]\w*))?$",
             line.strip(),

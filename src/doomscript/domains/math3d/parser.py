@@ -191,6 +191,26 @@ class Math3DDomainParser(DomainParser):
             pts, tgt, target = m_kd.group(1).strip(), m_kd.group(2).strip(), m_kd.group(3).strip()
             return f"set {target} to math3d_kdtree_query({pts}, {tgt})"
 
+        # create quaternion from euler pitch <p> yaw <y> roll <r> into <target>
+        m_q = re.match(
+            r"^create\s+quaternion\s+from\s+euler\s+pitch\s+(.+?)\s+yaw\s+(.+?)\s+roll\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_q:
+            p, y, r, target = m_q.group(1).strip(), m_q.group(2).strip(), m_q.group(3).strip(), m_q.group(4).strip()
+            return f"set {target} to math3d_quat_from_euler({p}, {y}, {r})"
+
+        # calculate sdf sphere at <p> with radius <r> into <target>
+        m_sdf = re.match(
+            r"^calculate\s+sdf\s+sphere\s+at\s+(.+?)\s+with\s+radius\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_sdf:
+            p, r, target = m_sdf.group(1).strip(), m_sdf.group(2).strip(), m_sdf.group(3).strip()
+            return f"set {target} to math3d_sdf_sphere({p}, {r})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

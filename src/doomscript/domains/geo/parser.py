@@ -45,6 +45,17 @@ class GeoDomainParser(DomainParser):
         return None
 
     def parse_operation(self, line: str, line_no: int) -> Optional[str]:
+        # check if point <pt> is inside polygon <poly> into <target>
+        m_pip = re.match(
+            r"^check\s+if\s+point\s+(.+?)\s+is\s+(?:inside|in)\s+polygon\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_pip:
+            pt, poly, target = m_pip.group(1).strip(), m_pip.group(2).strip(), m_pip.group(3).strip()
+            return f"set {target} to geo_point_in_polygon({pt}, {poly})"
+
+
         s = line.strip()
 
         # point [at] [lat] <lat> [,] [and lon] <lon> into <target>

@@ -217,6 +217,19 @@ class QuantumDomainParser(DomainParser):
             target = m_bb84.group(3).strip()
             return f"set {target} to quantum_bb84_simulate(num_bits={n_bits}, eve_present={eve})"
 
+        # create bell state [of type <type>] into <target>
+        m_bell = re.match(
+            r"^create\s+bell\s+state(?:\s+of\s+type\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_bell:
+            b_type = m_bell.group(1).strip() if m_bell.group(1) else "'phi_plus'"
+            target = m_bell.group(2).strip()
+            if not (b_type.startswith('"') or b_type.startswith("'") or b_type.isidentifier()):
+                b_type = f"'{b_type}'"
+            return f"set {target} to quantum_bell_state({b_type})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

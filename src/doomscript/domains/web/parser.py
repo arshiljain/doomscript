@@ -43,6 +43,18 @@ class WebDomainParser(DomainParser):
         return None
 
     def parse_operation(self, line: str, line_no: int) -> Optional[str]:
+        # extract metadata from html <html_doc> into <target>
+        m_meta = re.match(
+            r"^extract\s+metadata\s+from\s+html\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_meta:
+            h_doc = m_meta.group(1).strip()
+            target = m_meta.group(2).strip()
+            return f"set {target} to Record(web_extract_metadata({h_doc}))"
+
+
         s = line.strip()
 
         # open webpage / scrape webpage <url_or_html> into <target>

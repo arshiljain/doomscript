@@ -35,6 +35,16 @@ class NetDomainParser(DomainParser):
         return None
 
     def parse_operation(self, line: str, line_no: int) -> Optional[str]:
+        # create cidr prefix trie into <target>
+        m_trie = re.match(
+            r"^create\s+cidr\s+(?:prefix\s+)?trie\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_trie:
+            target = m_trie.group(1).strip()
+            return f"set {target} to net_create_cidr_trie()"
+
         # allow / block mutating network requests
         if re.match(r"^allow\s+mutating\s+(?:network\s+)?requests$", line.strip(), re.IGNORECASE):
             return "set_mutating_requests_allowed(True)"

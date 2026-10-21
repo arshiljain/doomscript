@@ -307,6 +307,30 @@ class SecDomainParser(DomainParser):
                 salt = f'"{salt}"'
             return f"set {target} to sec_pbkdf2_sha256({pwd}, {salt}, iterations={it}, dklen={l_val})"
 
+        # encrypt <text> with caesar cipher [shift <shift>] into <target>
+        m_caesar = re.match(
+            r"^encrypt\s+(.+?)\s+with\s+caesar\s+cipher(?:\s+shift\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_caesar:
+            txt = m_caesar.group(1).strip()
+            sh = m_caesar.group(2).strip() if m_caesar.group(2) else "3"
+            target = m_caesar.group(3).strip()
+            return f"set {target} to sec_caesar_cipher({txt}, shift={sh})"
+
+        # verify jwt <token> with secret <secret> into <target>
+        m_vjwt = re.match(
+            r"^verify\s+jwt\s+(.+?)\s+with\s+secret\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_vjwt:
+            tok = m_vjwt.group(1).strip()
+            sec = m_vjwt.group(2).strip()
+            target = m_vjwt.group(3).strip()
+            return f"set {target} to sec_verify_jwt({tok}, {sec})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

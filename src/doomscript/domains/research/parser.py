@@ -13,6 +13,18 @@ class ResearchDomainParser(DomainParser):
 
     def parse_operation(self, line: str, line_no: int) -> Optional[str]:
         s = line.strip()
+        # compute svd of <mat> into <target>
+        m_svd = re.match(
+            r"^(?:compute|calculate)\s+svd\s+of\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_svd:
+            mat = m_svd.group(1).strip()
+            target = m_svd.group(2).strip()
+            return f"set {target} to Record(research_svd({mat}))"
+
+
 
         # topological sort of [research graph] <graph> into <target>
         m_topo = re.match(

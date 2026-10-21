@@ -293,6 +293,17 @@ class BioDomainParser(DomainParser):
                 s2 = f'"{s2}"'
             return f"set {target} to bio_smith_waterman_align({s1}, {s2}, match={mat}, mismatch={mismat}, gap_open={go}, gap_extend={ge})"
 
+        # codon optimize [sequence] <seq> into <target>
+        m_co = re.match(
+            r"^codon\s+optimize(?:\s+sequence)?\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_co:
+            seq = m_co.group(1).strip()
+            target = m_co.group(2).strip()
+            return f"set {target} to bio_codon_optimize({seq})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

@@ -431,7 +431,7 @@ def ml_split_data(data: Any, test_size: Any = 0.2, seed: int = 42) -> Dict[str, 
     test_count = int(len(shuffled) * ts)
     test_set = shuffled[:test_count]
     train_set = shuffled[test_count:]
-    return {"train": train_set, "test": test_set}
+    return Record({"train": train_set, "test": test_set})
 
 
 def ml_confusion_matrix(actuals: Any, preds: Any) -> Dict[str, Any]:

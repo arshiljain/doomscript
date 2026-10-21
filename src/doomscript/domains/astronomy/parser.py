@@ -195,6 +195,28 @@ class AstronomyDomainParser(DomainParser):
             pc_arg = f", plane_change_deg={pc.strip()}" if pc else ""
             return f"set {target} to astronomy_plan_orbital_transfer({r1}, {r2}{rb_arg}{pc_arg})"
 
+        # calculate position of planet <planet> at [jd] <jd> into <target>
+        m_pos = re.match(
+            r"^calculate\s+position\s+of\s+planet\s+(.+?)\s+at(?:\s+jd)?\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_pos:
+            planet, jd, target = m_pos.group(1).strip(), m_pos.group(2).strip(), m_pos.group(3).strip()
+            if not (planet.startswith('"') or planet.startswith("'") or planet.isidentifier()):
+                planet = f'"{planet}"'
+            return f"set {target} to astronomy_planet_position({planet}, {jd})"
+
+        # predict eclipse at [jd] <jd> into <target>
+        m_ecl = re.match(
+            r"^predict\s+eclipse\s+at(?:\s+jd)?\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_ecl:
+            jd, target = m_ecl.group(1).strip(), m_ecl.group(2).strip()
+            return f"set {target} to Record(astronomy_predict_eclipse({jd}))"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

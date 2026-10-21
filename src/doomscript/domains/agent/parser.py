@@ -28,6 +28,21 @@ class AgentDomainParser(DomainParser):
         return None
 
     def parse_operation(self, line: str, line_no: int) -> Optional[str]:
+        # run debate on topic <topic> [rounds <r>] into <target>
+        m_deb = re.match(
+            r"^run\s+debate\s+on\s+topic\s+(.+?)(?:\s+rounds\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_deb:
+            top = m_deb.group(1).strip()
+            r_val = m_deb.group(2).strip() if m_deb.group(2) else "2"
+            target = m_deb.group(3).strip()
+            if not (top.startswith('"') or top.startswith("'") or top.isidentifier()):
+                top = f'"{top}"'
+            return f"set {target} to Record(agent_run_debate({top}, rounds={r_val}))"
+
+
         s = line.strip()
 
         # clear memory of agent <agent>

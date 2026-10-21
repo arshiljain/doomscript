@@ -160,6 +160,16 @@ class TimeSeriesDomainParser(DomainParser):
             target = m_emd.group(3).strip()
             return f"set {target} to timeseries_emd_decompose({data_arg}, max_imfs={m_val})"
 
+        # forecast time series <ts> with period <p> into <target>
+        m_hw = re.match(
+            r"^forecast\s+time\s+series\s+(.+?)\s+with\s+period\s+(\d+)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_hw:
+            ts_var, p, target = m_hw.group(1).strip(), m_hw.group(2).strip(), m_hw.group(3).strip()
+            return f"set {target} to time_series_holt_winters({ts_var}, {p})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

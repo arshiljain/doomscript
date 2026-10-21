@@ -195,6 +195,16 @@ class TelecomDomainParser(DomainParser):
             target = m_costas.group(4).strip()
             return f'set {target} to telecom_costas_loop_recovery({smps}, modulation="{mod}", loop_bw={bw})'
 
+        # encode with reed solomon message <msg> parity <nsym> into <target>
+        m_rs = re.match(
+            r"^encode\s+with\s+reed\s+solomon\s+message\s+(.+?)\s+parity\s+(\d+)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_rs:
+            msg, nsym, target = m_rs.group(1).strip(), m_rs.group(2).strip(), m_rs.group(3).strip()
+            return f"set {target} to telecom_reed_solomon_encode({msg}, {nsym})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

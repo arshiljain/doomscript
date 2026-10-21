@@ -174,6 +174,19 @@ class NeuroDomainParser(DomainParser):
             target = m_hop.group(4).strip()
             return f"set {target} to neuro_hopfield_recall({pats}, {probe}, max_steps={steps_val})"
 
+        # create izhikevich neuron [with preset <preset>] into <target>
+        m_izh = re.match(
+            r"^create\s+izhikevich\s+neuron(?:\s+with\s+preset\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_izh:
+            preset = m_izh.group(1).strip() if m_izh.group(1) else "'RS'"
+            target = m_izh.group(2).strip()
+            if not (preset.startswith('"') or preset.startswith("'") or preset.isidentifier()):
+                preset = f"'{preset}'"
+            return f"set {target} to neuro_create_izhikevich({preset})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

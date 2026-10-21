@@ -14,6 +14,18 @@ class OptDomainParser(DomainParser):
 
     def parse_operation(self, line: str, line_no: int) -> Optional[str]:
         s = line.strip()
+        # solve assignment problem with cost matrix <mat> into <target>
+        m_hung = re.match(
+            r"^solve\s+assignment\s+problem\s+with\s+cost\s+matrix\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_hung:
+            mat = m_hung.group(1).strip()
+            target = m_hung.group(2).strip()
+            return f"set {target} to Record(opt_hungarian_algorithm({mat}))"
+
+
 
         # create linear program into <target>
         m_clp = re.match(

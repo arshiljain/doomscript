@@ -32,6 +32,19 @@ class NLPDomainParser(DomainParser):
 
     def parse_operation(self, line: str, line_no: int) -> Optional[str]:
         s = line.strip()
+        # train bpe tokenizer on <texts> [with vocab size <size>] into <target>
+        m_bpe = re.match(
+            r"^train\s+bpe\s+tokenizer\s+on\s+(.+?)(?:\s+with\s+vocab\s+size\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_bpe:
+            texts = m_bpe.group(1).strip()
+            sz = m_bpe.group(2).strip() if m_bpe.group(2) else "100"
+            target = m_bpe.group(3).strip()
+            return f"set {target} to nlp_bpe_train({texts}, vocab_size={sz})"
+
+
 
         # words in <expr> into <target>
         m_words = re.match(

@@ -237,6 +237,18 @@ class GameDomainParser(DomainParser):
             ev, mach, target = m_hfsm_t.group(1).strip(), m_hfsm_t.group(2).strip(), m_hfsm_t.group(3).strip()
             return f"set {target} to game_hfsm_trigger({mach}, {ev})"
 
+        # create combatant <name> with hp <hp> attack <atk> defense <df> into <target>
+        m_comb = re.match(
+            r"^create\s+combatant\s+(.+?)\s+with\s+hp\s+(.+?)\s+attack\s+(.+?)\s+defense\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_comb:
+            name, hp, atk, df, target = m_comb.group(1).strip(), m_comb.group(2).strip(), m_comb.group(3).strip(), m_comb.group(4).strip(), m_comb.group(5).strip()
+            if not (name.startswith('"') or name.startswith("'") or name.isidentifier()):
+                name = f'"{name}"'
+            return f"set {target} to game_create_combatant({name}, {hp}, {atk}, {df})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

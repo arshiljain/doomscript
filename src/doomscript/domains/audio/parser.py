@@ -34,6 +34,18 @@ class AudioDomainParser(DomainParser):
         return None
 
     def parse_operation(self, line: str, line_no: int) -> Optional[str]:
+        # calculate fft of <sig> into <target>
+        m_fft = re.match(
+            r"^(?:calculate|compute)\s+fft\s+of\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_fft:
+            sig = m_fft.group(1).strip()
+            target = m_fft.group(2).strip()
+            return f"set {target} to audio_fft({sig})"
+
+
         s = line.strip()
 
         # load audio <path> into <target>

@@ -57,6 +57,20 @@ class ImageDomainParser(DomainParser):
         return None
 
     def parse_operation(self, line: str, line_no: int) -> Optional[str]:
+        # resize image <img> to width <w> and height <h> into <target>
+        m_resize = re.match(
+            r"^resize\s+image\s+(.+?)\s+to\s+width\s+(.+?)\s+and\s+height\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_resize:
+            img = m_resize.group(1).strip()
+            w = m_resize.group(2).strip()
+            h = m_resize.group(3).strip()
+            target = m_resize.group(4).strip()
+            return f"set {target} to image_resize({img}, width={w}, height={h})"
+
+
         s = line.strip()
 
         # open image <path> into <target>

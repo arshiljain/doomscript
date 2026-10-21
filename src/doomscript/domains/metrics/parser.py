@@ -127,6 +127,16 @@ class MetricsDomainParser(DomainParser):
             y_t, scores, target = m_ap.group(1).strip(), m_ap.group(2).strip(), m_ap.group(3).strip()
             return f"set {target} to metrics_precision_recall_ap({y_t}, {scores})"
 
+        # calculate <p>th percentile of <values> into <target>
+        m_pct = re.match(
+            r"^calculate\s+(\d+(?:\.\d+)?)(?:th|st|nd|rd)?\s+percentile\s+of\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_pct:
+            p_val, vals, target = m_pct.group(1).strip(), m_pct.group(2).strip(), m_pct.group(3).strip()
+            return f"set {target} to metrics_calculate_percentile({vals}, {p_val})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

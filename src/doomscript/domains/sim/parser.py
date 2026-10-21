@@ -46,6 +46,18 @@ class SimDomainParser(DomainParser):
         return None
 
     def parse_operation(self, line: str, line_no: int) -> Optional[str]:
+        # simulate queue system with arrival <arr> service <srv> [servers <srvs>] into <target>
+        m_q = re.match(
+            r"^simulate\s+queue\s+system\s+with\s+arrival\s+(.+?)\s+service\s+(.+?)(?:\s+servers\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if m_q:
+            arr, srv = m_q.group(1).strip(), m_q.group(2).strip()
+            srvs = m_q.group(3).strip() if m_q.group(3) else "1"
+            target = m_q.group(4).strip()
+            return f"set {target} to Record(sim_queue_system({arr}, {srv}, servers={srvs}))"
+
         # run <n> trials of <sim> [into <target>]
         m_tr = re.match(
             r"^run\s+(\d+)\s+trials\s+of\s+([A-Za-z_]\w*)(?:\s+into\s+([A-Za-z_]\w*))?$",
