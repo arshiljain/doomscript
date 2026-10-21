@@ -327,6 +327,16 @@ def run_trials(
     scope: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Runs multiple stochastic replications of a simulation and computes uncertainty metrics."""
+    if scope is None:
+        try:
+            import sys
+            caller_frame = sys._getframe(1)
+            target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
+            scope = dict(target_env)
+            if caller_frame.f_locals:
+                scope.update(caller_frame.f_locals)
+        except Exception:
+            scope = {}
     spec = _resolve_spec(sim_or_name, scope)
     trial_runs = []
     waiting_time_means = []
@@ -369,6 +379,16 @@ def sweep_parameter(
     scope: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
     """Sweeps a parameter across candidate values and records performance with uncertainty bounds."""
+    if scope is None:
+        try:
+            import sys
+            caller_frame = sys._getframe(1)
+            target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
+            scope = dict(target_env)
+            if caller_frame.f_locals:
+                scope.update(caller_frame.f_locals)
+        except Exception:
+            scope = {}
     spec = _resolve_spec(sim_or_name, scope)
     results = []
 
@@ -1926,3 +1946,47 @@ def sim_lattice_gas(
 
 
 
+
+
+def execute_sim_ir(spec: Any) -> Any:
+    """Executes a Simulation Domain IR specification against the caller's scope."""
+    import sys
+    from doomscript.domains.registry import get_domain_registry
+    if isinstance(spec, str):
+        spec = get_domain_registry().get_spec(spec)
+    caller_frame = sys._getframe(1)
+    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
+    scope = dict(target_env)
+    if caller_frame.f_locals:
+        scope.update(caller_frame.f_locals)
+    res = SimRuntime().execute_ir(spec, scope)
+    for k, v in scope.items():
+        target_env[k] = v
+    return res
+
+
+
+
+
+def optimize_function(fn_name: str, initial_guess: Optional[List[float]] = None) -> Any:
+    import sys
+    from doomscript.domains.sim.spec import OptimizationSpec
+    caller_frame = sys._getframe(1)
+    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
+    scope = dict(target_env)
+    if caller_frame.f_locals:
+        scope.update(caller_frame.f_locals)
+    spec = OptimizationSpec(objective=fn_name, initial_guess=initial_guess or [0.0])
+    return SimRuntime().execute_optimization(spec, scope)
+
+
+def sim_sample_normal(mean: float, std: float, count: int = 1000) -> list:
+    """Generate samples from a Normal (Gaussian) distribution."""
+    import random
+    return [random.gauss(float(mean), float(std)) for _ in range(int(count))]
+
+
+def sim_sample_uniform(low: float, high: float, count: int = 1000) -> list:
+    """Generate samples from a Uniform distribution."""
+    import random
+    return [random.uniform(float(low), float(high)) for _ in range(int(count))]

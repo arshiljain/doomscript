@@ -1844,99 +1844,15 @@ from doomscript.runtime_extended import *
 
 
 # Phase 5: Data Science Verbs over pandas
-def load_table(path):
-    """Load a tabular file (CSV) into a pandas DataFrame."""
-    import pandas as pd
-    return pd.read_csv(path)
+from doomscript.domains.data.runtime import (
+    load_table,
+    save_table,
+    filter_table,
+    sort_table,
+    group_and_agg_table,
+)
 
 
-def save_table(table, path):
-    """Save a table/DataFrame to a CSV file."""
-    import pandas as pd
-    if hasattr(table, "to_csv"):
-        table.to_csv(path, index=False)
-    else:
-        pd.DataFrame(table).to_csv(path, index=False)
-
-
-def filter_table(table, col, op, val):
-    """Filter a table/DataFrame by a column condition."""
-    is_list_input = isinstance(table, list)
-    import pandas as pd
-    if not isinstance(table, pd.DataFrame):
-        table = pd.DataFrame(table)
-
-    col = str(col).strip('"\'')
-    op_str = str(op).strip().lower()
-    if op_str in (">", "is greater than", "is over"):
-        res = table[table[col] > val]
-    elif op_str in (">=", "is at least", "is greater than or equal to"):
-        res = table[table[col] >= val]
-    elif op_str in ("<", "is less than", "is under"):
-        res = table[table[col] < val]
-    elif op_str in ("<=", "is at most", "is less than or equal to"):
-        res = table[table[col] <= val]
-    elif op_str in ("==", "equals", "is"):
-        res = table[table[col] == val]
-    elif op_str in ("!=", "is not", "isn't"):
-        res = table[table[col] != val]
-    else:
-        res = table
-
-    if is_list_input:
-        return [Record(r) for r in res.to_dict("records")]
-    return res
-
-
-def sort_table(table, col, ascending=True):
-    """Sort a table/DataFrame by a column."""
-    is_list_input = isinstance(table, list)
-    import pandas as pd
-    if not isinstance(table, pd.DataFrame):
-        table = pd.DataFrame(table)
-    col = str(col).strip('"\'')
-    res = table.sort_values(col, ascending=ascending)
-    if is_list_input:
-        return [Record(r) for r in res.to_dict("records")]
-    return res
-
-
-def group_and_agg_table(table, group_col, agg_col, func="mean"):
-    """Group a table/DataFrame by a column and aggregate a metric."""
-    import pandas as pd
-    if not isinstance(table, pd.DataFrame):
-        table = pd.DataFrame(table)
-    if func in ("mean", "average", "avg"):
-        return table.groupby(group_col, as_index=False)[agg_col].mean()
-    elif func == "sum":
-        return table.groupby(group_col, as_index=False)[agg_col].sum()
-    elif func == "count":
-        return table.groupby(group_col, as_index=False)[agg_col].count()
-    elif func in ("min", "lowest"):
-        return table.groupby(group_col, as_index=False)[agg_col].min()
-    elif func in ("max", "highest"):
-        return table.groupby(group_col, as_index=False)[agg_col].max()
-    return table.groupby(group_col, as_index=False)[agg_col].agg(func)
-
-
-def plot_table(table, x_col, y_col, kind="line", title=None):
-    """Create a plot from a table/DataFrame and return the matplotlib Figure."""
-    import matplotlib.pyplot as plt
-    fig, ax = plt.subplots()
-    if kind == "line":
-        ax.plot(table[x_col], table[y_col])
-    elif kind == "scatter":
-        ax.scatter(table[x_col], table[y_col])
-    elif kind == "bar":
-        ax.bar(table[x_col], table[y_col])
-    ax.set_xlabel(str(x_col))
-    ax.set_ylabel(str(y_col))
-    if title:
-        ax.set_title(str(title))
-    return fig
-
-
-# ---------------------------------------------------------------------------
 # Research Module Integration
 # ---------------------------------------------------------------------------
 from doomscript.research.backend import (
@@ -2011,6 +1927,9 @@ from doomscript.viz import (
     PlotBuilder,
     explore_dataset,
     ExplorationReport,
+    plot_table,
+    show_plot,
+    save_plot,
 )
 from doomscript.domains.viz import (
     ASCIIHistogramAndBoxPlotRenderer,
@@ -2021,20 +1940,7 @@ from doomscript.domains.viz import (
     viz_render_ascii_network,
 )
 
-def show_plot(obj):
-    """Displays a plot or exploration report, or prints the object."""
-    if hasattr(obj, "show"):
-        return obj.show()
-    print(obj)
 
-def save_plot(obj, path, width=None, height=None, dpi=None):
-    """Saves a plot or exploration report to HTML, PNG, SVG, or PDF."""
-    if hasattr(obj, "save"):
-        return obj.save(path, width=width, height=height, dpi=dpi)
-    raise TypeError(f"Object of type {type(obj).__name__} does not support save().")
-
-
-# ---------------------------------------------------------------------------
 # Data Engineering Domain Integration
 # ---------------------------------------------------------------------------
 from doomscript.domains.data import (
@@ -2101,38 +2007,8 @@ from doomscript.domains.ml.runtime import (
     ml_train_isolation_forest,
 )
 
-def execute_data_ir(spec):
-    import sys
-    from doomscript.domains.data.runtime import DataPipelineRuntime
-    from doomscript.domains.registry import get_domain_registry
-    if isinstance(spec, str):
-        spec = get_domain_registry().get_spec(spec)
-    caller_frame = sys._getframe(1)
-    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
-    scope = dict(target_env)
-    if caller_frame.f_locals:
-        scope.update(caller_frame.f_locals)
-    res = DataPipelineRuntime().execute_pipeline(spec, scope)
-    for k, v in scope.items():
-        target_env[k] = v
-    return res
-
-
-def execute_ml_ir(spec):
-    import sys
-    from doomscript.domains.ml.runtime import MLModelRuntime
-    from doomscript.domains.registry import get_domain_registry
-    if isinstance(spec, str):
-        spec = get_domain_registry().get_spec(spec)
-    caller_frame = sys._getframe(1)
-    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
-    scope = dict(target_env)
-    if caller_frame.f_locals:
-        scope.update(caller_frame.f_locals)
-    res = MLModelRuntime().execute_ir(spec, scope)
-    for k, v in scope.items():
-        target_env[k] = v
-    return res
+from doomscript.domains.data.runtime import execute_data_ir
+from doomscript.domains.ml.runtime import execute_ml_ir
 
 
 from doomscript.domains.db.runtime import (
@@ -2198,29 +2074,10 @@ from doomscript.domains.db.runtime import (
     db_cost_based_join_optimizer,
 )
 
-def execute_db_ir(spec):
-    import sys
-    from doomscript.domains.db.runtime import get_db_runtime
-    from doomscript.domains.registry import get_domain_registry
-    if isinstance(spec, str):
-        spec = get_domain_registry().get_spec(spec)
-    caller_frame = sys._getframe(1)
-    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
-    scope = dict(target_env)
-    if caller_frame.f_locals:
-        scope.update(caller_frame.f_locals)
-    res = get_db_runtime().execute_query_spec(spec, scope)
-    for k, v in scope.items():
-        target_env[k] = v
-    return res
-
-
-def insert_rows(table_name, data):
-    import sys
-    caller_frame = sys._getframe(1)
-    scope = dict(caller_frame.f_globals)
-    scope.update(caller_frame.f_locals)
-    return get_db_runtime().insert_rows(table_name, data, scope)
+from doomscript.domains.db.runtime import (
+    execute_db_ir,
+    insert_rows,
+)
 
 
 from doomscript.domains.net.runtime import (
@@ -2260,21 +2117,7 @@ from doomscript.domains.net.runtime import (
     net_download_file,
 )
 
-def execute_net_ir(spec):
-    import sys
-    from doomscript.domains.net.runtime import NetRuntime
-    from doomscript.domains.registry import get_domain_registry
-    if isinstance(spec, str):
-        spec = get_domain_registry().get_spec(spec)
-    caller_frame = sys._getframe(1)
-    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
-    scope = dict(target_env)
-    if caller_frame.f_locals:
-        scope.update(caller_frame.f_locals)
-    res = NetRuntime().execute_workflow(spec, scope)
-    for k, v in scope.items():
-        target_env[k] = v
-    return res
+from doomscript.domains.net.runtime import execute_net_ir
 
 
 from doomscript.domains.sim.runtime import (
@@ -2315,56 +2158,12 @@ from doomscript.domains.sim.runtime import (
 )
 from doomscript.domains.sim.spec import OptimizationSpec, TrialsSpec, SweepSpec
 
-def execute_sim_ir(spec):
-    import sys
-    from doomscript.domains.sim.runtime import SimRuntime
-    from doomscript.domains.registry import get_domain_registry
-    if isinstance(spec, str):
-        spec = get_domain_registry().get_spec(spec)
-    caller_frame = sys._getframe(1)
-    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
-    scope = dict(target_env)
-    if caller_frame.f_locals:
-        scope.update(caller_frame.f_locals)
-    res = SimRuntime().execute_ir(spec, scope)
-    for k, v in scope.items():
-        target_env[k] = v
-    return res
-
-
-def run_trials(sim_name, trials=100, seed=42):
-    import sys
-    caller_frame = sys._getframe(1)
-    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
-    scope = dict(target_env)
-    if caller_frame.f_locals:
-        scope.update(caller_frame.f_locals)
-    return _sim_run_trials(sim_name, trials=trials, seed=seed, scope=scope)
-
-
-def sweep_parameter(sim_name, param, values, trials_per_value=5, seed=42):
-    import sys
-    caller_frame = sys._getframe(1)
-    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
-    scope = dict(target_env)
-    if caller_frame.f_locals:
-        scope.update(caller_frame.f_locals)
-    return _sim_sweep_parameter(
-        sim_name, param, values, trials_per_value=trials_per_value, seed=seed, scope=scope
-    )
-
-
-def optimize_function(fn_name, initial_guess=None):
-    import sys
-    from doomscript.domains.sim.runtime import SimRuntime
-    from doomscript.domains.sim.spec import OptimizationSpec
-    caller_frame = sys._getframe(1)
-    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
-    scope = dict(target_env)
-    if caller_frame.f_locals:
-        scope.update(caller_frame.f_locals)
-    spec = OptimizationSpec(objective=fn_name, initial_guess=initial_guess or [0.0])
-    return SimRuntime().execute_optimization(spec, scope)
+from doomscript.domains.sim.runtime import (
+    execute_sim_ir,
+    run_trials,
+    sweep_parameter,
+    optimize_function,
+)
 
 
 from doomscript.domains.dsa.runtime import (
@@ -2375,73 +2174,13 @@ from doomscript.domains.dsa.runtime import (
 )
 from doomscript.domains.dsa.spec import BenchmarkSpec
 
-def analyze_complexity(fn_name, input_sizes=None):
-    import sys
-    caller_frame = sys._getframe(1)
-    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
-    scope = dict(target_env)
-    if caller_frame.f_locals:
-        scope.update(caller_frame.f_locals)
-    spec = BenchmarkSpec(fn_name=fn_name, input_sizes=input_sizes or [100, 500, 1000, 2000])
-    return run_benchmark(spec, scope)
-
-
-def run_benchmark_with_sizes(fn_name, sizes):
-    import sys
-    caller_frame = sys._getframe(1)
-    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
-    scope = dict(target_env)
-    if caller_frame.f_locals:
-        scope.update(caller_frame.f_locals)
-    spec = BenchmarkSpec(fn_name=fn_name, input_sizes=sizes)
-    return run_benchmark(spec, scope)
-
-
-def profile_memory_of_function(fn_name, input_expr):
-    import sys
-    caller_frame = sys._getframe(1)
-    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
-    scope = dict(target_env)
-    if caller_frame.f_locals:
-        scope.update(caller_frame.f_locals)
-    return _prof_mem(fn_name, input_expr, scope)
-
-
-def execute_dsa_ir(spec):
-    import sys
-    from doomscript.domains.dsa.runtime import DsaRuntime
-    from doomscript.domains.registry import get_domain_registry
-    if isinstance(spec, str):
-        spec = get_domain_registry().get_spec(spec)
-    caller_frame = sys._getframe(1)
-    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
-    scope = dict(target_env)
-    if caller_frame.f_locals:
-        scope.update(caller_frame.f_locals)
-    res = DsaRuntime().execute_ir(spec, scope)
-    for k, v in scope.items():
-        target_env[k] = v
-    return res
-
-
-def run_dsa_benchmark(fn_name, input_sizes, repeat=3, generator="sorted_integers", measure_memory=True):
-    """Executes a DSA benchmark against the caller's scope and returns the ComplexityReport dict."""
-    import sys
-    from doomscript.domains.dsa.spec import BenchmarkSpec
-    from doomscript.domains.dsa.runtime import run_benchmark
-    spec = BenchmarkSpec(
-        fn_name=fn_name,
-        input_sizes=input_sizes,
-        repeat=repeat,
-        generator=generator,
-        measure_memory=measure_memory,
-    )
-    caller_frame = sys._getframe(1)
-    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
-    scope = dict(target_env)
-    if caller_frame.f_locals:
-        scope.update(caller_frame.f_locals)
-    return run_benchmark(spec, scope)
+from doomscript.domains.dsa.runtime import (
+    analyze_complexity,
+    run_benchmark_with_sizes,
+    profile_memory_of_function,
+    execute_dsa_ir,
+    run_dsa_benchmark,
+)
 
 
 from doomscript.domains.dsa.runtime import (
@@ -2688,21 +2427,7 @@ from doomscript.domains.nlp.runtime import (
     TextRankSummarizer,
 )
 
-def execute_nlp_ir(spec):
-    import sys
-    from doomscript.domains.nlp.runtime import NLPRuntime
-    from doomscript.domains.registry import get_domain_registry
-    if isinstance(spec, str):
-        spec = get_domain_registry().get_spec(spec)
-    caller_frame = sys._getframe(1)
-    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
-    scope = dict(target_env)
-    if caller_frame.f_locals:
-        scope.update(caller_frame.f_locals)
-    res = NLPRuntime().execute_ir(spec, scope)
-    for k, v in scope.items():
-        target_env[k] = v
-    return res
+from doomscript.domains.nlp.runtime import execute_nlp_ir
 
 
 from doomscript.domains.geo.runtime import (
@@ -2751,21 +2476,7 @@ from doomscript.domains.geo.runtime import (
     geo_kriging_interpolate,
 )
 
-def execute_geo_ir(spec):
-    import sys
-    from doomscript.domains.geo.runtime import GeoRuntime
-    from doomscript.domains.registry import get_domain_registry
-    if isinstance(spec, str):
-        spec = get_domain_registry().get_spec(spec)
-    caller_frame = sys._getframe(1)
-    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
-    scope = dict(target_env)
-    if caller_frame.f_locals:
-        scope.update(caller_frame.f_locals)
-    res = GeoRuntime().execute_ir(spec, scope)
-    for k, v in scope.items():
-        target_env[k] = v
-    return res
+from doomscript.domains.geo.runtime import execute_geo_ir
 
 
 from doomscript.domains.opt.runtime import (
@@ -2801,30 +2512,10 @@ from doomscript.domains.opt.runtime import (
     opt_binary_search_peak_1d,
 )
 
-def solve_linear_program(spec_or_name):
-    import sys
-    caller_frame = sys._getframe(1)
-    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
-    scope = dict(target_env)
-    if caller_frame.f_locals:
-        scope.update(caller_frame.f_locals)
-    return _opt_solve_lp(spec_or_name, scope=scope)
-
-def execute_opt_ir(spec):
-    import sys
-    from doomscript.domains.opt.runtime import OptRuntime
-    from doomscript.domains.registry import get_domain_registry
-    if isinstance(spec, str):
-        spec = get_domain_registry().get_spec(spec)
-    caller_frame = sys._getframe(1)
-    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
-    scope = dict(target_env)
-    if caller_frame.f_locals:
-        scope.update(caller_frame.f_locals)
-    res = OptRuntime().execute_ir(spec, scope)
-    for k, v in scope.items():
-        target_env[k] = v
-    return res
+from doomscript.domains.opt.runtime import (
+    solve_linear_program,
+    execute_opt_ir,
+)
 
 
 from doomscript.domains.agent.runtime import (
@@ -4406,419 +4097,79 @@ def dict_values(val: Any) -> list:
     return []
 
 
-def accuracy_score_fn(preds: Any, actuals: Any) -> float:
-    """Calculates accuracy score between predicted and actual values."""
-    if not preds or not actuals:
-        return 0.0
-    p_list = list(preds)
-    a_list = list(actuals)
-    if len(p_list) != len(a_list):
-        return 0.0
-    correct = sum(1 for p, a in zip(p_list, a_list) if p == a)
-    return round(correct / len(p_list), 4)
-
-
-def dsa_push(container: Any, item: Any) -> Any:
-    """Push an item into a heap, list, or deque."""
-    from collections import deque
-    if hasattr(container, "push") and callable(container.push):
-        container.push(item)
-    elif isinstance(container, deque):
-        container.append(item)
-    elif isinstance(container, list):
-        container.append(item)
-    return container
-
-
-def dsa_heap_push(heap_list: Any, item: Any) -> Any:
-    """Push an item into a min/max heap or list."""
-    if hasattr(heap_list, "push") and callable(heap_list.push):
-        heap_list.push(item)
-        return heap_list
-    import heapq
-    heapq.heappush(heap_list, item)
-    return heap_list
-
-
-def dsa_heap_pop_min(heap_list: Any) -> Any:
-    """Pop the minimum item from a min-heap or list."""
-    from doomscript.domains.dsa.runtime import DsaHeap
-    if isinstance(heap_list, DsaHeap):
-        return heap_list.pop()
-    import heapq
-    if not heap_list:
-        return None
-    return heapq.heappop(heap_list)
-
-
-def dsa_heap_pop_max(heap_list: Any) -> Any:
-    """Remove and return the maximum item from a max-heap or collection."""
-    from doomscript.domains.dsa.runtime import DsaHeap
-    if isinstance(heap_list, DsaHeap) and getattr(heap_list, "kind", "") == "max":
-        return heap_list.pop()
-    if not heap_list:
-        return None
-    mx = max(heap_list)
-    heap_list.remove(mx)
-    return mx
-
-
-def dsa_deque_pop_left(q: Any) -> Any:
-    """Pop the first/left element from a deque or list."""
-    from collections import deque
-    if isinstance(q, deque):
-        return q.popleft() if q else None
-    if isinstance(q, list):
-        return q.pop(0) if q else None
-    return None
-
-
-def db_find_rows(table_name: str, where_sql: Optional[str] = None) -> list:
-    """Query rows from an SQLite table in the active db session."""
-    from doomscript.domains.db.runtime import get_db_runtime
-    db_rt = get_db_runtime()
-    q = f'SELECT * FROM "{table_name}"'
-    if where_sql:
-        q += f" WHERE {where_sql}"
-    cur = db_rt.get_connection().cursor()
-    try:
-        cur.execute(q)
-    except Exception:
-        return []
-    cols = [d[0] for d in cur.description] if cur.description else []
-    rows = cur.fetchall()
-    return [Record(dict(zip(cols, r))) for r in rows]
-
-
-def db_count_rows(table_name: str) -> int:
-    """Count rows in an SQLite table in the active db session."""
-    from doomscript.domains.db.runtime import get_db_runtime
-    db_rt = get_db_runtime()
-    cur = db_rt.get_connection().cursor()
-    cur.execute(f'SELECT COUNT(*) FROM "{table_name}"')
-    row = cur.fetchone()
-    return row[0] if row else 0
-
-
-def sim_sample_normal(mean: float, std: float, count: int = 1000) -> list:
-    """Generate samples from a Normal (Gaussian) distribution."""
-    import random
-    return [random.gauss(float(mean), float(std)) for _ in range(int(count))]
-
-
-def sim_sample_uniform(low: float, high: float, count: int = 1000) -> list:
-    """Generate samples from a Uniform distribution."""
-    import random
-    return [random.uniform(float(low), float(high)) for _ in range(int(count))]
-
-
-def filter_dataset(data: Any, condition: str) -> Any:
-    """Filter records in a dataset using safe AST expression evaluation."""
-    from doomscript.domains.data.runtime import _to_record_list
-    from doomscript.domains.data.expr_eval import SafeASTEvaluator
-    rows = _to_record_list(data)
-    evaluator = SafeASTEvaluator()
-    filtered = [Record(r) for r in rows if evaluator.evaluate(condition, r)]
-    try:
-        import pandas as pd
-        if isinstance(data, pd.DataFrame):
-            return pd.DataFrame([dict(r) for r in filtered])
-    except Exception:
-        pass
-    return filtered
-
-
-def sort_dataset(data: Any, by_col: str, descending: bool = False) -> Any:
-    """Sort records in a dataset by a given column."""
-    from doomscript.domains.data.runtime import _to_record_list
-    rows = _to_record_list(data)
-    sorted_rows = [
-        Record(r)
-        for r in sorted(
-            rows,
-            key=lambda r: (r.get(by_col) is None, r.get(by_col)),
-            reverse=descending,
-        )
-    ]
-    try:
-        import pandas as pd
-        if isinstance(data, pd.DataFrame):
-            return pd.DataFrame([dict(r) for r in sorted_rows])
-    except Exception:
-        pass
-    return sorted_rows
-
-
-def group_dataset(data: Any, by_col: str, agg_func: str, agg_col: str) -> Any:
-    """Group dataset by column and compute aggregate."""
-    from doomscript.domains.data.runtime import _to_record_list
-    rows = _to_record_list(data)
-    grouped: Dict[Any, List[Any]] = {}
-    for r in rows:
-        key = r.get(by_col)
-        grouped.setdefault(key, []).append(r.get(agg_col))
-    out = []
-    fn = agg_func.lower()
-    for k, vals in grouped.items():
-        clean_vals = [v for v in vals if isinstance(v, (int, float))]
-        if fn in ("sum", "total"):
-            res = sum(clean_vals) if clean_vals else 0
-        elif fn in ("avg", "mean", "average"):
-            res = (sum(clean_vals) / len(clean_vals)) if clean_vals else 0
-        elif fn in ("min", "lowest", "minimum"):
-            res = min(clean_vals) if clean_vals else 0
-        elif fn in ("max", "highest", "maximum"):
-            res = max(clean_vals) if clean_vals else 0
-        elif fn in ("count",):
-            res = len(vals)
-        else:
-            res = len(vals)
-        out.append(Record({by_col: k, f"{fn}_{agg_col}": res}))
-    try:
-        import pandas as pd
-        if isinstance(data, pd.DataFrame):
-            return pd.DataFrame([dict(r) for r in out])
-    except Exception:
-        pass
-    return out
-
-
-def train_direct_model(
-    algo: str,
-    data_val: Any,
-    target_col: str,
-    feature_cols: Optional[List[str]] = None,
-    scope: Optional[Dict[str, Any]] = None,
-):
-    """Direct one-liner model trainer."""
-    from doomscript.domains.data.runtime import _to_record_list
-    from doomscript.domains.ml.spec import ModelSpec
-    from doomscript.domains.ml.runtime import ModelContainer, train_model
-    rows = _to_record_list(data_val)
-    if not feature_cols and rows:
-        feature_cols = [k for k in rows[0].keys() if k != target_col]
-    spec = ModelSpec(
-        name=f"{algo}_model",
-        dataset="__direct_dataset__",
-        target=target_col,
-        features=feature_cols or [],
-        algorithm=algo,
-    )
-    container = ModelContainer(spec)
-    if scope is None:
-        import sys
-        caller_frame = sys._getframe(1)
-        scope = dict(caller_frame.f_globals)
-        if caller_frame.f_locals:
-            scope.update(caller_frame.f_locals)
-    scope["__direct_dataset__"] = data_val
-    return train_model(container, scope=scope)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# --- Cluster G: Finance, Time Series, Blockchain, Quantum & Cybersecurity Wrappers ---
-
-def finance_analytical_greeks(S: float, K: float, T: float, r: float, sigma: float, option_type: str = "call") -> Any:
-    """Calculates Black-Scholes price and exact analytical Greeks (Delta, Gamma, Vega, Theta, Rho)."""
-    return Record(AnalyticalGreeks.all_greeks(S, K, T, r, sigma, option_type=option_type))
-
-
-def finance_binomial_price(
-    S0: float, K: float, T: float, r: float, sigma: float, steps: int = 100, option_type: str = "call", is_american: bool = False
-) -> Any:
-    """Prices European or American option using Cox-Ross-Rubinstein binomial lattice."""
-    return Record(BinomialCoxRossRubinstein.price(S0, K, T, r, sigma, steps=steps, option_type=option_type, is_american=is_american))
-
-
-def finance_optimize_markowitz(
-    returns: List[float], cov_matrix: List[List[float]], risk_free_rate: float = 0.02
-) -> Dict[str, Any]:
-    """Computes tangency maximum Sharpe ratio portfolio weights under Markowitz modern portfolio theory."""
-    return MarkowitzOptimizer.maximum_sharpe_portfolio(returns, cov_matrix, risk_free_rate=risk_free_rate)
-
-
-def time_series_arima_simulate(
-    n: int,
-    ar_params: Optional[List[float]] = None,
-    d: int = 0,
-    ma_params: Optional[List[float]] = None,
-    constant: float = 0.0,
-    sigma: float = 1.0,
-    seed: int = 42,
-) -> List[float]:
-    """Simulates ARIMA(p, d, q) process data."""
-    return ARIMASimulator.simulate(n, ar_params=ar_params, d=d, ma_params=ma_params, constant=constant, sigma=sigma, seed=seed)
-
-
-def time_series_dtw(series1: List[float], series2: List[float], window: Optional[int] = None) -> Dict[str, Any]:
-    """Calculates Dynamic Time Warping alignment distance and optimal path between two sequences."""
-    return DynamicTimeWarping.align(series1, series2, window=window)
-
-
-def time_series_cusum(series: List[float], threshold_h: float = 4.0) -> Dict[str, Any]:
-    """Performs CUSUM change point anomaly detection on time series."""
-    return CUSUMDetector.detect(series, threshold_h=threshold_h)
-
-
-def chain_patricia_trie() -> PatriciaMerkleTrie:
-    """Instantiates a new Modified Merkle Patricia Trie."""
-    return PatriciaMerkleTrie()
-
-
-def chain_schnorr_prove(
-    secret_x: int, public_y: int, g: Optional[int] = None, p: Optional[int] = None, q: Optional[int] = None
-) -> Dict[str, Any]:
-    """Generates non-interactive Schnorr zero-knowledge proof of discrete logarithm."""
-    return SchnorrZKProtocol.prove(secret_x, public_y, g=g, p=p, q=q)
-
-
-def chain_schnorr_verify(
-    public_y: int, proof: Dict[str, Any], g: Optional[int] = None, p: Optional[int] = None, q: Optional[int] = None
-) -> bool:
-    """Verifies Schnorr zero-knowledge proof."""
-    return SchnorrZKProtocol.verify(public_y, proof, g=g, p=p, q=q)
-
-
-def quantum_grover_search(num_qubits: int, target: int) -> Any:
-    """Executes Grover search algorithm to amplify target state with quadratic speedup."""
-    grover = GroverSearch(num_qubits=num_qubits, target_state=target)
-    return Record(grover.run_optimal())
-
-
-def quantum_teleport(alpha: complex, beta: complex) -> Dict[str, Any]:
-    """Simulates quantum state teleportation over an entangled EPR channel."""
-    return QuantumTeleportation.teleport(alpha, beta)
-
-
-def sec_shamir_split(secret_int: int, n: int = 5, k: int = 3) -> Any:
-    """Splits integer secret into n shares with threshold k."""
-    k_eff = min(int(k), int(n))
-    n_eff = max(int(k), int(n))
-    shares = ShamirSecretSharing.split(secret_int, k_eff, n_eff)
-    return Record({
-        "secret": secret_int,
-        "threshold": k_eff,
-        "total_shares": n_eff,
-        "shares": shares,
-    })
-
-
-def sec_shamir_recover(shares: Any) -> int:
-    """Reconstructs secret from k shares using Lagrange polynomial interpolation."""
-    s_list = shares.shares if hasattr(shares, "shares") else shares
-    return ShamirSecretSharing.combine(s_list)
-
-
-
-def sec_generate_totp(secret: Union[str, bytes], digits: int = 6) -> str:
-    """Generates RFC 6238 time-based one-time password."""
-    return TOTPGenerator.generate_totp(secret, digits=digits)
-
-
-def sec_verify_totp(secret: Union[str, bytes], token: str, tolerance: int = 1) -> bool:
-    """Verifies RFC 6238 time-based one-time password with clock drift window."""
-    return TOTPGenerator.verify_totp(secret, token, tolerance=tolerance)
-
-
-def sec_secp256k1_public_key(priv_key: int) -> Tuple[int, int]:
-    """Derives elliptic curve public key (x, y) point on secp256k1."""
-    return Secp256k1Curve.public_key(priv_key)
-
-
-def sec_secp256k1_ecdh(priv_key: int, peer_pub_key: Tuple[int, int]) -> str:
-    """Derives SHA-256 Elliptic Curve Diffie-Hellman (ECDH) shared secret."""
-    return Secp256k1Curve.ecdh_shared_secret(priv_key, peer_pub_key)
-
-
-# --- Cluster H: Web, Database, Neuroscience & Geospatial Wrappers ---
-
-def web_css_select(html: str, selector: str) -> List[DOMElement]:
-    """Parses HTML into DOM and executes CSS selector query."""
-    root = CSSSelectorEngine.parse_html(html)
-    return CSSSelectorEngine.select(root, selector)
-
-
-def web_cookie_jar() -> RFC6265CookieJar:
-    """Instantiates a new RFC 6265 compliant HTTP cookie jar."""
-    return RFC6265CookieJar()
-
-
-def db_wal_create() -> WALCrashRecovery:
-    """Instantiates an ARIES write-ahead logger with recovery support."""
-    return WALCrashRecovery()
-
-
-def db_query_optimizer() -> CostBasedQueryOptimizer:
-    """Instantiates a cost-based query optimizer for table scan planning."""
-    return CostBasedQueryOptimizer()
-
-
-def db_mvcc_create() -> SnapshotIsolationMVCC:
-    """Instantiates a Snapshot Isolation Multi-Version Concurrency Control engine."""
-    return SnapshotIsolationMVCC()
-
-
-def neuro_tsodyks_markram(
-    U: float = 0.2, tau_rec: float = 800.0, tau_fac: float = 50.0, A: float = 1.0
-) -> TsodyksMarkramSynapse:
-    """Instantiates a Tsodyks-Markram short-term depressing and facilitating synapse."""
-    return TsodyksMarkramSynapse(U=U, tau_rec=tau_rec, tau_fac=tau_fac, A=A)
-
-
-def neuro_fitzhugh_nagumo(a: float = 0.7, b: float = 0.8, tau: float = 12.5) -> FitzHughNagumoNeuron:
-    """Instantiates a FitzHugh-Nagumo biological excitable membrane model."""
-    return FitzHughNagumoNeuron(a=a, b=b, tau=tau)
-
-
-def neuro_wta_network(
-    num_neurons: int, beta: float = 0.5, tau: float = 10.0, threshold: float = 0.0
-) -> WinnerTakeAllNetwork:
-    """Instantiates a competitive lateral inhibitory Winner-Take-All neural circuit."""
-    return WinnerTakeAllNetwork(num_neurons=num_neurons, beta=beta, tau=tau, threshold=threshold)
-
-
-def geo_delaunay_triangulate(
-    points: List[Tuple[float, float]]
-) -> List[Tuple[Tuple[float, float], Tuple[float, float], Tuple[float, float]]]:
-    """Computes 2D Delaunay Triangulation using Bowyer-Watson incremental algorithm."""
-    return DelaunayTriangulator.triangulate(points)
-
-
-def geo_voronoi_diagram(points: List[Tuple[float, float]]) -> List[Tuple[Tuple[float, float], Tuple[float, float]]]:
-    """Computes 2D Voronoi diagram dual edges."""
-    return DelaunayTriangulator.voronoi_diagram(points)
-
-
-def geo_web_mercator_forward(lat: float, lon: float) -> Tuple[float, float]:
-    """Transforms WGS84 (lat, lon) in degrees to EPSG:3857 (meters x, y)."""
-    return WebMercatorProjection.lat_lon_to_xy(lat, lon)
-
-
-def geo_web_mercator_inverse(x: float, y: float) -> Tuple[float, float]:
-    """Transforms EPSG:3857 (meters x, y) back to WGS84 (lat, lon) in degrees."""
-    return WebMercatorProjection.xy_to_lat_lon(x, y)
-
-
-def geo_compute_isochrone(
-    origin_node: str,
-    nodes: Dict[str, Tuple[float, float]],
-    edges: List[Dict[str, Any]],
-    max_time_minutes: float,
-) -> Dict[str, Any]:
-    """Computes reachable road nodes and convex hull isochrone polygon."""
-    return IsochroneContour.compute_isochrone(origin_node, nodes, edges, max_time_minutes)
-
+# ---------------------------------------------------------------------------
+# Re-exported Domain Capabilities (extracted into domain packages)
+# ---------------------------------------------------------------------------
+from doomscript.domains.ml.runtime import (
+    accuracy_score_fn,
+    train_direct_model,
+)
+from doomscript.domains.dsa.runtime import (
+    dsa_push,
+    dsa_heap_push,
+    dsa_heap_pop_min,
+    dsa_heap_pop_max,
+    dsa_deque_pop_left,
+)
+from doomscript.domains.db.runtime import (
+    db_find_rows,
+    db_count_rows,
+    db_wal_create,
+    db_query_optimizer,
+    db_mvcc_create,
+)
+from doomscript.domains.sim.runtime import (
+    sim_sample_normal,
+    sim_sample_uniform,
+)
+from doomscript.domains.data.runtime import (
+    filter_dataset,
+    sort_dataset,
+    group_dataset,
+)
+from doomscript.domains.finance.runtime import (
+    finance_analytical_greeks,
+    finance_binomial_price,
+    finance_optimize_markowitz,
+)
+from doomscript.domains.time_series.runtime import (
+    time_series_arima_simulate,
+    time_series_dtw,
+    time_series_cusum,
+)
+from doomscript.domains.chain.runtime import (
+    chain_patricia_trie,
+    chain_schnorr_prove,
+    chain_schnorr_verify,
+)
+from doomscript.domains.quantum.runtime import (
+    quantum_grover_search,
+    quantum_teleport,
+)
+from doomscript.domains.sec.runtime import (
+    sec_shamir_split,
+    sec_shamir_recover,
+    sec_generate_totp,
+    sec_verify_totp,
+    sec_secp256k1_public_key,
+    sec_secp256k1_ecdh,
+)
+from doomscript.domains.web.runtime import (
+    web_css_select,
+    web_cookie_jar,
+)
+from doomscript.domains.neuro.runtime import (
+    neuro_tsodyks_markram,
+    neuro_fitzhugh_nagumo,
+    neuro_wta_network,
+)
+from doomscript.domains.geo.runtime import (
+    geo_delaunay_triangulate,
+    geo_voronoi_diagram,
+    geo_web_mercator_forward,
+    geo_web_mercator_inverse,
+    geo_compute_isochrone,
+)
 
 # ===========================================================================
 # EXPLICIT RUNTIME EXPORT REGISTRY
@@ -4826,12 +4177,6 @@ def geo_compute_isochrone(
 
 import types
 from doomscript.core.exports import ALL_RUNTIME_EXPORT_NAMES
-
-# Deliberate, immutable internal mapping of supported runtime exports
-_CORE_RUNTIME_EXPORTS: types.MappingProxyType = types.MappingProxyType({
-    k: globals()[k] for k in ALL_RUNTIME_EXPORT_NAMES if k in globals()
-})
-
 
 def get_runtime_exports() -> Dict[str, Any]:
     """Returns a defensive copy of the explicit, immutable runtime exports registry.
@@ -4843,3 +4188,9 @@ def get_runtime_exports() -> Dict[str, Any]:
         execution capabilities.
     """
     return dict(_CORE_RUNTIME_EXPORTS)
+
+
+# Deliberate, immutable internal mapping of supported runtime exports
+_CORE_RUNTIME_EXPORTS: types.MappingProxyType = types.MappingProxyType({
+    k: globals()[k] for k in ALL_RUNTIME_EXPORT_NAMES if k in globals()
+})

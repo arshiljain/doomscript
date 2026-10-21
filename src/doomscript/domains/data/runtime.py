@@ -2310,3 +2310,163 @@ def data_roaring_stats(bitmap_handle: Any) -> Any:
     })
 
 
+
+
+def execute_data_ir(spec: Any) -> Any:
+    """Executes a Data Domain IR specification against the caller's scope."""
+    import sys
+    from doomscript.domains.registry import get_domain_registry
+    if isinstance(spec, str):
+        spec = get_domain_registry().get_spec(spec)
+    caller_frame = sys._getframe(1)
+    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
+    scope = dict(target_env)
+    if caller_frame.f_locals:
+        scope.update(caller_frame.f_locals)
+    res = DataPipelineRuntime().execute_pipeline(spec, scope)
+    for k, v in scope.items():
+        target_env[k] = v
+    return res
+
+
+def load_table(path: str) -> Any:
+    """Load a tabular file (CSV) into a pandas DataFrame."""
+    import pandas as pd
+    return pd.read_csv(path)
+
+
+def save_table(table: Any, path: str) -> None:
+    """Save a table/DataFrame to a CSV file."""
+    import pandas as pd
+    if hasattr(table, "to_csv"):
+        table.to_csv(path, index=False)
+    else:
+        pd.DataFrame(table).to_csv(path, index=False)
+
+
+def filter_table(table: Any, col: str, op: str, val: Any) -> Any:
+    """Filter a table/DataFrame by a column condition."""
+    is_list_input = isinstance(table, list)
+    import pandas as pd
+    if not isinstance(table, pd.DataFrame):
+        table = pd.DataFrame(table)
+
+    col = str(col).strip('"\'')
+    op_str = str(op).strip().lower()
+    if op_str in (">", "is greater than", "is over"):
+        res = table[table[col] > val]
+    elif op_str in (">=", "is at least", "is greater than or equal to"):
+        res = table[table[col] >= val]
+    elif op_str in ("<", "is less than", "is under"):
+        res = table[table[col] < val]
+    elif op_str in ("<=", "is at most", "is less than or equal to"):
+        res = table[table[col] <= val]
+    elif op_str in ("==", "equals", "is"):
+        res = table[table[col] == val]
+    elif op_str in ("!=", "is not", "isn't"):
+        res = table[table[col] != val]
+    else:
+        res = table
+
+    if is_list_input:
+        return [Record(r) for r in res.to_dict("records")]
+    return res
+
+
+def sort_table(table: Any, col: str, ascending: bool = True) -> Any:
+    """Sort a table/DataFrame by a column."""
+    is_list_input = isinstance(table, list)
+    import pandas as pd
+    if not isinstance(table, pd.DataFrame):
+        table = pd.DataFrame(table)
+    col = str(col).strip('"\'')
+    res = table.sort_values(col, ascending=ascending)
+    if is_list_input:
+        return [Record(r) for r in res.to_dict("records")]
+    return res
+
+
+def group_and_agg_table(table: Any, group_col: str, agg_col: str, func: str = "mean") -> Any:
+    """Group a table/DataFrame by a column and aggregate a metric."""
+    import pandas as pd
+    if not isinstance(table, pd.DataFrame):
+        table = pd.DataFrame(table)
+    if func in ("mean", "average", "avg"):
+        return table.groupby(group_col, as_index=False)[agg_col].mean()
+    elif func == "sum":
+        return table.groupby(group_col, as_index=False)[agg_col].sum()
+    elif func == "count":
+        return table.groupby(group_col, as_index=False)[agg_col].count()
+    elif func in ("min", "lowest"):
+        return table.groupby(group_col, as_index=False)[agg_col].min()
+    elif func in ("max", "highest"):
+        return table.groupby(group_col, as_index=False)[agg_col].max()
+    return table.groupby(group_col, as_index=False)[agg_col].agg(func)
+
+
+def filter_dataset(data: Any, condition: str) -> Any:
+    """Filter records in a dataset using safe AST expression evaluation."""
+    from doomscript.domains.data.expr_eval import SafeASTEvaluator
+    rows = _to_record_list(data)
+    evaluator = SafeASTEvaluator()
+    filtered = [Record(r) for r in rows if evaluator.evaluate(condition, r)]
+    try:
+        import pandas as pd
+        if isinstance(data, pd.DataFrame):
+            return pd.DataFrame([dict(r) for r in filtered])
+    except Exception:
+        pass
+    return filtered
+
+
+def sort_dataset(data: Any, by_col: str, descending: bool = False) -> Any:
+    """Sort records in a dataset by a given column."""
+    rows = _to_record_list(data)
+    sorted_rows = [
+        Record(r)
+        for r in sorted(
+            rows,
+            key=lambda r: (r.get(by_col) is None, r.get(by_col)),
+            reverse=descending,
+        )
+    ]
+    try:
+        import pandas as pd
+        if isinstance(data, pd.DataFrame):
+            return pd.DataFrame([dict(r) for r in sorted_rows])
+    except Exception:
+        pass
+    return sorted_rows
+
+
+def group_dataset(data: Any, by_col: str, agg_func: str, agg_col: str) -> Any:
+    """Group dataset by column and compute aggregate."""
+    rows = _to_record_list(data)
+    grouped: Dict[Any, List[Any]] = {}
+    for r in rows:
+        key = r.get(by_col)
+        grouped.setdefault(key, []).append(r.get(agg_col))
+    out = []
+    fn = agg_func.lower()
+    for k, vals in grouped.items():
+        clean_vals = [v for v in vals if isinstance(v, (int, float))]
+        if fn in ("sum", "total"):
+            res = sum(clean_vals) if clean_vals else 0
+        elif fn in ("avg", "mean", "average"):
+            res = (sum(clean_vals) / len(clean_vals)) if clean_vals else 0
+        elif fn in ("min", "lowest", "minimum"):
+            res = min(clean_vals) if clean_vals else 0
+        elif fn in ("max", "highest", "maximum"):
+            res = max(clean_vals) if clean_vals else 0
+        elif fn in ("count",):
+            res = len(vals)
+        else:
+            res = len(vals)
+        out.append(Record({by_col: k, f"{fn}_{agg_col}": res}))
+    try:
+        import pandas as pd
+        if isinstance(data, pd.DataFrame):
+            return pd.DataFrame([dict(r) for r in out])
+    except Exception:
+        pass
+    return out

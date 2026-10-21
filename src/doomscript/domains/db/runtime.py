@@ -1734,3 +1734,71 @@ def db_cost_based_join_optimizer(
 
 
 
+
+
+def execute_db_ir(spec: Any) -> Any:
+    """Executes a Database Domain IR specification against the caller's scope."""
+    import sys
+    from doomscript.domains.registry import get_domain_registry
+    if isinstance(spec, str):
+        spec = get_domain_registry().get_spec(spec)
+    caller_frame = sys._getframe(1)
+    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
+    scope = dict(target_env)
+    if caller_frame.f_locals:
+        scope.update(caller_frame.f_locals)
+    res = get_db_runtime().execute_query_spec(spec, scope)
+    for k, v in scope.items():
+        target_env[k] = v
+    return res
+
+
+def insert_rows(table_name: str, data: Any) -> Any:
+    """Inserts records into a database table."""
+    import sys
+    caller_frame = sys._getframe(1)
+    scope = dict(caller_frame.f_globals)
+    if caller_frame.f_locals:
+        scope.update(caller_frame.f_locals)
+    return get_db_runtime().insert_rows(table_name, data, scope)
+
+
+def db_find_rows(table_name: str, where_sql: Optional[str] = None) -> list:
+    """Query rows from an SQLite table in the active db session."""
+    from doomscript.core.record import Record
+    db_rt = get_db_runtime()
+    q = f'SELECT * FROM "{table_name}"'
+    if where_sql:
+        q += f" WHERE {where_sql}"
+    cur = db_rt.get_connection().cursor()
+    try:
+        cur.execute(q)
+    except Exception:
+        return []
+    cols = [d[0] for d in cur.description] if cur.description else []
+    rows = cur.fetchall()
+    return [Record(dict(zip(cols, r))) for r in rows]
+
+
+def db_count_rows(table_name: str) -> int:
+    """Count rows in an SQLite table in the active db session."""
+    db_rt = get_db_runtime()
+    cur = db_rt.get_connection().cursor()
+    cur.execute(f'SELECT COUNT(*) FROM "{table_name}"')
+    row = cur.fetchone()
+    return row[0] if row else 0
+
+
+def db_wal_create() -> WALCrashRecovery:
+    """Instantiates an ARIES write-ahead logger with recovery support."""
+    return WALCrashRecovery()
+
+
+def db_query_optimizer() -> CostBasedQueryOptimizer:
+    """Instantiates a cost-based query optimizer for table scan planning."""
+    return CostBasedQueryOptimizer()
+
+
+def db_mvcc_create() -> SnapshotIsolationMVCC:
+    """Instantiates a Snapshot Isolation Multi-Version Concurrency Control engine."""
+    return SnapshotIsolationMVCC()

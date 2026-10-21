@@ -1261,3 +1261,22 @@ def neuro_hopfield_recall(
 
 
 
+
+
+def neuro_tsodyks_markram(
+    U: float = 0.5, tau_rec: float = 800.0, tau_fac: float = 0.0, A: float = 1.0
+) -> TsodyksMarkramSynapse:
+    """Instantiates a Tsodyks-Markram short-term depressing and facilitating synapse."""
+    return TsodyksMarkramSynapse(U=U, tau_rec=tau_rec, tau_fac=tau_fac, A=A)
+
+
+def neuro_fitzhugh_nagumo(a: float = 0.7, b: float = 0.8, tau: float = 12.5) -> FitzHughNagumoNeuron:
+    """Instantiates a FitzHugh-Nagumo planar relaxation oscillator neuron."""
+    return FitzHughNagumoNeuron(a=a, b=b, tau=tau)
+
+
+def neuro_wta_network(
+    num_neurons: int = 4, lateral_weight: float = -2.0, self_excitation: float = 1.5
+) -> WinnerTakeAllNetwork:
+    """Instantiates a Winner-Take-All competitive neural circuit."""
+    return WinnerTakeAllNetwork(num_neurons=num_neurons, lateral_weight=lateral_weight, self_excitation=self_excitation)

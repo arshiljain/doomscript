@@ -4319,3 +4319,116 @@ def dsa_suffix_tree_longest_repeated(st_record: Any) -> str:
 
 
 
+
+
+def execute_dsa_ir(spec: Any) -> Any:
+    """Executes a DSA Domain IR specification against the caller's scope."""
+    import sys
+    from doomscript.domains.registry import get_domain_registry
+    if isinstance(spec, str):
+        spec = get_domain_registry().get_spec(spec)
+    caller_frame = sys._getframe(1)
+    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
+    scope = dict(target_env)
+    if caller_frame.f_locals:
+        scope.update(caller_frame.f_locals)
+    res = DsaRuntime().execute_ir(spec, scope)
+    for k, v in scope.items():
+        target_env[k] = v
+    return res
+
+
+def run_dsa_benchmark(fn_name: str, input_sizes: List[int], repeat: int = 3, generator: str = "sorted_integers", measure_memory: bool = True) -> Any:
+    """Executes a DSA benchmark against the caller's scope and returns the ComplexityReport dict."""
+    import sys
+    spec = BenchmarkSpec(
+        fn_name=fn_name,
+        input_sizes=input_sizes,
+        repeat=repeat,
+        generator=generator,
+        measure_memory=measure_memory,
+    )
+    caller_frame = sys._getframe(1)
+    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
+    scope = dict(target_env)
+    if caller_frame.f_locals:
+        scope.update(caller_frame.f_locals)
+    return run_benchmark(spec, scope)
+
+
+def analyze_complexity(fn_name: str, input_sizes: Optional[List[int]] = None) -> Any:
+    import sys
+    caller_frame = sys._getframe(1)
+    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
+    scope = dict(target_env)
+    if caller_frame.f_locals:
+        scope.update(caller_frame.f_locals)
+    spec = BenchmarkSpec(fn_name=fn_name, input_sizes=input_sizes or [100, 500, 1000, 2000])
+    return run_benchmark(spec, scope)
+
+
+def run_benchmark_with_sizes(fn_name: str, sizes: List[int]) -> Any:
+    import sys
+    caller_frame = sys._getframe(1)
+    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
+    scope = dict(target_env)
+    if caller_frame.f_locals:
+        scope.update(caller_frame.f_locals)
+    spec = BenchmarkSpec(fn_name=fn_name, input_sizes=sizes)
+    return run_benchmark(spec, scope)
+
+
+
+
+
+def dsa_push(container: Any, item: Any) -> Any:
+    """Push an item into a heap, list, or deque."""
+    from collections import deque
+    if hasattr(container, "push") and callable(container.push):
+        container.push(item)
+    elif isinstance(container, deque):
+        container.append(item)
+    elif isinstance(container, list):
+        container.append(item)
+    return container
+
+
+def dsa_heap_push(heap_list: Any, item: Any) -> Any:
+    """Push an item into a min/max heap or list."""
+    if hasattr(heap_list, "push") and callable(heap_list.push):
+        heap_list.push(item)
+        return heap_list
+    import heapq
+    heapq.heappush(heap_list, item)
+    return heap_list
+
+
+def dsa_heap_pop_min(heap_list: Any) -> Any:
+    """Pop the minimum item from a min-heap or list."""
+    if isinstance(heap_list, DsaHeap):
+        return heap_list.pop()
+    import heapq
+    if not heap_list:
+        return None
+    return heapq.heappop(heap_list)
+
+
+def dsa_heap_pop_max(heap_list: Any) -> Any:
+    """Remove and return the maximum item from a max-heap or collection."""
+    if isinstance(heap_list, DsaHeap) and getattr(heap_list, "kind", "") == "max":
+        return heap_list.pop()
+    if not heap_list:
+        return None
+    mx = max(heap_list)
+    heap_list.remove(mx)
+    return mx
+
+
+def dsa_deque_pop_left(q: Any) -> Any:
+    """Pop the first/left element from a deque or list."""
+    from collections import deque
+    if isinstance(q, deque):
+        return q.popleft() if q else None
+    if isinstance(q, list):
+        return q.pop(0) if q else None
+    return None

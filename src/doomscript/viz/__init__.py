@@ -11,6 +11,7 @@ from doomscript.viz.spec import (
 )
 from doomscript.viz.builder import PlotBuilder
 from doomscript.viz.explorer import explore_dataset, ExplorationReport
+from doomscript.viz.renderer import plot_table, show_plot, save_plot
 
 __all__ = [
     "PlotSpec",
@@ -23,4 +24,7 @@ __all__ = [
     "PlotBuilder",
     "explore_dataset",
     "ExplorationReport",
+    "plot_table",
+    "show_plot",
+    "save_plot",
 ]

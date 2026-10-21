@@ -2234,3 +2234,63 @@ def ml_dbscan(data: List[List[float]], eps: float = 0.5, min_samples: int = 5) -
 
 
 
+
+
+def execute_ml_ir(spec: Any) -> Any:
+    """Executes an ML Domain IR specification against the caller's scope."""
+    import sys
+    from doomscript.domains.registry import get_domain_registry
+    if isinstance(spec, str):
+        spec = get_domain_registry().get_spec(spec)
+    caller_frame = sys._getframe(1)
+    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
+    scope = dict(target_env)
+    if caller_frame.f_locals:
+        scope.update(caller_frame.f_locals)
+    res = MLModelRuntime().execute_ir(spec, scope)
+    for k, v in scope.items():
+        target_env[k] = v
+    return res
+
+
+def accuracy_score_fn(preds: Any, actuals: Any) -> float:
+    """Calculates accuracy score between predicted and actual values."""
+    if not preds or not actuals:
+        return 0.0
+    p_list = list(preds)
+    a_list = list(actuals)
+    if len(p_list) != len(a_list):
+        return 0.0
+    correct = sum(1 for p, a in zip(p_list, a_list) if p == a)
+    return round(correct / len(p_list), 4)
+
+
+def train_direct_model(
+    algo: str,
+    data_val: Any,
+    target_col: str,
+    feature_cols: Optional[List[str]] = None,
+    scope: Optional[Dict[str, Any]] = None,
+):
+    """Direct one-liner model trainer."""
+    from doomscript.domains.data.runtime import _to_record_list
+    from doomscript.domains.ml.spec import ModelSpec
+    rows = _to_record_list(data_val)
+    if not feature_cols and rows:
+        feature_cols = [k for k in rows[0].keys() if k != target_col]
+    spec = ModelSpec(
+        name=f"{algo}_model",
+        dataset="__direct_dataset__",
+        target=target_col,
+        features=feature_cols or [],
+        algorithm=algo,
+    )
+    container = ModelContainer(spec)
+    if scope is None:
+        import sys
+        caller_frame = sys._getframe(1)
+        scope = dict(caller_frame.f_globals)
+        if caller_frame.f_locals:
+            scope.update(caller_frame.f_locals)
+    scope["__direct_dataset__"] = data_val
+    return train_model(container, scope=scope)

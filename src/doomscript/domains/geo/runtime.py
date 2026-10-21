@@ -1977,3 +1977,52 @@ def geo_kriging_interpolate(
 
 
 
+
+
+def execute_geo_ir(spec: Any) -> Any:
+    """Executes a Geospatial Domain IR specification against the caller's scope."""
+    import sys
+    from doomscript.domains.registry import get_domain_registry
+    if isinstance(spec, str):
+        spec = get_domain_registry().get_spec(spec)
+    caller_frame = sys._getframe(1)
+    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
+    scope = dict(target_env)
+    if caller_frame.f_locals:
+        scope.update(caller_frame.f_locals)
+    res = GeoRuntime().execute_ir(spec, scope)
+    for k, v in scope.items():
+        target_env[k] = v
+    return res
+
+
+def geo_delaunay_triangulate(
+    points: List[Tuple[float, float]]
+) -> List[Tuple[Tuple[float, float], Tuple[float, float], Tuple[float, float]]]:
+    """Computes 2D Delaunay Triangulation using Bowyer-Watson incremental algorithm."""
+    return DelaunayTriangulator.triangulate(points)
+
+
+def geo_voronoi_diagram(points: List[Tuple[float, float]]) -> List[Tuple[Tuple[float, float], Tuple[float, float]]]:
+    """Computes 2D Voronoi diagram dual edges."""
+    return DelaunayTriangulator.voronoi_diagram(points)
+
+
+def geo_web_mercator_forward(lat: float, lon: float) -> Tuple[float, float]:
+    """Transforms WGS84 (lat, lon) in degrees to EPSG:3857 (meters x, y)."""
+    return WebMercatorProjection.lat_lon_to_xy(lat, lon)
+
+
+def geo_web_mercator_inverse(x: float, y: float) -> Tuple[float, float]:
+    """Transforms EPSG:3857 (meters x, y) back to WGS84 (lat, lon) in degrees."""
+    return WebMercatorProjection.xy_to_lat_lon(x, y)
+
+
+def geo_compute_isochrone(
+    origin_node: str,
+    nodes: Dict[str, Tuple[float, float]],
+    edges: List[Dict[str, Any]],
+    max_time_minutes: float,
+) -> Dict[str, Any]:
+    """Computes reachable road nodes and convex hull isochrone polygon."""
+    return IsochroneContour.compute_isochrone(origin_node, nodes, edges, max_time_minutes)

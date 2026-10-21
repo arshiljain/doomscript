@@ -1479,3 +1479,22 @@ def chain_threshold_aggregate_sign(message: str, shares: List[Any], threshold: i
     return Record(ThresholdSignatureSchemeShamir.threshold_sign(message, clean_shares, threshold))
 
 
+
+
+def chain_patricia_trie() -> PatriciaMerkleTrie:
+    """Instantiates a new Modified Merkle Patricia Trie."""
+    return PatriciaMerkleTrie()
+
+
+def chain_schnorr_prove(
+    secret_x: int, public_y: int, g: Optional[int] = None, p: Optional[int] = None, q: Optional[int] = None
+) -> Dict[str, Any]:
+    """Generates non-interactive Schnorr zero-knowledge proof of discrete logarithm."""
+    return SchnorrZKProtocol.prove(secret_x, public_y, g=g, p=p, q=q)
+
+
+def chain_schnorr_verify(
+    public_y: int, proof: Dict[str, Any], g: Optional[int] = None, p: Optional[int] = None, q: Optional[int] = None
+) -> bool:
+    """Verifies Schnorr zero-knowledge proof."""
+    return SchnorrZKProtocol.verify(public_y, proof, g=g, p=p, q=q)

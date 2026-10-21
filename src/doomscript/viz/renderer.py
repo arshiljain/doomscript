@@ -230,3 +230,34 @@ class LetsPlotRenderer:
         """Shows the plot in active display environment."""
         fig = cls.to_lets_plot(spec)
         return fig.show()
+
+
+def plot_table(table, x_col, y_col, kind="line", title=None):
+    """Create a plot from a table/DataFrame and return the matplotlib Figure."""
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots()
+    if kind == "line":
+        ax.plot(table[x_col], table[y_col])
+    elif kind == "scatter":
+        ax.scatter(table[x_col], table[y_col])
+    elif kind == "bar":
+        ax.bar(table[x_col], table[y_col])
+    ax.set_xlabel(str(x_col))
+    ax.set_ylabel(str(y_col))
+    if title:
+        ax.set_title(str(title))
+    return fig
+
+
+def show_plot(obj):
+    """Displays a plot or exploration report, or prints the object."""
+    if hasattr(obj, "show"):
+        return obj.show()
+    print(obj)
+
+
+def save_plot(obj, path, width=None, height=None, dpi=None):
+    """Saves a plot or exploration report to HTML, PNG, SVG, or PDF."""
+    if hasattr(obj, "save"):
+        return obj.save(path, width=width, height=height, dpi=dpi)
+    raise TypeError(f"Object of type {type(obj).__name__} does not support save().")

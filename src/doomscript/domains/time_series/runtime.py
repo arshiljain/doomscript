@@ -1431,3 +1431,26 @@ def timeseries_emd_decompose(
 
 
 
+
+
+def time_series_arima_simulate(
+    n: int,
+    ar_params: Optional[List[float]] = None,
+    d: int = 0,
+    ma_params: Optional[List[float]] = None,
+    constant: float = 0.0,
+    sigma: float = 1.0,
+    seed: int = 42,
+) -> List[float]:
+    """Simulates ARIMA(p, d, q) process data."""
+    return ARIMASimulator.simulate(n, ar_params=ar_params, d=d, ma_params=ma_params, constant=constant, sigma=sigma, seed=seed)
+
+
+def time_series_dtw(series1: List[float], series2: List[float], window: Optional[int] = None) -> Dict[str, Any]:
+    """Calculates Dynamic Time Warping alignment distance and optimal path between two sequences."""
+    return DynamicTimeWarping.align(series1, series2, window=window)
+
+
+def time_series_cusum(series: List[float], threshold_h: float = 4.0) -> Dict[str, Any]:
+    """Performs CUSUM change point anomaly detection on time series."""
+    return CUSUMDetector.detect(series, threshold_h=threshold_h)

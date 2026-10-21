@@ -1838,3 +1838,10 @@ def fin_merton_jump_diffusion(
     ))
 
 
+
+
+def finance_optimize_markowitz(
+    returns: List[float], cov_matrix: List[List[float]], risk_free_rate: float = 0.02
+) -> Dict[str, Any]:
+    """Computes tangency maximum Sharpe ratio portfolio weights under Markowitz modern portfolio theory."""
+    return MarkowitzOptimizer.maximum_sharpe_portfolio(returns, cov_matrix, risk_free_rate=risk_free_rate)

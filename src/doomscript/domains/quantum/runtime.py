@@ -896,3 +896,8 @@ def quantum_bb84_simulate(num_bits: int = 64, eve_present: bool = False, seed: O
     return Record(QuantumKeyDistributionBB84.simulate(num_bits=num_bits, eve_present=eve_present, seed=seed))
 
 
+
+
+def quantum_teleport(alpha: complex, beta: complex) -> Dict[str, Any]:
+    """Simulates quantum state teleportation over an entangled EPR channel."""
+    return QuantumTeleportation.teleport(alpha, beta)

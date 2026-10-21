@@ -305,6 +305,36 @@ class SimplexSolver:
 
 def solve_linear_program(spec_or_name: Any, scope: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Solves a LinearProgramSpec or named linear program in scope using Simplex."""
+    if scope is None:
+        try:
+            import sys
+            caller_frame = sys._getframe(1)
+            target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
+            scope = dict(target_env)
+            if caller_frame.f_locals:
+                scope.update(caller_frame.f_locals)
+        except Exception:
+            scope = {}
+    if scope is None:
+        try:
+            import sys
+            caller_frame = sys._getframe(1)
+            target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
+            scope = dict(target_env)
+            if caller_frame.f_locals:
+                scope.update(caller_frame.f_locals)
+        except Exception:
+            scope = {}
+    if scope is None:
+        try:
+            import sys
+            caller_frame = sys._getframe(1)
+            target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
+            scope = dict(target_env)
+            if caller_frame.f_locals:
+                scope.update(caller_frame.f_locals)
+        except Exception:
+            scope = {}
     if isinstance(spec_or_name, LinearProgramSpec):
         spec = spec_or_name
     elif isinstance(spec_or_name, dict) and "_spec" in spec_or_name:
@@ -3011,3 +3041,20 @@ def opt_sqp_optimize(
 
 
 
+
+
+def execute_opt_ir(spec: Any) -> Any:
+    """Executes an optimization IR spec in the caller's scope."""
+    import sys
+    from doomscript.domains.registry import get_domain_registry
+    if isinstance(spec, str):
+        spec = get_domain_registry().get_spec(spec)
+    caller_frame = sys._getframe(1)
+    target_env = caller_frame.f_globals if caller_frame.f_globals is not None else caller_frame.f_locals
+    scope = dict(target_env)
+    if caller_frame.f_locals:
+        scope.update(caller_frame.f_locals)
+    res = OptRuntime().execute_ir(spec, scope)
+    for k, v in scope.items():
+        target_env[k] = v
+    return res

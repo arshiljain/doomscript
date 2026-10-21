@@ -1112,3 +1112,29 @@ def sec_pbkdf2_sha256(
 
 
 
+
+
+def sec_verify_totp(secret: Union[str, bytes], token: str, tolerance: int = 1) -> bool:
+    """Verifies RFC 6238 time-based one-time password with clock drift window."""
+    return TOTPGenerator.verify_totp(secret, token, tolerance=tolerance)
+
+
+def sec_secp256k1_ecdh(priv_key: int, peer_pub_key: Tuple[int, int]) -> str:
+    """Derives SHA-256 Elliptic Curve Diffie-Hellman (ECDH) shared secret."""
+    return Secp256k1Curve.ecdh_shared_secret(priv_key, peer_pub_key)
+
+
+def sec_shamir_recover(shares: Any) -> int:
+    """Reconstructs secret from k shares using Lagrange polynomial interpolation."""
+    s_list = shares.shares if hasattr(shares, "shares") else shares
+    return ShamirSecretSharing.combine(s_list)
+
+
+def sec_generate_totp(secret: Union[str, bytes], digits: int = 6) -> str:
+    """Generates RFC 6238 time-based one-time password."""
+    return TOTPGenerator.generate_totp(secret, digits=digits)
+
+
+def sec_secp256k1_public_key(priv_key: int) -> Tuple[int, int]:
+    """Derives elliptic curve public key (x, y) point on secp256k1."""
+    return Secp256k1Curve.public_key(priv_key)
