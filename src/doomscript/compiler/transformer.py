@@ -1268,6 +1268,50 @@ class DoomToPython(Transformer):
         )
         return ast.Compare(left=len_call, ops=[ast.Gt()], comparators=[ast.Constant(value=0)])
 
+    def is_even(self, args):
+        val = to_load(args[0])
+        mod = ast.BinOp(left=val, op=ast.Mod(), right=ast.Constant(value=2))
+        return ast.Compare(left=mod, ops=[ast.Eq()], comparators=[ast.Constant(value=0)])
+
+    def is_not_even(self, args):
+        val = to_load(args[0])
+        mod = ast.BinOp(left=val, op=ast.Mod(), right=ast.Constant(value=2))
+        return ast.Compare(left=mod, ops=[ast.NotEq()], comparators=[ast.Constant(value=0)])
+
+    def is_odd(self, args):
+        val = to_load(args[0])
+        mod = ast.BinOp(left=val, op=ast.Mod(), right=ast.Constant(value=2))
+        return ast.Compare(left=mod, ops=[ast.NotEq()], comparators=[ast.Constant(value=0)])
+
+    def is_not_odd(self, args):
+        val = to_load(args[0])
+        mod = ast.BinOp(left=val, op=ast.Mod(), right=ast.Constant(value=2))
+        return ast.Compare(left=mod, ops=[ast.Eq()], comparators=[ast.Constant(value=0)])
+
+    def is_positive(self, args):
+        val = to_load(args[0])
+        return ast.Compare(left=val, ops=[ast.Gt()], comparators=[ast.Constant(value=0)])
+
+    def is_not_positive(self, args):
+        val = to_load(args[0])
+        return ast.Compare(left=val, ops=[ast.LtE()], comparators=[ast.Constant(value=0)])
+
+    def is_negative(self, args):
+        val = to_load(args[0])
+        return ast.Compare(left=val, ops=[ast.Lt()], comparators=[ast.Constant(value=0)])
+
+    def is_not_negative(self, args):
+        val = to_load(args[0])
+        return ast.Compare(left=val, ops=[ast.GtE()], comparators=[ast.Constant(value=0)])
+
+    def is_zero(self, args):
+        val = to_load(args[0])
+        return ast.Compare(left=val, ops=[ast.Eq()], comparators=[ast.Constant(value=0)])
+
+    def is_not_zero(self, args):
+        val = to_load(args[0])
+        return ast.Compare(left=val, ops=[ast.NotEq()], comparators=[ast.Constant(value=0)])
+
     def count_of(self, args):
         target = args[-1]
         return ast.Call(

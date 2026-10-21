@@ -246,6 +246,16 @@ call_arg_list: call_arg ("," call_arg)*
 
 ?compare_expr: compare_expr IS_EMPTY -> is_empty
              | compare_expr IS_NOT_EMPTY -> is_not_empty
+             | compare_expr IS_EVEN -> is_even
+             | compare_expr IS_NOT_EVEN -> is_not_even
+             | compare_expr IS_ODD -> is_odd
+             | compare_expr IS_NOT_ODD -> is_not_odd
+             | compare_expr IS_POSITIVE -> is_positive
+             | compare_expr IS_NOT_POSITIVE -> is_not_positive
+             | compare_expr IS_NEGATIVE -> is_negative
+             | compare_expr IS_NOT_NEGATIVE -> is_not_negative
+             | compare_expr IS_ZERO -> is_zero
+             | compare_expr IS_NOT_ZERO -> is_not_zero
              | compare_expr STARTS_WITH bitwise_or -> str_starts_with
              | compare_expr ENDS_WITH bitwise_or -> str_ends_with
              | compare_expr MATCHES_PATTERN bitwise_or -> str_matches_pattern
@@ -267,6 +277,16 @@ call_arg_list: call_arg ("," call_arg)*
 
 IS_EMPTY.3: "is empty"
 IS_NOT_EMPTY.3: "is not empty"
+IS_EVEN.4: /\bis\s+even\b/
+IS_NOT_EVEN.4: /\b(is\s+not|isn't)\s+even\b/
+IS_ODD.4: /\bis\s+odd\b/
+IS_NOT_ODD.4: /\b(is\s+not|isn't)\s+odd\b/
+IS_POSITIVE.4: /\bis\s+positive\b/
+IS_NOT_POSITIVE.4: /\b(is\s+not|isn't)\s+positive\b/
+IS_NEGATIVE.4: /\bis\s+negative\b/
+IS_NOT_NEGATIVE.4: /\b(is\s+not|isn't)\s+negative\b/
+IS_ZERO.4: /\bis\s+zero\b/
+IS_NOT_ZERO.4: /\b(is\s+not\s+zero|isn't\s+zero|is\s+non-?zero)\b/
 IS_BETWEEN.3: "is between"
 IS_ONE_OF.3: "is one of"
 IS_NUMBER.3: "is a number" | "is number"
