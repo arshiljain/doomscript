@@ -534,6 +534,13 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         flags=re.IGNORECASE
     )
 
+    # Pillar B: Stream-of-thought control flow and natural guards
+    masked = re.sub(r"^\s*try\s+to:?$", r"try:", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*as\s+long\s+as\s+(.+?):?$", r"while \1:", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*for\s+(?:each\s+and\s+every|every)\s+([A-Za-z_]\w*)\s+in\s+([^:\n]+?):?$", r"for each \1 in \2:", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*in\s+case\s+(?:of\s+)?(.+?):?$", r"if \1:", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*in\s+the\s+worst\s+case:?$", r"else:", masked, flags=re.IGNORECASE)
+
     # For loop with index: 'for each item and its index in items:'
     masked = re.sub(
         r"^\s*for\s+(?:each\s+)?([A-Za-z_]\w*)\s+and\s+(?:its|their|his|her)\s+index\s+in\s+(.+?):?$",
@@ -954,7 +961,8 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     # 4. Pronoun Resolution ('it' / 'that')
     # Temporarily protect grammar keywords that contain 'that' or 'it'
     masked = re.sub(r"\bverify\s+that\b", "__VERIFY_THAT__", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\bif\s+(?:(?:it|that)\s+fails|there\s+is\s+an?\s+error)\b", "__IF_FAILS__", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bif\s+(?:(?:it|that)\s+fails|there\s+is\s+an?\s+error|(?:it|anything)\s+goes\s+wrong)\b", "__IF_FAILS__", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bif\s+it\s+(?:turns\s+out|happens)\s+that\b", "__IF_TURNS_OUT__", masked, flags=re.IGNORECASE)
 
     pronoun_match = re.search(r"\b(it|that)\b", masked, re.IGNORECASE)
     if pronoun_match:
@@ -971,6 +979,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     # Restore protected keywords (also normalizes 'if that fails' to 'if it fails')
     masked = masked.replace("__VERIFY_THAT__", "verify that")
     masked = masked.replace("__IF_FAILS__", "if it fails")
+    masked = masked.replace("__IF_TURNS_OUT__", "if")
 
     # 5. Verb Synonyms
     # Handle display vs display colored

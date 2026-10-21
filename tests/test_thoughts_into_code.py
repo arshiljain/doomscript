@@ -70,3 +70,57 @@ db = double_val(21)
     assert env["hyp"] == 5.0
     assert env["db"] == 42
 
+
+# ---------------------------------------------------------------------------
+# Task 3: Stream-of-Thought Control Flow & Natural Guards Tests (Pillar B)
+# ---------------------------------------------------------------------------
+
+def test_conversational_loops_and_conditions():
+    source = """
+queue = [1, 2, 3]
+emptied = []
+as long as queue is not empty:
+    val = queue.pop(0)
+    add val to emptied
+
+collected = []
+for every x in [10, 20]:
+    add x to collected
+
+for each and every y in [30, 40]:
+    add y to collected
+
+balance = -15
+status = ""
+in case balance is negative:
+    status = "overdrawn"
+in the worst case:
+    status = "ok"
+
+attempts = 4
+flagged = False
+if it turns out that attempts > 3:
+    flagged = True
+"""
+    env = execute(source)
+    assert env["emptied"] == [1, 2, 3]
+    assert env["collected"] == [10, 20, 30, 40]
+    assert env["status"] == "overdrawn"
+    assert env["flagged"] is True
+
+
+def test_conversational_guards_and_try():
+    source = """
+age = 20
+make sure that age >= 18 otherwise "Too young"
+
+captured_err = ""
+try to:
+    zero_div = 10 / 0
+if it goes wrong as problem:
+    captured_err = "handled"
+"""
+    env = execute(source)
+    assert env["captured_err"] == "handled"
+
+
