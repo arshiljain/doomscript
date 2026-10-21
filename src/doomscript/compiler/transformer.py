@@ -290,11 +290,21 @@ class DoomToPython(Transformer):
     def filter_records_stmt(self, args):
         collection, field_name, cmp_op, val, target = args
         field_str = str(field_name)
-        if field_str.lower() in ("item", "it"):
+        if field_str.lower() in ("item", "it", "x", "val", "value", "element"):
             left = ast.Name(id='_x', ctx=ast.Load())
         else:
-            left = ast.Attribute(value=ast.Name(id='_x', ctx=ast.Load()), attr=field_str, ctx=ast.Load())
+            left = ast.Call(
+                func=ast.Name(id='ds_filter_val', ctx=ast.Load()),
+                args=[ast.Name(id='_x', ctx=ast.Load()), ast.Constant(value=field_str)],
+                keywords=[]
+            )
         op_map = {
+            "<=": ast.LtE(),
+            ">=": ast.GtE(),
+            "!=": ast.NotEq(),
+            "==": ast.Eq(),
+            "<": ast.Lt(),
+            ">": ast.Gt(),
             "is at least": ast.GtE(),
             "is at most": ast.LtE(),
             "is greater than": ast.Gt(),
@@ -304,11 +314,15 @@ class DoomToPython(Transformer):
             "is not": ast.NotEq(),
             "isn't": ast.NotEq(),
             "equals": ast.Eq(),
+            "is not inside": ast.NotIn(),
+            "is not in": ast.NotIn(),
+            "not in": ast.NotIn(),
             "is inside": ast.In(),
             "is in": ast.In(),
+            "in": ast.In(),
             "is": ast.Eq(),
         }
-        cmp_ast = op_map.get(str(cmp_op), ast.Eq()) if not isinstance(cmp_op, ast.cmpop) else cmp_op
+        cmp_ast = op_map.get(str(cmp_op).strip(), ast.Eq()) if not isinstance(cmp_op, ast.cmpop) else cmp_op
         test = ast.Compare(left=left, ops=[cmp_ast], comparators=[val])
         comp = ast.ListComp(
             elt=ast.Name(id='_x', ctx=ast.Load()),

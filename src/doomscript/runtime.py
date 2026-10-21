@@ -779,6 +779,29 @@ def get_field(obj, attr):
     return getattr(obj, attr_str, None)
 
 
+def ds_filter_val(elem, field_name):
+    """Safely extract comparison value from a filter item.
+    If the item is a dict or record with field_name, returns that value.
+    If the item is an object with attribute field_name, returns that attribute.
+    If the item is a scalar (int, float, str, bool), returns the item itself.
+    """
+    if elem is None:
+        return None
+    field_str = str(field_name)
+    if isinstance(elem, dict):
+        if field_str in elem:
+            return elem[field_str]
+        return getattr(elem, field_str, None)
+    if hasattr(elem, field_str):
+        try:
+            return getattr(elem, field_str)
+        except Exception:
+            pass
+    if isinstance(elem, (int, float, str, bool, bytes)):
+        return elem
+    return None
+
+
 def to_text(val):
     """Convert any value to a string representation."""
     return str(val)

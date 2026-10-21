@@ -146,3 +146,20 @@ say f"hello world"
     captured = capsys.readouterr()
     lines = captured.out.strip().splitlines()
     assert lines == ["F", "Grade F", "FFFF", "f", "hello world"]
+
+
+def test_filter_records_symbolic_and_scalars(capsys):
+    code = """
+scores = [92, 74, 88]
+scores where score >= 80 into passed
+say passed
+
+students = [{name: "Alice", grade: 95}, {name: "Bob", grade: 70}]
+students where grade >= 80 into honors
+say count of honors
+"""
+    execute(code)
+    captured = capsys.readouterr()
+    lines = captured.out.strip().splitlines()
+    assert lines[0] == "[92, 88]"
+    assert lines[1] == "1"

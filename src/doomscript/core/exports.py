@@ -22,6 +22,7 @@ CORE_EXPORT_NAMES: frozenset[str] = frozenset([
     "make_entity",
     "ds_add",
     "ds_remove",
+    "ds_filter_val",
     "E",
     "EventBus",
     "ExplorationReport",

@@ -219,6 +219,7 @@ def _execute_scoped(source: Any, custom_globals: dict = None, filename: str = "<
         "make_entity": runtime.make_entity,
         "ds_add": runtime.ds_add,
         "ds_remove": runtime.ds_remove,
+        "ds_filter_val": runtime.ds_filter_val,
         "DoomAssertionError": runtime.DoomAssertionError,
         "DoomIndexError": runtime.DoomIndexError,
         "DoomTypeError": runtime.DoomTypeError,
