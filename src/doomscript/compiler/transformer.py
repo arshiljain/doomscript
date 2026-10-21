@@ -1410,6 +1410,80 @@ class DoomToPython(Transformer):
     def agg_last(self, args):
         return ast.Call(func=ast.Name(id='agg_last', ctx=ast.Load()), args=[args[0]], keywords=[])
 
+    def slice_first_n(self, args):
+        n_tok = args[0]
+        n_val = int(n_tok) if '.' not in str(n_tok) else float(n_tok)
+        collection = to_load(args[-1])
+        return ast.Call(
+            func=ast.Name(id='ds_take', ctx=ast.Load()),
+            args=[collection, ast.Constant(value=n_val)],
+            keywords=[]
+        )
+
+    def slice_last_n(self, args):
+        n_tok = args[0]
+        n_val = int(n_tok) if '.' not in str(n_tok) else float(n_tok)
+        collection = to_load(args[-1])
+        return ast.Call(
+            func=ast.Name(id='ds_take_last', ctx=ast.Load()),
+            args=[collection, ast.Constant(value=n_val)],
+            keywords=[]
+        )
+
+    def take_stmt(self, args):
+        n, collection, target = to_load(args[0]), to_load(args[1]), args[2]
+        call = ast.Call(
+            func=ast.Name(id='ds_take', ctx=ast.Load()),
+            args=[collection, n],
+            keywords=[]
+        )
+        return ast.Assign(targets=[to_store(target)], value=call)
+
+    def drop_stmt(self, args):
+        n, collection, target = to_load(args[0]), to_load(args[1]), args[2]
+        call = ast.Call(
+            func=ast.Name(id='ds_drop', ctx=ast.Load()),
+            args=[collection, n],
+            keywords=[]
+        )
+        return ast.Assign(targets=[to_store(target)], value=call)
+
+    def take_expr(self, args):
+        n, collection = to_load(args[0]), to_load(args[1])
+        return ast.Call(
+            func=ast.Name(id='ds_take', ctx=ast.Load()),
+            args=[collection, n],
+            keywords=[]
+        )
+
+    def drop_expr(self, args):
+        n, collection = to_load(args[0]), to_load(args[1])
+        return ast.Call(
+            func=ast.Name(id='ds_drop', ctx=ast.Load()),
+            args=[collection, n],
+            keywords=[]
+        )
+
+    def pipe_stmt(self, args):
+        expr = to_load(args[0])
+        fns = [ast.Name(id=str(f), ctx=ast.Load()) for f in args[1:-1]]
+        target = args[-1]
+        call = ast.Call(
+            func=ast.Name(id='ds_pipe', ctx=ast.Load()),
+            args=[expr] + fns,
+            keywords=[]
+        )
+        return ast.Assign(targets=[to_store(target)], value=call)
+
+    def pipe_expr(self, args):
+        expr = to_load(args[0])
+        fns = [ast.Name(id=str(f), ctx=ast.Load()) for f in args[1:]]
+        return ast.Call(
+            func=ast.Name(id='ds_pipe', ctx=ast.Load()),
+            args=[expr] + fns,
+            keywords=[]
+        )
+
     def expr_join(self, args):
         items, delimiter = args[0], args[-1]
         return ast.Call(

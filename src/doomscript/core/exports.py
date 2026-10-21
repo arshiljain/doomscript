@@ -43,6 +43,7 @@ CORE_EXPORT_NAMES: frozenset[str] = frozenset([
     "ds_variance",
     "ds_enumerate",
     "ds_take",
+    "ds_take_last",
     "ds_drop",
     "ds_pipe",
     "E",

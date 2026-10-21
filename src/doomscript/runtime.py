@@ -792,6 +792,18 @@ def ds_take(collection, n):
     return items[:n]
 
 
+def ds_take_last(collection, n):
+    """Take the last n elements from a sequence or collection."""
+    if hasattr(collection, "__getitem__"):
+        try:
+            return collection[-n:]
+        except Exception:
+            pass
+    items = list(collection)
+    return items[-n:]
+
+
+
 def ds_drop(collection, n):
     """Drop the first n elements from a sequence, string, or collection."""
     if hasattr(collection, "__getitem__"):

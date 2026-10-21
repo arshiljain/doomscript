@@ -172,3 +172,51 @@ match role:
     assert env["access"] == "edit"
 
 
+# ---------------------------------------------------------------------------
+# Task 4: Collection Querying, Slicing & Spoken Pipelining Tests
+# ---------------------------------------------------------------------------
+
+def test_slicing_first_last_n_items():
+    source = """
+scores = [10, 20, 30, 40, 50]
+top_3 = first 3 items of scores
+bottom_2 = last 2 items of scores
+"""
+    env = execute(source)
+    assert env["top_3"] == [10, 20, 30]
+    assert env["bottom_2"] == [40, 50]
+
+
+def test_take_and_drop_statements():
+    source = """
+numbers = [1, 2, 3, 4, 5, 6]
+take 4 from numbers into head
+drop 3 from numbers into tail
+"""
+    env = execute(source)
+    assert env["head"] == [1, 2, 3, 4]
+    assert env["tail"] == [4, 5, 6]
+
+
+def test_spoken_pipelining():
+    source = """
+to trim_str with text:
+    return text.strip()
+
+to make_upper with text:
+    return text.upper()
+
+to add_exclamation with text:
+    return text + "!"
+
+raw = "  doomscript rocks  "
+pipe raw into trim_str then make_upper then add_exclamation into formatted
+
+set expr_res to pipe "  clean me  " into trim_str then make_upper
+"""
+    env = execute(source)
+    assert env["formatted"] == "DOOMSCRIPT ROCKS!"
+    assert env["expr_res"] == "CLEAN ME"
+
+
+

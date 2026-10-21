@@ -394,6 +394,8 @@ aggregate_expr: SUM_OF factor                                      -> agg_sum
               | PRODUCT_OF factor                                  -> agg_product
               | ("highest" | "maximum") ("in" | "of") factor       -> agg_max
               | ("lowest" | "minimum") ("in" | "of") factor        -> agg_min
+              | "first" NUMBER ("items" | "item") ("of" | "in") factor -> slice_first_n
+              | "last" NUMBER ("items" | "item") ("of" | "in") factor  -> slice_last_n
               | "first" ["item"] ("of" | "in") factor              -> agg_first
               | "last" ["item"] ("of" | "in") factor               -> agg_last
 

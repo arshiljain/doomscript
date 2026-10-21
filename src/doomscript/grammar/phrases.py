@@ -1772,17 +1772,28 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         masked = f"set {dec_m.group(3)} to crypto_decrypt({dec_m.group(1).strip()}, {dec_m.group(2).strip()})"
 
     # Phase 21: Streaming Data & Pipeline Operators
-    pipe_m = re.match(r"^pipe\s+(.+?)\s+into\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
-    if pipe_m:
-        masked = f"set {pipe_m.group(3)} to pipe_pipeline({pipe_m.group(1).strip()}, {pipe_m.group(2).strip()})"
+    pipe_into_m = re.match(r"^pipe\s+(.+?)\s+into\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if pipe_into_m:
+        p_expr = pipe_into_m.group(1).strip()
+        p_funcs_str = pipe_into_m.group(2).strip()
+        p_target = pipe_into_m.group(3).strip()
+        p_funcs = [f.strip() for f in re.split(r"\s+then\s+", p_funcs_str, flags=re.IGNORECASE)]
+        masked = f"set {p_target} to ds_pipe({p_expr}, {', '.join(p_funcs)})"
+    else:
+        pipe_expr_m = re.search(r"\bpipe\s+(.+?)\s+into\s+([A-Za-z_]\w*(?:\s+then\s+[A-Za-z_]\w*)+)", masked, re.IGNORECASE)
+        if pipe_expr_m:
+            p_expr = pipe_expr_m.group(1).strip()
+            p_funcs = [f.strip() for f in re.split(r"\s+then\s+", pipe_expr_m.group(2).strip(), flags=re.IGNORECASE)]
+            p_repl = f"ds_pipe({p_expr}, {', '.join(p_funcs)})"
+            masked = masked[:pipe_expr_m.start()] + p_repl + masked[pipe_expr_m.end():]
 
-    take_m = re.match(r"^take\s+first\s+(\d+)\s+items\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    take_m = re.match(r"^take\s+(?:first\s+)?(.+?)\s+(?:items\s+)?from\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
     if take_m:
-        masked = f"set {take_m.group(3)} to take_first_n({take_m.group(2).strip()}, {take_m.group(1)})"
+        masked = f"set {take_m.group(3)} to ds_take({take_m.group(2).strip()}, {take_m.group(1).strip()})"
 
-    drop_m = re.match(r"^drop\s+first\s+(\d+)\s+items\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    drop_m = re.match(r"^drop\s+(?:first\s+)?(.+?)\s+(?:items\s+)?from\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
     if drop_m:
-        masked = f"set {drop_m.group(3)} to drop_first_n({drop_m.group(2).strip()}, {drop_m.group(1)})"
+        masked = f"set {drop_m.group(3)} to ds_drop({drop_m.group(2).strip()}, {drop_m.group(1).strip()})"
 
     batch_m = re.match(r"^batch\s+(.+?)\s+by\s+(\d+)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
     if batch_m:
