@@ -333,3 +333,40 @@ flatten matrix into flat_list
     assert env["evens"] == [2, 4, 6]
     assert env["odds"] == [1, 3, 5]
     assert env["flat_list"] == [10, 20, 30, 40]
+
+
+def test_conversational_analytics_inquiries():
+    from doomscript.compiler.engine import execute
+    code = """
+orders = [
+    {"product": "Laptop", "amount": 1000},
+    {"product": "Mouse", "amount": 50},
+    {"product": "Keyboard", "amount": 150}
+]
+
+# Attribute aggregations with into
+what is the total amount in orders into total_val
+what is the average amount in orders into avg_val
+what is the highest amount in orders into max_val
+what is the lowest amount in orders into min_val
+
+# Count queries with into
+how many items in orders into total_count
+
+# Attribute aggregations without into (say)
+what is the total amount in orders
+what is the average amount in orders
+what is the highest amount in orders
+what is the lowest amount in orders
+how many items in orders
+
+# General expression inquiry
+what is 10 + 20 into thirty
+"""
+    env = execute(code)
+    assert env["total_val"] == 1200
+    assert env["avg_val"] == 400.0
+    assert env["max_val"] == 1000
+    assert env["min_val"] == 50
+    assert env["total_count"] == 3
+    assert env["thirty"] == 30

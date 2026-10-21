@@ -694,6 +694,33 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         tgt = flatten_m.group(2).strip()
         masked = f"set {tgt} to ds_flatten({coll})"
 
+    # Phase 4, Task 4.3: Conversational Analytics Inquiries
+    if masked.rstrip().endswith("?"):
+        masked = masked.rstrip()[:-1].rstrip()
+
+    how_many_m = re.match(
+        r"^\s*how\s+many(?:\s+(?:items|elements|records|objects|rows))?\s+(?:in|of)\s+(.+?)(?:\s+into\s+([A-Za-z_]\w*))?$",
+        masked,
+        re.IGNORECASE
+    )
+    if how_many_m:
+        coll = how_many_m.group(1).strip()
+        tgt = how_many_m.group(2)
+        if tgt:
+            masked = f"set {tgt} to count of {coll}"
+        else:
+            masked = f"say count of {coll}"
+
+    what_into_m = re.match(
+        r"^\s*(?:what\s+is|what's)\s+(?:the\s+)?(.+?)\s+into\s+([A-Za-z_]\w*)$",
+        masked,
+        re.IGNORECASE
+    )
+    if what_into_m:
+        expr = what_into_m.group(1).strip()
+        tgt = what_into_m.group(2).strip()
+        masked = f"set {tgt} to {expr}"
+
     # Phase 3, Task 3.2: Adverbial Statement Qualifiers (retrying, timeout, caching)
     retry_m = re.match(
         r"^\s*(?:call\s+)?(.+?)\s+retrying\s+(\d+)\s+times(?:\s+with\s+(.+?)\s+backoff)?(?:\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?))?\s*$",
@@ -883,7 +910,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     )
 
     # Pillar D: Interrogative Inquiries & Collaborative Outputs
-    masked = re.sub(r"^\s*what\s+is\s+(?:the\s+)?(.+?)\??$", r"say \1", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*(?:what\s+is|what's)\s+(?:the\s+)?(.+?)\??$", r"say \1", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*(?:tell|show)\s+(?:me|us)\s+(.+)$", r"say \1", masked, flags=re.IGNORECASE)
 
     # Spoken Action Invocations:
@@ -1735,10 +1762,10 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"\b(?:the\s+)?result\s+of\s+([A-Za-z_]\w*)\s+with\s+(.+?)(?=\s+and\s+then|\s+into\b|\s+otherwise\b|\s*$)", r"\1(\2)", masked, flags=re.IGNORECASE)
 
     # Field aggregates
-    masked = re.sub(r"\b(?:total|sum)\s+of\s+([A-Za-z_]\w*)\s+in\s+([A-Za-z_]\w*)", r'agg_field("sum", "\1", \2)', masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\baverage\s+of\s+([A-Za-z_]\w*)\s+in\s+([A-Za-z_]\w*)", r'agg_field("avg", "\1", \2)', masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\b(?:highest|maximum)\s+([A-Za-z_]\w*)\s+in\s+([A-Za-z_]\w*)", r'agg_field("max", "\1", \2)', masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\b(?:lowest|minimum)\s+([A-Za-z_]\w*)\s+in\s+([A-Za-z_]\w*)", r'agg_field("min", "\1", \2)', masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(?:total|sum)\s+(?:of\s+)?([A-Za-z_]\w*)\s+in\s+([A-Za-z_]\w*)", r'agg_field("sum", "\1", \2)', masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(?:average|mean)\s+(?:of\s+)?([A-Za-z_]\w*)\s+in\s+([A-Za-z_]\w*)", r'agg_field("avg", "\1", \2)', masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(?:highest|maximum|largest)\s+(?:of\s+)?([A-Za-z_]\w*)\s+in\s+([A-Za-z_]\w*)", r'agg_field("max", "\1", \2)', masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(?:lowest|minimum|smallest)\s+(?:of\s+)?([A-Za-z_]\w*)\s+in\s+([A-Za-z_]\w*)", r'agg_field("min", "\1", \2)', masked, flags=re.IGNORECASE)
 
     # List operations
     masked = re.sub(r"^\s*set\s+item\s+(.+?)\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s+to\s+(.+)$", r"set_item(\1, \2, \3)", masked, flags=re.IGNORECASE)
