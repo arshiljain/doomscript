@@ -915,6 +915,8 @@ _DS_GLOBAL_CACHE = {}
 def ds_retry(action_fn, max_attempts=3, backoff=0.1):
     """Executes action_fn, retrying up to max_attempts on error with exponential backoff."""
     import time
+    if hasattr(backoff, "magnitude"):
+        backoff = backoff.magnitude
     last_err = None
     for attempt in range(1, max_attempts + 1):
         try:
@@ -922,17 +924,19 @@ def ds_retry(action_fn, max_attempts=3, backoff=0.1):
         except Exception as e:
             last_err = e
             if attempt < max_attempts:
-                time.sleep(backoff * (2 ** (attempt - 1)))
+                time.sleep(float(backoff) * (2 ** (attempt - 1)))
     raise last_err
 
 
 def ds_with_timeout(action_fn, seconds=5.0):
     """Executes action_fn with a timeout limit."""
     import concurrent.futures
+    if hasattr(seconds, "magnitude"):
+        seconds = seconds.magnitude
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
         future = executor.submit(action_fn)
         try:
-            return future.result(timeout=seconds)
+            return future.result(timeout=float(seconds))
         except concurrent.futures.TimeoutError:
             raise DoomRuntimeError(f"Action timed out after {seconds} seconds.")
 
@@ -940,6 +944,8 @@ def ds_with_timeout(action_fn, seconds=5.0):
 def ds_cached_call(cache_key, action_fn, ttl_seconds=300.0):
     """Executes action_fn caching its result for ttl_seconds."""
     import time
+    if hasattr(ttl_seconds, "magnitude"):
+        ttl_seconds = ttl_seconds.magnitude
     now = time.time()
     if cache_key in _DS_GLOBAL_CACHE:
         cached_time, val = _DS_GLOBAL_CACHE[cache_key]

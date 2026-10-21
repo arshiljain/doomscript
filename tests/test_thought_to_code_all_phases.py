@@ -241,3 +241,25 @@ def test_runtime_resilience():
     assert c1 == 42
     assert c2 == 42
     assert calc_count[0] == 1  # Cache hit
+
+
+# ---------------------------------------------------------------------------
+# Phase 3, Task 3.2: Adverbial Statement Qualifiers
+# ---------------------------------------------------------------------------
+
+def test_adverbial_qualifiers():
+    from doomscript.compiler.engine import execute
+
+    code = """
+attempts = [0]
+to fetch_data:
+    attempts[0] = attempts[0] + 1
+    if attempts[0] < 2:
+        zero_div = 1 / 0
+    return "ok"
+
+call fetch_data retrying 3 times with 0.01 seconds backoff into res
+"""
+    env = execute(code)
+    assert env["res"] == "ok"
+    assert env["attempts"][0] == 2

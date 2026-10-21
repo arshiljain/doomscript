@@ -651,6 +651,63 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"\bnone\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+is\s+negative\b", r"ds_none_negative(\1)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bnone\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+is\s+zero\b", r"ds_none_zero(\1)", masked, flags=re.IGNORECASE)
 
+    # Phase 3, Task 3.2: Adverbial Statement Qualifiers (retrying, timeout, caching)
+    retry_m = re.match(
+        r"^\s*(?:call\s+)?(.+?)\s+retrying\s+(\d+)\s+times(?:\s+with\s+(.+?)\s+backoff)?(?:\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?))?\s*$",
+        masked,
+        re.IGNORECASE
+    )
+    if retry_m:
+        fn_expr = retry_m.group(1).strip()
+        times_v = retry_m.group(2).strip()
+        backoff_v = retry_m.group(3).strip() if retry_m.group(3) else "0.1"
+        target_v = retry_m.group(4).strip() if retry_m.group(4) else None
+        call_expr = f"{fn_expr}()" if not ("(" in fn_expr and fn_expr.endswith(")")) else fn_expr
+        retry_call = f"ds_retry(lambda: {call_expr}, max_attempts={times_v}, backoff={backoff_v})"
+        if target_v:
+            masked = f"set {target_v} to {retry_call}"
+        else:
+            masked = retry_call
+
+    timeout_m = re.match(
+        r"^\s*(?:call\s+)?(.+?)\s+with\s+timeout\s+of\s+([\d.]+)\s+seconds?(?:\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?))?\s*$",
+        masked,
+        re.IGNORECASE
+    )
+    if timeout_m:
+        fn_expr = timeout_m.group(1).strip()
+        secs_v = timeout_m.group(2).strip()
+        target_v = timeout_m.group(3).strip() if timeout_m.group(3) else None
+        call_expr = f"{fn_expr}()" if not ("(" in fn_expr and fn_expr.endswith(")")) else fn_expr
+        timeout_call = f"ds_with_timeout(lambda: {call_expr}, seconds={secs_v})"
+        if target_v:
+            masked = f"set {target_v} to {timeout_call}"
+        else:
+            masked = timeout_call
+
+    cache_m = re.match(
+        r"^\s*(?:call\s+)?(.+?)\s+caching\s+for\s+([\d.]+)\s+(seconds?|minutes?|hours?)(?:\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?))?\s*$",
+        masked,
+        re.IGNORECASE
+    )
+    if cache_m:
+        fn_expr = cache_m.group(1).strip()
+        dur = float(cache_m.group(2).strip())
+        unit = cache_m.group(3).lower()
+        if unit.startswith("minute"):
+            ttl = dur * 60.0
+        elif unit.startswith("hour"):
+            ttl = dur * 3600.0
+        else:
+            ttl = dur
+        target_v = cache_m.group(4).strip() if cache_m.group(4) else None
+        call_expr = f"{fn_expr}()" if not ("(" in fn_expr and fn_expr.endswith(")")) else fn_expr
+        cache_call = f"ds_cached_call('{fn_expr}', lambda: {call_expr}, ttl_seconds={ttl})"
+        if target_v:
+            masked = f"set {target_v} to {cache_call}"
+        else:
+            masked = cache_call
+
     # Phase 2, Task 2.4: Natural Superlatives
     superlative_m = re.match(
         r"^\s*find\s+(?:the\s+)?(largest|biggest|highest|maximum|cheapest|smallest|lowest|minimum|oldest|newest)\s+(?:[A-Za-z_]\w*\s+)?in\s+(.+?)(?:\s+by\s+([A-Za-z_]\w*))?\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)$",
