@@ -28,8 +28,7 @@ class ModelSpec(DomainIR):
             errors.append("Model name cannot be empty")
         if not self.dataset:
             errors.append("Dataset source cannot be empty")
-        if not self.features and self.algorithm != "k_means":
-            errors.append("Model requires at least one feature column")
+
         if self.split_train <= 0 or self.split_train > 1.0:
             errors.append(f"Train split must be between 0 and 1, got {self.split_train}")
         return errors

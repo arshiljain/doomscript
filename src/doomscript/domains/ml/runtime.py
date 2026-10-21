@@ -64,6 +64,8 @@ def _extract_dataset_matrices(
 ) -> Tuple[List[List[float]], List[Any]]:
     """Extracts numeric feature matrix X and target vector y from dataset rows."""
     rows = _to_record_list(data)
+    if not features and rows:
+        features = [k for k in rows[0].keys() if k != target]
     X: List[List[float]] = []
     y: List[Any] = []
 
