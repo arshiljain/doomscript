@@ -2474,6 +2474,55 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
                 emit(f"{indent}            self.{f} = {def_expr}", line_idx)
             continue
 
+        # Declarative Relationship: a User has many Orders
+        has_many_m = re.match(
+            r"^(?:(?:a|an)\s+)?([A-Z]\w*)\s+has\s+many\s+([A-Za-z_]\w*)$",
+            code.strip(),
+            re.IGNORECASE,
+        )
+        if has_many_m:
+            owner_cls = has_many_m.group(1)
+            target = has_many_m.group(2)
+            col_name = target.lower()
+            if not col_name.endswith("s"):
+                col_name = col_name + "s"
+            target_cls = target[:-1] if target.endswith("s") and not target.endswith("ss") else target
+            target_cls = target_cls[0].upper() + target_cls[1:]
+            inv_name = owner_cls.lower()
+            emit(f"{indent}ds_register_relation_has_many({owner_cls}, \"{col_name}\", {target_cls}, \"{inv_name}\")", line_idx)
+            continue
+
+        # Declarative Relationship: an Order belongs to a User
+        belongs_to_m = re.match(
+            r"^(?:(?:a|an)\s+)?([A-Z]\w*)\s+belongs\s+to\s+(?:(?:a|an)\s+)?([A-Z]\w*)$",
+            code.strip(),
+            re.IGNORECASE,
+        )
+        if belongs_to_m:
+            child_cls = belongs_to_m.group(1)
+            parent_cls = belongs_to_m.group(2)
+            inv_name = parent_cls.lower()
+            col_name = child_cls.lower()
+            if not col_name.endswith("s"):
+                col_name = col_name + "s"
+            emit(f"{indent}ds_register_relation_belongs_to({child_cls}, \"{inv_name}\", {parent_cls}, \"{col_name}\")", line_idx)
+            continue
+
+        # Declarative Relationship: a User has one Profile
+        has_one_m = re.match(
+            r"^(?:(?:a|an)\s+)?([A-Z]\w*)\s+has\s+one\s+([A-Za-z_]\w*)$",
+            code.strip(),
+            re.IGNORECASE,
+        )
+        if has_one_m:
+            owner_cls = has_one_m.group(1)
+            target = has_one_m.group(2)
+            prop_name = target.lower()
+            target_cls = target[0].upper() + target[1:]
+            inv_name = owner_cls.lower()
+            emit(f"{indent}ds_register_relation_has_one({owner_cls}, \"{prop_name}\", {target_cls}, \"{inv_name}\")", line_idx)
+            continue
+
         # Declarative Entity: a Person has name, age / Person has name, age
         ent_schema_m = re.match(
             r"^(?:(?:a|an)\s+)?([A-Z]\w*)\s+has\s+([A-Za-z_][A-Za-z0-9_,\s]*)$",

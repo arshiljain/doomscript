@@ -56,3 +56,38 @@ add 50 to acc1.transactions
     assert env["acc2"].balance == 500
     assert env["acc2"].transactions == []
 
+
+def test_declarative_relationships_smart_sync():
+    source = """
+a User has name
+an Order has item, price
+
+a User has many Orders
+an Order belongs to a User
+
+create a User with name "Alice" into u1
+create an Order with item "Laptop", price 1200 into o1
+
+add o1 to u1.orders
+"""
+    env = execute(source)
+    assert env["o1"].user is env["u1"]
+    assert env["u1"].orders == [env["o1"]]
+
+    # Test inverse assignment sync
+    source2 = """
+a User has name
+an Order has item, price
+
+a User has many Orders
+an Order belongs to a User
+
+create a User with name "Bob" into u2
+create an Order with item "Book", price 15 into o2
+
+o2.user = u2
+"""
+    env2 = execute(source2)
+    assert env2["o2"] in env2["u2"].orders
+
+

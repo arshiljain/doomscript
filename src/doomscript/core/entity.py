@@ -60,12 +60,41 @@ class DoomEntity(Record):
             self.__class__._relations_has_one = dict(self.__class__._relations_has_one)
 
         super().__init__()
+
+        # Auto-initialize relationship attributes
+        for col_name, inv_name in self.__class__._relations_has_many.items():
+            self[col_name] = RelationshipList(owner=self, inverse_attr=inv_name)
+        for prop_name in self.__class__._relations_belongs_to.keys():
+            self[prop_name] = None
+        for prop_name in self.__class__._relations_has_one.keys():
+            self[prop_name] = None
+
         data = initial_data or {}
         if isinstance(data, dict):
             for k, v in data.items():
                 self[k] = v
         for k, v in kwargs.items():
             self[k] = v
+
+    def __getattr__(self, key: str) -> Any:
+        try:
+            return super().__getattr__(key)
+        except AttributeError:
+            has_many_map = getattr(self.__class__, "_relations_has_many", {})
+            if key in has_many_map:
+                inv_name = has_many_map[key]
+                col = RelationshipList(owner=self, inverse_attr=inv_name)
+                self[key] = col
+                return col
+            belongs_to_map = getattr(self.__class__, "_relations_belongs_to", {})
+            if key in belongs_to_map:
+                self[key] = None
+                return None
+            has_one_map = getattr(self.__class__, "_relations_has_one", {})
+            if key in has_one_map:
+                self[key] = None
+                return None
+            raise
 
     def __setattr__(self, key: str, value: Any) -> None:
         if key in ("_in_sync",):
@@ -97,3 +126,30 @@ class DoomEntity(Record):
                     object.__setattr__(self, "_in_sync", False)
 
         super().__setattr__(key, value)
+
+
+def ds_register_relation_has_many(owner_cls, col_name: str, target_cls, inv_name: str) -> None:
+    """Registers a one-to-many relationship between owner_cls and target_cls."""
+    if "_relations_has_many" not in owner_cls.__dict__:
+        owner_cls._relations_has_many = dict(owner_cls._relations_has_many)
+    owner_cls._relations_has_many[col_name] = inv_name
+
+    if "_relations_belongs_to" not in target_cls.__dict__:
+        target_cls._relations_belongs_to = dict(target_cls._relations_belongs_to)
+    target_cls._relations_belongs_to[inv_name] = col_name
+
+
+def ds_register_relation_belongs_to(owner_cls, inv_name: str, target_cls, col_name: str) -> None:
+    """Registers a belongs-to relationship between owner_cls and target_cls."""
+    ds_register_relation_has_many(target_cls, col_name, owner_cls, inv_name)
+
+
+def ds_register_relation_has_one(owner_cls, prop_name: str, target_cls, inv_name: str) -> None:
+    """Registers a one-to-one relationship between owner_cls and target_cls."""
+    if "_relations_has_one" not in owner_cls.__dict__:
+        owner_cls._relations_has_one = dict(owner_cls._relations_has_one)
+    owner_cls._relations_has_one[prop_name] = inv_name
+
+    if "_relations_has_one" not in target_cls.__dict__:
+        target_cls._relations_has_one = dict(target_cls._relations_has_one)
+    target_cls._relations_has_one[inv_name] = prop_name
