@@ -1,8 +1,9 @@
+from __future__ import annotations
 """Robotics Forward/Inverse Kinematics, Trajectory Planning, and Kalman Filter for DoomScript."""
 
 import math
 import random
-from typing import List, Dict, Any, Tuple, Optional
+from typing import List, Dict, Any, Tuple, Optional, Set
 from doomscript.core.record import Record
 
 

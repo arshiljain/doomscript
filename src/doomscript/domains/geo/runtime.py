@@ -1,7 +1,8 @@
+from __future__ import annotations
 """Runtime execution engine for Geospatial Analytics domain."""
 
 import math
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 from doomscript.core.record import Record
 from doomscript.domains.base import DomainRuntime, DomainIR
 from doomscript.domains.geo.spec import (

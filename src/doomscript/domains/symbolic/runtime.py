@@ -1699,6 +1699,12 @@ class GroebnerBasisBuchberger:
 # SYMBOLIC SERIES EXPANDER (TAYLOR & MACLAURIN)
 # ==============================================================================
 
+
+
+def parse_expr(expression_str: str) -> Expr:
+    """Parses a string mathematical expression into an AST Expr object."""
+    return ExpressionParser(expression_str).parse()
+
 class SymbolicSeriesExpander:
     """Exact symbolic Taylor & Maclaurin polynomial series expansion."""
 

@@ -1,7 +1,8 @@
+from __future__ import annotations
 """Bytecode Virtual Machine, Assembler, and Pratt Parser for DoomScript."""
 
 import re
-from typing import List, Dict, Any, Optional, Union, Tuple, Callable
+from typing import List, Dict, Any, Optional, Union, Tuple, Callable, Set
 from doomscript.core.record import Record
 
 

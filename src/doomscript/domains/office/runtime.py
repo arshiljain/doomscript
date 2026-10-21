@@ -1,7 +1,9 @@
+from __future__ import annotations
 """Runtime execution engine for Office Automation (Spreadsheets & Documents) domain."""
 
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 import csv
+import math
 import os
 import re
 import zipfile

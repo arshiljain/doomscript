@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Runtime execution engine for Web & API Automation operations."""
 
 import json
@@ -8,7 +9,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 from doomscript.domains.base import DomainRuntime, DomainIR
 from doomscript.domains.net.spec import ApiWorkflowSpec, RequestStep, ParseStep, SaveStep
 from doomscript.core.record import Record
