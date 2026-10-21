@@ -66,9 +66,9 @@ class AgentDomainParser(DomainParser):
             msg_expr = m_tell.group(2).strip()
             return f"tell_agent({agent_var}, {msg_expr})"
 
-        # ask agent <agent> to <task> [with context <ctx>] [as json] into <target>
+        # ask agent <agent> [to] <task> [with context <ctx>] [as json] into <target>
         m_ask = re.match(
-            r"^ask\s+agent\s+([A-Za-z_]\w*)\s+to\s+(.+?)(?:\s+with\s+context\s+(.+?))?(?:\s+as\s+json)?\s+into\s+([A-Za-z_]\w*)$",
+            r"^ask\s+agent\s+([A-Za-z_]\w*)\s+(?:to\s+)?(.+?)(?:\s+with\s+context\s+(.+?))?(?:\s+as\s+json)?\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )

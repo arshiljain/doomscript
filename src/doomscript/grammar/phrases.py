@@ -255,6 +255,9 @@ SYNONYM_REPLACEMENTS = [
     (re.compile(r"\basc\b", re.IGNORECASE), "ascending"),
     # Inspection Verbs
     (re.compile(r"\bexamine\b", re.IGNORECASE), "inspect"),
+    # Agent Article Tolerance
+    (re.compile(r"^\s*ask\s+the\s+agent\s+", re.IGNORECASE), "ask agent "),
+    (re.compile(r"^\s*tell\s+the\s+agent\s+", re.IGNORECASE), "tell agent "),
 ]
 
 
@@ -1163,7 +1166,39 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"^\s*random\s+number\b", "roll", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*open\s+window\b", "open_window", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*with\s+(.+?)\s+(?:as|into)\s+([A-Za-z_]\w*)\s*:?", r"with \1 into \2:", masked, flags=re.IGNORECASE)
-        # Trailing input type cast: ask "..." into target as number/boolean/text
+        # Conversational AI & Assistant:
+    masked = re.sub(r"^\s*ask\s+the\s+agent\s+", "ask agent ", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*tell\s+the\s+agent\s+", "tell agent ", masked, flags=re.IGNORECASE)
+
+    ask_ast_m = re.match(
+        r"^\s*ask\s+(?:the\s+)?assistant\s+(.+?)(?:\s+for\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+        masked,
+        re.IGNORECASE,
+    )
+    if ask_ast_m:
+        p_str = ask_ast_m.group(1).strip()
+        ctx_str = ask_ast_m.group(2)
+        tgt_var = ask_ast_m.group(3).strip()
+        if ctx_str:
+            masked = f"{tgt_var} = ask_assistant({p_str}, context={ctx_str.strip()})"
+        else:
+            masked = f"{tgt_var} = ask_assistant({p_str})"
+
+    ask_mod_m = re.match(
+        r"^\s*ask\s+(?:the\s+)?model\s+(.+?)(?:\s+for\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+        masked,
+        re.IGNORECASE,
+    )
+    if ask_mod_m:
+        p_str = ask_mod_m.group(1).strip()
+        ctx_str = ask_mod_m.group(2)
+        tgt_var = ask_mod_m.group(3).strip()
+        if ctx_str:
+            masked = f"{tgt_var} = ask_model({p_str}, context={ctx_str.strip()})"
+        else:
+            masked = f"{tgt_var} = ask_model({p_str})"
+
+    # Trailing input type cast: ask "..." into target as number/boolean/text
     ask_as_m = re.match(
         r"^\s*ask\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s+as\s+(number|boolean|bool|text|string)\s*$",
         masked,

@@ -224,3 +224,44 @@ simulate portfolio with weights into sim_result
     assert res["projected_value"] > 0
 
 
+# ---------------------------------------------------------------------------
+# Task 4: AI & Agent Conversational Tests
+# ---------------------------------------------------------------------------
+
+def test_conversational_ask_assistant():
+    code = """
+ask the assistant "Summarize this report" into summary
+ask assistant "Generate title" into title_res
+"""
+    env = execute(code)
+    assert "summary" in env
+    assert "report" in env["summary"].lower() or "ai" in env["summary"].lower()
+    assert "title_res" in env
+
+
+def test_conversational_ask_model_with_context():
+    code = """
+report = "Quarterly profits rose 15%."
+ask the model "Classify sentiment" for report into sentiment
+ask model "Summarize" for report into brief
+"""
+    env = execute(code)
+    assert "sentiment" in env
+    assert len(env["sentiment"]) > 0
+    assert "brief" in env
+    assert len(env["brief"]) > 0
+
+
+def test_conversational_agent_article_tolerance():
+    code = """
+use agent
+create agent "Researcher" into my_agent
+ask the agent my_agent "Find papers" into findings
+tell the agent my_agent "Good job"
+"""
+    env = execute(code)
+    assert "findings" in env
+    assert len(env["findings"]) > 0
+
+
+

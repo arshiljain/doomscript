@@ -1598,6 +1598,27 @@ def simulate_portfolio(allocations: Any, initial_value: float = 10000.0, horizon
     })
 
 
+def ask_assistant(prompt: str, context: Optional[Any] = None, as_json: bool = False) -> Any:
+    """
+    Plain-English conversational query to an AI assistant.
+    Combines optional context into the prompt and invokes ask_ai with assistant system prompt.
+    """
+    full_prompt = str(prompt)
+    if context is not None:
+        full_prompt = f"Context:\n{context}\n\nTask:\n{full_prompt}"
+    return ask_ai(full_prompt, model="default", system="You are an intelligent, helpful assistant.", as_json=as_json)
+
+
+def ask_model(prompt: str, model: str = "default", context: Optional[Any] = None, as_json: bool = False) -> Any:
+    """
+    Plain-English query to a specified AI model with optional context.
+    """
+    full_prompt = str(prompt)
+    if context is not None:
+        full_prompt = f"Context:\n{context}\n\nTask:\n{full_prompt}"
+    return ask_ai(full_prompt, model=str(model), as_json=as_json)
+
+
 def combine_tables(left: list, right: list, on_key: str, how: str = "inner") -> list:
     """
     Performs a relational join on two lists of dictionaries/Records.
