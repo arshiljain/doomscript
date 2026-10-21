@@ -804,6 +804,22 @@ def ds_take_last(collection, n):
 
 
 
+def ds_find_first(collection, predicate=None):
+    """Find the first element in collection matching predicate, or None."""
+    if predicate is None:
+        for item in collection:
+            if item:
+                return item
+        return None
+    for item in collection:
+        try:
+            if predicate(item):
+                return item
+        except Exception:
+            pass
+    return None
+
+
 def ds_drop(collection, n):
     """Drop the first n elements from a sequence, string, or collection."""
     if hasattr(collection, "__getitem__"):

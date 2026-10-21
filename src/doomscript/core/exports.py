@@ -46,6 +46,7 @@ CORE_EXPORT_NAMES: frozenset[str] = frozenset([
     "ds_take_last",
     "ds_drop",
     "ds_pipe",
+    "ds_find_first",
     "ds_all_positive",
     "ds_all_negative",
     "ds_all_even",
