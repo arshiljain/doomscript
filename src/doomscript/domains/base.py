@@ -35,6 +35,10 @@ class DomainParser(ABC):
         """Parses a Level 3 declarative block into a DomainIR and target variable name."""
         pass
 
+    def can_handle_block(self, header: str) -> bool:
+        """Determines if this parser can handle the declarative block header."""
+        return False
+
 
 class DomainRuntime(ABC):
     """Execution engine for domain operations and workflows."""
@@ -86,5 +90,11 @@ class DomainContract(ABC):
     def can_handle_block(self, header: str) -> bool:
         """Determines if this domain can parse or handle a given block header."""
         if hasattr(self, "blocks") and self.blocks:
-            return any(b.matches(header) for b in self.blocks if hasattr(b, "matches"))
+            if any(b.matches(header) for b in self.blocks if hasattr(b, "matches")):
+                return True
+        if hasattr(self, "parser") and self.parser and hasattr(self.parser, "can_handle_block"):
+            try:
+                return self.parser.can_handle_block(header)
+            except Exception:
+                pass
         return False

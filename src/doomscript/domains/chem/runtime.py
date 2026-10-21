@@ -1626,6 +1626,15 @@ class MolecularConformerGenerator3D:
         }
 
 
-def chem_generate_3d_conformer(atoms: List[str], bonds: List[Tuple[int, int, int]]) -> Record:
-    """Generates 3D Cartesian coordinates for a molecular graph."""
-    return Record(MolecularConformerGenerator3D.generate_conformer(atoms, bonds))
+def chem_generate_3d_conformer(atoms: Any, bonds: Optional[List[Tuple[int, int, int]]] = None) -> Record:
+    """Generates 3D Cartesian coordinates for a molecular graph or SMILES string."""
+    if isinstance(atoms, str) and (bonds is None or len(bonds) == 0):
+        parsed = chem_parse_smiles(atoms)
+        atom_symbols = [a["symbol"] for a in parsed["atoms"]]
+        bond_tuples = [(int(b["u"]), int(b["v"]), int(b["order"])) for b in parsed["bonds"]]
+        raw = MolecularConformerGenerator3D.generate_conformer(atom_symbols, bond_tuples)
+    else:
+        raw = MolecularConformerGenerator3D.generate_conformer(atoms, bonds or [])
+    coords = [[a["x"], a["y"], a["z"]] for a in raw.get("atoms", [])]
+    raw["coordinates"] = coords
+    return Record(raw)

@@ -182,6 +182,33 @@ class ChemDomainParser(DomainParser):
             fp1, fp2, target = m_tan.group(1).strip(), m_tan.group(2).strip(), m_tan.group(3).strip()
             return f"set {target} to chem_tanimoto_similarity({fp1}, {fp2})"
 
+                # --- CHEM NATURAL PHRASES ---
+        # generate 3d conformer for smiles <smiles> into <target>
+        m_c3d = re.match(
+            r"^generate\s+3d\s+conformer\s+for\s+(?:smiles\s+)?(.+?)(?:\s+steps\s+\d+)?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_c3d:
+            smiles = m_c3d.group(1).strip()
+            target = m_c3d.group(2).strip()
+            if not (smiles.startswith('"') or smiles.startswith("'") or smiles.isidentifier()):
+                smiles = f'"{smiles}"'
+            return f"set {target} to chem_generate_3d_conformer({smiles})"
+
+        # generate chemical layout for smiles <smiles> into <target>
+        m_lay = re.match(
+            r"^generate\s+chemical\s+layout\s+for\s+(?:smiles\s+)?(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_lay:
+            smiles = m_lay.group(1).strip()
+            target = m_lay.group(2).strip()
+            if not (smiles.startswith('"') or smiles.startswith("'") or smiles.isidentifier()):
+                smiles = f'"{smiles}"'
+            return f"set {target} to chem_generate_layout({smiles})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

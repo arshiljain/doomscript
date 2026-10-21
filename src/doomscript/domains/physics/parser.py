@@ -289,6 +289,55 @@ class PhysicsDomainParser(DomainParser):
             target = m_lt.group(4).strip()
             return f"set {target} to physics_lorentz_transform({evt}, {vel}, c={c_val})"
 
+                # --- PHYSICS NATURAL PHRASES ---
+        # calculate van der waals pressure for gas <gas> at temp <t> and volume <v> [moles <m>] into <target>
+        m_vdw = re.match(
+            r"^calculate\s+van\s+der\s+waals\s+pressure\s+for\s+gas\s+(.+?)\s+at\s+temp\s+(.+?)\s+and\s+volume\s+(.+?)(?:\s+moles\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_vdw:
+            gas = m_vdw.group(1).strip()
+            temp = m_vdw.group(2).strip()
+            vol = m_vdw.group(3).strip()
+            moles = m_vdw.group(4).strip() if m_vdw.group(4) else "1.0"
+            target = m_vdw.group(5).strip()
+            if not (gas.startswith('"') or gas.startswith("'") or gas.isidentifier()):
+                gas = f'"{gas}"'
+            return f"set {target} to physics_van_der_waals_pressure({gas}, {temp}, {vol}, moles={moles})"
+
+        # calculate normal modes for masses <m> spring constants <k> into <target>
+        m_nm = re.match(
+            r"^calculate\s+normal\s+modes\s+for\s+masses\s+(.+?)\s+spring\s+constants\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_nm:
+            m, k, target = m_nm.group(1).strip(), m_nm.group(2).strip(), m_nm.group(3).strip()
+            return f"set {target} to physics_normal_modes({m}, {k})"
+
+        # simulate 1d wave equation with initial profile <u> [c <c>] into <target>
+        m_wave = re.match(
+            r"^simulate\s+1d\s+wave\s+equation\s+with\s+initial\s+profile\s+(.+?)(?:\s+c\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_wave:
+            u = m_wave.group(1).strip()
+            c = m_wave.group(2).strip() if m_wave.group(2) else "1.0"
+            target = m_wave.group(3).strip()
+            return f"set {target} to physics_wave_equation_1d({u}, c={c})"
+
+        # resolve collision between <b1> and <b2> at normal <n> with restitution <e> into <target>
+        m_col = re.match(
+            r"^resolve\s+collision\s+between\s+(.+?)\s+and\s+(.+?)\s+at\s+normal\s+(.+?)\s+with\s+restitution\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_col:
+            b1, b2, n, e, target = m_col.group(1).strip(), m_col.group(2).strip(), m_col.group(3).strip(), m_col.group(4).strip(), m_col.group(5).strip()
+            return f"set {target} to physics_resolve_collision({b1}, {b2}, {n}, {e})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

@@ -242,6 +242,28 @@ class QuantumDomainParser(DomainParser):
             target = m_steane.group(3).strip()
             return f"set {target} to quantum_steane_diagnose({bits}, {phases})"
 
+                # entangle qubit <c> with qubit <t> [in <reg>]
+        m_ent = re.match(
+            r"^entangle\s+qubit\s+(.+?)\s+with\s+qubit\s+(.+?)(?:\s+in\s+(?:circuit\s+|register\s+)?([A-Za-z_]\w*))?$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_ent:
+            c = m_ent.group(1).strip()
+            t = m_ent.group(2).strip()
+            reg = m_ent.group(3).strip() if m_ent.group(3) else "qc"
+            return f"quantum_apply_cnot({reg}, {c}, {t})"
+
+        # teleport state from qubit <src> to qubit <dst> into <target>
+        m_tel = re.match(
+            r"^teleport\s+state\s+from\s+qubit\s+(.+?)\s+to\s+qubit\s+(.+?)(?:\s+in\s+([A-Za-z_]\w*))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_tel:
+            target = m_tel.group(4).strip()
+            return f"set {target} to quantum_teleport(1.0, 0.0)"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:
@@ -250,5 +272,56 @@ class QuantumDomainParser(DomainParser):
     def parse_operation(self, line: str, line_no: int = 0) -> Optional[str]:
         return self.parse_line(line)
 
+    def can_handle_block(self, header: str) -> bool:
+        return bool(re.match(r'''^circuit\s+['\"]?([A-Za-z_]\w*)['\"]?(?:\s+with\s+(\d+)\s+qubits?)?(?:\s+into\s+([A-Za-z_]\w*))?:?$''', header.strip(), re.IGNORECASE))
+
     def parse_block(self, header: str, body_lines: list, indent: int = 0) -> tuple:
-        raise NotImplementedError("Quantum domain does not define declarative blocks")
+        from doomscript.domains.quantum.runtime import QuantumCircuitIR
+        m = re.match(
+            r'''^circuit\s+['\"]?([A-Za-z_]\w*)['\"]?(?:\s+with\s+(\d+)\s+qubits?)?(?:\s+into\s+([A-Za-z_]\w*))?:?$''',
+            header.strip(),
+            re.IGNORECASE,
+        )
+        if not m:
+            raise SyntaxError(f"Invalid quantum circuit header: {header}")
+        name = m.group(1)
+        n_qubits = int(m.group(2)) if m.group(2) else 2
+        target = m.group(3) or name
+        ops = []
+        for l_no, raw_line in body_lines:
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            m_h = re.match(r"^(?:apply\s+)?hadamard(?:\s+gate)?(?:\s+(?:on|to)\s+qubit|\s+qubit|\s+on|\s+to)?\s+(\d+)$", line, re.IGNORECASE)
+            if m_h:
+                ops.append({"op": "h", "qubit": int(m_h.group(1))})
+                continue
+            m_x = re.match(r"^(?:apply\s+)?(?:pauli\s*)?x(?:\s+gate)?(?:\s+(?:on|to)\s+qubit|\s+qubit|\s+on|\s+to)?\s+(\d+)$", line, re.IGNORECASE)
+            if m_x:
+                ops.append({"op": "x", "qubit": int(m_x.group(1))})
+                continue
+            m_y = re.match(r"^(?:apply\s+)?(?:pauli\s*)?y(?:\s+gate)?(?:\s+(?:on|to)\s+qubit|\s+qubit|\s+on|\s+to)?\s+(\d+)$", line, re.IGNORECASE)
+            if m_y:
+                ops.append({"op": "y", "qubit": int(m_y.group(1))})
+                continue
+            m_z = re.match(r"^(?:apply\s+)?(?:pauli\s*)?z(?:\s+gate)?(?:\s+(?:on|to)\s+qubit|\s+qubit|\s+on|\s+to)?\s+(\d+)$", line, re.IGNORECASE)
+            if m_z:
+                ops.append({"op": "z", "qubit": int(m_z.group(1))})
+                continue
+            m_cx = re.match(r"^(?:apply\s+)?cnot(?:\s+gate)?(?:\s+(?:from|control|with\s+control))?\s*(\d+)\s*(?:(?:to|and\s+target|target))?\s*(\d+)$", line, re.IGNORECASE)
+            if m_cx:
+                ops.append({"op": "cnot", "control": int(m_cx.group(1)), "target": int(m_cx.group(2))})
+                continue
+            m_ph = re.match(r"^(?:apply\s+)?phase(?:\s+gate)?(?:\s+with\s+angle|\s+angle)?\s+(.+?)\s+(?:on|to)\s+qubit\s+(\d+)$", line, re.IGNORECASE)
+            if m_ph:
+                ops.append({"op": "phase", "angle": float(m_ph.group(1)), "qubit": int(m_ph.group(2))})
+                continue
+            m_m = re.match(r"^measure(?:\s+qubit)?\s+(\d+)$", line, re.IGNORECASE)
+            if m_m:
+                ops.append({"op": "measure", "qubit": int(m_m.group(1))})
+                continue
+            m_mall = re.match(r"^measure(?:\s+into\s+([A-Za-z_]\w*))?$", line, re.IGNORECASE)
+            if m_mall:
+                ops.append({"op": "measure", "qubit": 0})
+                continue
+        return QuantumCircuitIR(name=name, num_qubits=n_qubits, operations=ops, target=target), target

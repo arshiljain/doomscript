@@ -566,6 +566,8 @@ class VanDerWaalsGas:
     @classmethod
     def for_substance(cls, name: str) -> 'VanDerWaalsGas':
         key = name.strip().lower().replace(" ", "_")
+        aliases = {"co2": "carbon_dioxide", "h2o": "water", "n2": "nitrogen", "o2": "oxygen", "h2": "hydrogen", "he": "helium", "ch4": "methane"}
+        key = aliases.get(key, key)
         if key not in cls.GAS_CONSTANTS:
             raise ValueError(f"Unknown gas '{name}'. Available: {list(cls.GAS_CONSTANTS.keys())}")
         a, b = cls.GAS_CONSTANTS[key]

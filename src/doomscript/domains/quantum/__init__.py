@@ -40,6 +40,8 @@ from doomscript.domains.quantum.runtime import (
     QuantumKeyDistributionBB84,
     quantum_qpe_estimate,
     quantum_bb84_simulate,
+    QuantumCircuitIR,
+    execute_quantum_ir,
 )
 from doomscript.domains.quantum.parser import QuantumDomainParser
 from doomscript.domains.quantum.exporter import QuantumASTExporter
@@ -99,7 +101,8 @@ class QuantumDomain(DomainContract):
         )
 
     def can_handle_block(self, header: str) -> bool:
-        return False
+        s = header.strip().lower()
+        return s.startswith("circuit ") or self.parser.can_handle_block(header)
 
 
 QUANTUM_DOMAIN = QuantumDomain()
@@ -136,4 +139,6 @@ __all__ = [
     "QuantumKeyDistributionBB84",
     "quantum_qpe_estimate",
     "quantum_bb84_simulate",
+    "QuantumCircuitIR",
+    "execute_quantum_ir",
 ]

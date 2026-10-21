@@ -1162,17 +1162,27 @@ def astronomy_propagate_kepler_orbit(
 
 
 def astronomy_calculate_sidereal_time(
-    year: int,
-    month: int,
-    day: int,
+    year: Any,
+    month: int = 1,
+    day: int = 1,
     hour: int = 0,
     minute: int = 0,
     second: float = 0.0,
     longitude_deg: float = 0.0,
 ) -> Record:
     """Calculates high-precision Julian Date and Greenwich / Local Sidereal Time."""
+    if isinstance(year, (int, float)) and year > 100000:
+        jd = float(year)
+        d = jd - 2451545.0
+        gst = (280.46061837 + 360.98564736629 * d) % 360.0
+        return Record({
+            "julian_date": jd,
+            "greenwich_sidereal_time_deg": gst,
+            "greenwich_sidereal_time_hours": gst / 15.0,
+            "local_sidereal_time_hours": (gst + longitude_deg) / 15.0,
+        })
     return Record(JulianDaySiderealTimeCalculator.calculate(
-        year, month, day, hour=hour, minute=minute, second=second, longitude_deg=longitude_deg
+        int(year), month, day, hour=hour, minute=minute, second=second, longitude_deg=longitude_deg
     ))
 
 

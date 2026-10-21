@@ -1724,11 +1724,11 @@ def robotics_move_arm(x: float, y: float, z: Optional[float] = None, l1: float =
         dh = [{"a": 0.0, "alpha": 0.0, "d": 1.0, "theta_offset": 0.0} for _ in range(3)]
         res = robotics_6dof_ik(dh, [float(x), float(y), float(z)])
         angles = res.get("joint_angles", [0.0, 0.0, 0.0])
-        return Record({"target": [float(x), float(y), float(z)], "joint_angles": angles, "reached": True})
+        return Record({"target": [float(x), float(y), float(z)], "x": float(x), "y": float(y), "z": float(z), "joint_angles": angles, "reached": True})
     else:
         sol = robotics_inverse_kinematics_2link(float(l1), float(l2), float(x), float(y))
         angles = [sol["theta1"], sol["theta2"]] if sol else [0.0, 0.0]
-        return Record({"target": [float(x), float(y)], "theta1": angles[0], "theta2": angles[1], "joint_angles": angles, "reached": sol is not None})
+        return Record({"target": [float(x), float(y)], "x": float(x), "y": float(y), "theta1": angles[0], "theta2": angles[1], "joint_angles": angles, "reached": sol is not None})
 
 
 def robotics_read_lidar(sensor: Any = None, num_samples: int = 360, max_range: float = 10.0) -> Record:
@@ -1747,7 +1747,36 @@ def robotics_read_lidar(sensor: Any = None, num_samples: int = 360, max_range: f
     ranges = [5.0] * num_samples
     return Record({
         "ranges": ranges,
+        "readings": ranges,
         "angles": angles,
         "num_beams": num_samples,
         "max_range": max_range,
     })
+
+
+from dataclasses import dataclass, field
+from doomscript.domains.base import DomainIR
+
+@dataclass
+class RoboticsTrajectoryIR(DomainIR):
+    name: str
+    start: Any = None
+    goal: Any = None
+    turning_radius: float = 1.0
+    method: str = "dubins"
+    obstacles: Any = None
+    step_size: float = 1.0
+    search_radius: float = 2.5
+    target: str = "nav_path"
+
+    def validate(self) -> List[str]:
+        return []
+
+def execute_robotics_ir(spec_id: str) -> Any:
+    from doomscript.domains.registry import get_domain_registry
+    from doomscript.domains.robotics import ROBOTICS_DOMAIN
+    reg = get_domain_registry()
+    spec = reg.get_spec(spec_id)
+    if spec is None:
+        raise ValueError(f"Unknown robotics spec: {spec_id}")
+    return ROBOTICS_DOMAIN.runtime.execute_ir(spec, {})

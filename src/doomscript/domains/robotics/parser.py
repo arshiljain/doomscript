@@ -241,6 +241,38 @@ class RoboticsDomainParser(DomainParser):
             step_arg = f", step_len={step.strip()}" if step else ""
             return f"set {target} to robotics_state_lattice_plan({st}, {gl}{obs_arg}{step_arg})"
 
+        
+        # plan dubins path from <start> to <goal> with radius <r> into <target>
+        m_dub = re.match(
+            r"^plan\s+dubins\s+path\s+from\s+(.+?)\s+to\s+(.+?)\s+with\s+radius\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_dub:
+            st, gl, rad, target = m_dub.group(1).strip(), m_dub.group(2).strip(), m_dub.group(3).strip(), m_dub.group(4).strip()
+            return f"set {target} to robotics_dubins_path({st}, {gl}, {rad})"
+
+        # update occupancy grid <grid> with pose <pose> and scan <scan> [range <max_r>] into <target>
+        m_occ = re.match(
+            r"^update\s+occupancy\s+grid\s+(.+?)\s+with\s+pose\s+(.+?)\s+and\s+scan\s+(.+?)(?:\s+range\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_occ:
+            grid, pose, scan, target = m_occ.group(1).strip(), m_occ.group(2).strip(), m_occ.group(3).strip(), m_occ.group(5).strip()
+            max_r = m_occ.group(4).strip() if m_occ.group(4) else "10.0"
+            return f"set {target} to robotics_occupancy_grid_update({grid}, {pose}, {scan}, max_range={max_r})"
+
+        # drive robot forward with left <vl> and right <vr> for <dt> seconds into <target>
+        m_dd = re.match(
+            r"^drive\s+robot\s+forward\s+with\s+left\s+(.+?)\s+and\s+right\s+(.+?)\s+for\s+(.+?)\s+seconds?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_dd:
+            vl, vr, dt, target = m_dd.group(1).strip(), m_dd.group(2).strip(), m_dd.group(3).strip(), m_dd.group(4).strip()
+            return f"set {target} to robotics_diff_drive_forward({vl}, {vr}, {dt})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:
@@ -249,5 +281,70 @@ class RoboticsDomainParser(DomainParser):
     def parse_operation(self, line: str, line_no: int = 0) -> Optional[str]:
         return self.parse_line(line)
 
+    def can_handle_block(self, header: str) -> bool:
+        return bool(re.match(r"^trajectory\s+", header.strip(), re.IGNORECASE))
+
     def parse_block(self, header: str, body_lines: list, indent: int = 0) -> tuple:
-        raise NotImplementedError("Robotics domain does not define declarative blocks")
+        from doomscript.domains.robotics.runtime import RoboticsTrajectoryIR
+        m = re.match(
+            r'''^trajectory\s+['"]?([A-Za-z_]\w*)['"]?(?:\s+into\s+([A-Za-z_]\w*))?:?$''',
+            header.strip(),
+            re.IGNORECASE,
+        )
+        if not m:
+            raise SyntaxError(f"Invalid robotics trajectory header: {header}")
+        name = m.group(1)
+        target = m.group(2) or name
+        start = [0.0, 0.0, 0.0]
+        goal = [10.0, 10.0, 0.0]
+        radius = 1.0
+        method = "dubins"
+        obs = None
+
+        for l_no, raw_line in body_lines:
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            m_s = re.match(r"^(?:start\s+at|from)\s+(.+)$", line, re.IGNORECASE)
+            if m_s:
+                try:
+                    start = eval(m_s.group(1).strip(), {}, {})
+                except Exception:
+                    pass
+                continue
+            m_g = re.match(r"^(?:goal\s+at|to)\s+(.+)$", line, re.IGNORECASE)
+            if m_g:
+                try:
+                    goal = eval(m_g.group(1).strip(), {}, {})
+                except Exception:
+                    pass
+                continue
+            m_r = re.match(r"^(?:turning\s+radius|radius)\s+(.+)$", line, re.IGNORECASE)
+            if m_r:
+                try:
+                    radius = float(m_r.group(1).strip())
+                except Exception:
+                    pass
+                continue
+            m_m = re.match(r"^(?:generate\s+using|using|method)\s+(dubins|rrt|rrt_star|cubic)", line, re.IGNORECASE)
+            if m_m:
+                method = m_m.group(1).lower()
+                continue
+            m_o = re.match(r"^obstacles\s+(.+)$", line, re.IGNORECASE)
+            if m_o:
+                try:
+                    obs = eval(m_o.group(1).strip(), {}, {})
+                except Exception:
+                    pass
+                continue
+
+        spec = RoboticsTrajectoryIR(
+            name=name,
+            start=start,
+            goal=goal,
+            turning_radius=radius,
+            method=method,
+            obstacles=obs,
+            target=target,
+        )
+        return spec, target

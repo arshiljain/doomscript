@@ -219,17 +219,19 @@ class BioDomainParser(DomainParser):
                 pat = f'"{pat}"'
             return f"set {target} to bio_bwt_count({bwt_val}, {pat})"
 
-        # find cpg islands in sequence <seq> into <target>
+        # find cpg islands in sequence <seq> [window <w>] into <target>
         m_cpg = re.match(
-            r"^find\s+cpg\s+islands\s+in\s+sequence\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            r"^find\s+cpg\s+islands\s+in\s+(?:sequence\s+)?(.+?)(?:\s+window\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )
         if m_cpg:
-            seq, target = m_cpg.group(1).strip(), m_cpg.group(2).strip()
+            seq = m_cpg.group(1).strip()
+            w = m_cpg.group(2).strip() if m_cpg.group(2) else "10"
+            target = m_cpg.group(3).strip()
             if not (seq.startswith('"') or seq.startswith("'") or seq.isidentifier()):
                 seq = f'"{seq}"'
-            return f"set {target} to bio_find_cpg_islands({seq})"
+            return f"set {target} to bio_find_cpg_islands({seq}, min_length={w})"
 
         # align sequences <seq1> and <seq2> with affine gap [open <d>] [extend <e>] into <target>
         m_aff = re.match(
@@ -303,6 +305,37 @@ class BioDomainParser(DomainParser):
             seq = m_co.group(1).strip()
             target = m_co.group(2).strip()
             return f"set {target} to bio_codon_optimize({seq})"
+
+                # --- BIO NATURAL PHRASES ---
+        # digest dna sequence <seq> with enzyme <enz> into <target>
+        m_dig = re.match(
+            r"^digest\s+dna\s+(?:sequence\s+)?(.+?)\s+with\s+enzyme\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_dig:
+            seq = m_dig.group(1).strip()
+            enz = m_dig.group(2).strip()
+            target = m_dig.group(3).strip()
+            if not (seq.startswith('"') or seq.startswith("'") or seq.isidentifier()):
+                seq = f'"{seq}"'
+            if not (enz.startswith('"') or enz.startswith("'") or enz.isidentifier()):
+                enz = f'"{enz}"'
+            return f"set {target} to bio_digest_dna({seq}, {enz})"
+
+        
+        # fold rna sequence <seq> using nussinov algorithm into <target>
+        m_nus = re.match(
+            r"^fold\s+rna\s+(?:sequence\s+)?(.+?)\s+using\s+nussinov\s+algorithm\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_nus:
+            seq = m_nus.group(1).strip()
+            target = m_nus.group(2).strip()
+            if not (seq.startswith('"') or seq.startswith("'") or seq.isidentifier()):
+                seq = f'"{seq}"'
+            return f"set {target} to bio_nussinov_rna_fold({seq})"
 
         return None
 

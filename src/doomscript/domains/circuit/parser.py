@@ -284,6 +284,31 @@ class CircuitDomainParser(DomainParser):
                 gate = f'"{gate}"'
             return f"set {target} to circuit_eval_logic({gate}, {inputs})"
 
+                # --- CIRCUIT NATURAL PHRASES ---
+        # minimize logic using quine mccluskey with minterms <minterms> [dont cares <dc>] [variables <n>] into <target>
+        m_qm = re.match(
+            r"^minimize\s+logic\s+using\s+quine\s+mccluskey\s+with\s+minterms\s+(.+?)(?:\s+dont\s+cares\s+(.+?))?(?:\s+variables\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_qm:
+            mints = m_qm.group(1).strip()
+            dcs = m_qm.group(2).strip() if m_qm.group(2) else "[]"
+            n_vars = m_qm.group(3).strip() if m_qm.group(3) else "4"
+            target = m_qm.group(4).strip()
+            return f"set {target} to circuit_quine_mccluskey_minimize({mints}, {dcs}, num_vars={n_vars})"
+
+        # solve dc circuit using nodal analysis for netlist <netlist> into <target>
+        m_mna = re.match(
+            r"^solve\s+dc\s+circuit\s+using\s+nodal\s+analysis\s+for\s+netlist\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_mna:
+            netlist = m_mna.group(1).strip()
+            target = m_mna.group(2).strip()
+            return f"set {target} to circuit_mna_dc_solve({netlist})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

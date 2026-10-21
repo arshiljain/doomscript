@@ -217,6 +217,29 @@ class AstronomyDomainParser(DomainParser):
             jd, target = m_ecl.group(1).strip(), m_ecl.group(2).strip()
             return f"set {target} to Record(astronomy_predict_eclipse({jd}))"
 
+                # --- ASTRONOMY NATURAL PHRASES ---
+        # calculate greenwich sidereal time for julian date <jd> into <target>
+        m_gst = re.match(
+            r"^calculate\s+greenwich\s+sidereal\s+time\s+for\s+julian\s+date\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_gst:
+            jd = m_gst.group(1).strip()
+            target = m_gst.group(2).strip()
+            return f"set {target} to astronomy_calculate_sidereal_time({jd})"
+
+        # calculate lagrange points for m1 <m1> and m2 <m2> [distance <d>] into <target>
+        m_lag = re.match(
+            r"^calculate\s+lagrange\s+points\s+for\s+m1\s+(.+?)\s+and\s+m2\s+(.+?)(?:\s+distance\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_lag:
+            m1, m2, target = m_lag.group(1).strip(), m_lag.group(2).strip(), m_lag.group(4).strip()
+            d = m_lag.group(3).strip() if m_lag.group(3) else "1.0"
+            return f"set {target} to astronomy_lagrange_points({m1}, {m2}, d={d})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

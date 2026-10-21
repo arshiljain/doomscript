@@ -54,6 +54,8 @@ from doomscript.domains.robotics.runtime import (
     robotics_state_lattice_plan,
     robotics_move_arm,
     robotics_read_lidar,
+    RoboticsTrajectoryIR,
+    execute_robotics_ir,
 )
 from doomscript.domains.robotics.parser import RoboticsDomainParser
 from doomscript.domains.robotics.exporter import RoboticsASTExporter
@@ -63,6 +65,35 @@ class RoboticsRuntime(DomainRuntime):
     """Runtime coordinator for robotics routines."""
 
     def execute_ir(self, ir: DomainIR, env: Dict[str, Any]) -> Any:
+        from doomscript.domains.robotics.runtime import (
+            RoboticsTrajectoryIR,
+            robotics_dubins_path,
+            robotics_rrt_plan,
+            robotics_rrt_star_plan,
+            robotics_cubic_trajectory,
+        )
+        if isinstance(ir, RoboticsTrajectoryIR):
+            start = ir.start if ir.start is not None else [0.0, 0.0, 0.0]
+            goal = ir.goal if ir.goal is not None else [5.0, 5.0, 0.0]
+            method = ir.method.lower()
+            if method == "dubins":
+                s3 = (start[0], start[1], start[2] if len(start) > 2 else 0.0)
+                g3 = (goal[0], goal[1], goal[2] if len(goal) > 2 else 0.0)
+                return robotics_dubins_path(s3, g3, turning_radius=float(ir.turning_radius))
+            elif method == "rrt":
+                bounds = [[-50.0, 50.0], [-50.0, 50.0]]
+                return robotics_rrt_plan(start[:2], goal[:2], bounds=bounds, obstacles=ir.obstacles, step_size=float(ir.step_size))
+            elif method == "rrt_star":
+                bounds = [[-50.0, 50.0], [-50.0, 50.0]]
+                return robotics_rrt_star_plan(start[:2], goal[:2], bounds=bounds, obstacles=ir.obstacles, search_radius=float(ir.search_radius))
+            elif method == "cubic":
+                q0 = start[0] if isinstance(start, (list, tuple)) else float(start)
+                q1 = goal[0] if isinstance(goal, (list, tuple)) else float(goal)
+                return robotics_cubic_trajectory(q0, q1, 0.0, 0.0, 0.0, 1.0, 50)
+            else:
+                s3 = (start[0], start[1], start[2] if len(start) > 2 else 0.0)
+                g3 = (goal[0], goal[1], goal[2] if len(goal) > 2 else 0.0)
+                return robotics_dubins_path(s3, g3, turning_radius=float(ir.turning_radius))
         return None
 
 
@@ -113,7 +144,8 @@ class RoboticsDomain(DomainContract):
         )
 
     def can_handle_block(self, header: str) -> bool:
-        return False
+        s = header.strip().lower()
+        return s.startswith("trajectory ") or self.parser.can_handle_block(header)
 
 
 ROBOTICS_DOMAIN = RoboticsDomain()
@@ -147,4 +179,6 @@ __all__ = [
     "robotics_state_lattice_plan",
     "robotics_move_arm",
     "robotics_read_lidar",
+    "RoboticsTrajectoryIR",
+    "execute_robotics_ir",
 ]

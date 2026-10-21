@@ -13,10 +13,47 @@ from doomscript.domains.base import DomainRuntime, DomainIR
 from doomscript.core.record import Record
 
 
+from dataclasses import dataclass, field
+
+
+@dataclass
+class QuantumCircuitIR(DomainIR):
+    """Declarative intermediate representation for a quantum circuit."""
+    name: str
+    num_qubits: int = 1
+    operations: List[Dict[str, Any]] = field(default_factory=list)
+    target: str = "qc"
+
+    def validate(self) -> List[str]:
+        errors = []
+        if self.num_qubits < 1:
+            errors.append("num_qubits must be at least 1")
+        return errors
+
+
 class QuantumRuntime(DomainRuntime):
     """Runtime coordinator for quantum simulation."""
 
     def execute_ir(self, ir: DomainIR, env: Dict[str, Any]) -> Any:
+        if isinstance(ir, QuantumCircuitIR):
+            reg = QuantumRegister(ir.num_qubits)
+            for op in ir.operations:
+                kind = op.get("op", "").lower()
+                if kind in ("h", "hadamard"):
+                    reg.apply_hadamard(int(op["qubit"]))
+                elif kind in ("x", "pauli_x", "not"):
+                    reg.apply_pauli_x(int(op["qubit"]))
+                elif kind in ("y", "pauli_y"):
+                    reg.apply_pauli_y(int(op["qubit"]))
+                elif kind in ("z", "pauli_z"):
+                    reg.apply_pauli_z(int(op["qubit"]))
+                elif kind in ("cnot", "cx"):
+                    reg.apply_cnot(int(op["control"]), int(op["target"]))
+                elif kind in ("phase", "rz"):
+                    reg.apply_phase(int(op["qubit"]), float(op.get("angle", 0.0)))
+                elif kind in ("measure", "measure_qubit"):
+                    reg.measure_qubit(int(op["qubit"]))
+            return reg
         return None
 
 

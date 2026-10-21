@@ -45,6 +45,7 @@ from doomscript.domains.chem.runtime import (
     ChemicalStoichiometryBalancer,
     LennardJonesMolecularDynamics,
     chem_lennard_jones_md,
+    chem_generate_3d_conformer,
 )
 from doomscript.domains.chem.parser import ChemDomainParser
 from doomscript.domains.chem.exporter import ChemASTExporter
@@ -142,4 +143,5 @@ __all__ = [
     "ChemicalStoichiometryBalancer",
     "LennardJonesMolecularDynamics",
     "chem_lennard_jones_md",
+    "chem_generate_3d_conformer",
 ]

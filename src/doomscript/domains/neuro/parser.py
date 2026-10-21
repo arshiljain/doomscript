@@ -187,6 +187,31 @@ class NeuroDomainParser(DomainParser):
                 preset = f"'{preset}'"
             return f"set {target} to neuro_create_izhikevich({preset})"
 
+                # --- NEURO NATURAL PHRASES ---
+        # create lif neuron [with v_rest <vr>] [with v_thresh <vt>] into <target>
+        m_lif = re.match(
+            r"^create\s+lif\s+neuron(?:\s+with\s+v_rest\s+(.+?))?(?:\s+with\s+v_thresh\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_lif:
+            vr = m_lif.group(1).strip() if m_lif.group(1) else "-70.0"
+            vt = m_lif.group(2).strip() if m_lif.group(2) else "-50.0"
+            target = m_lif.group(3).strip()
+            return f"set {target} to neuro_create_lif(v_rest={vr}, v_thresh={vt})"
+
+        # generate poisson spike train with rate <r> and duration <d> into <target>
+        m_spikes = re.match(
+            r"^generate\s+poisson\s+spike\s+train\s+with\s+rate\s+(.+?)\s+and\s+duration\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_spikes:
+            rate = m_spikes.group(1).strip()
+            dur = m_spikes.group(2).strip()
+            target = m_spikes.group(3).strip()
+            return f"set {target} to neuro_poisson_spikes({rate}, {dur})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:
