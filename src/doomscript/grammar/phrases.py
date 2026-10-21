@@ -1228,7 +1228,31 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     if check_m:
         masked = f"check if file {check_m.group(1).strip()} exists into {check_m.group(2).strip()}"
 
-    # Ergonomic Networking & HTTP (fetch, post, download)
+    # Ergonomic Networking & HTTP (fetch, post, download, conversational requests)
+    send_get_m = re.match(
+        r"^\s*send\s+(?:a\s+)?get\s+request\s+to\s+(.+?)(?:\s+and\s+wait\s+for\s+response)?\s+into\s+([A-Za-z_]\w*)$",
+        masked,
+        re.IGNORECASE,
+    )
+    if send_get_m:
+        masked = f"{send_get_m.group(2).strip()} = fetch_url({send_get_m.group(1).strip()}, method='GET')"
+
+    send_post_m = re.match(
+        r"^\s*send\s+(?:a\s+)?post\s+request\s+to\s+(.+?)\s+with\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+        masked,
+        re.IGNORECASE,
+    )
+    if send_post_m:
+        masked = f"{send_post_m.group(3).strip()} = fetch_url({send_post_m.group(1).strip()}, method='POST', json_body={send_post_m.group(2).strip()})"
+
+    extract_field_m = re.match(
+        r"^\s*extract\s+(?:json\s+)?field\s+(.+?)\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+        masked,
+        re.IGNORECASE,
+    )
+    if extract_field_m:
+        masked = f"{extract_field_m.group(3).strip()} = extract_json_field({extract_field_m.group(2).strip()}, {extract_field_m.group(1).strip()})"
+
     fetch_m = re.match(r"^\s*fetch\s+(?!url\b|json\b|text\b)(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
     if fetch_m:
         masked = f"{fetch_m.group(2)} = fetch_url({fetch_m.group(1).strip()})"

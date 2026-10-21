@@ -1383,6 +1383,69 @@ def download_file_url(url: str, target_path: str) -> str:
     return str(dst)
 
 
+def extract_json_field(source: Any, field_path: str) -> Any:
+    """
+    Extracts a nested field value from an HTTP response, Record, dictionary, list,
+    or JSON string using dot-notation and optional list indexing (e.g. 'data.items[0].id').
+    """
+    if source is None:
+        return None
+
+    cur = source
+    if isinstance(cur, str):
+        s_trimmed = cur.strip()
+        if (s_trimmed.startswith("{") and s_trimmed.endswith("}")) or (s_trimmed.startswith("[") and s_trimmed.endswith("]")):
+            try:
+                cur = json.loads(s_trimmed)
+            except Exception:
+                pass
+
+    if not field_path:
+        return cur
+
+    # Tokenize path: "data.items[0].name" -> ["data", "items", "[0]", "name"]
+    raw_tokens = [p.strip() for p in str(field_path).split(".") if p.strip()]
+    tokens = []
+    for token in raw_tokens:
+        parts = re.split(r"(\[\d+\])", token)
+        for part in parts:
+            if part:
+                tokens.append(part)
+
+    # If cur is an HTTP response container (Record with .json)
+    if isinstance(cur, Record) or hasattr(cur, "json"):
+        json_cand = cur.get("json") if isinstance(cur, Record) else getattr(cur, "json", None)
+        if json_cand is not None:
+            first_key = tokens[0] if tokens else ""
+            if isinstance(json_cand, (dict, Record)) and first_key in json_cand:
+                cur = json_cand
+            elif isinstance(json_cand, (dict, Record)) and (not isinstance(cur, (dict, Record)) or first_key not in cur):
+                cur = json_cand
+
+    for token in tokens:
+        if token.startswith("[") and token.endswith("]"):
+            try:
+                idx = int(token[1:-1])
+                cur = cur[idx]
+            except Exception:
+                return None
+        else:
+            if isinstance(cur, (dict, Record)):
+                cur = cur.get(token)
+            elif hasattr(cur, token):
+                cur = getattr(cur, token)
+            elif isinstance(cur, list):
+                try:
+                    idx = int(token)
+                    cur = cur[idx]
+                except Exception:
+                    return None
+            else:
+                return None
+
+    return cur
+
+
 def combine_tables(left: list, right: list, on_key: str, how: str = "inner") -> list:
     """
     Performs a relational join on two lists of dictionaries/Records.
