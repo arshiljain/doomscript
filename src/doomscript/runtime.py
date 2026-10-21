@@ -867,16 +867,19 @@ def ds_attr(item, attr_name, default=None):
     """Safely retrieves an attribute or dictionary key from item."""
     if item is None:
         return default
+    val = default
     if isinstance(item, dict):
-        return item.get(attr_name, default)
-    if hasattr(item, attr_name):
-        return getattr(item, attr_name)
-    if hasattr(item, "__getitem__"):
+        val = item.get(attr_name, default)
+    elif hasattr(item, attr_name):
+        val = getattr(item, attr_name)
+    elif hasattr(item, "__getitem__"):
         try:
-            return item[attr_name]
+            val = item[attr_name]
         except (KeyError, TypeError, IndexError):
-            pass
-    return default
+            val = default
+    if val is None and default is not None:
+        return default
+    return val
 
 
 def ds_find_superlative(collection, order="max", key=None):
@@ -1018,6 +1021,81 @@ def ds_drop(collection, n):
             pass
     items = list(collection)
     return items[n:]
+
+
+def ds_drop_last(collection, n):
+    """Drop the last n elements from a sequence, string, or collection."""
+    if hasattr(collection, "__getitem__"):
+        try:
+            return collection[:-n] if n > 0 else collection[:]
+        except Exception:
+            pass
+    items = list(collection)
+    return items[:-n] if n > 0 else items[:]
+
+
+def ds_range(start, end, step=1):
+    """Generate a list of numbers from start to end inclusive, or characters if single-letter strings."""
+    if isinstance(start, int) and isinstance(end, int):
+        if start <= end:
+            return list(range(start, end + 1, step))
+        else:
+            return list(range(start, end - 1, -step if step > 0 else step))
+    if isinstance(start, str) and isinstance(end, str) and len(start) == 1 and len(end) == 1:
+        s_ord, e_ord = ord(start), ord(end)
+        if s_ord <= e_ord:
+            return [chr(c) for c in range(s_ord, e_ord + 1, step)]
+        else:
+            return [chr(c) for c in range(s_ord, e_ord - 1, -step if step > 0 else step)]
+    return list(range(int(start), int(end) + 1, step))
+
+
+def ds_coalesce(val, default):
+    """Return default if val is None, else val."""
+    return default if val is None else val
+
+
+def ds_sorted_by(collection, key: str, reverse: bool = False):
+    """Returns a sorted list of dicts/Records/objects by key attribute."""
+    def key_fn(item):
+        if isinstance(item, dict):
+            val = item.get(key, 0)
+        else:
+            val = getattr(item, key, 0)
+        if isinstance(val, (int, float)):
+            return (0, val)
+        if isinstance(val, str):
+            try:
+                return (0, float(val))
+            except ValueError:
+                return (1, val)
+        return (2, str(val))
+    return sorted(collection, key=key_fn, reverse=reverse)
+
+
+def ds_join(items, delimiter):
+    """Join a collection of items with delimiter."""
+    return str(delimiter).join(str(i) for i in items)
+
+
+def ds_trim(text):
+    """Trim leading and trailing whitespace."""
+    return str(text).strip()
+
+
+def ds_uppercase(text):
+    """Convert text to uppercase."""
+    return str(text).upper()
+
+
+def ds_lowercase(text):
+    """Convert text to lowercase."""
+    return str(text).lower()
+
+
+def ds_reversed(collection):
+    """Returns a reversed copy of the collection."""
+    return list(reversed(collection))
 
 
 def ds_percent_of(pct, total):

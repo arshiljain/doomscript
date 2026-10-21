@@ -1075,7 +1075,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
 
     # Expression sort: sorted <var> -> sorted of <var>
     masked = re.sub(
-        r"\bsorted\s+(?!of\b)([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)(?!\s*[\(=])\b",
+        r"\bsorted\s+(?!of\b)(?!by\b)([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)(?!\s*[\(=])\b",
         r"sorted of \1",
         masked,
         flags=re.IGNORECASE
@@ -1768,6 +1768,115 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"\blast\s+(\d+|[A-Za-z_]\w*)\s+items\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"last_n_items(\1, \2)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\b(?:title|titlecase)\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"str_title(\1)", masked, flags=re.IGNORECASE)
 
+    # Frontier 6: Safe Null-Coalescing & Default Fallbacks (otherwise / default)
+    # Note: 'verify that <cond> otherwise <msg>' uses 'otherwise' as syntax separator, not null-coalescing.
+    is_verify_stmt = bool(re.search(r"^\s*verify\s+that\b", masked, re.IGNORECASE))
+
+    masked = re.sub(
+        r"\b([A-Za-z_]\w*)'s\s+([A-Za-z_]\w*)\s+(?:otherwise|default)\s+([^\s,:\);]+(?:\s+[^\s,:\);]+)*)",
+        r'ds_attr(\1, "\2", \3)',
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"\b([A-Za-z_]\w*)\.([A-Za-z_]\w*)\s+(?:otherwise|default)\s+([^\s,:\);]+(?:\s+[^\s,:\);]+)*)",
+        r'ds_attr(\1, "\2", \3)',
+        masked,
+        flags=re.IGNORECASE
+    )
+    if not is_verify_stmt:
+        def _coal_repl(m):
+            w = m.group(1)
+            if m.start() == 0 or w.lower() in ("verify", "check", "assert", "if", "unless", "when", "otherwise", "else"):
+                return m.group(0)
+            return f"ds_coalesce({w}, {m.group(2)})"
+
+        masked = re.sub(
+            r"\b([A-Za-z_]\w*)\s+(?:otherwise|default)\s+([^\s,:\);]+(?:\s+[^\s,:\);]+)*)",
+            _coal_repl,
+            masked,
+            flags=re.IGNORECASE
+        )
+
+    # Frontier 1: Disjunctions (either ... or ... / neither ... nor ...)
+    masked = re.sub(
+        r"\b([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s+is\s+either\s+(.+?)\s+or\s+([^\s,:\);]+)",
+        r"(\1 is one of [\2, \3])",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"\b([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s+is\s+neither\s+(.+?)\s+nor\s+([^\s,:\);]+)",
+        r"(not (\1 is one of [\2, \3]))",
+        masked,
+        flags=re.IGNORECASE
+    )
+
+    # Frontier 2: Proportional percentage arithmetic mutators (increase/decrease by N%)
+    inc_pct_m = re.match(
+        r"^\s*increase\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+by\s+(\d+(?:\.\d+)?)\s*(?:%|percent)\s*$",
+        masked,
+        re.IGNORECASE
+    )
+    if inc_pct_m:
+        target_v = inc_pct_m.group(1).strip()
+        pct_num = float(inc_pct_m.group(2)) / 100.0
+        masked = f"set {target_v} to {target_v} * {1.0 + pct_num}"
+
+    dec_pct_m = re.match(
+        r"^\s*decrease\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+by\s+(\d+(?:\.\d+)?)\s*(?:%|percent)\s*$",
+        masked,
+        re.IGNORECASE
+    )
+    if dec_pct_m:
+        target_v = dec_pct_m.group(1).strip()
+        pct_num = float(dec_pct_m.group(2)) / 100.0
+        masked = f"set {target_v} to {target_v} * {1.0 - pct_num}"
+
+    # Frontier 3: Participle expressions (parity between expressions and statements)
+    masked = re.sub(
+        r"\b([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s+joined\s+with\s+(.+?)(?=[,\)\n;]|$)",
+        r"ds_join(\1, \2)",
+        masked,
+        flags=re.IGNORECASE
+    )
+    def _sort_by_repl(m):
+        coll = m.group(1)
+        attr = m.group(2)
+        desc = True if (m.group(3) and m.group(3).lower() == 'descending') else False
+        return f"ds_sorted_by({coll}, '{attr}', reverse={desc})"
+
+    masked = re.sub(
+        r"\b([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s+sorted\s+by\s+([A-Za-z_]\w*)(?:\s+(descending|ascending))?\b",
+        _sort_by_repl,
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"\b([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s+sorted\b(?!\s+by\b)",
+        r"sorted(\1)",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(r"\b([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s+trimmed\b", r"ds_trim(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s+uppercase\b", r"ds_uppercase(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s+lowercase\b", r"ds_lowercase(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s+reversed\b", r"ds_reversed(\1)", masked, flags=re.IGNORECASE)
+
+    # Frontier 4: Range Literals and Loops
+    masked = re.sub(
+        r"^\s*for\s+(?:each\s+)?([A-Za-z_]\w*)\s+in\s+(\d+|[A-Za-z_]\w*)\s+to\s+(\d+|[A-Za-z_]\w*)\s*:",
+        r"for each \1 from \2 to \3:",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"\[\s*(\d+|[A-Za-z_]\w*|__STR_\d+__)\s+to\s+(\d+|[A-Za-z_]\w*|__STR_\d+__)\s*\]",
+        r"ds_range(\1, \2)",
+        masked,
+        flags=re.IGNORECASE
+    )
+
     # Chained possessives: A's B's C -> get_field(get_field(A, "B"), "C")
     while re.search(r"\b([A-Za-z_]\w*)'s\s+([A-Za-z_]\w*)'s\s+([A-Za-z_]\w*)", masked):
         masked = re.sub(
@@ -2374,6 +2483,14 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
             p_repl = f"ds_pipe({p_expr}, {', '.join(p_funcs)})"
             masked = masked[:pipe_expr_m.start()] + p_repl + masked[pipe_expr_m.end():]
 
+    take_last_m = re.match(r"^\s*take\s+last\s+(.+?)\s+(?:items\s+)?from\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if take_last_m:
+        masked = f"set {take_last_m.group(3)} to ds_take_last({take_last_m.group(2).strip()}, {take_last_m.group(1).strip()})"
+
+    drop_last_m = re.match(r"^\s*drop\s+last\s+(.+?)\s+(?:items\s+)?from\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if drop_last_m:
+        masked = f"set {drop_last_m.group(3)} to ds_drop_last({drop_last_m.group(2).strip()}, {drop_last_m.group(1).strip()})"
+
     take_m = re.match(r"^take\s+(?:first\s+)?(.+?)\s+(?:items\s+)?from\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
     if take_m:
         masked = f"set {take_m.group(3)} to ds_take({take_m.group(2).strip()}, {take_m.group(1).strip()})"
@@ -2792,7 +2909,39 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
         d_name = b_info["domain"].name
         emit(f"{b_info['parent_indent']}set {target_var} to execute_{d_name}_ir('{spec_id}')", b_info["header_line"])
 
+    expanded_lines: List[Tuple[int, str]] = []
     for line_idx, raw_line in enumerate(lines, start=1):
+        cur_raw = raw_line
+        cur_indent_len = len(cur_raw) - len(cur_raw.lstrip(" "))
+        cur_indent = " " * cur_indent_len
+        split_any = False
+        while True:
+            stripped = cur_raw.strip()
+            code_no_comment, comment = split_comment(stripped)
+            if not code_no_comment:
+                break
+            masked_inline, inline_strings = mask_strings(code_no_comment)
+            inline_m = re.match(
+                r"^(if\s+.+?|unless\s+.+?|while\s+.+?|until\s+.+?|repeat\s+.+?\s+times|for\s+(?:each\s+)?[A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*\s+in\s+[^:]+)\s*:\s*([^\s#].+)$",
+                masked_inline,
+                re.IGNORECASE
+            )
+            if not inline_m:
+                break
+            split_any = True
+            hdr = unmask_strings(inline_m.group(1).strip() + ":", inline_strings)
+            body = unmask_strings(inline_m.group(2).strip(), inline_strings)
+            expanded_lines.append((line_idx, f"{cur_indent}{hdr}"))
+            cur_indent += "    "
+            cur_raw = f"{cur_indent}{body}"
+            if comment and not re.search(r"#(?!.*['\"])", cur_raw):
+                cur_raw += f" {comment}"
+        if split_any:
+            expanded_lines.append((line_idx, cur_raw))
+        else:
+            expanded_lines.append((line_idx, raw_line))
+
+    for line_idx, raw_line in expanded_lines:
         if not raw_line.strip():
             if domain_block_stack:
                 domain_block_stack[-1]["lines"].append((line_idx, raw_line))

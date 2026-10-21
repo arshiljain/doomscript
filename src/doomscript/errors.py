@@ -192,9 +192,10 @@ def translate_lark_error(err: Exception, source_line: str) -> Tuple[str, Optiona
     """
     clean_line = source_line.strip()
 
-    # 1. Unclosed quotes check
-    dquotes = len(re.findall(r'(?<!\\)"', clean_line))
-    squotes = len(re.findall(r"(?<!\\)'", clean_line))
+    # 1. Unclosed quotes check (mask possessive apostrophes first)
+    clean_for_quotes = re.sub(r"\b[A-Za-z_]\w*'s\b", "", clean_line)
+    dquotes = len(re.findall(r'(?<!\\)"', clean_for_quotes))
+    squotes = len(re.findall(r"(?<!\\)'", clean_for_quotes))
     if dquotes % 2 != 0:
         return (
             "It looks like an unclosed double quote (\"). Every opening quote needs a matching closing quote.",
