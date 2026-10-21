@@ -209,3 +209,35 @@ find the cheapest order in orders by amount into budget_order
     env = execute(code)
     assert env["top_order"]["id"] == 102
     assert env["budget_order"]["id"] == 103
+
+
+# ---------------------------------------------------------------------------
+# Phase 3, Task 3.1: Runtime Resilience Engine
+# ---------------------------------------------------------------------------
+
+def test_runtime_resilience():
+    from doomscript.runtime import ds_retry, ds_with_timeout, ds_cached_call
+
+    # Retry test
+    attempts = [0]
+    def flaky():
+        attempts[0] += 1
+        if attempts[0] < 3:
+            raise ValueError("Network glitch")
+        return "success"
+
+    res = ds_retry(flaky, max_attempts=4, backoff=0.01)
+    assert res == "success"
+    assert attempts[0] == 3
+
+    # Caching test
+    calc_count = [0]
+    def slow_calc():
+        calc_count[0] += 1
+        return 42
+
+    c1 = ds_cached_call("test_key", slow_calc, ttl_seconds=60)
+    c2 = ds_cached_call("test_key", slow_calc, ttl_seconds=60)
+    assert c1 == 42
+    assert c2 == 42
+    assert calc_count[0] == 1  # Cache hit

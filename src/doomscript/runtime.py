@@ -910,6 +910,46 @@ def ds_find_superlative(collection, order="max", key=None):
         return items[0]
 
 
+_DS_GLOBAL_CACHE = {}
+
+def ds_retry(action_fn, max_attempts=3, backoff=0.1):
+    """Executes action_fn, retrying up to max_attempts on error with exponential backoff."""
+    import time
+    last_err = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return action_fn()
+        except Exception as e:
+            last_err = e
+            if attempt < max_attempts:
+                time.sleep(backoff * (2 ** (attempt - 1)))
+    raise last_err
+
+
+def ds_with_timeout(action_fn, seconds=5.0):
+    """Executes action_fn with a timeout limit."""
+    import concurrent.futures
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(action_fn)
+        try:
+            return future.result(timeout=seconds)
+        except concurrent.futures.TimeoutError:
+            raise DoomRuntimeError(f"Action timed out after {seconds} seconds.")
+
+
+def ds_cached_call(cache_key, action_fn, ttl_seconds=300.0):
+    """Executes action_fn caching its result for ttl_seconds."""
+    import time
+    now = time.time()
+    if cache_key in _DS_GLOBAL_CACHE:
+        cached_time, val = _DS_GLOBAL_CACHE[cache_key]
+        if now - cached_time < ttl_seconds:
+            return val
+    val = action_fn()
+    _DS_GLOBAL_CACHE[cache_key] = (now, val)
+    return val
+
+
 def ds_at_least_n(collection, n, predicate_fn):
     """Checks whether at least n elements in collection match predicate."""
     if not collection:
