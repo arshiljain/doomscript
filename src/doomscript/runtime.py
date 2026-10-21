@@ -1530,6 +1530,74 @@ def summarize_data(table: Any, metric_col: str, group_col: str, agg_fn: str = "s
     return summaries
 
 
+def calculate_compound_interest(principal: Any, rate: Any, years: Any, periods: int = 1) -> float:
+    """
+    Calculates compound interest: A = P * (1 + r/n)**(n*t).
+    Handles rates given as decimals (0.05) or percentages (5 or '5%').
+    """
+    p = float(principal)
+    if isinstance(rate, str) and rate.endswith("%"):
+        r = float(rate[:-1].strip()) / 100.0
+    else:
+        r = float(rate)
+        if r > 1.0:
+            r = r / 100.0
+    t = float(years)
+    n = max(1, int(periods))
+    total = p * ((1.0 + r / n) ** (n * t))
+    return round(total, 2)
+
+
+def simulate_portfolio(allocations: Any, initial_value: float = 10000.0, horizon_days: int = 30) -> Record:
+    """
+    Simulates multi-asset portfolio returns, volatility, projected value, and risk metrics.
+    """
+    import math
+    if allocations is None:
+        allocations = {}
+    elif isinstance(allocations, Record):
+        allocations = dict(allocations)
+    elif not isinstance(allocations, dict):
+        allocations = {}
+
+    total_w = sum(float(v) for v in allocations.values()) if allocations else 1.0
+    norm_alloc = {str(k): (float(v) / total_w if total_w > 0 else 0.0) for k, v in allocations.items()}
+
+    asset_returns = {
+        "BTC": 0.25, "ETH": 0.22, "SOL": 0.30,
+        "AAPL": 0.14, "MSFT": 0.15, "GOOG": 0.13, "AMZN": 0.14, "NVDA": 0.28,
+        "SPY": 0.10, "QQQ": 0.13,
+    }
+    asset_vols = {
+        "BTC": 0.55, "ETH": 0.65, "SOL": 0.70,
+        "AAPL": 0.22, "MSFT": 0.20, "GOOG": 0.24, "AMZN": 0.25, "NVDA": 0.40,
+        "SPY": 0.16, "QQQ": 0.19,
+    }
+
+    exp_ret = sum(norm_alloc[k] * asset_returns.get(k.upper(), 0.12) for k in norm_alloc)
+    port_vol = math.sqrt(sum((norm_alloc[k] * asset_vols.get(k.upper(), 0.25)) ** 2 for k in norm_alloc))
+    if not norm_alloc:
+        exp_ret = 0.10
+        port_vol = 0.15
+
+    dt = float(horizon_days) / 365.0
+    init_val = float(initial_value)
+    projected_val = round(init_val * math.exp(exp_ret * dt), 2)
+    sharpe = round((exp_ret - 0.04) / max(1e-6, port_vol), 4)
+    var_95 = round(1.645 * port_vol * math.sqrt(max(1e-6, dt)) * 100.0, 2)
+
+    return Record({
+        "allocations": Record(norm_alloc),
+        "initial_value": init_val,
+        "projected_value": projected_val,
+        "expected_annual_return": round(exp_ret, 4),
+        "annual_volatility": round(port_vol, 4),
+        "sharpe_ratio": sharpe,
+        "var_95": var_95,
+        "horizon_days": horizon_days,
+    })
+
+
 def combine_tables(left: list, right: list, on_key: str, how: str = "inner") -> list:
     """
     Performs a relational join on two lists of dictionaries/Records.

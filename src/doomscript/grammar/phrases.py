@@ -1313,6 +1313,41 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
 
     masked = re.sub(r"\b(?:reversed|reverse)\s+in\b", "reversed of", masked, flags=re.IGNORECASE)
 
+    # Conversational Finance & Simulation:
+    sim_port_m = re.match(
+        r"^\s*simulate\s+portfolio\s+with\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+        masked,
+        re.IGNORECASE,
+    )
+    if sim_port_m:
+        raw_with = sim_port_m.group(1).strip()
+        target_var = sim_port_m.group(2).strip()
+        if "%" in raw_with:
+            pct_pairs = re.findall(r"(\d+(?:\.\d+)?)\s*%\s*([A-Za-z_]\w*)", raw_with)
+            if pct_pairs:
+                dict_body = ", ".join(f'"{sym}": {float(p)/100.0}' for p, sym in pct_pairs)
+                masked = f"{target_var} = simulate_portfolio({{{dict_body}}})"
+            else:
+                masked = f"{target_var} = simulate_portfolio({raw_with})"
+        else:
+            masked = f"{target_var} = simulate_portfolio({raw_with})"
+
+    calc_ci_m = re.match(
+        r"^\s*calculate\s+compound\s+interest\s+on\s+principal\s+(.+?)\s+at\s+rate\s+(.+?)\s+(?:over|for)\s+(.+?)\s+years\s+into\s+([A-Za-z_]\w*)$",
+        masked,
+        re.IGNORECASE,
+    )
+    if calc_ci_m:
+        p_expr = calc_ci_m.group(1).strip()
+        r_expr = calc_ci_m.group(2).strip()
+        y_expr = calc_ci_m.group(3).strip()
+        target_var = calc_ci_m.group(4).strip()
+        if r_expr.endswith("%"):
+            r_val = str(float(r_expr[:-1].strip()) / 100.0)
+        else:
+            r_val = r_expr
+        masked = f"{target_var} = calculate_compound_interest({p_expr}, {r_val}, {y_expr})"
+
     # Conversational Data Summaries:
     summ_col_m = re.match(
         r"^\s*summarize\s+column\s+(.+?)\s+by\s+(.+?)\s+(?:in|from)\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",

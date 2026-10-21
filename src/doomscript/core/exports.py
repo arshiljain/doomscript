@@ -231,6 +231,8 @@ CORE_EXPORT_NAMES: frozenset[str] = frozenset([
     "extract_html_text",
     "extract_json_field",
     "load_json_file",
+    "calculate_compound_interest",
+    "simulate_portfolio",
     "summarize_data",
     "extract_zip_archive",
     "f_cdf",

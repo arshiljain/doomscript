@@ -180,3 +180,47 @@ plot regional_sales as a bar chart titled "Q4 Regional Sales" into my_chart
     chart = env["my_chart"]
     assert chart._labels.title == "Q4 Regional Sales"
 
+
+# ---------------------------------------------------------------------------
+# Task 3: Finance & Simulation Conversational Tests
+# ---------------------------------------------------------------------------
+
+def test_conversational_compound_interest():
+    code = """
+calculate compound interest on principal 1000 at rate 5% over 10 years into total
+calculate compound interest on principal 2000 at rate 0.08 over 3 years into total2
+"""
+    env = execute(code)
+    assert "total" in env
+    assert env["total"] == 1628.89
+    assert "total2" in env
+    assert env["total2"] == 2519.42
+
+
+def test_conversational_portfolio_simulation_percentages():
+    code = """
+simulate portfolio with 50% BTC and 50% ETH into sim_result
+"""
+    env = execute(code)
+    assert "sim_result" in env
+    res = env["sim_result"]
+    assert res["allocations"]["BTC"] == 0.5
+    assert res["allocations"]["ETH"] == 0.5
+    assert res["initial_value"] == 10000.0
+    assert res["projected_value"] > 0
+    assert "sharpe_ratio" in res
+
+
+def test_conversational_portfolio_simulation_dict():
+    code = """
+weights = {"AAPL": 0.6, "MSFT": 0.4}
+simulate portfolio with weights into sim_result
+"""
+    env = execute(code)
+    assert "sim_result" in env
+    res = env["sim_result"]
+    assert res["allocations"]["AAPL"] == 0.6
+    assert res["allocations"]["MSFT"] == 0.4
+    assert res["projected_value"] > 0
+
+
