@@ -610,7 +610,7 @@ TEST_CASES = [
         "name": "Assertion fail 'verify that age is at least 18 otherwise \"Must be an adult\"'",
         "code": "age = 16\nverify that age is at least 18 otherwise \"Must be an adult\"",
         "expected": "fails with message 'Must be an adult', check if AssertionError leaks",
-        "expect_error": "AssertionError",
+        "expect_error": ["AssertionError", "DoomAssertionError", "DoomError"],
     },
     {
         "id": "IO-09",
@@ -639,6 +639,477 @@ TEST_CASES = [
         "name": "Natural phrasing 'try: ... if there is an error: ...'",
         "code": "try:\n    x = 10 / 0\nif there is an error:\n    say \"RECOVERED\"",
         "expected": "recovers gracefully",
+    },
+
+    # -------------------------------------------------------------------------
+    # 6. THOUGHT-TO-CODE PHASE 1: DISCOURSE PRONOUNS & QUANTIFIERS
+    # -------------------------------------------------------------------------
+    {
+        "id": "P1-01",
+        "category": "Discourse Pronouns & Quantifiers",
+        "name": "Pronoun 'it' after assignment",
+        "code": "x = 10\ndouble it\nsay x",
+        "expected": "x becomes 20, prints 20",
+    },
+    {
+        "id": "P1-02",
+        "category": "Discourse Pronouns & Quantifiers",
+        "name": "Pronoun 'it' in condition",
+        "code": "score = 95\nif it is at least 90:\n    say \"EXCELLENT\"",
+        "expected": "prints EXCELLENT",
+    },
+    {
+        "id": "P1-03",
+        "category": "Discourse Pronouns & Quantifiers",
+        "name": "Dual referents 'it' (singular) and 'them' (plural)",
+        "code": "numbers = [1, 2, 3]\nx = 10\nadd x to them\nsay count of numbers",
+        "expected": "count becomes 4",
+    },
+    {
+        "id": "P1-04",
+        "category": "Discourse Pronouns & Quantifiers",
+        "name": "Pronoun 'that' referring to previous result",
+        "code": "x = 5\ndouble it\nhalve that\nsay x",
+        "expected": "x becomes 5",
+    },
+    {
+        "id": "P1-05",
+        "category": "Discourse Pronouns & Quantifiers",
+        "name": "Possessive 'its' property access",
+        "code": "user = {\"name\": \"Alice\", \"age\": 30}\nsay its name",
+        "expected": "prints Alice",
+    },
+    {
+        "id": "P1-06",
+        "category": "Discourse Pronouns & Quantifiers",
+        "name": "Plural 'their count' query",
+        "code": "items = [10, 20, 30]\nsay their count",
+        "expected": "prints 3",
+    },
+    {
+        "id": "P1-07",
+        "category": "Discourse Pronouns & Quantifiers",
+        "name": "Universal quantifier 'all numbers are even'",
+        "code": "numbers = [2, 4, 6]\nif all numbers are even:\n    say \"ALL_EVEN\"",
+        "expected": "prints ALL_EVEN",
+    },
+    {
+        "id": "P1-08",
+        "category": "Discourse Pronouns & Quantifiers",
+        "name": "Universal quantifier 'every x in numbers is positive'",
+        "code": "numbers = [1, 2, 3]\nif every x in numbers is positive:\n    say \"ALL_POS\"",
+        "expected": "prints ALL_POS",
+    },
+    {
+        "id": "P1-09",
+        "category": "Discourse Pronouns & Quantifiers",
+        "name": "Universal quantifier false branch",
+        "code": "numbers = [2, 3, 4]\nif all numbers are even:\n    say \"YES\"\nelse:\n    say \"NOT_ALL\"",
+        "expected": "prints NOT_ALL",
+    },
+    {
+        "id": "P1-10",
+        "category": "Discourse Pronouns & Quantifiers",
+        "name": "Existential quantifier 'any x in mixed is odd'",
+        "code": "mixed = [2, 3, 4]\nif any x in mixed is odd:\n    say \"HAS_ODD\"",
+        "expected": "prints HAS_ODD",
+    },
+    {
+        "id": "P1-11",
+        "category": "Discourse Pronouns & Quantifiers",
+        "name": "Existential quantifier false branch",
+        "code": "evens = [2, 4, 6]\nif any x in evens is odd:\n    say \"YES\"\nelse:\n    say \"NONE_ODD\"",
+        "expected": "prints NONE_ODD",
+    },
+    {
+        "id": "P1-12",
+        "category": "Discourse Pronouns & Quantifiers",
+        "name": "Negative quantifier 'no x in list is negative'",
+        "code": "clean = [1, 2, 3]\nif no x in clean is negative:\n    say \"ALL_NON_NEG\"",
+        "expected": "prints ALL_NON_NEG",
+    },
+    {
+        "id": "P1-13",
+        "category": "Discourse Pronouns & Quantifiers",
+        "name": "Negative quantifier false branch",
+        "code": "dirty = [1, -2, 3]\nif no x in dirty is negative:\n    say \"CLEAN\"\nelse:\n    say \"HAS_NEG\"",
+        "expected": "prints HAS_NEG",
+    },
+    {
+        "id": "P1-14",
+        "category": "Discourse Pronouns & Quantifiers",
+        "name": "Universal quantifier 'all items are positive'",
+        "code": "vals = [10, 20]\nif all vals are positive:\n    say \"POSITIVE\"",
+        "expected": "prints POSITIVE",
+    },
+    {
+        "id": "P1-15",
+        "category": "Discourse Pronouns & Quantifiers",
+        "name": "Plural membership 'in them'",
+        "code": "fruits = [\"apple\", \"banana\"]\nif \"apple\" is in them:\n    say \"FOUND\"",
+        "expected": "prints FOUND",
+    },
+
+    # -------------------------------------------------------------------------
+    # 7. THOUGHT-TO-CODE PHASE 2: CONTEXTUAL ATTRIBUTES, SUPERLATIVES & WHOSE
+    # -------------------------------------------------------------------------
+    {
+        "id": "P2-01",
+        "category": "Contextual Attributes & Superlatives",
+        "name": "Contextual attribute filter 'keep only orders where price > 100'",
+        "code": "orders = [{\"id\": 1, \"price\": 150}, {\"id\": 2, \"price\": 50}]\nkeep only orders where price > 100\nsay count of orders",
+        "expected": "prints 1",
+    },
+    {
+        "id": "P2-02",
+        "category": "Contextual Attributes & Superlatives",
+        "name": "Contextual attribute discard 'discard from orders where price >= 100'",
+        "code": "orders = [{\"id\": 1, \"price\": 150}, {\"id\": 2, \"price\": 50}]\ndiscard from orders where price >= 100\nsay count of orders",
+        "expected": "prints 1",
+    },
+    {
+        "id": "P2-03",
+        "category": "Contextual Attributes & Superlatives",
+        "name": "Compound contextual attribute filter",
+        "code": "users = [{\"name\": \"Alice\", \"active\": true, \"age\": 25}, {\"name\": \"Bob\", \"active\": false, \"age\": 30}]\nkeep only users where age > 20 and active is true\nsay count of users",
+        "expected": "prints 1",
+    },
+    {
+        "id": "P2-04",
+        "category": "Contextual Attributes & Superlatives",
+        "name": "Relative clause loop 'whose role is admin'",
+        "code": "users = [{\"name\": \"Alice\", \"role\": \"admin\"}, {\"name\": \"Bob\", \"role\": \"user\"}]\nfor each user in users whose role is \"admin\":\n    say user's name",
+        "expected": "prints Alice",
+    },
+    {
+        "id": "P2-05",
+        "category": "Contextual Attributes & Superlatives",
+        "name": "Relative clause loop numeric 'whose score >= 90'",
+        "code": "students = [{\"name\": \"A\", \"score\": 95}, {\"name\": \"B\", \"score\": 70}]\nfor each s in students whose score >= 90:\n    say s's name",
+        "expected": "prints A",
+    },
+    {
+        "id": "P2-06",
+        "category": "Contextual Attributes & Superlatives",
+        "name": "Superlative 'find largest order in orders by amount into top'",
+        "code": "orders = [{\"id\": 1, \"amount\": 100}, {\"id\": 2, \"amount\": 300}, {\"id\": 3, \"amount\": 200}]\nfind the largest order in orders by amount into top\nsay top's id",
+        "expected": "prints 2",
+    },
+    {
+        "id": "P2-07",
+        "category": "Contextual Attributes & Superlatives",
+        "name": "Superlative 'find cheapest item in items by price into best'",
+        "code": "items = [{\"name\": \"Pen\", \"price\": 5}, {\"name\": \"Book\", \"price\": 20}]\nfind the cheapest item in items by price into best\nsay best's name",
+        "expected": "prints Pen",
+    },
+    {
+        "id": "P2-08",
+        "category": "Contextual Attributes & Superlatives",
+        "name": "Superlative 'find oldest person in people by age into elder'",
+        "code": "people = [{\"name\": \"Anna\", \"age\": 25}, {\"name\": \"Grandpa\", \"age\": 80}]\nfind the oldest person in people by age into elder\nsay elder's name",
+        "expected": "prints Grandpa",
+    },
+    {
+        "id": "P2-09",
+        "category": "Contextual Attributes & Superlatives",
+        "name": "Superlative 'find newest event in events by timestamp into latest'",
+        "code": "events = [{\"name\": \"E1\", \"timestamp\": 100}, {\"name\": \"E2\", \"timestamp\": 200}]\nfind the newest event in events by timestamp into latest\nsay latest's name",
+        "expected": "prints E2",
+    },
+    {
+        "id": "P2-10",
+        "category": "Contextual Attributes & Superlatives",
+        "name": "Superlative 'find smallest number in nums into min_val'",
+        "code": "nums = [15, 3, 42, 8]\nfind the smallest n in nums by x into min_n\nsay min_n",
+        "expected": "prints 3",
+    },
+    {
+        "id": "P2-11",
+        "category": "Contextual Attributes & Superlatives",
+        "name": "Superlative 'find highest score in scores into top'",
+        "code": "scores = [88, 92, 79, 99]\nfind the highest s in scores by x into top\nsay top",
+        "expected": "prints 99",
+    },
+    {
+        "id": "P2-12",
+        "category": "Contextual Attributes & Superlatives",
+        "name": "Relative clause loop 'whose status is done'",
+        "code": "tasks = [{\"title\": \"T1\", \"status\": \"done\"}, {\"title\": \"T2\", \"status\": \"todo\"}]\nfor each t in tasks whose status is \"done\":\n    say t's title",
+        "expected": "prints T1",
+    },
+    {
+        "id": "P2-13",
+        "category": "Contextual Attributes & Superlatives",
+        "name": "Contextual attribute filter on dict items",
+        "code": "items = [{\"val\": 10}, {\"val\": 50}]\nkeep only items where val > 20\nsay count of items",
+        "expected": "prints 1",
+    },
+    {
+        "id": "P2-14",
+        "category": "Contextual Attributes & Superlatives",
+        "name": "Filter with equality on string attribute",
+        "code": "people = [{\"name\": \"Alice\", \"dept\": \"eng\"}, {\"name\": \"Bob\", \"dept\": \"sales\"}]\nkeep only people where dept is \"eng\"\nsay count of people",
+        "expected": "prints 1",
+    },
+    {
+        "id": "P2-15",
+        "category": "Contextual Attributes & Superlatives",
+        "name": "Discard with equality on string attribute",
+        "code": "people = [{\"name\": \"Alice\", \"dept\": \"eng\"}, {\"name\": \"Bob\", \"dept\": \"sales\"}]\ndiscard from people where dept is \"sales\"\nsay count of people",
+        "expected": "prints 1",
+    },
+
+    # -------------------------------------------------------------------------
+    # 8. THOUGHT-TO-CODE PHASE 3: DECLARATIVE RESILIENCE & COMPOUND ACTIONS
+    # -------------------------------------------------------------------------
+    {
+        "id": "P3-01",
+        "category": "Resilience & Compound Actions",
+        "name": "Adverbial qualifier 'retrying 3 times'",
+        "code": "attempts = [0]\nto flaky:\n    attempts[0] = attempts[0] + 1\n    if attempts[0] < 2:\n        make error \"Flaky error\"\n    return 42\ncall flaky retrying 3 times into res\nsay res",
+        "expected": "prints 42",
+    },
+    {
+        "id": "P3-02",
+        "category": "Resilience & Compound Actions",
+        "name": "Adverbial qualifier with backoff",
+        "code": "attempts = [0]\nto flaky:\n    attempts[0] = attempts[0] + 1\n    if attempts[0] < 2:\n        make error \"Transient\"\n    return \"OK\"\ncall flaky retrying 2 times with 0.01 seconds backoff into res\nsay res",
+        "expected": "prints OK",
+    },
+    {
+        "id": "P3-03",
+        "category": "Resilience & Compound Actions",
+        "name": "Adverbial qualifier with timeout",
+        "code": "to fast_op:\n    return 99\ncall fast_op with timeout of 2 seconds into res\nsay res",
+        "expected": "prints 99",
+    },
+    {
+        "id": "P3-04",
+        "category": "Resilience & Compound Actions",
+        "name": "Adverbial qualifier caching",
+        "code": "calls = [0]\nto compute_expensive:\n    calls[0] = calls[0] + 1\n    return calls[0]\ncall compute_expensive caching for 5 minutes into r1\ncall compute_expensive caching for 5 minutes into r2\nsay r1, r2",
+        "expected": "prints 1 1",
+    },
+    {
+        "id": "P3-05",
+        "category": "Resilience & Compound Actions",
+        "name": "Adverbial qualifier bare call",
+        "code": "flag = [0]\nto run_action:\n    flag[0] = 1\ncall run_action retrying 2 times\nsay flag[0]",
+        "expected": "prints 1",
+    },
+    {
+        "id": "P3-06",
+        "category": "Resilience & Compound Actions",
+        "name": "Compound sentence 'then if'",
+        "code": "items = [1, 2, 3]\nset c to count of items, then if c > 0:\n    say \"HAS_ITEMS\"",
+        "expected": "prints HAS_ITEMS",
+    },
+    {
+        "id": "P3-07",
+        "category": "Resilience & Compound Actions",
+        "name": "Compound sentence 'and then if'",
+        "code": "val = 10\nincrease val by 5, and then if val > 12:\n    say \"BIG\"",
+        "expected": "prints BIG",
+    },
+    {
+        "id": "P3-08",
+        "category": "Resilience & Compound Actions",
+        "name": "Compound sentence with 'then unless'",
+        "code": "val = 0\nincrease val by 1, then unless val is zero:\n    say \"NON_ZERO\"",
+        "expected": "prints NON_ZERO",
+    },
+    {
+        "id": "P3-09",
+        "category": "Resilience & Compound Actions",
+        "name": "Sequential compound 'and then' statements",
+        "code": "x = 10\nadd 5 to x, and then say x",
+        "expected": "prints 15",
+    },
+    {
+        "id": "P3-10",
+        "category": "Resilience & Compound Actions",
+        "name": "Compound sentence with assignment",
+        "code": "x = 2\ndouble it, and then double it\nsay x",
+        "expected": "prints 8",
+    },
+    {
+        "id": "P3-11",
+        "category": "Resilience & Compound Actions",
+        "name": "Compound sentence with loop",
+        "code": "nums = [1, 2]\nadd 3 to nums, then for each n in nums:\n    say n",
+        "expected": "prints 1\n2\n3",
+    },
+    {
+        "id": "P3-12",
+        "category": "Resilience & Compound Actions",
+        "name": "Retry exceeding attempts recovery",
+        "code": "to always_fail:\n    make error \"Failed completely\"\ntry:\n    call always_fail retrying 2 times\nif that fails:\n    say \"HANDLED\"",
+        "expected": "prints HANDLED",
+    },
+    {
+        "id": "P3-13",
+        "category": "Resilience & Compound Actions",
+        "name": "Adverbial qualifier bare function syntax",
+        "code": "to ping:\n    return \"PONG\"\nping retrying 2 times into out\nsay out",
+        "expected": "prints PONG",
+    },
+    {
+        "id": "P3-14",
+        "category": "Resilience & Compound Actions",
+        "name": "Compound sentence 'set x to 5, then say x'",
+        "code": "set x to 5, then say x",
+        "expected": "prints 5",
+    },
+    {
+        "id": "P3-15",
+        "category": "Resilience & Compound Actions",
+        "name": "Sequential compound with multiple actions",
+        "code": "x = 1\nincrease x by 1, and then increase x by 2\nsay x",
+        "expected": "prints 4",
+    },
+
+    # -------------------------------------------------------------------------
+    # 9. THOUGHT-TO-CODE PHASE 4: SET RESHAPING & STATISTICAL INQUIRIES
+    # -------------------------------------------------------------------------
+    {
+        "id": "P4-01",
+        "category": "Set Reshaping & Analytics Inquiries",
+        "name": "Relational 'pair A with B into C'",
+        "code": "a = [\"x\", \"y\"]\nb = [1, 2]\npair a with b into pairs\nsay count of pairs",
+        "expected": "prints 2",
+    },
+    {
+        "id": "P4-02",
+        "category": "Set Reshaping & Analytics Inquiries",
+        "name": "Relational 'pair A with B into dictionary C'",
+        "code": "keys = [\"k1\", \"k2\"]\nvals = [10, 20]\npair keys with vals into dictionary d\nsay d's k1",
+        "expected": "prints 10",
+    },
+    {
+        "id": "P4-03",
+        "category": "Set Reshaping & Analytics Inquiries",
+        "name": "Relational 'partition numbers into evens, odds where x is even'",
+        "code": "numbers = [1, 2, 3, 4]\npartition numbers into evens, odds where x is even\nsay count of evens, count of odds",
+        "expected": "prints 2 2",
+    },
+    {
+        "id": "P4-04",
+        "category": "Set Reshaping & Analytics Inquiries",
+        "name": "Relational 'partition numbers into evens and odds where x is even'",
+        "code": "numbers = [1, 2, 3, 4]\npartition numbers into evens and odds where x is even\nsay count of evens",
+        "expected": "prints 2",
+    },
+    {
+        "id": "P4-05",
+        "category": "Set Reshaping & Analytics Inquiries",
+        "name": "Relational 'partition with contextual attribute'",
+        "code": "orders = [{\"amt\": 150}, {\"amt\": 50}]\npartition orders into high, low where amt > 100\nsay count of high, count of low",
+        "expected": "prints 1 1",
+    },
+    {
+        "id": "P4-06",
+        "category": "Set Reshaping & Analytics Inquiries",
+        "name": "Relational 'flatten matrix into flat'",
+        "code": "matrix = [[1, 2], [3, 4]]\nflatten matrix into flat\nsay count of flat",
+        "expected": "prints 4",
+    },
+    {
+        "id": "P4-07",
+        "category": "Set Reshaping & Analytics Inquiries",
+        "name": "Conversational 'what is the total amount in orders into total_val'",
+        "code": "orders = [{\"amount\": 100}, {\"amount\": 200}]\nwhat is the total amount in orders into total_val\nsay total_val",
+        "expected": "prints 300",
+    },
+    {
+        "id": "P4-08",
+        "category": "Set Reshaping & Analytics Inquiries",
+        "name": "Conversational 'what is the average amount in orders into avg_val'",
+        "code": "orders = [{\"amount\": 100}, {\"amount\": 300}]\nwhat is the average amount in orders into avg_val\nsay avg_val",
+        "expected": "prints 200.0",
+    },
+    {
+        "id": "P4-09",
+        "category": "Set Reshaping & Analytics Inquiries",
+        "name": "Conversational 'what is the highest amount in orders into max_val'",
+        "code": "orders = [{\"amount\": 100}, {\"amount\": 500}]\nwhat is the highest amount in orders into max_val\nsay max_val",
+        "expected": "prints 500",
+    },
+    {
+        "id": "P4-10",
+        "category": "Set Reshaping & Analytics Inquiries",
+        "name": "Conversational 'what is the lowest amount in orders into min_val'",
+        "code": "orders = [{\"amount\": 50}, {\"amount\": 200}]\nwhat is the lowest amount in orders into min_val\nsay min_val",
+        "expected": "prints 50",
+    },
+    {
+        "id": "P4-11",
+        "category": "Set Reshaping & Analytics Inquiries",
+        "name": "Conversational 'how many items in orders into count_val'",
+        "code": "orders = [1, 2, 3, 4]\nhow many items in orders into count_val\nsay count_val",
+        "expected": "prints 4",
+    },
+    {
+        "id": "P4-12",
+        "category": "Set Reshaping & Analytics Inquiries",
+        "name": "Conversational 'how many in orders into count_val'",
+        "code": "orders = [10, 20]\nhow many in orders into count_val\nsay count_val",
+        "expected": "prints 2",
+    },
+    {
+        "id": "P4-13",
+        "category": "Set Reshaping & Analytics Inquiries",
+        "name": "Conversational inquiry without into 'what is the total amount in orders'",
+        "code": "orders = [{\"amount\": 10}, {\"amount\": 20}]\nwhat is the total amount in orders",
+        "expected": "prints 30",
+    },
+    {
+        "id": "P4-14",
+        "category": "Set Reshaping & Analytics Inquiries",
+        "name": "Conversational inquiry without into 'what is the average amount in orders'",
+        "code": "orders = [{\"amount\": 10}, {\"amount\": 30}]\nwhat is the average amount in orders",
+        "expected": "prints 20.0",
+    },
+    {
+        "id": "P4-15",
+        "category": "Set Reshaping & Analytics Inquiries",
+        "name": "Conversational question mark 'what is the total amount in orders?'",
+        "code": "orders = [{\"amount\": 100}, {\"amount\": 50}]\nwhat is the total amount in orders?",
+        "expected": "prints 150",
+    },
+    {
+        "id": "P4-16",
+        "category": "Set Reshaping & Analytics Inquiries",
+        "name": "Conversational question mark 'how many items in orders?'",
+        "code": "orders = [1, 2, 3]\nhow many items in orders?",
+        "expected": "prints 3",
+    },
+    {
+        "id": "P4-17",
+        "category": "Set Reshaping & Analytics Inquiries",
+        "name": "Conversational math inquiry 'what is 10 + 20 into thirty'",
+        "code": "what is 10 + 20 into thirty\nsay thirty",
+        "expected": "prints 30",
+    },
+    {
+        "id": "P4-18",
+        "category": "Set Reshaping & Analytics Inquiries",
+        "name": "Conversational contraction 'what's 5 * 5 into twenty_five'",
+        "code": "what's 5 * 5 into twenty_five\nsay twenty_five",
+        "expected": "prints 25",
+    },
+    {
+        "id": "P4-19",
+        "category": "Set Reshaping & Analytics Inquiries",
+        "name": "Conversational 'what is count of orders into c'",
+        "code": "orders = [\"a\", \"b\"]\nwhat is count of orders into c\nsay c",
+        "expected": "prints 2",
+    },
+    {
+        "id": "P4-20",
+        "category": "Set Reshaping & Analytics Inquiries",
+        "name": "Conversational 'what is sum of numbers into s'",
+        "code": "numbers = [10, 20, 30]\nwhat is sum of numbers into s\nsay s",
+        "expected": "prints 60",
     },
 ]
 
@@ -746,8 +1217,12 @@ def run_single_test(tc: Dict[str, Any]) -> Dict[str, Any]:
         result["details"] = tb_str
         err_name = type(re_err).__name__
         result["python_leakage"] = detect_python_leakage(f"{err_name}: {str(re_err)}")
-        if tc.get("expect_error") and tc.get("expect_error") == err_name:
-            result["status"] = "SUCCESS"
+        exp = tc.get("expect_error")
+        if exp:
+            if isinstance(exp, list) and (err_name in exp or any(e in err_name for e in exp)):
+                result["status"] = "SUCCESS"
+            elif isinstance(exp, str) and (err_name == exp or exp in err_name):
+                result["status"] = "SUCCESS"
     finally:
         sys.stdout = old_stdout
         sys.stdin = old_stdin
@@ -775,7 +1250,7 @@ def main():
         summary_counts[st] = summary_counts.get(st, 0) + 1
         if res["python_leakage"]:
             leakage_count += 1
-        print(f"[{idx:02d}/{len(TEST_CASES)}] {res['id']}: {res['name']} -> {res['status']}")
+        print(f"[{idx:03d}/{len(TEST_CASES)}] {res['id']}: {res['name']} -> {res['status']}", flush=True)
 
     # Save JSON results
     json_path = os.path.join(WORKSPACE_ROOT, "scratch", "audit_results.json")

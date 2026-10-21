@@ -740,7 +740,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
             masked = retry_call
 
     timeout_m = re.match(
-        r"^\s*(?:call\s+)?(.+?)\s+with\s+timeout\s+of\s+([\d.]+)\s+seconds?(?:\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?))?\s*$",
+        r"^\s*(?:call\s+)?(.+?)\s+with\s+timeout\s+of\s+(.+?)(?:\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?))?\s*$",
         masked,
         re.IGNORECASE
     )
@@ -756,23 +756,16 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
             masked = timeout_call
 
     cache_m = re.match(
-        r"^\s*(?:call\s+)?(.+?)\s+caching\s+for\s+([\d.]+)\s+(seconds?|minutes?|hours?)(?:\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?))?\s*$",
+        r"^\s*(?:call\s+)?(.+?)\s+caching\s+for\s+(.+?)(?:\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?))?\s*$",
         masked,
         re.IGNORECASE
     )
     if cache_m:
         fn_expr = cache_m.group(1).strip()
-        dur = float(cache_m.group(2).strip())
-        unit = cache_m.group(3).lower()
-        if unit.startswith("minute"):
-            ttl = dur * 60.0
-        elif unit.startswith("hour"):
-            ttl = dur * 3600.0
-        else:
-            ttl = dur
-        target_v = cache_m.group(4).strip() if cache_m.group(4) else None
+        dur_expr = cache_m.group(2).strip()
+        target_v = cache_m.group(3).strip() if cache_m.group(3) else None
         call_expr = f"{fn_expr}()" if not ("(" in fn_expr and fn_expr.endswith(")")) else fn_expr
-        cache_call = f"ds_cached_call('{fn_expr}', lambda: {call_expr}, ttl_seconds={ttl})"
+        cache_call = f"ds_cached_call('{fn_expr}', lambda: {call_expr}, ttl_seconds={dur_expr})"
         if target_v:
             masked = f"set {target_v} to {cache_call}"
         else:
@@ -853,13 +846,13 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     def _rewrite_keep_only(m):
         coll = m.group(1).strip()
         cond = m.group(2).strip()
-        target = m.group(3).strip()
+        target = m.group(3).strip() if m.group(3) else coll
         var_name = "x" if re.search(r"\bx\b", cond) else "item"
         bound_cond = _bind_contextual_attrs(cond, var_name)
         return f"set {target} to [{var_name} for {var_name} in {coll} if {bound_cond}]"
 
     masked = re.sub(
-        r"^\s*keep\s+only\s+(?:items\s+in\s+)?(.+?)\s+where\s+(.+?)\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)$",
+        r"^\s*keep\s+only\s+(?:items\s+in\s+)?(.+?)\s+where\s+(.+?)(?:\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?))?$",
         _rewrite_keep_only,
         masked,
         flags=re.IGNORECASE
@@ -868,13 +861,13 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     def _rewrite_discard(m):
         coll = m.group(1).strip()
         cond = m.group(2).strip()
-        target = m.group(3).strip()
+        target = m.group(3).strip() if m.group(3) else coll
         var_name = "x" if re.search(r"\bx\b", cond) else "item"
         bound_cond = _bind_contextual_attrs(cond, var_name)
         return f"set {target} to [{var_name} for {var_name} in {coll} if not ({bound_cond})]"
 
     masked = re.sub(
-        r"^\s*discard\s+from\s+(.+?)\s+where\s+(.+?)\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)$",
+        r"^\s*discard\s+from\s+(.+?)\s+where\s+(.+?)(?:\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?))?$",
         _rewrite_discard,
         masked,
         flags=re.IGNORECASE
@@ -3499,7 +3492,7 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
             continue
 
         # Compound sentence chaining into block statement: e.g. 'do something, then if cond:'
-        compound_chain_m = re.match(r"^(.+?)(?:,\s*then|\s+and\s+then)\s+((?:if|unless|for|while|repeat)\s+.+?:)$", code, re.IGNORECASE)
+        compound_chain_m = re.match(r"^(.+?)(?:,\s*and\s+then|,\s*then|\s+and\s+then)\s+((?:if|unless|for|while|repeat)\s+.+?:)$", code, re.IGNORECASE)
         if compound_chain_m:
             first_stmt = compound_chain_m.group(1).strip()
             second_hdr = compound_chain_m.group(2).strip()
@@ -3542,7 +3535,7 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
             )
 
         # 1. Statement chaining via 'and then'
-        chain_parts = re.split(r"\s+and\s+then\s+", masked_code, flags=re.IGNORECASE)
+        chain_parts = re.split(r"\s*(?:,\s*and\s+then|,\s*then|\s+and\s+then)\s+", masked_code, flags=re.IGNORECASE)
 
         sub_statements: List[str] = []
         for part in chain_parts:
