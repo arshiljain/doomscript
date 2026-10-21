@@ -294,6 +294,18 @@ class TsodyksMarkramSynapse:
             "peak_psc": round(max(psc_trace) if psc_trace else 0.0, 4),
         }
 
+    def simulate_spike_train(self, spike_times_ms: List[float], total_duration_ms: float, dt_ms: float = 1.0) -> Dict[str, Any]:
+        spikes_set = set(int(round(t / dt_ms)) for t in spike_times_ms)
+        n_steps = int(total_duration_ms / dt_ms)
+        binary_spikes = [1 if i in spikes_set else 0 for i in range(n_steps)]
+        res = self.simulate_train(binary_spikes, dt_ms=dt_ms)
+        return {
+            "postsynaptic_current": res["psc_trace"],
+            "resource_r": res["resource_r"],
+            "utilization_u": res["utilization_u"],
+            "total_released": sum(res["psc_trace"]),
+        }
+
 
 class FitzHughNagumoNeuron:
     """Two-variable phase-plane biological excitable membrane model (v: membrane potential, w: recovery variable)."""
@@ -1382,63 +1394,6 @@ class MorrisLecarNeuron:
         }
 
 
-class TsodyksMarkramSynapse:
-    """Phenomenological model of short-term synaptic plasticity (depression & facilitation)."""
-
-    def __init__(
-        self,
-        tau_rec_ms: float = 800.0,   # Recovery time constant from depression
-        tau_facil_ms: float = 50.0,  # Facilitation time constant
-        u_baseline: float = 0.2,     # Baseline neurotransmitter release probability
-    ):
-        self.tau_rec = tau_rec_ms
-        self.tau_facil = tau_facil_ms
-        self.u_baseline = u_baseline
-
-    def simulate_spike_train(
-        self,
-        spike_times_ms: List[float],
-        total_duration_ms: float,
-        dt_ms: float = 1.0,
-    ) -> Dict[str, Any]:
-        """Computes dynamic neurotransmitter availability R and utilization u over time."""
-        import math
-        spikes_set = set(int(round(t / dt_ms)) for t in spike_times_ms)
-        n_steps = int(total_duration_ms / dt_ms)
-
-        r = 1.0  # Fraction of available neurotransmitter resources
-        u = self.u_baseline  # Utilization parameter
-        postsynaptic_current = []
-        r_history = []
-        u_history = []
-
-        for step in range(n_steps):
-            is_spike = step in spikes_set
-            if is_spike:
-                # Spike arrives: facilitate utilization u
-                u = u + self.u_baseline * (1.0 - u)
-                # Released neurotransmitter
-                psc = r * u
-                # Depression: reduce available resources R
-                r = r - psc
-            else:
-                psc = 0.0
-
-            postsynaptic_current.append(psc)
-            r_history.append(r)
-            u_history.append(u)
-
-            # Continuous relaxation between spikes
-            r = r + ((1.0 - r) / self.tau_rec) * dt_ms
-            u = u - ((u - self.u_baseline) / self.tau_facil) * dt_ms
-
-        return {
-            "postsynaptic_current": postsynaptic_current,
-            "resource_r": r_history,
-            "utilization_u": u_history,
-            "total_released": sum(postsynaptic_current),
-        }
-
 
 def neuro_morris_lecar() -> MorrisLecarNeuron:
     """Creates a Morris-Lecar biophysical neuron model."""
@@ -1447,4 +1402,4 @@ def neuro_morris_lecar() -> MorrisLecarNeuron:
 
 def neuro_tsodyks_markram_synapse(tau_rec: float = 800.0, tau_facil: float = 50.0, u_base: float = 0.2) -> TsodyksMarkramSynapse:
     """Creates a Tsodyks-Markram dynamic short-term plasticity synapse model."""
-    return TsodyksMarkramSynapse(tau_rec_ms=tau_rec, tau_facil_ms=tau_facil, u_baseline=u_base)
+    return TsodyksMarkramSynapse(U=u_base, tau_rec=tau_rec, tau_fac=tau_facil)

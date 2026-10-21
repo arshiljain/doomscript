@@ -1267,13 +1267,15 @@ class HierarchicalTaskNetworkHTNPlanner:
 # ==============================================================================
 
 class MCTSNode:
-    def __init__(self, state: Any, parent: Optional["MCTSNode"] = None, action_from_parent: Optional[Any] = None):
+    def __init__(self, state: Any, parent: Optional["MCTSNode"] = None, action_from_parent: Optional[Any] = None, action_taken: Optional[Any] = None):
         self.state = state
         self.parent = parent
-        self.action = action_from_parent
+        self.action = action_from_parent if action_from_parent is not None else action_taken
+        self.action_taken = self.action
         self.children: List["MCTSNode"] = []
         self.visits: int = 0
         self.total_value: float = 0.0
+        self.value_sum: float = 0.0
 
     @property
     def q_value(self) -> float:
@@ -1285,6 +1287,18 @@ class MCTSNode:
         if not self.parent or self.parent.visits == 0:
             return self.q_value
         return self.q_value + exploration_c * math.sqrt(math.log(self.parent.visits) / self.visits)
+
+    def is_fully_expanded(self, legal_actions: List[Any]) -> bool:
+        return len(self.children) == len(legal_actions)
+
+    def best_child(self, exploration_c: float = 1.414) -> 'MCTSNode':
+        def ucb_score(child: 'MCTSNode') -> float:
+            if child.visits == 0:
+                return float('inf')
+            exploit = child.value_sum / child.visits
+            explore = exploration_c * math.sqrt(math.log(self.visits) / child.visits)
+            return exploit + explore
+        return max(self.children, key=ucb_score)
 
 
 class MonteCarloTreeSearchMCTS:
@@ -1439,29 +1453,6 @@ class HTNPlanner:
         result = seek_plan(dict(initial_state), task_list, [])
         return result[1] if result is not None else None
 
-
-class MCTSNode:
-    """Node in Monte Carlo Search Tree."""
-    def __init__(self, state: Any, parent: Optional['MCTSNode'] = None, action_taken: Any = None):
-        self.state = state
-        self.parent = parent
-        self.action_taken = action_taken
-        self.children: List['MCTSNode'] = []
-        self.visits: int = 0
-        self.value_sum: float = 0.0
-
-    def is_fully_expanded(self, legal_actions: List[Any]) -> bool:
-        return len(self.children) == len(legal_actions)
-
-    def best_child(self, exploration_c: float = 1.414) -> 'MCTSNode':
-        import math
-        def ucb_score(child: MCTSNode) -> float:
-            if child.visits == 0:
-                return float('inf')
-            exploit = child.value_sum / child.visits
-            explore = exploration_c * math.sqrt(math.log(self.visits) / child.visits)
-            return exploit + explore
-        return max(self.children, key=ucb_score)
 
 
 class MonteCarloTreeSearchEngine:

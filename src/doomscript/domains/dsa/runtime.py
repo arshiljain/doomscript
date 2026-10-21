@@ -3552,6 +3552,7 @@ class SplayTreeNode:
     def __init__(self, key: float, val: Any = None):
         self.key = float(key)
         self.val = val if val is not None else key
+        self.value = self.val
         self.left: Optional["SplayTreeNode"] = None
         self.right: Optional["SplayTreeNode"] = None
         self.parent: Optional["SplayTreeNode"] = None
@@ -4603,13 +4604,6 @@ def dsa_segment_tree_2d(matrix: List[List[float]], op: str = "min") -> SegmentTr
 # ADVANCED DATA STRUCTURES: SPLAY TREE & COMPACT RADIX TREE (PATRICIA TRIE)
 # ==============================================================================
 
-class SplayTreeNode:
-    def __init__(self, key: Any, value: Any = None):
-        self.key = key
-        self.value = value
-        self.left: Optional['SplayTreeNode'] = None
-        self.right: Optional['SplayTreeNode'] = None
-        self.parent: Optional['SplayTreeNode'] = None
 
 
 class SplayTree:
