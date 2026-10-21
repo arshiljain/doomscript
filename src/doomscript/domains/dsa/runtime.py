@@ -817,8 +817,12 @@ class DsaTrie:
         return words
 
 
-def dsa_create_trie() -> DsaTrie:
-    return DsaTrie()
+def dsa_create_trie(words: Optional[List[str]] = None) -> DsaTrie:
+    t = DsaTrie()
+    if words:
+        for w in words:
+            t.insert(str(w))
+    return t
 
 
 def dsa_trie_insert(trie: Any, word: Any) -> Any:

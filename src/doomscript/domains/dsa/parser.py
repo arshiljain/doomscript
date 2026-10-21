@@ -374,9 +374,13 @@ class DsaDomainParser(DomainParser):
         # --- 13 Additional Algorithmic Powers ---
 
         # 1. Trie Engine
-        trie_c_m = re.match(r"^create\s+trie\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
+        trie_c_m = re.match(r"^create\s+(?:prefix\s+tree|trie)(?:\s+from\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
         if trie_c_m:
-            return f"set {trie_c_m.group(1).strip()} to dsa_create_trie()"
+            words = trie_c_m.group(1)
+            target = trie_c_m.group(2).strip()
+            if words:
+                return f"set {target} to dsa_create_trie({words.strip()})"
+            return f"set {target} to dsa_create_trie()"
 
         trie_ins_m = re.match(r"^insert\s+(?:word\s+)?(.+?)\s+into\s+(?:trie\s+)?([A-Za-z_]\w*)$", line.strip(), re.IGNORECASE)
         if trie_ins_m:

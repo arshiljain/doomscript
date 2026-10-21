@@ -334,15 +334,23 @@ class PrattParser:
         return parse_expr(0)
 
 
-def compiler_run_bytecode(instructions: List[Instruction], constants: Optional[List[Any]] = None) -> Record:
+def compiler_run_bytecode(instructions: Any, constants: Optional[List[Any]] = None) -> Record:
     vm = BytecodeVM()
-    vm.load_program(instructions, constants)
-    return Record(vm.run())
+    if isinstance(instructions, (dict, Record)):
+        inst_list = instructions.get("instructions", [])
+        const_list = instructions.get("constants", constants)
+        vm.load_program(inst_list, const_list)
+    else:
+        vm.load_program(instructions, constants)
+    raw = vm.run()
+    if vm.stack:
+        raw["result"] = vm.stack[-1]
+    return Record(raw)
 
 
 def compiler_assemble_string(assembly_text: str) -> Dict[str, Any]:
     asm = Assembler()
-    lines = [l.strip() for l in str(assembly_text).strip().splitlines() if l.strip() and not l.strip().startswith("#")]
+    lines = [l.strip() for l in str(assembly_text).replace("\\n", "\n").replace("\r", "").split("\n") if l.strip() and not l.strip().startswith("#")]
     for line in lines:
         if line.endswith(":"):
             asm.label(line[:-1].strip())
