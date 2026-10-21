@@ -93,7 +93,11 @@ class DomainRegistry:
 
     @contextlib.contextmanager
     def compilation_context(self):
-        """Context manager providing isolated compilation state for concurrent compilation units."""
+        """Context manager providing isolated, reentrant compilation state for concurrent compilation units."""
+        existing = _COMPILATION_STATE.get()
+        if existing is not None:
+            yield existing
+            return
         new_state = CompilationState()
         token = _COMPILATION_STATE.set(new_state)
         try:

@@ -704,12 +704,18 @@ INF = float("inf")
 
 
 def get_field(obj, attr):
-    """Safely access a field on a Record, dictionary, or object."""
+    """Safely access a field on a Record, dictionary, or object.
+    Prioritizes dictionary/record keys over class method attributes,
+    preventing dictionary methods (items, keys, values, get) from shadowing user fields.
+    """
     if obj is None:
         return None
+    attr_str = str(attr)
     if isinstance(obj, dict):
-        return obj.get(str(attr))
-    return getattr(obj, str(attr), None)
+        if attr_str in obj:
+            return obj[attr_str]
+        return getattr(obj, attr_str, None)
+    return getattr(obj, attr_str, None)
 
 
 def to_text(val):

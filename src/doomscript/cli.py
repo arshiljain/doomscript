@@ -389,11 +389,18 @@ def repl():
             full_code = "\n".join(buffer)
             try:
                 execute(full_code, custom_globals=session_env)
-            except Exception:
-                try:
-                    execute(f"say {full_code}", custom_globals=session_env)
-                except Exception as inner_e:
-                    handle_cli_error("<repl>", full_code, inner_e)
+            except Exception as first_e:
+                from doomscript.exceptions import DoomScriptSyntaxError
+                retried = False
+                # Only retry as 'say <expr>' if it was a syntax error on a single expression
+                if isinstance(first_e, DoomScriptSyntaxError) and not re.search(r"^\s*[A-Za-z_]\w*\s*=", full_code):
+                    try:
+                        execute(f"say {full_code}", custom_globals=session_env)
+                        retried = True
+                    except Exception:
+                        pass
+                if not retried:
+                    handle_cli_error("<repl>", full_code, first_e)
         except (KeyboardInterrupt, EOFError):
             console.print("\n[dim]Session closed.[/dim]")
             break

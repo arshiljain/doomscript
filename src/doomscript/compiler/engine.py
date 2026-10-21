@@ -44,41 +44,42 @@ def compile_to_ast(source: str, filename: str = "<doom>") -> ast.Module:
     from doomscript.exceptions import DoomScriptSyntaxError
     import lark.exceptions
 
-    get_domain_registry().reset_active()
-    normalized_source, line_map = normalize_with_map(source)
-    if not normalized_source.endswith("\n"):
-        normalized_source += "\n"
-    parser = get_parser()
-    try:
-        tree = parser.parse(normalized_source)
-    except (lark.exceptions.UnexpectedInput, lark.exceptions.LarkError) as parse_err:
-        norm_line_num = getattr(parse_err, "line", 1)
-        orig_line_num = line_map.get(norm_line_num, norm_line_num)
-        orig_lines = source.splitlines()
-        orig_line = orig_lines[orig_line_num - 1] if 0 < orig_line_num <= len(orig_lines) else ""
-        active_dom_names = [d.name for d in get_domain_registry().get_active_domains()]
-        col = getattr(parse_err, "column", None)
-        failing_token = None
-        if hasattr(parse_err, "token"):
-            failing_token = getattr(parse_err.token, "value", str(parse_err.token))
-        suggestion = DidYouMeanAdvisor.find_suggestion(
-            orig_line,
-            active_domains=active_dom_names,
-            source=source,
-            failing_token=failing_token,
-            col=col,
-        )
-        raise DoomScriptSyntaxError(
-            f"Syntax error at line {orig_line_num}",
-            line=orig_line_num,
-            column=col,
-            source_line=orig_line.strip(),
-            suggestion=suggestion,
-            file_path=filename,
-        ) from parse_err
+    with get_domain_registry().compilation_context():
+        get_domain_registry().reset_active()
+        normalized_source, line_map = normalize_with_map(source)
+        if not normalized_source.endswith("\n"):
+            normalized_source += "\n"
+        parser = get_parser()
+        try:
+            tree = parser.parse(normalized_source)
+        except (lark.exceptions.UnexpectedInput, lark.exceptions.LarkError) as parse_err:
+            norm_line_num = getattr(parse_err, "line", 1)
+            orig_line_num = line_map.get(norm_line_num, norm_line_num)
+            orig_lines = source.splitlines()
+            orig_line = orig_lines[orig_line_num - 1] if 0 < orig_line_num <= len(orig_lines) else ""
+            active_dom_names = [d.name for d in get_domain_registry().get_active_domains()]
+            col = getattr(parse_err, "column", None)
+            failing_token = None
+            if hasattr(parse_err, "token"):
+                failing_token = getattr(parse_err.token, "value", str(parse_err.token))
+            suggestion = DidYouMeanAdvisor.find_suggestion(
+                orig_line,
+                active_domains=active_dom_names,
+                source=source,
+                failing_token=failing_token,
+                col=col,
+            )
+            raise DoomScriptSyntaxError(
+                f"Syntax error at line {orig_line_num}",
+                line=orig_line_num,
+                column=col,
+                source_line=orig_line.strip(),
+                suggestion=suggestion,
+                file_path=filename,
+            ) from parse_err
 
-    transformer = DoomToPython(line_map=line_map)
-    return transformer.transform(tree)
+        transformer = DoomToPython(line_map=line_map)
+        return transformer.transform(tree)
 
 def transpile(source: str) -> str:
     """Transpiles DoomScript source into formatted Python code."""
@@ -404,7 +405,6 @@ def _execute_scoped(source: Any, custom_globals: dict = None, filename: str = "<
     reg = get_domain_registry()
     for d in reg.get_active_domains():
         exec_globals.update(reg.get_domain_exports(d.name))
-    exec_globals.update(reg.get_domain_exports())
 
     # 3. Explicit compiler runtime helpers
     for k, v in runtime_helpers.items():

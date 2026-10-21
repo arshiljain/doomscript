@@ -1435,7 +1435,11 @@ class DoomToPython(Transformer):
 
     def possessive(self, args):
         atom, attr = args
-        return ast.Attribute(value=to_load(atom), attr=str(attr), ctx=ast.Load())
+        return ast.Call(
+            func=ast.Name(id="get_field", ctx=ast.Load()),
+            args=[to_load(atom), ast.Constant(value=str(attr))],
+            keywords=[]
+        )
 
     def attr_access(self, args):
         val, attr = args
