@@ -165,7 +165,7 @@ class AgentDomain(DomainContract):
 
     def can_handle_block(self, header: str) -> bool:
         s = header.strip().lower()
-        return s.startswith("define agent ") and (":" in s)
+        return (s.startswith("define agent ") or s.startswith("team ")) and (":" in s)
 
 
 # Register with central registry

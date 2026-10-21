@@ -75,3 +75,14 @@ class FinanceBacktestSpec(DomainIR):
 
     def validate(self) -> List[str]:
         return []
+
+
+@dataclass
+class FinancePortfolioIR(DomainIR):
+    name: str = "portfolio"
+    target: str = "portfolio"
+    total_value: float = 10000.0
+    holdings: Dict[str, float] = field(default_factory=dict)
+
+    def validate(self) -> List[str]:
+        return []

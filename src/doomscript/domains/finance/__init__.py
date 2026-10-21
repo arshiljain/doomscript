@@ -3,6 +3,7 @@
 import re
 from doomscript.domains.base import DomainContract
 from doomscript.domains.finance.spec import (
+    FinancePortfolioIR,
     FinanceFetchSpec,
     FinanceMavSpec,
     FinanceRsiSpec,
@@ -163,7 +164,8 @@ class FinanceDomain(DomainContract):
         return False
 
     def can_handle_block(self, header: str) -> bool:
-        return False
+        s = header.strip().lower()
+        return s.startswith("portfolio ") and (":" in s)
 
 
 # Register with central registry
@@ -171,6 +173,7 @@ FINANCE_DOMAIN = FinanceDomain()
 get_domain_registry().register(FINANCE_DOMAIN)
 
 __all__ = [
+    "FinancePortfolioIR",
     "FinanceDomain",
     "FINANCE_DOMAIN",
     "FinanceFetchSpec",

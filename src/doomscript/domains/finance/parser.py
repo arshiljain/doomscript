@@ -4,6 +4,7 @@ import re
 from typing import Any, Dict, List, Optional, Tuple
 from doomscript.domains.base import DomainParser
 from doomscript.domains.finance.spec import (
+    FinancePortfolioIR,
     FinanceFetchSpec,
     FinanceMavSpec,
     FinanceRsiSpec,
@@ -289,6 +290,25 @@ class FinanceDomainParser(DomainParser):
             fn = "fin_black_scholes_call" if is_call else "fin_black_scholes_put"
             return f"set {target} to {fn}({spot}, {strike}, {t}, {rate}, {vol})"
 
+        # calculate black-scholes price for call/put option on asset <spot> strike <strike> expiry <t> rate <rate> vol <vol> into <target>
+        m_bs_user = re.match(
+            r"^(?:calculate\s+)?black[-\s]scholes\s+price\s+for\s+(call|put)\s+option\s+(?:on\s+asset|with\s+spot|for\s+spot)\s+(.+?)\s+strike\s+(.+?)\s+expiry\s+(.+?)\s+rate\s+(.+?)\s+(?:vol|volatility)\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_bs_user:
+            is_call = m_bs_user.group(1).lower() == "call"
+            spot, strike, t, rate, vol, target = (
+                m_bs_user.group(2).strip(),
+                m_bs_user.group(3).strip(),
+                m_bs_user.group(4).strip(),
+                m_bs_user.group(5).strip(),
+                m_bs_user.group(6).strip(),
+                m_bs_user.group(7).strip(),
+            )
+            fn = "fin_black_scholes_call" if is_call else "fin_black_scholes_put"
+            return f"set {target} to {fn}({spot}, {strike}, {t}, {rate}, {vol})"
+
         bsc_m = re.match(
             r"^black\s+scholes\s+call\s+price\s+for\s+spot\s+(.+?)\s+strike\s+(.+?)\s+expiry\s+(.+?)\s+rate\s+(.+?)\s+volatility\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
             s,
@@ -509,4 +529,28 @@ class FinanceDomainParser(DomainParser):
     def parse_block(
         self, header: str, body_lines: List[Tuple[int, str]], indent: int = 0
     ) -> Tuple[Any, str]:
-        raise NotImplementedError("Finance domain does not currently define declarative blocks")
+        # portfolio "<name>" [into <target>] / portfolio <name> [into <target>]
+        m = re.match(
+            r"""^portfolio\s+["']?([A-Za-z0-9_]+)["']?(?:\s+into\s+([A-Za-z_]\w*))?:?$""",
+            header.strip(),
+            re.IGNORECASE,
+        )
+        if not m:
+            raise SyntaxError(f"Invalid portfolio block header: {header}")
+        port_name = m.group(1).strip()
+        target = m.group(2).strip() if m.group(2) else port_name.lower()
+        holdings = {}
+        for _, raw_line in body_lines:
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            m_asset = re.match(r"""^(?:asset|holding)\s+["']?([A-Za-z0-9_]+)["']?(?:\s*(?:with\s+weight|weight|with|\:)?\s*)(.+)$""", line, re.IGNORECASE)
+            if m_asset:
+                sym = m_asset.group(1).strip()
+                val_str = m_asset.group(2).strip()
+                try:
+                    val = float(val_str)
+                except ValueError:
+                    val = 1.0
+                holdings[sym] = val
+        return FinancePortfolioIR(name=port_name, target=target, holdings=holdings), target

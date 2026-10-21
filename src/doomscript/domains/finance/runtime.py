@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from doomscript.core.record import Record
 from doomscript.domains.base import DomainRuntime, DomainIR
 from doomscript.domains.finance.spec import (
+    FinancePortfolioIR,
     FinanceFetchSpec,
     FinanceMavSpec,
     FinanceRsiSpec,
@@ -287,6 +288,19 @@ class FinanceRuntime(DomainRuntime):
         elif isinstance(ir, FinanceSharpeSpec):
             returns = scope.get(ir.returns_var)
             return calculate_sharpe_ratio(returns, risk_free_rate=ir.risk_free_rate)
+        elif isinstance(ir, FinancePortfolioIR):
+            tot = sum(ir.holdings.values()) if ir.holdings else 1.0
+            norm = {k: v / tot for k, v in ir.holdings.items()} if tot > 0 else {}
+            res = Record({
+                "name": ir.name,
+                "holdings": ir.holdings,
+                "weights": norm,
+                "total_value": ir.total_value,
+                "num_assets": len(ir.holdings),
+            })
+            if ir.target:
+                scope[ir.target] = res
+            return res
         elif isinstance(ir, FinanceBacktestSpec):
             prices = scope.get(ir.prices_var)
             return backtest_strategy(prices, condition=ir.condition)

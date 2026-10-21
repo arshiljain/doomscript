@@ -108,7 +108,7 @@ class AgentDomainParser(DomainParser):
 
         # create team <name> with agents <agent_list> into <target>
         m_team = re.match(
-            r"^create\s+team\s+([A-Za-z_]\w*)\s+with\s+agents\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+            r"^create\s+team\s+(.+?)\s+with\s+agents\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
             s,
             re.IGNORECASE,
         )
@@ -425,7 +425,33 @@ class AgentDomainParser(DomainParser):
 
     def parse_block(
         self, header: str, body_lines: List[Tuple[int, str]], indent: int = 0
-    ) -> Tuple[AgentSpec, str]:
+    ) -> Tuple[Any, str]:
+        s_hdr = header.strip()
+        m_team = re.match(
+            r"""^team\s+["']?([A-Za-z0-9_]+)["']?(?:\s+into\s+([A-Za-z_]\w*))?:?$""",
+            s_hdr,
+            re.IGNORECASE,
+        )
+        if m_team:
+            team_name = m_team.group(1).strip()
+            target_var = m_team.group(2).strip() if m_team.group(2) else team_name.lower()
+            agent_vars = []
+            for _, raw_line in body_lines:
+                line = raw_line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                m_mem = re.match(r"^(?:member|agent)\s*[:\s]\s*([A-Za-z_]\w*)$", line, re.IGNORECASE)
+                if m_mem:
+                    agent_vars.append(m_mem.group(1).strip())
+                elif re.match(r"^[A-Za-z_]\w*$", line):
+                    agent_vars.append(line)
+            from doomscript.domains.agent.spec import TeamSpec
+            spec = TeamSpec(team_name=team_name, agent_vars=agent_vars, target_var=target_var)
+            errors = spec.validate()
+            if errors:
+                raise SyntaxError(f"Team validation error: {'; '.join(errors)}")
+            return spec, target_var
+
         # define agent <Name> [with role <role>]:
         m = re.match(
             r"^define\s+agent\s+([A-Za-z_]\w*)(?:\s+with\s+role\s+(.+?))?:?$",

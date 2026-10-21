@@ -175,6 +175,9 @@ def run_team(team: AgentTeam, task: str, context: Optional[Any] = None) -> Recor
     return team.run(task=task, context=context)
 
 
+_REGISTERED_AGENTS: Dict[str, Agent] = {}
+
+
 class AgentRuntime(DomainRuntime):
     """Runtime execution engine for Agent specifications."""
 
@@ -184,7 +187,7 @@ class AgentRuntime(DomainRuntime):
             raise ValueError(f"Agent spec validation failed: {'; '.join(errors)}")
 
         if isinstance(ir, AgentSpec):
-            return create_agent(
+            ag = create_agent(
                 name=ir.name,
                 role=ir.role,
                 instructions=ir.instructions,
@@ -192,15 +195,25 @@ class AgentRuntime(DomainRuntime):
                 tools=ir.tools,
                 memory=ir.memory,
             )
+            _REGISTERED_AGENTS[ir.name] = ag
+            _REGISTERED_AGENTS[ir.name.lower()] = ag
+            return ag
         elif isinstance(ir, TaskSpec):
-            agent = scope.get(ir.agent_var)
+            agent = scope.get(ir.agent_var) or _REGISTERED_AGENTS.get(ir.agent_var)
             if not isinstance(agent, Agent):
                 raise TypeError(f"Variable '{ir.agent_var}' is not an Agent instance")
             ctx = scope.get(ir.context_var) if ir.context_var else None
             return agent.ask(task=ir.task, context=ctx, as_json=ir.as_json)
         elif isinstance(ir, TeamSpec):
-            agents = [scope[var] for var in ir.agent_vars if var in scope]
-            return create_team(name=ir.team_name, agents=agents)
+            agents = []
+            for var in ir.agent_vars:
+                found = scope.get(var) or _REGISTERED_AGENTS.get(var) or _REGISTERED_AGENTS.get(var.lower())
+                if found:
+                    agents.append(found)
+            res = create_team(name=ir.team_name, agents=agents)
+            if getattr(ir, "target_var", None):
+                scope[ir.target_var] = res
+            return res
         raise NotImplementedError(f"Unsupported IR: {type(ir)}")
 
 
