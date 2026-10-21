@@ -28,6 +28,7 @@ import statistics
 from typing import Any, Dict, List, Optional, Tuple, Callable, Union
 
 from doomscript.core.record import Record
+from doomscript.core.entity import DoomEntity, RelationshipList
 from doomscript.core.units import Quantity, make_quantity, convert_unit
 
 from doomscript.taxonomy import (
