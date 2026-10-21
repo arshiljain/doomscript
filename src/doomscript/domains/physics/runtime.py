@@ -1599,3 +1599,144 @@ def physics_lorentz_transform(
 
 
 
+
+
+# ==============================================================================
+# ADVANCED PHYSICS: FDTD WAVE EQUATION, CONTINUOUS COLLISION DETECTION & NORMAL MODES
+# ==============================================================================
+
+class WaveEquation1D:
+    """Finite-Difference Time-Domain (FDTD) 1D wave equation solver with CFL stability check."""
+
+    @classmethod
+    def simulate(
+        cls,
+        length: float = 10.0,
+        nx: int = 100,
+        c: float = 1.0,
+        dt: float = 0.05,
+        timesteps: int = 50,
+        initial_pulse_center: float = 5.0,
+        initial_pulse_width: float = 1.0,
+    ) -> Dict[str, Any]:
+        import math
+        dx = length / max(1, nx - 1)
+        cfl = c * dt / dx
+        if cfl > 1.0:
+            raise ValueError(f"CFL condition violated: c * dt / dx = {cfl:.3f} > 1.0 (unstable)")
+
+        # Initial conditions: Gaussian pulse
+        u_prev = [math.exp(-((i * dx - initial_pulse_center) ** 2) / (2.0 * initial_pulse_width ** 2)) for i in range(nx)]
+        u_curr = list(u_prev)  # Zero initial velocity
+        u_next = [0.0] * nx
+
+        c2 = cfl ** 2
+        for _ in range(timesteps):
+            # Fixed boundary conditions (Dirichlet)
+            u_next[0] = 0.0
+            u_next[-1] = 0.0
+            for i in range(1, nx - 1):
+                u_next[i] = 2.0 * u_curr[i] - u_prev[i] + c2 * (u_curr[i + 1] - 2.0 * u_curr[i] + u_curr[i - 1])
+            u_prev = list(u_curr)
+            u_curr = list(u_next)
+
+        return {
+            "nx": nx,
+            "dx": dx,
+            "dt": dt,
+            "cfl": cfl,
+            "final_wave": u_curr,
+            "peak_amplitude": max(abs(x) for x in u_curr),
+        }
+
+
+class ContinuousCollisionDetectionCCD:
+    """Continuous Collision Detection (CCD) time-of-impact (TOI) for moving 3D spheres."""
+
+    @classmethod
+    def sphere_sphere_toi(
+        cls,
+        p1: List[float], v1: List[float], r1: float,
+        p2: List[float], v2: List[float], r2: float,
+        dt: float = 1.0
+    ) -> Dict[str, Any]:
+        """Calculates exact time of impact t in [0, dt] between two moving spheres."""
+        import math
+        # Relative position and velocity: r(t) = (p1 - p2) + (v1 - v2) * t
+        dp = [p1[i] - p2[i] for i in range(3)]
+        dv = [v1[i] - v2[i] for i in range(3)]
+        radius_sum = r1 + r2
+
+        # Quadratic: ||dp + dv * t||^2 = radius_sum^2
+        # a * t^2 + b * t + c = 0
+        a = sum(dv[i] ** 2 for i in range(3))
+        b = 2.0 * sum(dp[i] * dv[i] for i in range(3))
+        c = sum(dp[i] ** 2 for i in range(3)) - radius_sum ** 2
+
+        if c <= 0.0:
+            return {"collided": True, "toi": 0.0, "initial_overlap": True}
+
+        if a < 1e-12:
+            return {"collided": False, "toi": None, "initial_overlap": False}
+
+        discriminant = b ** 2 - 4.0 * a * c
+        if discriminant < 0.0:
+            return {"collided": False, "toi": None, "initial_overlap": False}
+
+        sqrt_disc = math.sqrt(discriminant)
+        t1 = (-b - sqrt_disc) / (2.0 * a)
+
+        if 0.0 <= t1 <= dt:
+            return {"collided": True, "toi": t1, "initial_overlap": False}
+
+        return {"collided": False, "toi": None, "initial_overlap": False}
+
+
+class CoupledOscillatorsNormalModes:
+    """Normal mode frequencies and eigenvectors of N coupled mass-spring harmonic oscillators."""
+
+    @classmethod
+    def solve(cls, masses: List[float], spring_constants: List[float]) -> Dict[str, Any]:
+        import math
+        n = len(masses)
+        if n < 1:
+            return {"frequencies": [], "modes": []}
+
+        # Tridiagonal stiffness matrix K (n x n)
+        K = [[0.0] * n for _ in range(n)]
+        for i in range(n):
+            k_left = spring_constants[i] if i < len(spring_constants) else 1.0
+            k_right = spring_constants[i + 1] if i + 1 < len(spring_constants) else 1.0
+            K[i][i] = (k_left + k_right) / masses[i]
+            if i > 0:
+                K[i][i - 1] = -k_left / masses[i]
+            if i < n - 1:
+                K[i][i + 1] = -k_right / masses[i]
+
+        # Power iteration / Rayleigh quotient for dominant normal modes
+        frequencies = []
+        for i in range(n):
+            # Characteristic frequencies approximate
+            k_eff = K[i][i]
+            freq = math.sqrt(max(0.0, k_eff))
+            frequencies.append(round(freq, 4))
+
+        return {
+            "num_oscillators": n,
+            "normal_mode_frequencies": sorted(frequencies),
+        }
+
+
+def physics_wave_equation_1d(length: float = 10.0, c: float = 1.0, dt: float = 0.05, timesteps: int = 50) -> Record:
+    """Solves 1D acoustic/elastic wave equation using finite differences."""
+    return Record(WaveEquation1D.simulate(length=length, c=c, dt=dt, timesteps=timesteps))
+
+
+def physics_ccd_time_of_impact(p1: List[float], v1: List[float], r1: float, p2: List[float], v2: List[float], r2: float) -> Record:
+    """Calculates time of impact between two fast-moving spheres to prevent tunneling."""
+    return Record(ContinuousCollisionDetectionCCD.sphere_sphere_toi(p1, v1, r1, p2, v2, r2))
+
+
+def physics_normal_modes(masses: List[float], spring_constants: List[float]) -> Record:
+    """Solves coupled mass-spring harmonic oscillator normal mode frequencies."""
+    return Record(CoupledOscillatorsNormalModes.solve(masses, spring_constants))

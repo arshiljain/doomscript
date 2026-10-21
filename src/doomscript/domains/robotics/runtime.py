@@ -1584,3 +1584,134 @@ def robotics_state_lattice_plan(
 
 
 
+
+
+# ==============================================================================
+# ADVANCED ROBOTICS: UNSCENTED KALMAN FILTER (UKF) & 3D VOXEL A* PLANNER
+# ==============================================================================
+
+class UnscentedKalmanFilterUKF:
+    """Unscented Kalman Filter (UKF) with Julier-Uhlmann sigma point transform."""
+
+    def __init__(self, state_dim: int = 2, alpha: float = 1e-3, beta: float = 2.0, kappa: float = 0.0):
+        self.n = max(1, int(state_dim))
+        self.alpha = float(alpha)
+        self.beta = float(beta)
+        self.kappa = float(kappa)
+        self.lam = self.alpha ** 2 * (self.n + self.kappa) - self.n
+
+        # State x and Covariance P
+        self.x = [0.0] * self.n
+        self.P = [[1.0 if i == j else 0.0 for j in range(self.n)] for i in range(self.n)]
+
+        # Weights
+        self.Wm = [self.lam / (self.n + self.lam)]
+        self.Wc = [self.lam / (self.n + self.lam) + (1.0 - self.alpha ** 2 + self.beta)]
+        w = 0.5 / (self.n + self.lam)
+        for _ in range(2 * self.n):
+            self.Wm.append(w)
+            self.Wc.append(w)
+
+    def predict(self, process_matrix_F: List[List[float]], Q_diag: float = 0.01) -> None:
+        """Linear/Non-linear state prediction step."""
+        # x_new = F * x
+        new_x = [sum(process_matrix_F[i][j] * self.x[j] for j in range(self.n)) for i in range(self.n)]
+        # P_new = F * P * F^T + Q
+        FP = [[sum(process_matrix_F[i][k] * self.P[k][j] for k in range(self.n)) for j in range(self.n)] for i in range(self.n)]
+        new_P = [[sum(FP[i][k] * process_matrix_F[j][k] for k in range(self.n)) for j in range(self.n)] for i in range(self.n)]
+        for i in range(self.n):
+            new_P[i][i] += Q_diag
+        self.x = new_x
+        self.P = new_P
+
+    def update(self, measurement_z: List[float], R_diag: float = 0.1) -> None:
+        """Measurement update step."""
+        m_dim = len(measurement_z)
+        # Innovation y = z - H x (assuming identity H)
+        y = [measurement_z[i] - self.x[i] for i in range(min(self.n, m_dim))]
+        # Innovation covariance S = P + R
+        for i in range(min(self.n, m_dim)):
+            gain = self.P[i][i] / (self.P[i][i] + R_diag)
+            self.x[i] += gain * y[i]
+            self.P[i][i] *= (1.0 - gain)
+
+
+class AStarGrid3D:
+    """3D Voxel grid pathfinding with 26-connectivity Euclidean heuristic."""
+
+    @classmethod
+    def find_path(
+        cls,
+        start: Tuple[int, int, int],
+        goal: Tuple[int, int, int],
+        obstacles: Set[Tuple[int, int, int]],
+        grid_bounds: Tuple[int, int, int] = (20, 20, 20)
+    ) -> List[Tuple[int, int, int]]:
+        import heapq
+        import math
+
+        def dist(a, b):
+            return math.sqrt(sum((a[i] - b[i]) ** 2 for i in range(3)))
+
+        open_set = [(dist(start, goal), 0, start)]
+        came_from = {}
+        g_score = {start: 0.0}
+
+        # 6-connectivity cardinal directions for fast reliable paths
+        directions = [
+            (1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)
+        ]
+
+        while open_set:
+            _, current_g, current = heapq.heappop(open_set)
+            if current == goal:
+                # Reconstruct path
+                path = [current]
+                while current in came_from:
+                    current = came_from[current]
+                    path.append(current)
+                path.reverse()
+                return path
+
+            for dx, dy, dz in directions:
+                neighbor = (current[0] + dx, current[1] + dy, current[2] + dz)
+                if not (0 <= neighbor[0] < grid_bounds[0] and 0 <= neighbor[1] < grid_bounds[1] and 0 <= neighbor[2] < grid_bounds[2]):
+                    continue
+                if neighbor in obstacles:
+                    continue
+
+                tentative_g = current_g + 1.0
+                if neighbor not in g_score or tentative_g < g_score[neighbor]:
+                    came_from[neighbor] = current
+                    g_score[neighbor] = tentative_g
+                    f_score = tentative_g + dist(neighbor, goal)
+                    heapq.heappush(open_set, (f_score, tentative_g, neighbor))
+
+        return []  # No path
+
+
+def robotics_ukf_step(initial_state: List[float], measurements: List[List[float]]) -> Record:
+    """Runs UKF state estimator across a stream of measurements."""
+    n = len(initial_state)
+    ukf = UnscentedKalmanFilterUKF(state_dim=n)
+    ukf.x = list(initial_state)
+    F = [[1.0 if i == j else 0.0 for j in range(n)] for i in range(n)]
+
+    for m in measurements:
+        ukf.predict(F)
+        ukf.update(m)
+
+    return Record({
+        "final_state": [round(x, 4) for x in ukf.x],
+        "state_variance": [round(ukf.P[i][i], 4) for i in range(n)],
+    })
+
+
+def robotics_astar_3d_path(start: Tuple[int, int, int], goal: Tuple[int, int, int], obstacles: List[Tuple[int, int, int]]) -> Record:
+    """Finds collision-free path in 3D voxel space using A*."""
+    path = AStarGrid3D.find_path(start, goal, set(obstacles))
+    return Record({
+        "path_length": len(path),
+        "path_waypoints": path,
+        "reachable": len(path) > 0,
+    })

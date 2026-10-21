@@ -1722,3 +1722,88 @@ def math3d_kdtree_query(
 
 
 
+
+
+# ==============================================================================
+# ADVANCED 3D GEOMETRY: BARYCENTRIC COORDINATES & SPHERICAL HARMONICS
+# ==============================================================================
+
+class BarycentricCoordinates3D:
+    """3D point-to-triangle barycentric coordinates and projection."""
+
+    @classmethod
+    def point_triangle_coords(cls, p: List[float], a: List[float], b: List[float], c: List[float]) -> Dict[str, Any]:
+        """Calculates (u, v, w) barycentric coordinates of point p projected on triangle (a, b, c)."""
+        import math
+        v0 = [b[i] - a[i] for i in range(3)]
+        v1 = [c[i] - a[i] for i in range(3)]
+        v2 = [p[i] - a[i] for i in range(3)]
+
+        d00 = sum(v0[i] * v0[i] for i in range(3))
+        d01 = sum(v0[i] * v1[i] for i in range(3))
+        d11 = sum(v1[i] * v1[i] for i in range(3))
+        d20 = sum(v2[i] * v0[i] for i in range(3))
+        d21 = sum(v2[i] * v1[i] for i in range(3))
+
+        denom = d00 * d11 - d01 * d01
+        if abs(denom) < 1e-12:
+            return {"u": 0.333, "v": 0.333, "w": 0.334, "inside_triangle": False}
+
+        v = (d11 * d20 - d01 * d21) / denom
+        w = (d00 * d21 - d01 * d20) / denom
+        u = 1.0 - v - w
+
+        inside = (u >= -1e-6) and (v >= -1e-6) and (w >= -1e-6)
+        return {
+            "u": round(u, 6),
+            "v": round(v, 6),
+            "w": round(w, 6),
+            "inside_triangle": inside,
+        }
+
+
+class SphericalHarmonics3D:
+    """Real spherical harmonics basis functions Y_l^m(theta, phi) for degree l <= 2 (9 coefficients)."""
+
+    @classmethod
+    def evaluate_basis_9(cls, nx: float, ny: float, nz: float) -> List[float]:
+        """Evaluates 9 real spherical harmonics basis functions for unit direction vector (nx, ny, nz)."""
+        import math
+        # Normalize
+        norm = math.sqrt(nx ** 2 + ny ** 2 + nz ** 2)
+        if norm > 1e-12:
+            x, y, z = nx / norm, ny / norm, nz / norm
+        else:
+            x, y, z = 0.0, 0.0, 1.0
+
+        # Constants
+        c0 = 0.5 * math.sqrt(1.0 / math.pi)
+        c1 = 0.5 * math.sqrt(3.0 / math.pi)
+        c2 = 0.5 * math.sqrt(15.0 / math.pi)
+        c3 = 0.25 * math.sqrt(5.0 / math.pi)
+        c4 = 0.25 * math.sqrt(15.0 / math.pi)
+
+        # Degree 0
+        y0_0 = c0
+        # Degree 1
+        y1_m1 = c1 * y
+        y1_0 = c1 * z
+        y1_p1 = c1 * x
+        # Degree 2
+        y2_m2 = c2 * x * y
+        y2_m1 = c2 * y * z
+        y2_0 = c3 * (3.0 * z ** 2 - 1.0)
+        y2_p1 = c2 * x * z
+        y2_p2 = c4 * (x ** 2 - y ** 2)
+
+        return [y0_0, y1_m1, y1_0, y1_p1, y2_m2, y2_m1, y2_0, y2_p1, y2_p2]
+
+
+def math3d_barycentric_triangle(p: List[float], a: List[float], b: List[float], c: List[float]) -> Record:
+    """Calculates 3D barycentric coordinates of point relative to triangle."""
+    return Record(BarycentricCoordinates3D.point_triangle_coords(p, a, b, c))
+
+
+def math3d_spherical_harmonic_eval(direction: List[float]) -> List[float]:
+    """Evaluates 9-coefficient real spherical harmonics basis on unit sphere."""
+    return SphericalHarmonics3D.evaluate_basis_9(direction[0], direction[1], direction[2])
