@@ -2505,3 +2505,154 @@ def graph_pagerank_calculate(
 
 
 
+
+
+# ==============================================================================
+# NETWORK FLOW ALGORITHMS: EDMONDS-KARP & DINIC MAX FLOW
+# ==============================================================================
+
+class EdmondsKarpMaxFlow:
+    """Edmonds-Karp O(V * E^2) maximum flow algorithm with residual capacity tracking."""
+
+    @classmethod
+    def compute(cls, nodes: List[str], edges: List[Dict[str, Any]], source: str, sink: str) -> Dict[str, Any]:
+        from collections import deque
+        capacity: Dict[str, Dict[str, float]] = {u: {} for u in nodes}
+        for u in nodes:
+            for v in nodes:
+                capacity[u][v] = 0.0
+
+        adj: Dict[str, List[str]] = {u: [] for u in nodes}
+        for edge in edges:
+            u, v, cap = edge["source"], edge["target"], float(edge.get("capacity", 1.0))
+            capacity[u][v] = capacity[u].get(v, 0.0) + cap
+            if v not in capacity[u]:
+                capacity[u][v] = 0.0
+            if u not in capacity[v]:
+                capacity[v][u] = 0.0
+            adj[u].append(v)
+            adj[v].append(u)
+
+        flow = 0.0
+        while True:
+            parent: Dict[str, Optional[str]] = {u: None for u in nodes}
+            parent[source] = source
+            q = deque([source])
+            bottleneck = {source: float("inf")}
+
+            while q:
+                curr = q.popleft()
+                if curr == sink:
+                    break
+                for nxt in adj[curr]:
+                    res_cap = capacity[curr][nxt]
+                    if res_cap > 1e-9 and parent[nxt] is None:
+                        parent[nxt] = curr
+                        bottleneck[nxt] = min(bottleneck[curr], res_cap)
+                        q.append(nxt)
+
+            if parent[sink] is None:
+                break
+
+            push = bottleneck[sink]
+            flow += push
+            curr = sink
+            while curr != source:
+                p = parent[curr]
+                capacity[p][curr] -= push
+                capacity[curr][p] += push
+                curr = p
+
+        # Extract non-zero edge flows
+        edge_flows = []
+        for edge in edges:
+            u, v = edge["source"], edge["target"]
+            orig_cap = float(edge.get("capacity", 1.0))
+            f = max(0.0, orig_cap - capacity[u][v])
+            edge_flows.append({"source": u, "target": v, "flow": f, "capacity": orig_cap})
+
+        return {
+            "max_flow": flow,
+            "source": source,
+            "sink": sink,
+            "flows": edge_flows,
+        }
+
+
+class DinicMaxFlow:
+    """Dinic's O(V^2 * E) maximum flow algorithm with layered networks and blocking flows."""
+
+    @classmethod
+    def compute(cls, nodes: List[str], edges: List[Dict[str, Any]], source: str, sink: str) -> Dict[str, Any]:
+        from collections import deque
+        capacity: Dict[str, Dict[str, float]] = {u: {} for u in nodes}
+        adj: Dict[str, List[str]] = {u: [] for u in nodes}
+
+        for edge in edges:
+            u, v, cap = edge["source"], edge["target"], float(edge.get("capacity", 1.0))
+            capacity[u][v] = capacity[u].get(v, 0.0) + cap
+            if v not in capacity[u]:
+                capacity[u][v] = 0.0
+            if u not in capacity[v]:
+                capacity[v][u] = 0.0
+            if v not in adj[u]:
+                adj[u].append(v)
+            if u not in adj[v]:
+                adj[v].append(u)
+
+        total_flow = 0.0
+
+        while True:
+            # Step 1: BFS layered network
+            level: Dict[str, int] = {u: -1 for u in nodes}
+            level[source] = 0
+            q = deque([source])
+            while q:
+                curr = q.popleft()
+                for nxt in adj[curr]:
+                    if capacity[curr][nxt] > 1e-9 and level[nxt] < 0:
+                        level[nxt] = level[curr] + 1
+                        q.append(nxt)
+
+            if level[sink] < 0:
+                break
+
+            # Step 2: DFS blocking flow
+            ptr: Dict[str, int] = {u: 0 for u in nodes}
+
+            def dfs(curr: str, pushed: float) -> float:
+                if pushed <= 1e-9 or curr == sink:
+                    return pushed
+                while ptr[curr] < len(adj[curr]):
+                    nxt = adj[curr][ptr[curr]]
+                    res_cap = capacity[curr][nxt]
+                    if level[nxt] == level[curr] + 1 and res_cap > 1e-9:
+                        tr = dfs(nxt, min(pushed, res_cap))
+                        if tr > 1e-9:
+                            capacity[curr][nxt] -= tr
+                            capacity[nxt][curr] += tr
+                            return tr
+                    ptr[curr] += 1
+                return 0.0
+
+            while True:
+                pushed = dfs(source, float("inf"))
+                if pushed <= 1e-9:
+                    break
+                total_flow += pushed
+
+        return {
+            "max_flow": total_flow,
+            "source": source,
+            "sink": sink,
+        }
+
+
+def graph_edmonds_karp(nodes: List[str], edges: List[Dict[str, Any]], source: str, sink: str) -> Record:
+    """Computes maximum network flow using Edmonds-Karp algorithm."""
+    return Record(EdmondsKarpMaxFlow.compute(nodes, edges, source, sink))
+
+
+def graph_dinic_max_flow(nodes: List[str], edges: List[Dict[str, Any]], source: str, sink: str) -> Record:
+    """Computes maximum network flow using Dinic's blocking flow algorithm."""
+    return Record(DinicMaxFlow.compute(nodes, edges, source, sink))

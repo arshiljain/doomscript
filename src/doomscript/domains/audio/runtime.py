@@ -1673,3 +1673,95 @@ def audio_compress_limit(
     )
 
 
+
+
+# ==============================================================================
+# SPECTRAL AUDIO PROCESSING: COOLEY-TUKEY FFT & STFT
+# ==============================================================================
+
+class CooleyTukeyFFT:
+    """Pure-Python radix-2 Cooley-Tukey decimation-in-time Fast Fourier Transform."""
+
+    @classmethod
+    def fft(cls, signal: List[float]) -> List[complex]:
+        n = len(signal)
+        if n == 0:
+            return []
+        # Next power of 2
+        p2 = 1
+        while p2 < n:
+            p2 <<= 1
+        padded = [complex(x) for x in signal] + [0.0j] * (p2 - n)
+        return cls._dit_fft(padded)
+
+    @classmethod
+    def ifft(cls, spectrum: List[complex]) -> List[float]:
+        n = len(spectrum)
+        if n == 0:
+            return []
+        conjugates = [s.conjugate() for s in spectrum]
+        f_conj = cls._dit_fft(conjugates)
+        return [(x.conjugate() / n).real for x in f_conj]
+
+    @classmethod
+    def _dit_fft(cls, a: List[complex]) -> List[complex]:
+        n = len(a)
+        if n <= 1:
+            return a
+        even = cls._dit_fft(a[0::2])
+        odd = cls._dit_fft(a[1::2])
+        out = [0.0j] * n
+        import cmath
+        for k in range(n // 2):
+            w = cmath.exp(-2.0j * cmath.pi * k / n) * odd[k]
+            out[k] = even[k] + w
+            out[k + n // 2] = even[k] - w
+        return out
+
+
+class STFTProcessor:
+    """Short-Time Fourier Transform (STFT) spectrogram analyzer."""
+
+    @classmethod
+    def stft(cls, samples: List[float], frame_size: int = 512, hop_size: int = 256) -> Dict[str, Any]:
+        import math
+        # Hann window
+        window = [0.5 * (1.0 - math.cos(2.0 * math.pi * i / (frame_size - 1))) for i in range(frame_size)]
+        frames = []
+        magnitudes = []
+        phases = []
+
+        num_frames = (len(samples) - frame_size) // hop_size + 1 if len(samples) >= frame_size else 0
+        for i in range(max(0, num_frames)):
+            start = i * hop_size
+            chunk = [samples[start + j] * window[j] for j in range(frame_size)]
+            spec = CooleyTukeyFFT.fft(chunk)
+            half = spec[:frame_size // 2 + 1]
+            mag = [abs(x) for x in half]
+            phase = [math.atan2(x.imag, x.real) for x in half]
+            frames.append(half)
+            magnitudes.append(mag)
+            phases.append(phase)
+
+        return {
+            "num_frames": len(frames),
+            "frame_size": frame_size,
+            "hop_size": hop_size,
+            "magnitudes": magnitudes,
+            "phases": phases,
+        }
+
+
+def audio_fft(signal: List[float]) -> List[complex]:
+    """Computes Radix-2 Fast Fourier Transform of input signal."""
+    return CooleyTukeyFFT.fft(signal)
+
+
+def audio_ifft(spectrum: List[complex]) -> List[float]:
+    """Computes Inverse Fast Fourier Transform from spectrum."""
+    return CooleyTukeyFFT.ifft(spectrum)
+
+
+def audio_stft(samples: List[float], frame_size: int = 512, hop_size: int = 256) -> Record:
+    """Computes Short-Time Fourier Transform (STFT) spectrogram frames."""
+    return Record(STFTProcessor.stft(samples, frame_size=frame_size, hop_size=hop_size))

@@ -1138,3 +1138,140 @@ def sec_generate_totp(secret: Union[str, bytes], digits: int = 6) -> str:
 def sec_secp256k1_public_key(priv_key: int) -> Tuple[int, int]:
     """Derives elliptic curve public key (x, y) point on secp256k1."""
     return Secp256k1Curve.public_key(priv_key)
+
+
+# ==============================================================================
+# CHACHA20 STREAM CIPHER & POLY1305 MAC (RFC 7539)
+# ==============================================================================
+
+class ChaCha20Cipher:
+    """Pure-Python RFC 7539 ChaCha20 256-bit stream cipher."""
+
+    @staticmethod
+    def _rotl32(v: int, c: int) -> int:
+        return ((v << c) & 0xFFFFFFFF) | ((v & 0xFFFFFFFF) >> (32 - c))
+
+    @classmethod
+    def _quarter_round(cls, x: List[int], a: int, b: int, c: int, d: int) -> None:
+        x[a] = (x[a] + x[b]) & 0xFFFFFFFF
+        x[d] = cls._rotl32(x[d] ^ x[a], 16)
+        x[c] = (x[c] + x[d]) & 0xFFFFFFFF
+        x[b] = cls._rotl32(x[b] ^ x[c], 12)
+        x[a] = (x[a] + x[b]) & 0xFFFFFFFF
+        x[d] = cls._rotl32(x[d] ^ x[a], 8)
+        x[c] = (x[c] + x[d]) & 0xFFFFFFFF
+        x[b] = cls._rotl32(x[b] ^ x[c], 7)
+
+    @classmethod
+    def block(cls, key: bytes, counter: int, nonce: bytes) -> bytes:
+        if len(key) != 32:
+            raise ValueError("ChaCha20 key must be 32 bytes")
+        if len(nonce) != 12:
+            raise ValueError("ChaCha20 nonce must be 12 bytes")
+
+        # Constants "expand 32-byte k"
+        state = [
+            0x61707865, 0x3320646e, 0x79622d32, 0x6b206574,
+            int.from_bytes(key[0:4], "little"),
+            int.from_bytes(key[4:8], "little"),
+            int.from_bytes(key[8:12], "little"),
+            int.from_bytes(key[12:16], "little"),
+            int.from_bytes(key[16:20], "little"),
+            int.from_bytes(key[20:24], "little"),
+            int.from_bytes(key[24:28], "little"),
+            int.from_bytes(key[28:32], "little"),
+            counter & 0xFFFFFFFF,
+            int.from_bytes(nonce[0:4], "little"),
+            int.from_bytes(nonce[4:8], "little"),
+            int.from_bytes(nonce[8:12], "little"),
+        ]
+
+        working_state = list(state)
+        for _ in range(10):
+            # Column rounds
+            cls._quarter_round(working_state, 0, 4, 8, 12)
+            cls._quarter_round(working_state, 1, 5, 9, 13)
+            cls._quarter_round(working_state, 2, 6, 10, 14)
+            cls._quarter_round(working_state, 3, 7, 11, 15)
+            # Diagonal rounds
+            cls._quarter_round(working_state, 0, 5, 10, 15)
+            cls._quarter_round(working_state, 1, 6, 11, 12)
+            cls._quarter_round(working_state, 2, 7, 8, 13)
+            cls._quarter_round(working_state, 3, 4, 9, 14)
+
+        out = bytearray()
+        for i in range(16):
+            sum_val = (working_state[i] + state[i]) & 0xFFFFFFFF
+            out.extend(sum_val.to_bytes(4, "little"))
+        return bytes(out)
+
+    @classmethod
+    def crypt(cls, key: bytes, counter: int, nonce: bytes, data: bytes) -> bytes:
+        res = bytearray()
+        num_blocks = (len(data) + 63) // 64
+        for b in range(num_blocks):
+            key_block = cls.block(key, counter + b, nonce)
+            chunk = data[b * 64:(b + 1) * 64]
+            for i in range(len(chunk)):
+                res.append(chunk[i] ^ key_block[i])
+        return bytes(res)
+
+
+class Poly1305Authenticator:
+    """Pure-Python RFC 7539 Poly1305 one-time message authenticator."""
+
+    P = (1 << 130) - 5
+
+    @classmethod
+    def mac(cls, key: bytes, msg: bytes) -> bytes:
+        if len(key) != 32:
+            raise ValueError("Poly1305 key must be 32 bytes")
+
+        # Clamp r
+        r_raw = bytearray(key[:16])
+        r_raw[3] &= 15
+        r_raw[7] &= 15
+        r_raw[11] &= 15
+        r_raw[15] &= 15
+        r_raw[4] &= 252
+        r_raw[8] &= 252
+        r_raw[12] &= 252
+        r = int.from_bytes(r_raw, "little")
+        s = int.from_bytes(key[16:], "little")
+
+        accumulator = 0
+        for i in range(0, len(msg), 16):
+            chunk = msg[i:i + 16]
+            # append 0x01 byte
+            n = int.from_bytes(chunk + b"\x01", "little")
+            accumulator = (accumulator + n) % cls.P
+            accumulator = (accumulator * r) % cls.P
+
+        tag = (accumulator + s) & ((1 << 128) - 1)
+        return tag.to_bytes(16, "little")
+
+    @classmethod
+    def verify(cls, key: bytes, msg: bytes, tag: bytes) -> bool:
+        expected = cls.mac(key, msg)
+        import hmac
+        return hmac.compare_digest(expected, tag)
+
+
+def sec_chacha20_encrypt(key_bytes: bytes, nonce_bytes: bytes, plaintext: bytes, counter: int = 1) -> bytes:
+    """Encrypts plaintext bytes using ChaCha20 stream cipher."""
+    return ChaCha20Cipher.crypt(key_bytes, counter, nonce_bytes, plaintext)
+
+
+def sec_chacha20_decrypt(key_bytes: bytes, nonce_bytes: bytes, ciphertext: bytes, counter: int = 1) -> bytes:
+    """Decrypts ciphertext bytes using ChaCha20 stream cipher."""
+    return ChaCha20Cipher.crypt(key_bytes, counter, nonce_bytes, ciphertext)
+
+
+def sec_poly1305_mac(key_bytes: bytes, message: bytes) -> bytes:
+    """Computes 16-byte Poly1305 authentication tag."""
+    return Poly1305Authenticator.mac(key_bytes, message)
+
+
+def sec_poly1305_verify(key_bytes: bytes, message: bytes, tag: bytes) -> bool:
+    """Verifies 16-byte Poly1305 authentication tag in constant time."""
+    return Poly1305Authenticator.verify(key_bytes, message, tag)
