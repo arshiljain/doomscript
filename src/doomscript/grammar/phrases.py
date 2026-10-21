@@ -595,8 +595,8 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         masked = re.sub(r"\s+then$", ":", masked, flags=re.IGNORECASE)
 
     # Pre-normalize and protect assert that / make sure [that] / check that / assert
-    masked = re.sub(r"^\s*(?:make\s+sure(?:\s+that)?|ensure(?:\s+that)?|assert(?:\s+that)?|check\s+that)\s+(.+?)\s+otherwise\s+(.+)$", r"verify that \1 otherwise \2", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"^\s*(?:make\s+sure(?:\s+that)?|ensure(?:\s+that)?|assert(?:\s+that)?|check\s+that)\s+(.+)$", r'verify that \1 otherwise "Check failed"', masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*(?:make\s+sure(?:\s+that)?|assert(?:\s+that)?|check\s+that)\s+(.+?)\s+otherwise\s+(.+)$", r"verify that \1 otherwise \2", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*(?:make\s+sure(?:\s+that)?|assert(?:\s+that)?|check\s+that)\s+(.+)$", r'verify that \1 otherwise "Check failed"', masked, flags=re.IGNORECASE)
 
     # Pillar A: Conversational hypotheses and intentional definitions
     masked = re.sub(
