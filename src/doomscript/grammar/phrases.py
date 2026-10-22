@@ -1475,6 +1475,8 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     # 4. Pronoun Resolution ('it' / 'that')
     # Temporarily protect grammar keywords that contain 'that' or 'it'
     masked = re.sub(r"\bverify\s+that\b", "__VERIFY_THAT__", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\brequire\s+that\b", "__REQUIRE_THAT__", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bensure\s+that\b", "__ENSURE_THAT__", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bif\s+(?:(?:it|that)\s+fails|there\s+is\s+an?\s+error|(?:it|anything)\s+goes\s+wrong)\b", "__IF_FAILS__", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bif\s+it\s+(?:turns\s+out|happens)\s+that\b", "__IF_TURNS_OUT__", masked, flags=re.IGNORECASE)
 
@@ -1520,6 +1522,8 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
 
     # Restore protected keywords (also normalizes 'if that fails' to 'if it fails')
     masked = masked.replace("__VERIFY_THAT__", "verify that")
+    masked = masked.replace("__REQUIRE_THAT__", "verify that")
+    masked = masked.replace("__ENSURE_THAT__", "verify that")
     masked = masked.replace("__IF_FAILS__", "if it fails")
     masked = masked.replace("__IF_TURNS_OUT__", "if")
 
@@ -1530,11 +1534,12 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     elif re.match(r"^display\b", masked, re.IGNORECASE):
         masked = re.sub(r"^display\b", "say", masked, flags=re.IGNORECASE)
 
-    for syn, canonical in VERB_SYNONYMS.items():
-        pattern = re.compile(rf"^{syn}\b", re.IGNORECASE)
-        if pattern.match(masked):
-            masked = pattern.sub(canonical, masked)
-            break
+    if not re.match(r"^\s*[A-Za-z_]\w*\s*(?:=|\+=|-=|\*=)", masked):
+        for syn, canonical in VERB_SYNONYMS.items():
+            pattern = re.compile(rf"^{syn}\s+(?![=+\-*/%<>&|^]|\b(?:is|=|to|in)\b)", re.IGNORECASE)
+            if pattern.match(masked):
+                masked = pattern.sub(f"{canonical} ", masked, count=1)
+                break
 
     # 6. Possessives and Article Rewrites
     for pat, repl in POSSESSIVE_REWRITES:
@@ -1910,30 +1915,30 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
 
     # Frontier 6: Safe Null-Coalescing & Default Fallbacks (otherwise / default)
     # Note: 'verify that <cond> otherwise <msg>' uses 'otherwise' as syntax separator, not null-coalescing.
-    is_verify_stmt = bool(re.search(r"^\s*verify\s+that\b", masked, re.IGNORECASE))
+    is_contract_stmt = bool(re.search(r"^\s*(?:verify|require|ensure|assert|check)\b", masked, re.IGNORECASE))
 
-    masked = re.sub(
-        r"\b([A-Za-z_]\w*)'s\s+([A-Za-z_]\w*)\s+(?:otherwise|default)\s+([^\s,:\);]+(?:\s+[^\s,:\);]+)*)",
-        r'ds_attr(\1, "\2", \3)',
-        masked,
-        flags=re.IGNORECASE
-    )
-    masked = re.sub(
-        r"\b([A-Za-z_]\w*)\.([A-Za-z_]\w*)\s+(?:otherwise|default)\s+([^\s,:\);]+(?:\s+[^\s,:\);]+)*)",
-        r'ds_attr(\1, "\2", \3)',
-        masked,
-        flags=re.IGNORECASE
-    )
-    masked = re.sub(
-        r"\b([A-Za-z_]\w*)\[([^\]]+)\]\s+(?:otherwise|default)\s+([^\s,:\);]+(?:\s+[^\s,:\);]+)*)",
-        r"ds_attr(\1, \2, \3)",
-        masked,
-        flags=re.IGNORECASE
-    )
-    if not is_verify_stmt:
+    if not is_contract_stmt:
+        masked = re.sub(
+            r"\b([A-Za-z_]\w*)'s\s+([A-Za-z_]\w*)\s+(?:otherwise|default)\s+([^\s,:\);]+(?:\s+[^\s,:\);]+)*)",
+            r'ds_attr(\1, "\2", \3)',
+            masked,
+            flags=re.IGNORECASE
+        )
+        masked = re.sub(
+            r"\b([A-Za-z_]\w*)\.([A-Za-z_]\w*)\s+(?:otherwise|default)\s+([^\s,:\);]+(?:\s+[^\s,:\);]+)*)",
+            r'ds_attr(\1, "\2", \3)',
+            masked,
+            flags=re.IGNORECASE
+        )
+        masked = re.sub(
+            r"\b([A-Za-z_]\w*)\[([^\]]+)\]\s+(?:otherwise|default)\s+([^\s,:\);]+(?:\s+[^\s,:\);]+)*)",
+            r"ds_attr(\1, \2, \3)",
+            masked,
+            flags=re.IGNORECASE
+        )
         def _coal_repl(m):
             w = m.group(1)
-            if m.start() == 0 or w.lower() in ("verify", "check", "assert", "if", "unless", "when", "otherwise", "else"):
+            if m.start() == 0 or w.lower() in ("verify", "check", "assert", "require", "ensure", "if", "unless", "when", "otherwise", "else"):
                 return m.group(0)
             return f"ds_coalesce({w}, {m.group(2)})"
 
@@ -1999,7 +2004,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         flags=re.IGNORECASE
     )
     masked = re.sub(
-        r"\b([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s+sorted\b(?!\s+by\b)",
+        r"\b(?!(?:to|in|into|of|from|as|with|set|let|put|the|a|an)\b)([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s+sorted\b(?!\s+(?:by|of)\b)",
         r"sorted(\1)",
         masked,
         flags=re.IGNORECASE
@@ -2041,7 +2046,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"(?<!'s\s)(?<!\.)(?<!\bto\s)(?<![\"'])\bsum\b(?![\"'])(?!\s+of\b)(?!\s*\()", "_var_sum", masked)
     masked = re.sub(r"(?<!'s\s)(?<!\.)(?<![\"'])\badd\b(?![\"'])(?!\s+(?:.+?\s+)?(?:to|into)\b)", "_var_add", masked)
     masked = re.sub(r"(?<!'s\s)(?<!\.)(?<!\bto\s)(?<!\bbullet\s)(?<!\ba\s)(?<!\bempty\s)(?<!\bnew\s)(?<![\"'])\blist\b(?![\"'])(?!\s+files\b)(?!\s+of\b)(?!\s*\()", "_var_list", masked)
-    masked = re.sub(r"(?<!'s\s)(?<!\.)(?<!\bto\s)(?<!\bfind\s)(?<!\btake\s)(?<!\bdrop\s)\bfirst\b(?!\s+(?:\d+|[A-Za-z_]\w*)\s+items?\s+(?:of|from)\b|\s+item\s+of\b|\s+[A-Z]\w*)(?!\s*\()", "_var_first", masked)
+    # Removed _var_first hack (first is now a first-class ident in grammar)
     # Preposition flexibility: add <item> into <target>
     masked = re.sub(
         r"^\s*add\s+(.+?)\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
@@ -2089,13 +2094,13 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"(\d+(?:\.\d+)?)\s*%\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])*|\d+(?:\.\d+)?|\([^)]+\))", r"percent_of(\1, \2)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"(\b\w+|\))\s+to\s+(?:the\s+)?power\s+of\s+(\b\w+|\()", r"math_pow(\1, \2)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"(\b\w+|\))\s+squared\b", r"math_pow(\1, 2)", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"(\b\w+|\))\s+mod\s+(\b\w+|\()", r"math_mod(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bmod\b", "%", masked, flags=re.IGNORECASE)
     masked = re.sub(r"(\b\w+|\))\s+plus\s+(\b\w+|\()", r"\1 + \2", masked, flags=re.IGNORECASE)
     masked = re.sub(r"(\b\w+|\))\s+minus\s+(\b\w+|\()", r"\1 - \2", masked, flags=re.IGNORECASE)
     if not re.match(r"^\s*repeat\b", masked, re.IGNORECASE):
         masked = re.sub(r"(\b\w+|\))\s+times\s+(\b\w+|\()", r"\1 * \2", masked, flags=re.IGNORECASE)
     masked = re.sub(r"(\b\w+|\))\s+multiplied\s+by\s+(\b\w+|\()", r"\1 * \2", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\b(?:the\s+)?remainder\s+of\s+(.+?)\s+(?:divided\s+by|mod|/)\s+([^\s;,\n]+)", r"math_mod(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(?:the\s+)?remainder\s+of\s+(.+?)\s+(?:divided\s+by|mod|/)\s+([^\s;,\n]+)", r"(\1 % \2)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"(\b\w+|\))\s+divided\s+by\s+(\b\w+|\()", r"\1 / \2", masked, flags=re.IGNORECASE)
 
     # Arithmetic Mutators in English
@@ -2155,7 +2160,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"^\s*(?:the\s+)?result\s+is\s+(.+)$", r"return \1", masked, flags=re.IGNORECASE)
 
     # Conditions & Parity
-    _SUBJ_PAT = r"(\d+(?:\.\d+)?|[A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?|\([^\)]+\))"
+    _SUBJ_PAT = r"(\d+(?:\.\d+)?|[A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?|\([^\)]+\))"
     masked = re.sub(rf"\b{_SUBJ_PAT}\s+is\s+divisible\s+by\s+([A-Za-z_]\w*|\d+)\b", r"math_mod(\1, \2) is 0", masked, flags=re.IGNORECASE)
     masked = re.sub(rf"\b{_SUBJ_PAT}\s+is\s+not\s+divisible\s+by\s+([A-Za-z_]\w*|\d+)\b", r"math_mod(\1, \2) is not 0", masked, flags=re.IGNORECASE)
     masked = re.sub(rf"\b{_SUBJ_PAT}\s+is\s+(?:a\s+)?multiple\s+of\s+([A-Za-z_]\w*|\d+)\b", r"math_mod(\1, \2) is 0", masked, flags=re.IGNORECASE)
@@ -2167,8 +2172,8 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     # Handled natively in Lark grammar via IS_BETWEEN and IS_OUTSIDE
     pass
     masked = re.sub(r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s+is\s+neither\s+(.+?)\s+nor\s+([^\s;,\n]+)", r"not (\1 is \2 or \1 is \3)", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"(\b\w+(?:'s\s+[A-Za-z_]\w*)?|\))\s+is\s+(?:inside|in)\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?|\[[^\]]*\]|\{[^\}]*\})", r"\1 is inside \2", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"(\b\w+(?:'s\s+[A-Za-z_]\w*)?|\))\s+(?:is\s+)?not\s+(?:inside|in)\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?|\[[^\]]*\]|\{[^\}]*\})", r"\1 is not inside \2", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"""(\b\w+(?:\[[^\]]+\]|\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?|\))\s+is\s+(?:inside|in)\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?|\[[^\]]*\]|\{[^\}]*\}|"[^"]*"|'[^']*')""", r"\1 is inside \2", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"""(\b\w+(?:\[[^\]]+\]|\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?|\))\s+(?:is\s+)?(?:not\s+(?:inside|in)|isn't\s+(?:inside|in))\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?|\[[^\]]*\]|\{[^\}]*\}|"[^"]*"|'[^']*')""", r"\1 is not inside \2", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\b([A-Za-z_]\w*(?:\[[^\]]+\])?|\d+)\s+xor\s+([A-Za-z_]\w*(?:\[[^\]]+\])?|\d+)\b", r"\1 ^ \2", masked, flags=re.IGNORECASE)
     
     # Membership 'in' operator: x in y -> x is inside y (excluding for-loops, comprehensions, and statement keywords)
@@ -2176,7 +2181,9 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         def _in_repl(m):
             if m.group(2).lower() in ("background", "bytes", "seconds", "minutes", "hours", "milliseconds", "days"):
                 return m.group(0)
-            if m.group(1).lower() in ("highest", "maximum", "lowest", "minimum", "files", "nulls", "missing", "items", "now"):
+            if m.group(1).lower() in ("highest", "maximum", "lowest", "minimum", "files", "nulls", "missing", "items", "now", "is", "not", "isn't", "inside"):
+                return m.group(0)
+            if re.search(r"\b(?:is|not|isn't)\s*$", masked[:m.start()], re.IGNORECASE):
                 return m.group(0)
             full_prefix = masked[:m.start()] + m.group(1)
             if re.search(r"\bfor\s+(?:each\s+)?([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*)$", full_prefix, re.IGNORECASE):
@@ -2203,7 +2210,15 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"\bquarter\s+of\s+([A-Za-z_]\w*|\d+)\b", r"(\1 / 4)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\b(?:double|twice)\s+of\s+([A-Za-z_]\w*|\d+)\b", r"(\1 * 2)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\btriple\s+of\s+([A-Za-z_]\w*|\d+)\b", r"(\1 * 3)", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\b(?:the\s+)?remainder\s+of\s+(.+?)\s+(?:divided\s+by|mod|/)\s+([^\s;,\n]+)", r"math_mod(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(?:the\s+)?remainder\s+of\s+(.+?)\s+(?:divided\s+by|mod|/)\s+([^\s;,\n]+)", r"(\1 % \2)", masked, flags=re.IGNORECASE)
+
+    # Dict keys, values, and entries in English
+    masked = re.sub(r"\b(?:the\s+)?keys\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)", r"ds_keys(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(?:the\s+)?values\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)", r"ds_values(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(?:the\s+)?(?:entries|pairs)\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)", r"ds_items(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"(?<!\bunique\s)\b(?:the\s+)?items\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)", r"ds_items(\1)", masked, flags=re.IGNORECASE)
+    # Loop over key and value
+    masked = re.sub(r"\bfor\s+(?:each\s+)?([A-Za-z_]\w*)\s+and\s+([A-Za-z_]\w*)\s+in\b", r"for each \1, \2 in", masked, flags=re.IGNORECASE)
 
     # Lists, Text, and Aggregates
     masked = re.sub(r"\bhow\s+many\s+items\s+are\s+in\s+([A-Za-z_]\w*)", r"count of \1", masked, flags=re.IGNORECASE)
@@ -2331,12 +2346,14 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     req_otherwise_m = re.match(r"^require\s+(.+?)\s+otherwise\s+(.+)$", masked, re.IGNORECASE)
     if req_otherwise_m:
         cond_part = req_otherwise_m.group(1).strip()
+        cond_part = re.sub(r"^that\s+", "", cond_part, flags=re.IGNORECASE).strip()
         msg_part = req_otherwise_m.group(2).strip()
         masked = f"verify that {cond_part} otherwise {msg_part}"
     else:
         req_m = re.match(r"^require\s+(.+)$", masked, re.IGNORECASE)
         if req_m:
             cond_part = req_m.group(1).strip()
+            cond_part = re.sub(r"^that\s+", "", cond_part, flags=re.IGNORECASE).strip()
             orig_cond_text = unmask_strings(cond_part, strings)
             safe_cond = orig_cond_text.replace('"', "'")
             msg_literal = f'"Requirement failed: {safe_cond}"'
@@ -2347,12 +2364,14 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     ens_otherwise_m = re.match(r"^ensure\s+(.+?)\s+otherwise\s+(.+)$", masked, re.IGNORECASE)
     if ens_otherwise_m:
         cond_part = ens_otherwise_m.group(1).strip()
+        cond_part = re.sub(r"^that\s+", "", cond_part, flags=re.IGNORECASE).strip()
         msg_part = ens_otherwise_m.group(2).strip()
         masked = f"verify that {cond_part} otherwise {msg_part}"
     else:
         ens_m = re.match(r"^ensure\s+(.+)$", masked, re.IGNORECASE)
         if ens_m:
             cond_part = ens_m.group(1).strip()
+            cond_part = re.sub(r"^that\s+", "", cond_part, flags=re.IGNORECASE).strip()
             orig_cond_text = unmask_strings(cond_part, strings)
             safe_cond = orig_cond_text.replace('"', "'")
             msg_literal = f'"Postcondition failed: {safe_cond}"'
@@ -2434,6 +2453,12 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         e_expr = exp_le_m.group(1).strip()
         e_val = exp_le_m.group(2).strip()
         masked = f'verify that {e_expr} is at most {e_val} otherwise "Expectation failed: value not at most"'
+
+    exp_be_val_m = re.match(r"^expect\s+(.+?)\s+to\s+be\s+(.+)$", masked, re.IGNORECASE)
+    if exp_be_val_m:
+        e_expr = exp_be_val_m.group(1).strip()
+        e_exp = exp_be_val_m.group(2).strip()
+        masked = f'verify that {e_expr} equals {e_exp} otherwise "Expectation failed: equality check"'
 
     exp_cont_m = re.match(r"^expect\s+(.+?)\s+to\s+contain\s+(.+)$", masked, re.IGNORECASE)
     if exp_cont_m:
@@ -4029,7 +4054,7 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
                 pending_injections.append((indent_len, assertions, line_idx))
                 continue
 
-        # Phase 9: Destructuring (split via 'and then')
+    # Phase 9: Destructuring (split via 'and then')
         head_tail_m = re.match(r"^first\s+item\s+into\s+([A-Za-z_]\w*)\s*,\s*remaining\s+items\s+into\s+([A-Za-z_]\w*)\s+from\s+(.+)$", code, re.IGNORECASE)
         if head_tail_m:
             h_var = head_tail_m.group(1)
@@ -4133,7 +4158,7 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
             )
             # Rule 3: '... and <imperative_verb> ...' (all statement verbs)
             masked_code = re.sub(
-                r"(?<!\band\sthen)\s+and\s+([A-Za-z_]\w*)",
+                r"(?<!\band\sthen)(?<!\bgo\sahead)\s+and\s+([A-Za-z_]\w*)",
                 lambda m: f" and then {m.group(1)}" if m.group(1).lower() in STATEMENT_START_KEYWORDS and m.group(1).lower() not in ("then", "of", "in", "to", "as", "with", "by", "from") else m.group(0),
                 masked_code,
                 flags=re.IGNORECASE,

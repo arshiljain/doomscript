@@ -288,25 +288,41 @@ class DataPipelineRuntime(DomainRuntime):
                     out_row = {}
                     for k, val in zip(step.keys, key_tuple):
                         out_row[k] = val
+                    agg_map = {
+                        "sum": "sum", "total": "sum",
+                        "mean": "mean", "avg": "mean", "average": "mean",
+                        "min": "min", "minimum": "min", "lowest": "min",
+                        "max": "max", "maximum": "max", "highest": "max",
+                        "first": "first",
+                        "last": "last",
+                        "count": "count",
+                    }
                     for out_col, (agg_func, src_col) in step.aggregations.items():
-                        func_lower = agg_func.lower()
+                        func_lower = agg_map.get(agg_func.lower(), agg_func.lower())
                         if func_lower == "count":
                             out_row[out_col] = len(group_rows)
                         else:
                             vals = [r.get(src_col) for r in group_rows if r.get(src_col) is not None]
-                            numeric_vals = [v for v in vals if isinstance(v, (int, float))]
+                            numeric_vals = []
+                            for v in vals:
+                                try:
+                                    numeric_vals.append(float(v) if not isinstance(v, int) else v)
+                                except (ValueError, TypeError):
+                                    pass
                             if func_lower == "sum":
                                 out_row[out_col] = sum(numeric_vals) if numeric_vals else 0
                             elif func_lower in ("mean", "avg"):
                                 out_row[out_col] = (sum(numeric_vals) / len(numeric_vals)) if numeric_vals else 0.0
                             elif func_lower == "min":
-                                out_row[out_col] = min(numeric_vals) if numeric_vals else None
+                                out_row[out_col] = min(numeric_vals) if numeric_vals else (min(vals) if vals else None)
                             elif func_lower == "max":
-                                out_row[out_col] = max(numeric_vals) if numeric_vals else None
+                                out_row[out_col] = max(numeric_vals) if numeric_vals else (max(vals) if vals else None)
                             elif func_lower == "first":
                                 out_row[out_col] = vals[0] if vals else None
                             elif func_lower == "last":
                                 out_row[out_col] = vals[-1] if vals else None
+                            else:
+                                raise ValueError(f"Unknown aggregation function: {agg_func}")
                     agg_rows.append(out_row)
                 rows = agg_rows
 
@@ -379,13 +395,16 @@ class DataPipelineRuntime(DomainRuntime):
                     writer.writeheader()
                     writer.writerows(rows)
 
+        # Ensure all output rows are Record instances so attribute access (row.region) works
+        record_rows = [Record(r) if isinstance(r, dict) and not isinstance(r, Record) else r for r in rows]
+
         # Bind result to scope
         if spec.target:
-            scope[spec.target] = rows
+            scope[spec.target] = record_rows
         if spec.name:
-            scope[spec.name] = rows
+            scope[spec.name] = record_rows
 
-        return rows
+        return record_rows
 
 
 def explain_pipeline(pipeline_or_name: Any) -> str:

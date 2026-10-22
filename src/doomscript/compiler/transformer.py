@@ -18,6 +18,82 @@ def to_load(node):
         return ast.Tuple(elts=[to_load(e) for e in node.elts], ctx=ast.Load())
     return node
 
+
+def fix_function_scopes(module_ast: ast.Module) -> ast.Module:
+    """Fixes lexical scopes across functions: keeps locally built lists local,
+    declares nonlocal for outer-scope nested mutations, and declares global
+    for module-level mutations.
+    """
+    class ScopePatcher(ast.NodeTransformer):
+        def __init__(self):
+            self.func_stack = []
+
+        def visit_FunctionDef(self, node):
+            params = {a.arg for a in node.args.args}
+            local_defs = params.copy()
+            for child in ast.walk(node):
+                if child is node:
+                    continue
+                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                if isinstance(child, ast.Assign):
+                    is_mutation = (
+                        isinstance(child.value, ast.Call)
+                        and isinstance(child.value.func, ast.Name)
+                        and child.value.func.id in ('ds_add', 'ds_remove')
+                    )
+                    if not is_mutation:
+                        for tgt in child.targets:
+                            if isinstance(tgt, ast.Name):
+                                local_defs.add(tgt.id)
+                elif isinstance(child, ast.For):
+                    if isinstance(child.target, ast.Name):
+                        local_defs.add(child.target.id)
+                    elif isinstance(child.target, (ast.Tuple, ast.List)):
+                        for elt in child.target.elts:
+                            if isinstance(elt, ast.Name):
+                                local_defs.add(elt.id)
+
+            needed_nonlocal = set()
+            needed_global = set()
+
+            for child in ast.walk(node):
+                if child is node:
+                    continue
+                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                if isinstance(child, ast.Assign):
+                    is_mutation = (
+                        isinstance(child.value, ast.Call)
+                        and isinstance(child.value.func, ast.Name)
+                        and child.value.func.id in ('ds_add', 'ds_remove')
+                    )
+                    if is_mutation:
+                        for tgt in child.targets:
+                            if isinstance(tgt, ast.Name) and tgt.id not in local_defs:
+                                in_enclosing = any(tgt.id in enc_locals for _, enc_locals in reversed(self.func_stack))
+                                if in_enclosing:
+                                    needed_nonlocal.add(tgt.id)
+                                else:
+                                    needed_global.add(tgt.id)
+
+            self.func_stack.append((node, local_defs))
+            new_body = [s for s in node.body if not isinstance(s, (ast.Global, ast.Nonlocal))]
+            if needed_nonlocal:
+                new_body.insert(0, ast.Nonlocal(names=sorted(list(needed_nonlocal))))
+            if needed_global:
+                new_body.insert(0, ast.Global(names=sorted(list(needed_global))))
+            node.body = new_body
+
+            self.generic_visit(node)
+            self.func_stack.pop()
+            return node
+
+        def visit_AsyncFunctionDef(self, node):
+            return self.visit_FunctionDef(node)
+
+    return ScopePatcher().visit(module_ast)
+
 class DoomToPython(Transformer):
     """Transforms DoomScript CST to Python AST."""
 
@@ -53,6 +129,7 @@ class DoomToPython(Transformer):
     def start(self, stmts):
         body = [s for s in stmts if s is not None]
         mod = ast.Module(body=body, type_ignores=[])
+        mod = fix_function_scopes(mod)
         ast.fix_missing_locations(mod)
         return mod
 
@@ -960,6 +1037,12 @@ class DoomToPython(Transformer):
         target, collection, condition, suite = args
         if isinstance(target, str):
             target = ast.Name(id=target, ctx=ast.Store())
+        if isinstance(target, (ast.Tuple, ast.List)) and len(target.elts) == 2:
+            collection = ast.Call(
+                func=ast.Name(id='ds_iter_pairs', ctx=ast.Load()),
+                args=[collection],
+                keywords=[]
+            )
         if_node = ast.If(test=condition, body=suite, orelse=[])
         return ast.For(target=target, iter=collection, body=[if_node], orelse=[])
 
@@ -1014,6 +1097,12 @@ class DoomToPython(Transformer):
         target, iterable, body = args
         if isinstance(target, str):
             target = ast.Name(id=target, ctx=ast.Store())
+        if isinstance(target, (ast.Tuple, ast.List)) and len(target.elts) == 2:
+            iterable = ast.Call(
+                func=ast.Name(id='ds_iter_pairs', ctx=ast.Load()),
+                args=[iterable],
+                keywords=[]
+            )
         return ast.For(
             target=target,
             iter=iterable,
@@ -1142,17 +1231,6 @@ class DoomToPython(Transformer):
             kw_defaults=[],
             defaults=defaults
         )
-
-        param_names = {p.arg for p in arg_nodes}
-        globals_to_declare = set()
-        for node in ast.walk(ast.Module(body=body, type_ignores=[])):
-            if isinstance(node, ast.Assign):
-                for tgt in node.targets:
-                    if isinstance(tgt, ast.Name) and tgt.id not in param_names:
-                        if isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Name) and node.value.func.id in ('ds_add', 'ds_remove'):
-                            globals_to_declare.add(tgt.id)
-        if globals_to_declare:
-            body = [ast.Global(names=sorted(list(globals_to_declare)))] + body
 
         return ast.FunctionDef(
             name=func_name,
@@ -1730,27 +1808,72 @@ class DoomToPython(Transformer):
             val = raw[3:-3]
         else:
             val = raw[1:-1]
-        var_pattern = re.compile(r"\{([A-Za-z_]\w*(?:\s*(?:'s|\.)\s*[A-Za-z_]\w*)*)\}")
-        if var_pattern.search(val):
+        if "{" in val:
             parts = []
-            last_end = 0
+            i = 0
+            n = len(val)
+            curr_text = []
             has_interpolation = False
-            for m in var_pattern.finditer(val):
-                if m.start() > last_end:
-                    parts.append(ast.Constant(value=val[last_end:m.start()]))
-                expr_text = m.group(1).strip()
-                if "'s" in expr_text or "." in expr_text:
-                    sub_parts = re.split(r"(?:'s|\.)", expr_text)
-                    curr = ast.Name(id=f"{sub_parts[0].strip()}", ctx=ast.Load())
-                    for sp in sub_parts[1:]:
-                        curr = ast.Attribute(value=curr, attr=f"{sp.strip()}", ctx=ast.Load())
-                    parts.append(ast.FormattedValue(value=curr, conversion=-1))
+
+            while i < n:
+                if val[i:i+2] == '{{':
+                    curr_text.append('{')
+                    i += 2
+                elif val[i:i+2] == '}}':
+                    curr_text.append('}')
+                    i += 2
+                elif val[i] == '{':
+                    depth = 1
+                    j = i + 1
+                    in_quote = None
+                    while j < n and depth > 0:
+                        ch = val[j]
+                        if in_quote:
+                            if ch == '\\':
+                                j += 1
+                            elif ch == in_quote:
+                                in_quote = None
+                        else:
+                            if ch == '"':
+                                in_quote = ch
+                            elif ch == "'":
+                                prev_ch = val[j-1] if j > 0 else ' '
+                                if not prev_ch.isalnum() and prev_ch != '_':
+                                    in_quote = ch
+                            elif ch in ('{', '(', '['):
+                                depth += 1
+                            elif ch in ('}', ')', ']'):
+                                depth -= 1
+                                if depth == 0:
+                                    break
+                        j += 1
+
+                    if depth == 0 and j < n and val[j] == '}':
+                        expr_text = val[i+1:j].strip()
+                        norm_expr = re.sub(r"([A-Za-z_]\w*)'s\s+([A-Za-z_]\w*)", r"\1.\2", expr_text)
+                        try:
+                            expr_ast = ast.parse(norm_expr, mode='eval').body
+                        except SyntaxError:
+                            expr_ast = None
+
+                        if expr_ast is not None:
+                            if curr_text:
+                                parts.append(ast.Constant(value="".join(curr_text)))
+                                curr_text = []
+                            parts.append(ast.FormattedValue(value=expr_ast, conversion=-1))
+                            has_interpolation = True
+                            i = j + 1
+                            continue
+
+                    curr_text.append(val[i])
+                    i += 1
                 else:
-                    parts.append(ast.FormattedValue(value=ast.Name(id=f"{expr_text}", ctx=ast.Load()), conversion=-1))
-                last_end = m.end()
-                has_interpolation = True
-            if last_end < len(val):
-                parts.append(ast.Constant(value=val[last_end:]))
+                    curr_text.append(val[i])
+                    i += 1
+
+            if curr_text:
+                parts.append(ast.Constant(value="".join(curr_text)))
+
             if has_interpolation:
                 return ast.JoinedStr(values=parts)
         return ast.Constant(value=val)

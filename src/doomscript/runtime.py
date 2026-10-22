@@ -1111,6 +1111,8 @@ def ds_lowercase(text):
 
 def ds_reversed(collection):
     """Returns a reversed copy of the collection."""
+    if isinstance(collection, str):
+        return collection[::-1]
     return list(reversed(collection))
 
 
@@ -1435,7 +1437,9 @@ def item_of(index, collection):
             return collection[idx - 1]
         raise IndexError(f"You asked for item {idx}, but this list only has {n} items.")
     elif idx == 0:
-        raise IndexError("List indexing is 1-based: item 1 is the first item (requested item 0).")
+        if n > 0:
+            return collection[0]
+        raise IndexError("Cannot get item 0 from empty collection.")
     else:
         if abs(idx) <= n:
             return collection[idx]
@@ -1462,7 +1466,10 @@ def set_item(index, collection, value):
         else:
             raise IndexError(f"You asked for item {idx}, but this list only has {n} items.")
     elif idx == 0:
-        raise IndexError("List indexing is 1-based: item 1 is the first item (requested item 0).")
+        if n > 0:
+            collection[0] = value
+        else:
+            raise IndexError("Cannot set item 0 in empty collection.")
     else:
         if abs(idx) <= n:
             collection[idx] = value
@@ -1492,6 +1499,8 @@ def sorted_list(collection, *args, **kwargs):
 
 def reversed_list(collection):
     """Returns a reversed copy of the collection."""
+    if isinstance(collection, str):
+        return collection[::-1]
     return list(reversed(collection))
 
 
@@ -5224,6 +5233,32 @@ from doomscript.domains.geo.runtime import (
 import types
 from doomscript.core.exports import ALL_RUNTIME_EXPORT_NAMES
 
+
+def ds_keys(d):
+    """Returns the keys of a mapping as a list."""
+    if hasattr(d, "keys") and callable(getattr(d, "keys")):
+        return list(d.keys())
+    return list(d)
+
+def ds_values(d):
+    """Returns the values of a mapping as a list."""
+    if hasattr(d, "values") and callable(getattr(d, "values")):
+        return list(d.values())
+    return []
+
+def ds_items(d):
+    """Returns key-value pairs as a list of tuples, avoiding raw dict_items."""
+    if hasattr(d, "items") and callable(getattr(d, "items")):
+        return list(d.items())
+    return list(d)
+
+def ds_iter_pairs(d):
+    """Iterates over pairs from mapping or collections."""
+    if hasattr(d, "items") and callable(getattr(d, "items")):
+        return list(d.items())
+    return d
+
+
 def get_runtime_exports() -> Dict[str, Any]:
     """Returns a defensive copy of the explicit, immutable runtime exports registry.
 
@@ -5240,3 +5275,4 @@ def get_runtime_exports() -> Dict[str, Any]:
 _CORE_RUNTIME_EXPORTS: types.MappingProxyType = types.MappingProxyType({
     k: globals()[k] for k in ALL_RUNTIME_EXPORT_NAMES if k in globals()
 })
+

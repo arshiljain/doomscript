@@ -710,17 +710,41 @@ class DataDomainParser(DomainParser):
 
             if in_groupby and cur_groupby:
                 calc_m = re.match(
-                    r"^calculate\s+([A-Za-z_]\w*)\s+as\s+(sum|mean|avg|min|max|first|last|count)(?:\s+of\s+([A-Za-z_]\w*))?",
+                    r"^calculate\s+([A-Za-z_]\w*)\s+as\s+([A-Za-z_]\w+)(?:\s+of\s+([A-Za-z_]\w*))?",
                     line,
                     re.IGNORECASE,
                 )
                 if calc_m:
                     out_col = calc_m.group(1)
-                    agg_fn = calc_m.group(2).lower()
+                    raw_fn = calc_m.group(2).lower()
                     src_col = calc_m.group(3) or ""
-                    cur_groupby.aggregations[out_col] = (agg_fn, src_col)
+                    
+                    agg_map = {
+                        "sum": "sum", "total": "sum",
+                        "mean": "mean", "avg": "mean", "average": "mean",
+                        "min": "min", "minimum": "min", "lowest": "min",
+                        "max": "max", "maximum": "max", "highest": "max",
+                        "first": "first",
+                        "last": "last",
+                        "count": "count",
+                    }
+                    if raw_fn not in agg_map:
+                        from doomscript.exceptions import DoomScriptSyntaxError
+                        raise DoomScriptSyntaxError(
+                            f"Unknown aggregation function '{raw_fn}' in group by. Expected one of: average/mean, sum/total, count, min/lowest/minimum, max/highest/maximum, first, last",
+                            line=i + 1,
+                            source_line=line,
+                        )
+                    cur_groupby.aggregations[out_col] = (agg_map[raw_fn], src_col)
                     i += 1
                     continue
+                elif line.strip().lower().startswith("calculate "):
+                    from doomscript.exceptions import DoomScriptSyntaxError
+                    raise DoomScriptSyntaxError(
+                        f"Malformed calculate statement in group by: '{line.strip()}'",
+                        line=i + 1,
+                        source_line=line,
+                    )
                 else:
                     in_groupby = False
 

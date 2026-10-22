@@ -428,7 +428,12 @@ slice_item: expr ":" [expr] [":" [expr]] -> slice_full
           | ":" [expr] [":" [expr]]      -> slice_lead
           | expr                         -> index_expr
 
-?ident: NAME | "file"
+KW_FIRST: "first"
+KW_LAST: "last"
+KW_LOG: "log"
+KW_FILE: "file"
+
+?ident: NAME | KW_FILE | KW_FIRST | KW_LAST | KW_LOG
 ?base_atom: ident          -> var
           | NUMBER         -> num
           | STRING         -> str

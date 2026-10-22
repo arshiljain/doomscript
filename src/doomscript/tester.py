@@ -18,14 +18,15 @@ from doomscript.exceptions import DoomError
 console = Console()
 
 
-def extract_test_blocks(source: str) -> List[Dict[str, Any]]:
+def extract_test_blocks(source: str):
     """
-    Extracts top-level `test "name":` blocks from a .doom file.
-    If no explicit `test` blocks are present, treats the entire file as one test.
+    Extracts top-level `test "name":` blocks and any non-test file preamble from a .doom file.
+    Returns (preamble_code, test_blocks).
     """
     source = textwrap.dedent(source)
     lines = source.splitlines()
     blocks = []
+    preamble_lines = []
     current_test_name = None
     current_lines = []
 
@@ -43,7 +44,20 @@ def extract_test_blocks(source: str) -> List[Dict[str, Any]]:
             continue
 
         if current_test_name is not None:
-            current_lines.append(line)
+            # Check for unindented non-empty line that ends test block
+            if line.strip() and (len(line) - len(line.lstrip())) == 0:
+                blocks.append({
+                    "name": current_test_name,
+                    "code": textwrap.dedent("\n".join(current_lines)),
+                    "line": idx - len(current_lines)
+                })
+                current_test_name = None
+                current_lines = []
+                preamble_lines.append(line)
+            else:
+                current_lines.append(line)
+        else:
+            preamble_lines.append(line)
 
     if current_test_name is not None and current_lines:
         blocks.append({
@@ -52,7 +66,8 @@ def extract_test_blocks(source: str) -> List[Dict[str, Any]]:
             "line": len(lines) - len(current_lines) + 1
         })
 
-    return blocks
+    preamble = "\n".join(preamble_lines).strip()
+    return preamble, blocks
 
 
 def run_doom_tests(target_path: Optional[Path] = None) -> bool:
@@ -89,7 +104,7 @@ def run_doom_tests(target_path: Optional[Path] = None) -> bool:
         with open(file_path, "r", encoding="utf-8") as f:
             source = f.read()
 
-        test_blocks = extract_test_blocks(source)
+        preamble, test_blocks = extract_test_blocks(source)
         if not test_blocks:
             # Entire file is a single test
             test_blocks = [{
@@ -97,6 +112,16 @@ def run_doom_tests(target_path: Optional[Path] = None) -> bool:
                 "code": source,
                 "line": 1
             }]
+            preamble = ""
+
+        base_env = None
+        if preamble:
+            try:
+                base_env = execute(preamble, filename=str(file_path))
+            except Exception as exc:
+                console.print(f"  [bold red]FAIL file setup[/bold red]: {exc}")
+                failed_tests += 1
+                continue
 
         for tb in test_blocks:
             total_tests += 1
@@ -105,7 +130,8 @@ def run_doom_tests(target_path: Optional[Path] = None) -> bool:
             t_start = time.perf_counter()
 
             try:
-                execute(t_code)
+                env = base_env.copy() if base_env is not None else None
+                execute(t_code, custom_globals=env, filename=str(file_path))
                 duration = time.perf_counter() - t_start
                 passed_tests += 1
                 console.print(f"  [bold green]PASS[/bold green] test \"{t_name}\" [dim]({duration:.3f}s)[/dim]")
