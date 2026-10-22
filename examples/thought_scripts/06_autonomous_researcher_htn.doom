@@ -1,0 +1,19 @@
+# 06_autonomous_researcher_htn.doom
+# Hierarchical task decomposition and reflection loop for research synthesis.
+
+domain agent
+
+agent LeadScientist with role "Materials Science Researcher", capabilities ["synthesis", "paper_review"] into lead_agent
+
+decompose goal "Synthesize High-Density Lithium-Sulfur Cathode" into subtasks using lead_agent into task_list
+
+say "Decomposed goal into " + (count of task_list) + " primary research milestones:"
+for each task in task_list:
+    say "  Milestone " + task's id + ": " + task's name
+
+# Agent reflections on initial technical proposal
+set initial_draft to "We propose mixing sulfur with carbon nanotubes at 180 degrees Celsius without solvent."
+agent lead_agent reflects on initial_draft until quality >= 0.88 into finalized_spec
+
+say "Final Quality Score: " + finalized_spec's quality_score
+say "Refinement Iterations: " + finalized_spec's iterations

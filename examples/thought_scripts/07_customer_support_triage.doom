@@ -1,0 +1,24 @@
+# 07_customer_support_triage.doom
+# Simulates ticket classification, urgency detection, and agent delegation.
+
+domain agent
+
+set tickets to [
+    {id: 101, text: "Cannot login to payment portal, getting 403 error", urgent: true},
+    {id: 102, text: "Feature request: please add dark mode to settings", urgent: false},
+    {id: 103, text: "Double billed on invoice #8921, please refund immediately", urgent: true}
+]
+
+set urgent_count to 0
+set standard_count to 0
+
+for each ticket in tickets:
+    if ticket's urgent is true:
+        increase urgent_count by 1
+        say "Escalating urgent ticket #" + ticket's id + ": " + ticket's text
+    else:
+        increase standard_count by 1
+        say "Queued normal priority ticket #" + ticket's id
+
+say "Triage Summary: " + urgent_count + " urgent, " + standard_count + " normal."
+verify that urgent_count == 2 otherwise "Urgent count mismatch in triage"

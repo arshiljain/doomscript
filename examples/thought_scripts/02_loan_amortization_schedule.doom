@@ -1,0 +1,24 @@
+# 02_loan_amortization_schedule.doom
+# Calculates fixed-rate loan amortization and compares interest over time.
+
+domain finance
+
+set loan_principal to 350000.0
+set annual_interest_rate to 6.5
+set loan_term_years to 30
+
+amortize loan loan_principal at annual_interest_rate% over loan_term_years years into schedule
+format currency schedule's monthly_payment for locale "en_US" into monthly_str
+format currency schedule's total_interest for locale "en_US" into total_interest_str
+format currency schedule's total_paid for locale "en_US" into total_paid_str
+
+say "=== HOME MORTGAGE AMORTIZATION ==="
+say "Principal Amount: $" + loan_principal
+say "Monthly Principal & Interest: " + monthly_str
+say "Total Lifetime Interest: " + total_interest_str
+say "Total Out-of-Pocket Cost: " + total_paid_str
+
+# Compare with high-yield savings compound growth
+compound interest on 50000.0 at 5.0% over 10 years into investment_growth
+format currency investment_growth for locale "en_US" into growth_str
+say "Alternative: $50,000 invested at 5% grows to: " + growth_str

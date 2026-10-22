@@ -1653,7 +1653,11 @@ class DoomToPython(Transformer):
         return ast.UnaryOp(op=ast.USub(), operand=args[0])
 
     def add(self, args):
-        return ast.BinOp(left=args[0], op=ast.Add(), right=args[1])
+        return ast.Call(
+            func=ast.Name(id="ds_bin_add", ctx=ast.Load()),
+            args=[to_load(args[0]), to_load(args[1])],
+            keywords=[]
+        )
 
     def sub(self, args):
         return ast.BinOp(left=args[0], op=ast.Sub(), right=args[1])

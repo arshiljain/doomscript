@@ -1,0 +1,27 @@
+# 19_gradebook_and_gpa_calculator.doom
+# Computes course averages, letter grades, and honors eligibility.
+
+set students to [
+    {name: "Alexander", scores: [88, 92, 95]},
+    {name: "Beatrice", scores: [95, 98, 94]},
+    {name: "Calvin", scores: [72, 75, 78]}
+]
+
+say "=== SEMESTER GRADEBOOK REPORT ==="
+
+for each student in students:
+    set total_score to 0
+    for each score in student's scores:
+        increase total_score by score
+    set average_score to total_score / (count of student's scores)
+
+    set letter_grade to "F"
+    if average_score >= 90.0:
+        set letter_grade to "A"
+    else:
+        if average_score >= 80.0:
+            set letter_grade to "B"
+        else:
+            set letter_grade to "C"
+
+    say "Student: " + student's name + " | Average: " + average_score + " | Grade: " + letter_grade

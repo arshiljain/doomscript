@@ -1,0 +1,27 @@
+# 01_monthly_payroll_and_tax.doom
+# Calculates employee payroll with tax brackets and formatted payslips.
+
+domain finance
+
+set base_salary to 8500.0
+set bonus to 1200.0
+set gross_income to base_salary + bonus
+
+# Compute tax deduction and benefits
+set tax_rate to 22.0
+sales tax on gross_income at tax_rate% into tax_deduction
+set health_insurance to 350.0
+set retirement_match to 0.05 * gross_income
+
+set total_deductions to tax_deduction + health_insurance + retirement_match
+set net_take_home to gross_income - total_deductions
+
+format currency gross_income for locale "en_US" into formatted_gross
+format currency net_take_home for locale "en_US" into formatted_net
+format currency total_deductions for locale "en_US" into formatted_deductions
+
+say "--- EMPLOYEE PAYSLIP ---"
+say "Gross Income: " + formatted_gross
+say "Total Deductions: " + formatted_deductions
+say "Net Take-Home Pay: " + formatted_net
+verify that net_take_home > 5000.0 otherwise "Net pay check failed minimum threshold"

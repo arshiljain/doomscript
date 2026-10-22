@@ -94,6 +94,13 @@ def make_entity(entity_type_name: str, **kwargs):
     return r
 
 
+def ds_bin_add(a, b):
+    """Natural addition: if either operand is string, performs string concatenation; otherwise numeric/collection addition."""
+    if isinstance(a, str) or isinstance(b, str):
+        return str(a) + str(b)
+    return a + b
+
+
 def ds_add(target, item):
     """Polymorphic add: numbers sum, lists append, sets add, strings concat."""
     if isinstance(target, (int, float)) and isinstance(item, (int, float)):

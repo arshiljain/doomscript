@@ -1,0 +1,26 @@
+# 11_data_cleaning_and_fuzzy_merge.doom
+# Relational join and data imputation across datasets.
+
+domain data
+
+set customers to [
+    {customer_id: 1, name: "Alice Johnson", tier: "Gold"},
+    {customer_id: 2, name: "Bob Smith", tier: "Silver"},
+    {customer_id: 3, name: "Charlie Brown", tier: "Bronze"}
+]
+
+set orders to [
+    {customer_id: 1, total_spent: 450.0},
+    {customer_id: 2, total_spent: 120.0}
+]
+
+left join customers and orders on "customer_id" into customer_orders
+
+say "=== ENRICHED CUSTOMER PROFILES ==="
+for each record in customer_orders:
+    set spent to record's total_spent
+    if spent is none:
+        set spent to 0.0
+    say "Customer: " + record's name + " (" + record's tier + ") - Spent: $" + spent
+
+verify that (count of customer_orders) == 3 otherwise "Join row count mismatch"

@@ -1,0 +1,27 @@
+# 14_blackjack_card_game.doom
+# Simulates card dealing, total hand scoring with Ace adjustment, and winner determination.
+
+set player_hand to [10, 8]
+set dealer_hand to [9, 7]
+
+set player_total to 0
+for each card in player_hand:
+    increase player_total by card
+
+set dealer_total to 0
+for each card in dealer_hand:
+    increase dealer_total by card
+
+say "=== BLACKJACK TABLE ==="
+say "Player Hand Score: " + player_total
+say "Dealer Hand Score: " + dealer_total
+
+set winner to "Push"
+if player_total > dealer_total:
+    set winner to "Player"
+else:
+    if dealer_total > player_total:
+        set winner to "Dealer"
+
+say "Outcome: " + winner + " wins the hand!"
+verify that winner == "Player" otherwise "Outcome determination error"

@@ -1224,7 +1224,15 @@ def parse_thought_paradigm(domain: str, line: str, line_no: int = 0) -> Optional
     Parses natural English statements for Paradigms 101-400 across all 15 clusters.
     Returns normalized DoomScript statement code if matched, otherwise None.
     """
-    s = line.strip()
+    from doomscript.grammar.phrases import mask_strings, unmask_strings
+    masked_line, str_map = mask_strings(line.strip())
+    res = _match_thought_paradigm(domain, masked_line, line_no)
+    if res is not None:
+        return unmask_strings(res, str_map)
+    return None
+
+
+def _match_thought_paradigm(domain: str, s: str, line_no: int = 0) -> Optional[str]:
 
     # --- CLUSTER XI: AGENTIC SWARMS (domain: agent) ---
     if domain in ("agent", "agents"):
@@ -1273,6 +1281,13 @@ def parse_thought_paradigm(domain: str, line: str, line_no: int = 0) -> Optional
             return f"set {target} to ds_explore_tree_of_thoughts({prob}, depth={d})"
 
     # --- CLUSTER XII: FINANCE (domain: finance) ---
+    if domain in ("finance", "econ"):
+        # sales tax on <amt> at <rate>[%] into <target>
+        m = re.match(r"^sales\s+tax\s+on\s+(.+?)\s+at\s+(.+?)(?:%)?\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
+        if m:
+            amt, r, target = m.group(1).strip(), m.group(2).strip(), m.group(3).strip()
+            return f"set {target} to ds_sales_tax({amt}, {r})"
+
     if domain in ("finance", "econ"):
         # compound interest on <p> at <r>% over <y> years [compounded <freq>] into <target>
         m = re.match(r"^compound\s+interest\s+on\s+(.+?)\s+at\s+(.+?)%\s+over\s+(.+?)\s+years?(?:\s+compounded\s+(\d+))?\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
@@ -1423,6 +1438,19 @@ def parse_thought_paradigm(domain: str, line: str, line_no: int = 0) -> Optional
             return f"set {target} to ds_wcag_contrast({fg}, {bg})"
 
     # --- CLUSTER XXV: OFFICE (domain: office) ---
+    if domain in ("office", "docs"):
+        # extract executive summary from <src> [into <n> bullet points] into <target>
+        m = re.match(r"^extract\s+executive\s+summary\s+from\s+(.+?)(?:\s+into\s+(\d+)\s+bullet\s+points)?\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
+        if m:
+            src, n, target = m.group(1).strip(), m.group(2) if m.group(2) else "4", m.group(3).strip()
+            return f"set {target} to ds_extract_executive_summary({src}, bullets={n})"
+
+        # render metric callout with label <lbl>, value <val>, delta <delta> into <target>
+        m = re.match(r"^render\s+metric\s+callout\s+with\s+label\s+(.+?),\s*value\s+(.+?),\s*delta\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
+        if m:
+            lbl, val, delta, target = m.group(1).strip(), m.group(2).strip(), m.group(3).strip(), m.group(4).strip()
+            return f"set {target} to ds_render_metric_callout({lbl}, {val}, {delta})"
+
     if domain in ("office", "docs"):
         # compile markdown presentation to slides with theme <theme> into <target>
         m = re.match(r"^compile\s+markdown\s+presentation\s+to\s+slides\s+with\s+theme\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)

@@ -1,0 +1,29 @@
+# 09_dna_mutation_and_translation.doom
+# Translates genetic DNA sequences into functional peptide sequences.
+
+domain bio
+
+set ancestral_dna to "ATGTTCTCGTAA"
+set patient_dna to "ATGTTCTCGTAG"
+
+gc content of ancestral_dna into ancestral_gc
+transcribe dna ancestral_dna into mrna_strand
+translate mrna mrna_strand into protein_seq
+
+say "=== GENOMIC SEQUENCE REPORT ==="
+say "Ancestral DNA: " + ancestral_dna
+say "GC Content: " + (ancestral_gc * 100.0) + "%"
+say "Transcribed mRNA: " + mrna_strand
+say "Translated Peptide: " + protein_seq
+
+# Detect point mutation
+set mutation_count to 0
+for each index in 1 to count of ancestral_dna:
+    set base_a to item index of ancestral_dna
+    set base_p to item index of patient_dna
+    if base_a != base_p:
+        increase mutation_count by 1
+        say "Mutation at position " + index + ": " + base_a + " -> " + base_p
+
+say "Total point mutations: " + mutation_count
+verify that mutation_count == 1 otherwise "Mutation count calculation failed"

@@ -1,0 +1,24 @@
+# 15_projectile_motion_physics.doom
+# Calculates kinematics for ballistic projectile trajectory and peak apogee.
+
+domain math3d
+
+set launch_velocity to 50.0
+set gravity to 9.81
+
+# Compute 1D vertical motion time to peak and apogee height
+set time_to_peak to launch_velocity / gravity
+set max_height to (launch_velocity * launch_velocity) / (2.0 * gravity)
+set total_flight_time to 2.0 * time_to_peak
+
+# Compute 2D vector dot product between velocity and gravity vector
+dot product of vector [0.0, launch_velocity] and vector [0.0, -9.81] into initial_vertical_work
+
+say "=== BALLISTIC FLIGHT TELEMETRY ==="
+say "Launch Speed: " + launch_velocity + " m/s"
+say "Time to Peak: " + time_to_peak + " seconds"
+say "Maximum Altitude: " + max_height + " meters"
+say "Total Hang Time: " + total_flight_time + " seconds"
+say "Vertical Work Dot Product: " + initial_vertical_work
+
+verify that total_flight_time > 10.0 otherwise "Flight time calculation mismatch"

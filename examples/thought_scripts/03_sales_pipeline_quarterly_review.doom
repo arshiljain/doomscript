@@ -1,0 +1,33 @@
+# 03_sales_pipeline_quarterly_review.doom
+# Evaluates quarterly sales leads, computes conversion rates and metrics.
+
+domain office
+
+set deals to [
+    {client: "Acme Corp", amount: 45000, closed: true, rep: "Sarah"},
+    {client: "Global Tech", amount: 120000, closed: true, rep: "Sarah"},
+    {client: "Omni Industries", amount: 35000, closed: false, rep: "David"},
+    {client: "Vertex Systems", amount: 85000, closed: true, rep: "David"},
+    {client: "Nova Retail", amount: 60000, closed: true, rep: "Elena"}
+]
+
+set total_pipeline_value to 0
+set total_closed_value to 0
+set closed_deal_count to 0
+
+for each deal in deals:
+    increase total_pipeline_value by deal's amount
+    if deal's closed is true:
+        increase total_closed_value by deal's amount
+        increase closed_deal_count by 1
+
+set conversion_rate to (closed_deal_count / (count of deals)) * 100.0
+
+format currency total_closed_value for locale "en_US" into closed_str
+format currency total_pipeline_value for locale "en_US" into pipeline_str
+
+say "=== Q3 SALES PIPELINE PERFORMANCE ==="
+say "Total Pipeline: " + pipeline_str
+say "Total Closed Won: " + closed_str
+say "Win Rate: " + conversion_rate + "%"
+say "Closed Deals: " + closed_deal_count + " of " + (count of deals)

@@ -1951,7 +1951,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
 
     # Frontier 4: Range Literals and Loops
     masked = re.sub(
-        r"^\s*for\s+(?:each\s+)?([A-Za-z_]\w*)\s+in\s+(\d+|[A-Za-z_]\w*)\s+to\s+(\d+|[A-Za-z_]\w*)\s*:",
+        r"^\s*for\s+(?:each\s+)?([A-Za-z_]\w*)\s+in\s+(.+?)\s+to\s+(.+?)\s*:",
         r"for each \1 from \2 to \3:",
         masked,
         flags=re.IGNORECASE

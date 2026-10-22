@@ -1,0 +1,25 @@
+# 13_text_adventure_dungeon.doom
+# Interactive dungeon room traversal, item pickup, and inventory state tracking.
+
+set player_health to 100
+set player_gold to 25
+set inventory to ["Torch", "Rusty Dagger"]
+
+say "=== DUNGEON CRAWLER SIMULATION ==="
+say "Health: " + player_health + ", Gold: " + player_gold
+say "Carrying: " + (count of inventory) + " items."
+
+# Explore an ancient chest
+set chest_items to ["Health Potion", "Golden Key"]
+for each item in chest_items:
+    add item to inventory
+    say "Picked up: " + item
+
+# Encounter a trap
+say "A dart shoots from the wall!"
+decrease player_health by 15
+say "Current Health: " + player_health
+
+verify that player_health == 85 otherwise "Health calculation mismatch"
+verify that (count of inventory) == 4 otherwise "Inventory count mismatch"
+say "Inventory check passed: Hero survived with " + player_health + " HP!"

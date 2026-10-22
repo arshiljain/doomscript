@@ -1,0 +1,19 @@
+# 12_robot_odometry_and_pid.doom
+# Simulates motor PID control loops and 2D spatial positioning.
+
+domain robotics
+domain math3d
+
+# PID controller driving velocity toward setpoint
+set target_speed to 60.0
+set measured_speed to 52.0
+pid update with setpoint target_speed, measurement measured_speed, dt 0.05 into throttle_effort
+say "PID Throttle Effort: " + throttle_effort
+
+# 2D Euclidean distance to goal waypoint
+set robot_position to [0.0, 0.0]
+set goal_waypoint to [30.0, 40.0]
+euclidean distance between point robot_position and point goal_waypoint into distance_to_goal
+
+say "Distance to Target Waypoint: " + distance_to_goal + " meters"
+verify that distance_to_goal == 50.0 otherwise "Pythagorean distance calculation error"

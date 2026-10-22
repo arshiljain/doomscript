@@ -1,0 +1,17 @@
+# 04_executive_meeting_brief.doom
+# Extracts key takeaways, generates slide deck and executive KPI callout.
+
+domain office
+
+set raw_transcript to "Quarterly Board Meeting Notes: Revenue reached record highs with 24% YoY growth. Key engineering infrastructure milestones completed on schedule. Expansion into European cloud regions approved by directors for Q1 rollout."
+
+extract executive summary from raw_transcript into 4 bullet points into takeaways
+render metric callout with label "Annual Growth", value "+24%", delta "YoY" into kpi_card
+compile markdown presentation to slides with theme "Executive Dark" into pitch_deck
+
+say "=== EXECUTIVE SUMMARY BRIEF ==="
+for each takeaway in takeaways:
+    say takeaway
+
+say "KPI Callout: " + kpi_card's label + " = " + kpi_card's value
+say "Slide Presentation Status: " + pitch_deck's status

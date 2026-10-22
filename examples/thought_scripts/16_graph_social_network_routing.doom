@@ -1,0 +1,20 @@
+# 16_graph_social_network_routing.doom
+# Models connection topology and calculates shortest route through social network.
+
+domain graph
+
+set social_graph to {
+    "Alice": {"Bob": 1, "Charlie": 4},
+    "Bob": {"Charlie": 2, "Diana": 5},
+    "Charlie": {"Diana": 1},
+    "Diana": {"Eve": 2}
+}
+
+shortest path dijkstra in social_graph from "Alice" to "Diana" into shortest_route
+
+say "=== SOCIAL NETWORK ROUTING ==="
+say "Degrees of Connection: " + shortest_route's cost + " hops"
+say "Path taken: " + shortest_route's path
+
+verify that shortest_route's cost == 4.0 otherwise "Routing cost mismatch"
+verify that shortest_route's reachable is true otherwise "Unreachable destination"

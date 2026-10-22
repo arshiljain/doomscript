@@ -1,0 +1,20 @@
+# 20_event_stream_debouncer.doom
+# Tests UI design tokens and reactive contrast verification.
+
+domain web
+
+bind design token "theme.surface.background" to "#0F172A" with dark_mode "#020617" into bg_token
+bind design token "theme.text.primary" to "#F8FAFC" with dark_mode "#FFFFFF" into text_token
+
+say "=== UI DESIGN SYSTEM TELEMETRY ==="
+say "Background CSS Variable: " + bg_token's css_variable
+say "Text CSS Variable: " + text_token's css_variable
+
+# Verify WCAG contrast compliance
+verify contrast between "#FFFFFF" and "#000000" meets "WCAG_AA" into contrast_check
+
+say "Contrast Ratio: " + contrast_check's ratio
+say "Meets WCAG AA: " + contrast_check's meets_aa
+say "Meets WCAG AAA: " + contrast_check's meets_aaa
+
+verify that contrast_check's meets_aa is true otherwise "WCAG contrast check failed"

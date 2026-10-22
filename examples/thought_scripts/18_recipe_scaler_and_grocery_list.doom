@@ -1,0 +1,27 @@
+# 18_recipe_scaler_and_grocery_list.doom
+# Scales ingredient quantities proportionally for catering batch size.
+
+set original_servings to 4.0
+set target_servings to 10.0
+set scale_factor to target_servings / original_servings
+
+set base_recipe to [
+    {ingredient: "All-Purpose Flour", amount_grams: 250},
+    {ingredient: "Granulated Sugar", amount_grams: 100},
+    {ingredient: "Unsalted Butter", amount_grams: 125},
+    {ingredient: "Dark Chocolate Chips", amount_grams: 150}
+]
+
+say "=== RECIPE SCALER (4 to 10 SERVINGS) ==="
+say "Multiplier: " + scale_factor + "x"
+
+set total_flour_scaled to 0.0
+
+for each item in base_recipe:
+    set scaled_qty to item's amount_grams * scale_factor
+    say "  " + item's ingredient + ": " + scaled_qty + " grams"
+    if item's ingredient == "All-Purpose Flour":
+        set total_flour_scaled to scaled_qty
+
+verify that total_flour_scaled == 625.0 otherwise "Flour scaling computation error"
+say "Scaled ingredients verified successfully for commercial batch."

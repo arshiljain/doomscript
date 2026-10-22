@@ -1,0 +1,21 @@
+# 05_multi_agent_code_audit.doom
+# Orchestrates a multi-agent debate and consensus vote on system architecture.
+
+domain agent
+
+agent SecurityAuditor with role "Principal Security Architect", capabilities ["threat_modeling", "code_audit"] into sec_agent
+agent PerformanceEngineer with role "Staff Performance Engineer", capabilities ["profiling", "latency_optimization"] into perf_agent
+
+say "Created agent: " + sec_agent's name + " (" + sec_agent's role + ")"
+say "Created agent: " + perf_agent's name + " (" + perf_agent's role + ")"
+
+# Run debate across agents
+swarm debate "Migrate from REST to gRPC with Mutual TLS" with [sec_agent, perf_agent] into debate_outcome
+say "Consensus Reached: " + debate_outcome's consensus
+
+# Tally consensus votes
+swarm vote on proposal "Adopt gRPC with mTLS" using majority into vote_result
+if vote_result's approved is true:
+    say "Proposal Approved with " + vote_result's yes_count + " votes!"
+else:
+    say "Proposal Rejected."
