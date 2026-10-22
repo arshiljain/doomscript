@@ -69,6 +69,26 @@ from doomscript.domains.social import SOCIAL_DOMAIN
 from doomscript.domains.linguistics import LINGUISTICS_DOMAIN
 from doomscript.domains.geophysics import GEOPHYSICS_DOMAIN
 from doomscript.domains.synthetic_bio import SYNTHETIC_BIO_DOMAIN
+from doomscript.domains.thermodynamics import THERMODYNAMICS_DOMAIN
+from doomscript.domains.optics import OPTICS_DOMAIN
+from doomscript.domains.acoustics import ACOUSTICS_DOMAIN
+from doomscript.domains.oceanography import OCEANOGRAPHY_DOMAIN
+from doomscript.domains.astrophysics import ASTROPHYSICS_DOMAIN
+from doomscript.domains.petroleum import PETROLEUM_DOMAIN
+from doomscript.domains.metallurgy import METALLURGY_DOMAIN
+from doomscript.domains.ergonomics import ERGONOMICS_DOMAIN
+from doomscript.domains.biomechanics import BIOMECHANICS_DOMAIN
+from doomscript.domains.actuarial import ACTUARIAL_DOMAIN
+from doomscript.domains.pharmacology import PHARMACOLOGY_DOMAIN
+from doomscript.domains.electromagnetics import ELECTROMAGNETICS_DOMAIN
+from doomscript.domains.combustion import COMBUSTION_DOMAIN
+from doomscript.domains.nuclear import NUCLEAR_DOMAIN
+from doomscript.domains.cartography import CARTOGRAPHY_DOMAIN
+from doomscript.domains.chronometry import CHRONOMETRY_DOMAIN
+from doomscript.domains.agronomy import AGRONOMY_DOMAIN
+from doomscript.domains.crystallography import CRYSTALLOGRAPHY_DOMAIN
+from doomscript.domains.aviation import AVIATION_DOMAIN
+from doomscript.domains.structural import STRUCTURAL_DOMAIN
 
 __all__ = [
     "DomainContract",
@@ -139,4 +159,24 @@ __all__ = [
     "LINGUISTICS_DOMAIN",
     "GEOPHYSICS_DOMAIN",
     "SYNTHETIC_BIO_DOMAIN",
+    "THERMODYNAMICS_DOMAIN",
+    "OPTICS_DOMAIN",
+    "ACOUSTICS_DOMAIN",
+    "OCEANOGRAPHY_DOMAIN",
+    "ASTROPHYSICS_DOMAIN",
+    "PETROLEUM_DOMAIN",
+    "METALLURGY_DOMAIN",
+    "ERGONOMICS_DOMAIN",
+    "BIOMECHANICS_DOMAIN",
+    "ACTUARIAL_DOMAIN",
+    "PHARMACOLOGY_DOMAIN",
+    "ELECTROMAGNETICS_DOMAIN",
+    "COMBUSTION_DOMAIN",
+    "NUCLEAR_DOMAIN",
+    "CARTOGRAPHY_DOMAIN",
+    "CHRONOMETRY_DOMAIN",
+    "AGRONOMY_DOMAIN",
+    "CRYSTALLOGRAPHY_DOMAIN",
+    "AVIATION_DOMAIN",
+    "STRUCTURAL_DOMAIN",
 ]
