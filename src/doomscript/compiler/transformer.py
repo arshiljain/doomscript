@@ -390,7 +390,19 @@ class DoomToPython(Transformer):
             "is under": ast.Lt(),
             "is not": ast.NotEq(),
             "isn't": ast.NotEq(),
+            "is not equal to": ast.NotEq(),
+            "does not equal": ast.NotEq(),
             "equals": ast.Eq(),
+            "is equal to": ast.Eq(),
+            "equal to": ast.Eq(),
+            "is identical to": ast.Eq(),
+            "is the same as": ast.Eq(),
+            "is not equal to": ast.NotEq(),
+            "does not equal": ast.NotEq(),
+            "is equal to": ast.Eq(),
+            "equal to": ast.Eq(),
+            "is identical to": ast.Eq(),
+            "is the same as": ast.Eq(),
             "is not inside": ast.NotIn(),
             "is not in": ast.NotIn(),
             "not in": ast.NotIn(),
@@ -1301,7 +1313,7 @@ class DoomToPython(Transformer):
 
     def compare(self, args):
         left, op_tok, right = args
-        op_str = str(op_tok)
+        op_str = str(op_tok).strip()
         op_map = {
             "<=": ast.LtE(),
             ">=": ast.GtE(),
@@ -1317,7 +1329,13 @@ class DoomToPython(Transformer):
             "is under": ast.Lt(),
             "is not": ast.NotEq(),
             "isn't": ast.NotEq(),
+            "is not equal to": ast.NotEq(),
+            "does not equal": ast.NotEq(),
             "equals": ast.Eq(),
+            "is equal to": ast.Eq(),
+            "equal to": ast.Eq(),
+            "is identical to": ast.Eq(),
+            "is the same as": ast.Eq(),
             "is not inside": ast.NotIn(),
             "is not in": ast.NotIn(),
             "not in": ast.NotIn(),
@@ -1326,7 +1344,8 @@ class DoomToPython(Transformer):
             "in": ast.In(),
             "is": ast.Eq(),
         }
-        return ast.Compare(left=left, ops=[op_map[op_str]], comparators=[right])
+        cmp_op = op_map.get(op_str, ast.Eq())
+        return ast.Compare(left=left, ops=[cmp_op], comparators=[right])
 
     def is_between(self, args):
         if len(args) == 4:

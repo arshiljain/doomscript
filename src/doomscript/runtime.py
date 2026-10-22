@@ -1038,6 +1038,22 @@ def ds_none(collection, predicate_fn):
     return not ds_any(collection, predicate_fn)
 
 
+def ds_quant_match(item, prop_or_val):
+    """Matches an item against a quantifier predicate, checking attributes, dict keys, or equality."""
+    if isinstance(item, dict):
+        if prop_or_val in item:
+            return bool(item[prop_or_val])
+        if f"is_{prop_or_val}" in item:
+            return bool(item[f"is_{prop_or_val}"])
+    if hasattr(item, str(prop_or_val)):
+        val = getattr(item, str(prop_or_val))
+        return bool(val() if callable(val) else val)
+    if hasattr(item, f"is_{prop_or_val}"):
+        val = getattr(item, f"is_{prop_or_val}")
+        return bool(val() if callable(val) else val)
+    return item == prop_or_val
+
+
 def ds_attr(item, attr_name, default=None):
     """Safely retrieves an attribute or dictionary key from item."""
     if item is None:

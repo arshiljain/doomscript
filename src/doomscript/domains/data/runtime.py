@@ -251,12 +251,16 @@ class DataPipelineRuntime(DomainRuntime):
                     (r"\bis\s+above\b", ">"),
                     (r"\bis\s+below\b", "<"),
                     (r"\bis\s+equal\s+to\b", "=="),
+                    (r"\bequal\s+to\b", "=="),
                     (r"\bis\s+identical\s+to\b", "=="),
                     (r"\bis\s+the\s+same\s+as\b", "=="),
                     (r"\bequals\b", "=="),
+                    (r"\bequal\b", "=="),
                     (r"\bdoes\s+not\s+equal\b", "!="),
                     (r"\bis\s+not\s+equal\s+to\b", "!="),
                     (r"\bis\s+not\b", "!="),
+                    (r"\bisn't\b", "!="),
+                    (r"\bis\b", "=="),
                 ]
                 for pat, rep in replacements:
                     cond_str = re.sub(pat, rep, cond_str, flags=re.IGNORECASE)

@@ -161,6 +161,8 @@ class DataDomain(DomainContract):
             or (s.startswith("group ") and " calculating " in s)
             or (s.startswith("join ") and (" on " in s and " as " in s))
             or s.startswith("explain pipeline ")
+            or s.startswith("execute pipeline ")
+            or s.startswith("run pipeline ")
             or s.startswith("pipeline explain ")
             or s.startswith("pipeline dry-run ")
             or s.startswith("pivot table ")

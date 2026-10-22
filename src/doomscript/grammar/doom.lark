@@ -326,8 +326,14 @@ CMP_OP.3: "<="
       | "is not inside"    // not in
       | "is not in"        // not in
       | "not in"           // not in
+      | "is not equal to"  // !=
+      | "does not equal"   // !=
       | "is not"           // !=
       | "isn't"            // !=
+      | "is equal to"      // ==
+      | "equal to"         // ==
+      | "is identical to"  // ==
+      | "is the same as"   // ==
       | "equals"           // ==
       | "is inside"        // in
       | "is in"            // in

@@ -35,8 +35,8 @@ SAFE_OPERATORS = {
     ast.GtE: operator.ge,
     ast.In: lambda a, b: a in b,
     ast.NotIn: lambda a, b: a not in b,
-    ast.Is: operator.is_,
-    ast.IsNot: operator.is_not,
+    ast.Is: operator.eq,
+    ast.IsNot: operator.ne,
 }
 
 SAFE_BUILTINS: Dict[str, Callable] = {
@@ -67,14 +67,34 @@ class SafeASTEvaluator:
             raise SafeEvalError("Empty expression cannot be evaluated")
 
         s = expr_str.strip()
-        s = re.sub(r"\bis\s+greater\s+than\s+or\s+equal\s+to\b", ">=", s, flags=re.IGNORECASE)
-        s = re.sub(r"\bis\s+less\s+than\s+or\s+equal\s+to\b", "<=", s, flags=re.IGNORECASE)
-        s = re.sub(r"\bis\s+at\s+least\b", ">=", s, flags=re.IGNORECASE)
-        s = re.sub(r"\bis\s+at\s+most\b", "<=", s, flags=re.IGNORECASE)
-        s = re.sub(r"\bis\s+greater\s+than\b", ">", s, flags=re.IGNORECASE)
-        s = re.sub(r"\bis\s+less\s+than\b", "<", s, flags=re.IGNORECASE)
-        s = re.sub(r"\bis\s+equal\s+to\b", "==", s, flags=re.IGNORECASE)
-        s = re.sub(r"\bis\s+not\b", "!=", s, flags=re.IGNORECASE)
+        replacements = [
+            (r"\bis\s+greater\s+than\s+or\s+equal\s+to\b", ">="),
+            (r"\bis\s+less\s+than\s+or\s+equal\s+to\b", "<="),
+            (r"\bis\s+strictly\s+greater\s+than\b", ">"),
+            (r"\bis\s+strictly\s+less\s+than\b", "<"),
+            (r"\bis\s+at\s+least\b", ">="),
+            (r"\bis\s+at\s+most\b", "<="),
+            (r"\bis\s+greater\s+than\b", ">"),
+            (r"\bis\s+less\s+than\b", "<"),
+            (r"\bis\s+more\s+than\b", ">"),
+            (r"\bis\s+over\b", ">"),
+            (r"\bis\s+under\b", "<"),
+            (r"\bis\s+above\b", ">"),
+            (r"\bis\s+below\b", "<"),
+            (r"\bis\s+equal\s+to\b", "=="),
+            (r"\bequal\s+to\b", "=="),
+            (r"\bis\s+identical\s+to\b", "=="),
+            (r"\bis\s+the\s+same\s+as\b", "=="),
+            (r"\bequals\b", "=="),
+            (r"\bequal\b", "=="),
+            (r"\bdoes\s+not\s+equal\b", "!="),
+            (r"\bis\s+not\s+equal\s+to\b", "!="),
+            (r"\bis\s+not\b", "!="),
+            (r"\bisn't\b", "!="),
+            (r"\bis\b", "=="),
+        ]
+        for pat, rep in replacements:
+            s = re.sub(pat, rep, s, flags=re.IGNORECASE)
 
         try:
             tree = ast.parse(s, mode="eval")

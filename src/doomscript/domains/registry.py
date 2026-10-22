@@ -302,6 +302,10 @@ class DomainRegistry:
         self._specs.clear()
         self._default_state.specs.clear()
 
+    def get_all_domains(self) -> List[DomainContract]:
+        """Returns all registered domain contracts."""
+        return list(self._domains.values())
+
     def get_active_domains(self) -> List[DomainContract]:
         """Returns all currently active domain instances in LIFO precedence order."""
         return [self._domains[name] for name in reversed(self._active_domains) if name in self._domains]

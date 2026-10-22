@@ -737,9 +737,47 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"\bnone\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+is\s+negative\b", r"ds_none_negative(\1)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bnone\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+is\s+zero\b", r"ds_none_zero(\1)", masked, flags=re.IGNORECASE)
 
-    _reserved_query_words = {'and', 'or', 'not', 'is', 'in', 'true', 'false', 'none', 'item', 'x', 'at', 'least', 'most', 'greater', 'less', 'than', 'between', 'outside', 'empty', 'even', 'odd', 'positive', 'negative', 'zero'}
+    _reserved_query_words = {
+        'and', 'or', 'not', 'is', 'in', 'true', 'false', 'none', 'item', 'x',
+        'at', 'least', 'most', 'greater', 'less', 'than', 'between', 'outside',
+        'empty', 'even', 'odd', 'positive', 'negative', 'zero',
+        'over', 'under', 'above', 'below', 'equal', 'equals', 'strictly', 'more',
+        'identical', 'same', 'different', 'from', 'within', "isn't", 'inside'
+    }
+
+    def _normalize_query_cond(c: str) -> str:
+        replacements = [
+            (r"\bis\s+greater\s+than\s+or\s+equal\s+to\b", ">="),
+            (r"\bis\s+less\s+than\s+or\s+equal\s+to\b", "<="),
+            (r"\bis\s+strictly\s+greater\s+than\b", ">"),
+            (r"\bis\s+strictly\s+less\s+than\b", "<"),
+            (r"\bis\s+at\s+least\b", ">="),
+            (r"\bis\s+at\s+most\b", "<="),
+            (r"\bis\s+greater\s+than\b", ">"),
+            (r"\bis\s+less\s+than\b", "<"),
+            (r"\bis\s+more\s+than\b", ">"),
+            (r"\bis\s+over\b", ">"),
+            (r"\bis\s+under\b", "<"),
+            (r"\bis\s+above\b", ">"),
+            (r"\bis\s+below\b", "<"),
+            (r"\bis\s+equal\s+to\b", "=="),
+            (r"\bequal\s+to\b", "=="),
+            (r"\bis\s+identical\s+to\b", "=="),
+            (r"\bis\s+the\s+same\s+as\b", "=="),
+            (r"\bequals\b", "=="),
+            (r"\bequal\b", "=="),
+            (r"\bdoes\s+not\s+equal\b", "!="),
+            (r"\bis\s+not\s+equal\s+to\b", "!="),
+            (r"\bis\s+not\b", "!="),
+            (r"\bisn't\b", "!="),
+            (r"\bis\b", "=="),
+        ]
+        for pat, rep in replacements:
+            c = re.sub(pat, rep, c, flags=re.IGNORECASE)
+        return c
 
     def _bind_contextual_attrs(cond: str, var_name: str) -> str:
+        cond = _normalize_query_cond(cond)
         if re.search(r"\b(x|item)\b", cond):
             return cond
         def _repl(m):
@@ -902,44 +940,97 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         masked = f"for each {item_var} in {coll_var} where ds_attr({item_var}, '{attr_name}') {cmp_op} {val_expr}:"
 
     # Phase 1, Task 1.4: Universal, Existential & Negative Set Quantifiers
-    all_are_m = re.match(r"^\s*if\s+all\s+(?:items\s+in\s+)?(.+?)\s+are\s+(.+?):?$", masked, re.IGNORECASE)
+    def _parse_quant_predicate(var_name: str, mode: str, pred_str: str) -> str:
+        p = pred_str.strip()
+        if mode == "has":
+            m_cmp = re.match(r"^([A-Za-z_]\w*)\s+(?:equal\s+to|equals|is|==)\s+(.+)$", p, re.IGNORECASE)
+            if m_cmp:
+                return f"ds_attr({var_name}, '{m_cmp.group(1)}') == {m_cmp.group(2).strip()}"
+            m_gt = re.match(r"^([A-Za-z_]\w*)\s+(?:is\s+)?(?:over|greater\s+than|>)\s+(.+)$", p, re.IGNORECASE)
+            if m_gt:
+                return f"ds_attr({var_name}, '{m_gt.group(1)}') > {m_gt.group(2).strip()}"
+            m_lt = re.match(r"^([A-Za-z_]\w*)\s+(?:is\s+)?(?:under|less\s+than|<)\s+(.+)$", p, re.IGNORECASE)
+            if m_lt:
+                return f"ds_attr({var_name}, '{m_lt.group(1)}') < {m_lt.group(2).strip()}"
+            return f"ds_quant_match({var_name}, '{p}')"
+        else: # is
+            low = p.lower()
+            if low == "even":
+                return f"({var_name} % 2 == 0)"
+            if low == "odd":
+                return f"({var_name} % 2 != 0)"
+            if low == "positive":
+                return f"({var_name} > 0)"
+            if low == "negative":
+                return f"({var_name} < 0)"
+            if low == "zero":
+                return f"({var_name} == 0)"
+            if low == "empty":
+                return f"(len({var_name}) == 0)"
+            if low in ("not empty", "non-empty"):
+                return f"(len({var_name}) > 0)"
+            if low in ("true", "false", "none"):
+                return f"({var_name} is {p})"
+            if (p.startswith(("'", '"')) and p.endswith(("'", '"'))) or re.match(r"^-?\d+(?:\.\d+)?$", p):
+                return f"({var_name} == {p})"
+            m_comp = re.match(r"^(?:over|greater\s+than|>)\s+(.+)$", p, re.IGNORECASE)
+            if m_comp:
+                return f"({var_name} > {m_comp.group(1).strip()})"
+            m_comp_lt = re.match(r"^(?:under|less\s+than|<)\s+(.+)$", p, re.IGNORECASE)
+            if m_comp_lt:
+                return f"({var_name} < {m_comp_lt.group(1).strip()})"
+            if re.match(r"^[A-Za-z_]\w*$", p):
+                return f"ds_quant_match({var_name}, '{p}')"
+            return f"({var_name} == {p})"
+
+    all_are_m = re.match(r"^\s*if\s+all\s+(?:items\s+in\s+)?(.+?)\s+(?:are|have)\s+(.+?):?$", masked, re.IGNORECASE)
     if all_are_m:
         coll = all_are_m.group(1).strip()
         pred = all_are_m.group(2).strip()
-        masked = f"if ds_every({coll}, lambda x: x is {pred}):"
+        pred_code = _parse_quant_predicate("x", "is", pred)
+        masked = f"if ds_every({coll}, lambda x: {pred_code}):"
 
-    every_in_m = re.match(r"^\s*if\s+every\s+([A-Za-z_]\w*)\s+in\s+(.+?)\s+is\s+(.+?):?$", masked, re.IGNORECASE)
+    every_in_m = re.match(r"^\s*if\s+every\s+([A-Za-z_]\w*)\s+in\s+(.+?)\s+(is|has)\s+(.+?):?$", masked, re.IGNORECASE)
     if every_in_m:
         var = every_in_m.group(1).strip()
         coll = every_in_m.group(2).strip()
-        pred = every_in_m.group(3).strip()
-        masked = f"if ds_every({coll}, lambda {var}: {var} is {pred}):"
+        mode = every_in_m.group(3).lower()
+        pred = every_in_m.group(4).strip()
+        pred_code = _parse_quant_predicate(var, mode, pred)
+        masked = f"if ds_every({coll}, lambda {var}: {pred_code}):"
 
-    any_in_m = re.match(r"^\s*if\s+any\s+([A-Za-z_]\w*)\s+in\s+(.+?)\s+is\s+(.+?):?$", masked, re.IGNORECASE)
+    any_in_m = re.match(r"^\s*if\s+any\s+([A-Za-z_]\w*)\s+in\s+(.+?)\s+(is|has)\s+(.+?):?$", masked, re.IGNORECASE)
     if any_in_m:
         var = any_in_m.group(1).strip()
         coll = any_in_m.group(2).strip()
-        pred = any_in_m.group(3).strip()
-        masked = f"if ds_any({coll}, lambda {var}: {var} is {pred}):"
+        mode = any_in_m.group(3).lower()
+        pred = any_in_m.group(4).strip()
+        pred_code = _parse_quant_predicate(var, mode, pred)
+        masked = f"if ds_any({coll}, lambda {var}: {pred_code}):"
 
-    any_of_m = re.match(r"^\s*if\s+any\s+of\s+(.+?)\s+is\s+(.+?):?$", masked, re.IGNORECASE)
+    any_of_m = re.match(r"^\s*if\s+any\s+of\s+(.+?)\s+(is|has)\s+(.+?):?$", masked, re.IGNORECASE)
     if any_of_m:
         coll = any_of_m.group(1).strip()
-        pred = any_of_m.group(2).strip()
-        masked = f"if ds_any({coll}, lambda x: x is {pred}):"
+        mode = any_of_m.group(2).lower()
+        pred = any_of_m.group(3).strip()
+        pred_code = _parse_quant_predicate("x", mode, pred)
+        masked = f"if ds_any({coll}, lambda x: {pred_code}):"
 
-    no_in_m = re.match(r"^\s*if\s+no\s+([A-Za-z_]\w*)\s+in\s+(.+?)\s+is\s+(.+?):?$", masked, re.IGNORECASE)
+    no_in_m = re.match(r"^\s*if\s+no\s+([A-Za-z_]\w*)\s+in\s+(.+?)\s+(is|has)\s+(.+?):?$", masked, re.IGNORECASE)
     if no_in_m:
         var = no_in_m.group(1).strip()
         coll = no_in_m.group(2).strip()
-        pred = no_in_m.group(3).strip()
-        masked = f"if ds_none({coll}, lambda {var}: {var} is {pred}):"
+        mode = no_in_m.group(3).lower()
+        pred = no_in_m.group(4).strip()
+        pred_code = _parse_quant_predicate(var, mode, pred)
+        masked = f"if ds_none({coll}, lambda {var}: {pred_code}):"
 
-    none_of_m = re.match(r"^\s*if\s+none\s+of\s+(.+?)\s+(?:are|is)\s+(.+?):?$", masked, re.IGNORECASE)
+    none_of_m = re.match(r"^\s*if\s+none\s+of\s+(.+?)\s+(?:are|is|have|has)\s+(.+?):?$", masked, re.IGNORECASE)
     if none_of_m:
         coll = none_of_m.group(1).strip()
         pred = none_of_m.group(2).strip()
-        masked = f"if ds_none({coll}, lambda x: x is {pred}):"
+        pred_code = _parse_quant_predicate("x", "is", pred)
+        masked = f"if ds_none({coll}, lambda x: {pred_code}):"
 
     # Pillar C: Thought Queries & Intuitive Filtering
 
@@ -2126,7 +2217,19 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"\b(?:highest|maximum|largest)\s+(?:of\s+)?([A-Za-z_]\w*)\s+in\s+([A-Za-z_]\w*)", r'agg_field("max", "\1", \2)', masked, flags=re.IGNORECASE)
     masked = re.sub(r"\b(?:lowest|minimum|smallest)\s+(?:of\s+)?([A-Za-z_]\w*)\s+in\s+([A-Za-z_]\w*)", r'agg_field("min", "\1", \2)', masked, flags=re.IGNORECASE)
 
-    # List operations
+    # List operations (statement forms)
+    masked = re.sub(
+        r"^\s*first\s+(\d+|[A-Za-z_]\w*)\s+items\s+of\s+(.+?)\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
+        r"set \3 to first_n_items(\1, \2)",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"^\s*last\s+(\d+|[A-Za-z_]\w*)\s+items\s+of\s+(.+?)\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
+        r"set \3 to last_n_items(\1, \2)",
+        masked,
+        flags=re.IGNORECASE
+    )
     masked = re.sub(r"^\s*set\s+item\s+(.+?)\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s+to\s+(.+)$", r"set_item(\1, \2, \3)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bitem\s+(\d+|[A-Za-z_]\w*)\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"item_of(\1, \2)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bfirst\s+(\d+|[A-Za-z_]\w*)\s+items\s+of\s+([A-Za-z_]\w*(?:\([^)]*\)|(?:'s\s+[A-Za-z_]\w*)?)|\[[^\]]+\])", r"first_n_items(\1, \2)", masked, flags=re.IGNORECASE)
@@ -2204,9 +2307,9 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         pct_num = float(dec_pct_m.group(2)) / 100.0
         masked = f"set {target_v} to {target_v} * {1.0 - pct_num}"
 
-    # Frontier 3: Participle expressions (parity between expressions and statements)
+    # Frontier 3: Composable participle expressions (support calls, identifiers, indexing, parenthesized exprs)
     masked = re.sub(
-        r"\b([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s+joined\s+with\s+(.+?)(?=[,\)\n;]|$)",
+        r"((?:[A-Za-z_]\w*(?:\([^)]*\)|\[[^\]]+\]|'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*)+|\([^)]+\)|[A-Za-z_]\w*))\s+joined\s+with\s+(.+?)(?=[,\)\n;]|$)",
         r"ds_join(\1, \2)",
         masked,
         flags=re.IGNORECASE

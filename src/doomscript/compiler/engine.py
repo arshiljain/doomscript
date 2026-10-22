@@ -239,6 +239,7 @@ def _execute_scoped(source: Any, custom_globals: dict = None, filename: str = "<
         "ds_format_currency": runtime.ds_format_currency,
         "ds_format_percentage": runtime.ds_format_percentage,
         "ds_is_property": runtime.ds_is_property,
+        "ds_quant_match": runtime.ds_quant_match,
         "ds_query_agg": runtime.ds_query_agg,
         "ds_keys": runtime.ds_keys,
         "ds_values": runtime.ds_values,

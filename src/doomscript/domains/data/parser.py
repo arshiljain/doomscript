@@ -177,6 +177,19 @@ class DataDomainParser(DomainParser):
             target = pipe_diag_m.group(2) or "pipeline_plan"
             return f'set {target} to explain_pipeline("{p_name}")'
 
+        # execute/run pipeline <name> [from <source>] into <target>
+        run_pipe_m = re.match(
+            r"^(?:execute|run)\s+pipeline\s+[\"\']?([A-Za-z_]\w*)[\"\']?(?:\s+from\s+([^\s:]+))?\s+into\s+([A-Za-z_]\w*)$",
+            line.strip(),
+            re.IGNORECASE,
+        )
+        if run_pipe_m:
+            p_name = run_pipe_m.group(1)
+            p_src = run_pipe_m.group(2)
+            p_tgt = run_pipe_m.group(3)
+            src_kw = f", source_data={p_src}" if p_src else ""
+            return f'set {p_tgt} to run_pipeline("{p_name}", dict(locals()){src_kw})'
+
         # Batch 2: Advanced Spoken English Tabular Operations
         # pivot table <df> with index <idx>, columns <cols>, values <vals>[, agg <agg>] into <target>
         piv_m = re.match(

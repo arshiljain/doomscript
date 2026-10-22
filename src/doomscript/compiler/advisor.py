@@ -84,7 +84,7 @@ CORE_KEYWORDS: Set[str] = {
     "sort", "unique", "true", "false", "none", "nothing", "not", "and", "or",
     "is", "starts", "ends", "between", "contains", "empty", "sqrt", "absolute",
     "value", "today", "now", "constructor", "init", "initialize", "setup",
-    "start", "base", "super", "my", "its", "make", "squares", "words", "lines"
+    "start", "base", "super", "my", "its", "make", "squares", "words", "lines", "item", "items", "keep", "only", "take", "drop", "every", "any", "has", "have", "had", "joined", "equals", "equal", "over", "under", "above", "below", "greater", "less", "than", "at", "least", "most", "qualifying"
 }
 
 BUILTIN_FUNCS: Set[str] = {
@@ -284,7 +284,8 @@ class DidYouMeanAdvisor:
             col=col,
         )
         if token_sug:
-            return token_sug
+            if cls._is_valid_syntax(token_sug):
+                return token_sug
 
         # 2. Domain signature matching
         line_words = cls._extract_words(s)
