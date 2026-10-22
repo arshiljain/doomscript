@@ -1006,22 +1006,24 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"^\s*(?:what\s+is|what's)\s+(?:the\s+)?(.+?)\??$", r"say \1", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*(?:tell|show)\s+(?:me|us)\s+(.+)$", r"say \1", masked, flags=re.IGNORECASE)
 
-    # Spoken Action Invocations:
-    # 1. tell <target> to <action> [args...]
-    tell_action_m = re.match(
-        r"^\s*tell\s+(.+?)\s+to\s+([a-z_]\w*)(?:\s+(.+))?$",
+    # Spoken Action Invocations (Statement & Expression Parity):
+    # tell <target> to <action> [with <args>]
+    def _repl_tell(m):
+        tgt = m.group(1).replace("'s ", ".").strip()
+        act = m.group(2).strip()
+        a_str = m.group(3)
+        if a_str:
+            a_stripped = re.sub(r"^\s*with\s+", "", a_str.strip(), flags=re.IGNORECASE)
+            a_clean = ", ".join(a.strip() for a in a_stripped.split(",") if a.strip())
+            return f"{tgt}.{act}({a_clean})"
+        return f"{tgt}.{act}()"
+
+    masked = re.sub(
+        r"\btell\s+(?!(?:me|us)\b)([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s+to\s+([a-z_]\w*)(?:\s+with\s+([^,\n\)#]+))?",
+        _repl_tell,
         masked,
-        re.IGNORECASE,
+        flags=re.IGNORECASE
     )
-    if tell_action_m and tell_action_m.group(1).lower() not in ("me", "us"):
-        target = tell_action_m.group(1).replace("'s ", ".").strip()
-        action = tell_action_m.group(2).strip()
-        args = tell_action_m.group(3)
-        if args:
-            args_clean = ", ".join(a.strip() for a in args.split(",") if a.strip())
-            masked = f"{target}.{action}({args_clean})"
-        else:
-            masked = f"{target}.{action}()"
 
     # 2. deposit <amount> into/to <target>
     deposit_m = re.match(
@@ -1167,7 +1169,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         flags=re.IGNORECASE
     )
     masked = re.sub(
-        r"\b(?:the\s+)?squares\s+(?:of|from)\s+([A-Za-z_]\w*|\d+(?:\.\d+)?)\s+to\s+([A-Za-z_]\w*|\d+(?:\.\d+)?)\b",
+        r"\b(?:(?:a\s+)?list\s+of\s+|the\s+)?squares\s+(?:of|from)\s+([A-Za-z_]\w*|\d+(?:\.\d+)?)\s+to\s+([A-Za-z_]\w*|\d+(?:\.\d+)?)\b",
         r"[x * x for x in range_inclusive(\1, \2)]",
         masked,
         flags=re.IGNORECASE
@@ -1177,6 +1179,74 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(
         r"^\s*(?:change|modify|update)\s+(.+?)\s+to\s+(.+)$",
         r"set \1 to \2",
+        masked,
+        flags=re.IGNORECASE
+    )
+
+    # In-place string mutators (trim, capitalize, uppercase, lowercase)
+    masked = re.sub(
+        r"^\s*trim\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
+        r"set \1 to trim of \1",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"^\s*capitalize\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
+        r"set \1 to capitalize of \1",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"^\s*(?:convert\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s+to\s+uppercase|uppercase\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?))\s*$",
+        lambda m: f"set {m.group(1) or m.group(2)} to uppercase of {m.group(1) or m.group(2)}",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"^\s*(?:convert\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s+to\s+lowercase|lowercase\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?))\s*$",
+        lambda m: f"set {m.group(1) or m.group(2)} to lowercase of {m.group(1) or m.group(2)}",
+        masked,
+        flags=re.IGNORECASE
+    )
+
+    # Preposition flexibility (add X into/in Y -> add X to Y, first item in X -> first item of X)
+    masked = re.sub(
+        r"^\s*add\s+(.+?)\s+(?:into|in)\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
+        r"add \1 to \2",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"\b(first|last)\s+item\s+in\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)",
+        r"\1 item of \2",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"\bsplit\s+(.+?)\s+(?:with|on)\s+(\S+)",
+        r"split \1 by \2",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"\bjoin\s+(.+?)\s+by\s+(\S+)",
+        r"join \1 with \2",
+        masked,
+        flags=re.IGNORECASE
+    )
+
+    # Conversational list assignment: numbers is a list of 1, 2, 3
+    masked = re.sub(
+        r"^\s*([A-Za-z_]\w*)\s+is\s+(a\s+list\s+of\b.+)$",
+        r"set \1 to \2",
+        masked,
+        flags=re.IGNORECASE
+    )
+
+    # Trailing type cast in input: ask "..." into age as number
+    masked = re.sub(
+        r"^\s*ask\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s+as\s+(number|text|string|boolean|bool)\s*$",
+        lambda m: f"ask {'boolean' if m.group(3).lower() in ('boolean', 'bool') else m.group(3).lower()} {m.group(1)} into {m.group(2)}" if m.group(3).lower() not in ('text', 'string') else f"ask {m.group(1)} into {m.group(2)}",
         masked,
         flags=re.IGNORECASE
     )
@@ -3522,19 +3592,31 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
             emit(f'{indent}ds_register_relation_has_one("{owner_cls}", "{prop_name}", "{target_cls}", "{inv_name}")', line_idx)
             continue
 
-        # Declarative Entity: a Person has name, age / Person has name, age
+        # Declarative Entity: a Person has name, age / Person has name, age = 0, status = "active"
         ent_schema_m = re.match(
-            r"^(?:(?:a|an)\s+)?([A-Z]\w*)\s+has\s+([A-Za-z_][A-Za-z0-9_,\s]*)$",
+            r"^(?:(?:a|an)\s+)?([A-Z]\w*)\s+has\s+(?!many\b|one\b)(.+)$",
             code.strip(),
             re.IGNORECASE,
         )
         if ent_schema_m:
             cname = ent_schema_m.group(1)
-            raw_fields = [f.strip() for f in ent_schema_m.group(2).split(",") if f.strip()]
-            params = ", ".join(f"{f}=None" for f in raw_fields)
+            raw_field_str = ent_schema_m.group(2)
+            raw_parts = [p.strip() for p in raw_field_str.split(",") if p.strip()]
+            field_pairs = []
+            for p in raw_parts:
+                if "=" in p:
+                    f_name, def_val = p.split("=", 1)
+                    field_pairs.append((f_name.strip(), def_val.strip()))
+                elif re.search(r"\(default\s+(.+)\)", p, re.IGNORECASE):
+                    m_def = re.search(r"^([A-Za-z_]\w*)\s*\(default\s+(.+)\)", p, re.IGNORECASE)
+                    field_pairs.append((m_def.group(1).strip(), m_def.group(2).strip()))
+                else:
+                    field_pairs.append((p.strip(), "None"))
+
+            params = ", ".join(f"{f}={d}" for f, d in field_pairs)
             emit(f"{indent}class {cname}(DoomEntity):", line_idx)
             emit(f"{indent}    to init with {params}:", line_idx)
-            for f in raw_fields:
+            for f, _ in field_pairs:
                 emit(f"{indent}        self.{f} = {f}", line_idx)
             continue
 
@@ -3966,6 +4048,25 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
                 shift = cur_match["when_indent"] - cur_match["match_indent"]
                 new_indent_len = max(indent_len - shift, cur_match["match_indent"] + 4)
                 indent = " " * new_indent_len
+
+        # Declarative action on entity: action <name> on [a|an] <Entity> [with <args>]:
+        action_on_m = re.match(
+            r"^action\s+([A-Za-z_]\w*)\s+on\s+(?:(?:a|an)\s+)?([A-Za-z_]\w*)(?:\s+with\s+(.+?))?\s*:$",
+            code,
+            re.IGNORECASE,
+        )
+        if action_on_m:
+            act_name = action_on_m.group(1)
+            cname = action_on_m.group(2)
+            args = (action_on_m.group(3) or "").strip()
+            primary_verb = stem_verb(act_name)
+            fn_name = f"__{cname}_{primary_verb}_{line_idx}"
+            param_str = f"self, {args}" if args else "self"
+            emit(f"{indent}to {fn_name} with {param_str}:", line_idx)
+            pending_entity_methods.append((indent_len, f"{indent}set {cname}.{primary_verb} to {fn_name}", line_idx))
+            if act_name != primary_verb:
+                pending_entity_methods.append((indent_len, f"{indent}set {cname}.{act_name} to {fn_name}", line_idx))
+            continue
 
         # Phase 12b: Event-Driven State Transitions ('when ...')
         if not (match_stack and indent_len > match_stack[-1]["match_indent"]):
