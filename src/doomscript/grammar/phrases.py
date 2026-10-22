@@ -1002,6 +1002,156 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         flags=re.IGNORECASE
     )
 
+    # Phase 5: Thought-to-Code Dimensions (Aggregations, Percentages, Bulk Actions, Iterations, Properties)
+
+    # 1. Declarative Aggregations & Query Filters
+    def _rewrite_thought_agg(m):
+        op = m.group(1).lower()
+        field = m.group(2).strip()
+        coll = m.group(3).strip()
+        cond = m.group(4).strip() if m.group(4) else None
+        if cond:
+            var_name = "x" if re.search(r"\bx\b", cond) else "item"
+            if coll.endswith("s") and len(coll) > 2:
+                singular = coll[:-1]
+                cond = re.sub(rf"\b{singular}\.(?=[A-Za-z_])", f"{var_name}.", cond)
+            bound = _bind_contextual_attrs(cond, var_name)
+            return f"ds_query_agg('{op}', '{field}', {coll}, lambda {var_name}: {bound})"
+        return f"ds_query_agg('{op}', '{field}', {coll})"
+
+    masked = re.sub(
+        r"\b(sum|total|average|mean|highest|maximum|lowest|minimum)\s+(?:of\s+)?([A-Za-z_]\w*)\s+in\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)*)(?:\s+where\s+([^,:\n\(\)]+?))?(?=[,:\n\)]|$)",
+        _rewrite_thought_agg,
+        masked,
+        flags=re.IGNORECASE
+    )
+
+    def _rewrite_thought_count(m):
+        coll = m.group(1).strip()
+        cond = m.group(2).strip()
+        var_name = "x" if re.search(r"\bx\b", cond) else "item"
+        if coll.endswith("s") and len(coll) > 2:
+            singular = coll[:-1]
+            cond = re.sub(rf"\b{singular}\.(?=[A-Za-z_])", f"{var_name}.", cond)
+        bound = _bind_contextual_attrs(cond, var_name)
+        return f"ds_query_agg('count', None, {coll}, lambda {var_name}: {bound})"
+
+    masked = re.sub(
+        r"\b(?:count\s+of|number\s+of|how\s+many)\s+(?:items\s+in\s+)?([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)*)\s+where\s+([^,:\n\(\)]+?)(?=[,:\n\)]|$)",
+        _rewrite_thought_count,
+        masked,
+        flags=re.IGNORECASE
+    )
+
+    # 2. Natural Proportions & Percentages
+    _EXPR_TERM = r"(\([^\)]+\)|[A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)*|\d+(?:\.\d+)?)"
+    masked = re.sub(
+        rf"\b{_EXPR_TERM}\s+as\s+(?:a\s+)?percent(?:age)?\s+of\s+{_EXPR_TERM}(?=[,:\s\n\)]|$)",
+        r"(((\1) / (\2)) * 100.0)",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"\b([A-Za-z_]\w*|\d+(?:\.\d+)?)\s*%\s+off\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\([^\)]+\))?|\d+(?:\.\d+)?)\b",
+        r"((\2) * (1.0 - ((\1) / 100.0)))",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"\b([A-Za-z_]\w*|\d+(?:\.\d+)?)\s*%\s+(?:markup\s+on|tax\s+on|on)\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\([^\)]+\))?|\d+(?:\.\d+)?)\b",
+        r"((\2) * (1.0 + ((\1) / 100.0)))",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"\b([A-Za-z_]\w*|\d+(?:\.\d+)?)\s*%\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\([^\)]+\))?|\d+(?:\.\d+)?)\b",
+        r"(((\1) / 100.0) * (\2))",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"\bhalf\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\([^\)]+\))?|\d+(?:\.\d+)?)\b",
+        r"((\1) / 2.0)",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"\bquarter\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\([^\)]+\))?|\d+(?:\.\d+)?)\b",
+        r"((\1) / 4.0)",
+        masked,
+        flags=re.IGNORECASE
+    )
+
+    # 3. Bulk Actions & Collective Verbs
+    masked = re.sub(
+        r"^\s*add\s+all\s+(?:of\s+)?(.+?)\s+(?:to|into)\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)$",
+        r"set \2 to ds_extend(\2, \1)",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"^\s*remove\s+all\s+(?:of\s+)?(.+?)\s+from\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)$",
+        r"set \2 to ds_remove_all(\2, \1)",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"^\s*(?:clear|empty)\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)$",
+        r"set \1 to ds_clear(\1)",
+        masked,
+        flags=re.IGNORECASE
+    )
+
+    # 4. Parallel, Paired & Indexed Iteration
+    masked = re.sub(
+        r"^\s*for\s+each\s+([A-Za-z_]\w*)\s+with\s+0-based\s+index\s+in\s+(.+?):$",
+        r"for each index, \1 in ds_enumerate(\2, 0):",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"^\s*for\s+each\s+([A-Za-z_]\w*)\s+(?:with|and\s+its)\s+index\s+in\s+(.+?):$",
+        r"for each index, \1 in ds_enumerate(\2):",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"\bpairs\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)*)\s+(?:and|,)\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)*)\b",
+        r"ds_pairs(\1, \2)",
+        masked,
+        flags=re.IGNORECASE
+    )
+
+    # 5. Boolean Property Ergonomics
+    _RESERVED_ADJ = {'none', 'true', 'false', 'even', 'odd', 'positive', 'negative', 'empty', 'zero', 'a', 'an', 'one', 'between', 'outside', 'inside', 'in', 'greater', 'less', 'at', 'over', 'under', 'equal', 'not'}
+    if re.match(r"^\s*(?:if|unless|while|repeat\s+while|repeat\s+until|verify(?:\s+that)?|ensure|require|assert|check(?:\s+that)?)\b", masked, re.IGNORECASE):
+        def _repl_is_prop(m):
+            subj = m.group(1).strip()
+            adj = m.group(2).strip()
+            if adj.lower() in _RESERVED_ADJ:
+                return m.group(0)
+            return f"ds_is_property({subj}, '{adj}')"
+
+        def _repl_is_not_prop(m):
+            subj = m.group(1).strip()
+            adj = m.group(2).strip()
+            if adj.lower() in _RESERVED_ADJ:
+                return m.group(0)
+            return f"not (ds_is_property({subj}, '{adj}'))"
+
+        masked = re.sub(
+            r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+(?:is\s+not|isn't)\s+([A-Za-z_]\w+)(?=\s+(?:and|or|then|otherwise)\b|:|\n|$)",
+            _repl_is_not_prop,
+            masked,
+            flags=re.IGNORECASE
+        )
+        masked = re.sub(
+            r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+is\s+([A-Za-z_]\w+)(?=\s+(?:and|or|then|otherwise)\b|:|\n|$)",
+            _repl_is_prop,
+            masked,
+            flags=re.IGNORECASE
+        )
+
     # Pillar D: Interrogative Inquiries & Collaborative Outputs
     masked = re.sub(r"^\s*(?:what\s+is|what's)\s+(?:the\s+)?(.+?)\??$", r"say \1", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*(?:tell|show)\s+(?:me|us)\s+(.+)$", r"say \1", masked, flags=re.IGNORECASE)

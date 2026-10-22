@@ -148,6 +148,167 @@ def ds_remove(target, item):
         raise DoomTypeError(f"Cannot remove items from {type(target).__name__}")
 
 
+def ds_extend(target, items):
+    """Polymorphic bulk add: lists extend, sets update, dicts update."""
+    if isinstance(target, list):
+        target.extend(items)
+        return target
+    elif isinstance(target, set):
+        target.update(items)
+        return target
+    elif isinstance(target, dict):
+        if isinstance(items, dict):
+            target.update(items)
+            return target
+        elif isinstance(items, (list, tuple)):
+            for k, v in items:
+                target[k] = v
+            return target
+        raise DoomTypeError(f"Cannot extend dictionary with {type(items).__name__}")
+    elif isinstance(target, str):
+        return target + str(items)
+    else:
+        try:
+            return target + items
+        except Exception:
+            raise DoomTypeError(f"Cannot extend {type(target).__name__} with {type(items).__name__}")
+
+
+def ds_remove_all(target, items):
+    """Polymorphic bulk remove: removes all occurrences of given items."""
+    if isinstance(target, list):
+        to_remove = set(items) if not isinstance(items, (str, bytes)) else {items}
+        target[:] = [it for it in target if it not in to_remove]
+        return target
+    elif isinstance(target, set):
+        target.difference_update(items)
+        return target
+    elif isinstance(target, dict):
+        for k in items:
+            target.pop(k, None)
+        return target
+    else:
+        raise DoomTypeError(f"Cannot remove items from {type(target).__name__}")
+
+
+def ds_clear(target):
+    """Clear all elements from a collection or record."""
+    if hasattr(target, "clear"):
+        target.clear()
+    elif isinstance(target, list):
+        target.clear()
+    return target
+
+
+def ds_pairs(a, b):
+    """Return paired items from two collections."""
+    return list(zip(a, b))
+
+
+def ds_format_currency(val, currency="$"):
+    """Format a numerical value as currency with 2 decimals and commas."""
+    try:
+        fval = float(val)
+        return f"{currency}{fval:,.2f}"
+    except Exception:
+        return str(val)
+
+
+def ds_format_percentage(val, decimals=1):
+    """Format a numerical value as percentage string."""
+    try:
+        fval = float(val)
+        return f"{fval:.{decimals}f}%"
+    except Exception:
+        return str(val)
+
+
+def ds_is_property(target, prop_name: str) -> bool:
+    """Check if target has a truthy property/flag/method matching prop_name or is_<prop_name>."""
+    if isinstance(target, dict):
+        if prop_name in target:
+            return bool(target[prop_name])
+        if f"is_{prop_name}" in target:
+            return bool(target[f"is_{prop_name}"])
+        return False
+    if hasattr(target, prop_name):
+        val = getattr(target, prop_name)
+        if callable(val):
+            try:
+                return bool(val())
+            except Exception:
+                pass
+        return bool(val)
+    if hasattr(target, f"is_{prop_name}"):
+        val = getattr(target, f"is_{prop_name}")
+        if callable(val):
+            try:
+                return bool(val())
+            except Exception:
+                pass
+        return bool(val)
+    return False
+
+
+def ds_query_agg(op: str, field, collection, predicate=None):
+    """Declarative query aggregation over collections of dicts, Records, or primitives."""
+    if collection is None:
+        return 0 if op in ("sum", "count") else None
+    try:
+        items = list(collection)
+    except Exception:
+        items = [collection]
+    if predicate is not None:
+        filtered = []
+        for it in items:
+            try:
+                if predicate(it):
+                    filtered.append(it)
+            except Exception:
+                pass
+        items = filtered
+    if op == "count":
+        return len(items)
+    def _extract_val(it):
+        if not field:
+            v = it
+        elif isinstance(it, dict):
+            v = it.get(field)
+        elif hasattr(it, field):
+            v = getattr(it, field)
+        else:
+            try:
+                v = it[field]
+            except Exception:
+                v = getattr(it, field, None)
+        if isinstance(v, (int, float)):
+            return v
+        if isinstance(v, str):
+            s = v.strip()
+            try:
+                return float(s) if "." in s else int(s)
+            except (ValueError, TypeError):
+                pass
+        return v
+    vals = [_extract_val(it) for it in items]
+    num_vals = [v for v in vals if isinstance(v, (int, float))]
+    op_clean = op.lower().strip()
+    if op_clean in ("sum", "total", "_var_sum"):
+        return sum(num_vals) if num_vals else 0
+    elif op_clean in ("avg", "average", "mean", "_var_avg"):
+        return (sum(num_vals) / len(num_vals)) if num_vals else 0.0
+    elif op_clean in ("max", "highest", "maximum", "_var_max"):
+        return max(num_vals if num_vals else vals) if vals else None
+    elif op_clean in ("min", "lowest", "minimum", "_var_min"):
+        return min(num_vals if num_vals else vals) if vals else None
+    elif op_clean == "first":
+        return vals[0] if vals else None
+    elif op_clean == "last":
+        return vals[-1] if vals else None
+    return vals
+
+
+
 
 def sleep(seconds):
     """Pause execution for a given number of seconds."""

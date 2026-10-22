@@ -13,15 +13,16 @@ set base_recipe to [
 ]
 
 say "=== RECIPE SCALER (4 to 10 SERVINGS) ==="
-say "Multiplier: " + scale_factor + "x"
+say "Multiplier: {scale_factor}x"
 
-set total_flour_scaled to 0.0
+# Declarative aggregation to find flour amount
+set flour_base to sum of amount_grams in base_recipe where ingredient == "All-Purpose Flour"
+set total_flour_scaled to flour_base * scale_factor
 
-for each item in base_recipe:
+# Indexed iteration for clean recipe printing
+for each item with index in base_recipe:
     set scaled_qty to item's amount_grams * scale_factor
-    say "  " + item's ingredient + ": " + scaled_qty + " grams"
-    if item's ingredient == "All-Purpose Flour":
-        set total_flour_scaled to scaled_qty
+    say "  {index}. {item's ingredient}: {scaled_qty} grams"
 
 verify that total_flour_scaled == 625.0 otherwise "Flour scaling computation error"
 say "Scaled ingredients verified successfully for commercial batch."

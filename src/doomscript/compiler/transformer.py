@@ -1851,6 +1851,11 @@ class DoomToPython(Transformer):
                     if depth == 0 and j < n and val[j] == '}':
                         expr_text = val[i+1:j].strip()
                         norm_expr = re.sub(r"([A-Za-z_]\w*)'s\s+([A-Za-z_]\w*)", r"\1.\2", expr_text)
+                        norm_expr = re.sub(r"^(.+?)\s+as\s+(?:usd|currency)$", r"ds_format_currency(\1)", norm_expr, flags=re.IGNORECASE)
+                        norm_expr = re.sub(r"^(.+?)\s+as\s+percent(?:age)?$", r"ds_format_percentage(\1)", norm_expr, flags=re.IGNORECASE)
+                        norm_expr = re.sub(r"^(.+?)\s+as\s+int(?:eger)?$", r"int(\1)", norm_expr, flags=re.IGNORECASE)
+                        norm_expr = re.sub(r"^(.+?)\s+joined\s+(?:with|by)\s+(.+?)$", r"str_join(\1, \2)", norm_expr, flags=re.IGNORECASE)
+                        norm_expr = re.sub(r"^count\s+of\s+(.+?)$", r"count_of(\1)", norm_expr, flags=re.IGNORECASE)
                         try:
                             expr_ast = ast.parse(norm_expr, mode='eval').body
                         except SyntaxError:
