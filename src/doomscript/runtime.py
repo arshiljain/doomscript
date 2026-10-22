@@ -94,6 +94,13 @@ def make_entity(entity_type_name: str, **kwargs):
     return r
 
 
+def ds_ternary(cond, then_val, else_val):
+    """Natural ternary conditional: returns then_val if cond is truthy else else_val."""
+    if callable(then_val) and not isinstance(then_val, type):
+        return then_val() if cond else (else_val() if callable(else_val) else else_val)
+    return then_val if cond else else_val
+
+
 def ds_bin_add(a, b):
     """Natural addition: if either operand is string, performs string concatenation; otherwise numeric/collection addition."""
     if isinstance(a, str) or isinstance(b, str):
@@ -520,7 +527,7 @@ def str_matches_pattern(text, pattern):
 
 
 # Filesystem Operations
-def copy_file(src, dst):
+def copy_file(src, dst, overwrite=True):
     """Copy a file from src to dst."""
     shutil.copy2(str(src), str(dst))
 

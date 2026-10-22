@@ -126,7 +126,7 @@ skip_stmt: "skip" -> skip_stmt
 write_file_stmt: "write" expr ("into" | "to") "file" expr -> write_file
 append_file_stmt: "append" expr "to" "file" expr -> append_file
 read_file_stmt: "read" "file" expr "into" target -> read_file
-copy_file_stmt: "copy" "file" expr "to" expr -> copy_file
+copy_file_stmt: "copy" "file" expr "to" expr [("with" "overwrite" | "overwrite") expr] -> copy_file
 delete_file_stmt: "delete" "file" expr -> delete_file
 create_dir_stmt: "create" "directory" expr -> create_dir
 list_files_stmt: "list" "files" "in" expr "into" target -> list_files

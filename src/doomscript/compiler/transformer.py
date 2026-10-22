@@ -372,11 +372,15 @@ class DoomToPython(Transformer):
         return ast.Expr(value=call)
 
     def copy_file(self, args):
-        src, dst = args
+        src = args[0]
+        dst = args[1]
+        kws = []
+        if len(args) > 2:
+            kws.append(ast.keyword(arg='overwrite', value=args[2]))
         call = ast.Call(
             func=ast.Name(id='copy_file', ctx=ast.Load()),
             args=[src, dst],
-            keywords=[]
+            keywords=kws
         )
         return ast.Expr(value=call)
 

@@ -620,6 +620,57 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
 
     masked = re.sub(r'\bin\s+make_quantity\s*\(\s*(\d+)\s*,\s*["\'](\w+)["\']\s*\)', _repl_time_from_now, masked, flags=re.IGNORECASE)
 
+    # Compositional: Ternary assignment: set <var> to <val1> if <cond> otherwise <val2>
+    ternary_assign_m = re.match(
+        r"^\s*set\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+to\s+(.+?)\s+if\s+(.+?)\s+(?:otherwise|else)\s+(.+)$",
+        masked,
+        re.IGNORECASE,
+    )
+    if ternary_assign_m:
+        t_var = ternary_assign_m.group(1).strip()
+        t_then = ternary_assign_m.group(2).strip()
+        t_cond = ternary_assign_m.group(3).strip()
+        t_else = ternary_assign_m.group(4).strip()
+        masked = f"set {t_var} to ds_ternary({t_cond}, {t_then}, {t_else})"
+
+    # Compositional: Prefix ternary assignment: set <var> to if <cond> then <val1> otherwise <val2>
+    ternary_prefix_m = re.match(
+        r"^\s*set\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+to\s+if\s+(.+?)\s+then\s+(.+?)\s+(?:otherwise|else)\s+(.+)$",
+        masked,
+        re.IGNORECASE,
+    )
+    if ternary_prefix_m:
+        t_var = ternary_prefix_m.group(1).strip()
+        t_cond = ternary_prefix_m.group(2).strip()
+        t_then = ternary_prefix_m.group(3).strip()
+        t_else = ternary_prefix_m.group(4).strip()
+        masked = f"set {t_var} to ds_ternary({t_cond}, {t_then}, {t_else})"
+
+    # Compositional: set <var> to <coll> whose <field> <cmp> <val>
+    whose_expr_m = re.match(
+        r"^\s*set\s+([A-Za-z_]\w*)\s+to\s+([A-Za-z_]\w*)\s+whose\s+([A-Za-z_]\w*)\s+(is|equals|==|!=|>|<|>=|<=)\s+(.+)$",
+        masked,
+        re.IGNORECASE,
+    )
+    if whose_expr_m:
+        t_var = whose_expr_m.group(1).strip()
+        coll = whose_expr_m.group(2).strip()
+        attr = whose_expr_m.group(3).strip()
+        cmp_op = whose_expr_m.group(4).strip()
+        val = whose_expr_m.group(5).strip()
+        norm_cmp = "==" if cmp_op.lower() in ("is", "equals") else cmp_op
+        masked = f"set {t_var} to [item for item in {coll} if ds_attr(item, '{attr}') {norm_cmp} {val}]"
+
+    # Compositional: Inline expression sort: sort <list> descending/ascending
+    masked = re.sub(r"\bsort\s+(\[[^\]]+\]|[A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s+descending\b", r"sorted_list(\1, reverse=True)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bsort\s+(\[[^\]]+\]|[A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s+ascending\b", r"sorted_list(\1, reverse=False)", masked, flags=re.IGNORECASE)
+
+    # Compositional: Inline expression filter: filter <list> where <var> is ...
+    filter_expr_m = re.search(r"\bfilter\s+(\[[^\]]+\]|[A-Za-z_]\w*)\s+where\s+([A-Za-z_]\w*)\s+(is\s+[A-Za-z_]\w*|==.+?|!=.+?|>.*|<.*|>=.*|<=.*)", masked, re.IGNORECASE)
+    if filter_expr_m:
+        f_coll, f_var, f_pred = filter_expr_m.group(1), filter_expr_m.group(2), filter_expr_m.group(3)
+        masked = masked.replace(filter_expr_m.group(0), f"[{f_var} for {f_var} in {f_coll} if {f_var} {f_pred}]")
+
 
     # Normalize 'attempt' to 'try'
     if re.match(r"^attempt\b", masked, re.IGNORECASE):
@@ -1213,6 +1264,13 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         masked,
         flags=re.IGNORECASE
     )
+    # In-place reverse: reverse <var>
+    masked = re.sub(
+        r"^\s*(?:reverse|reversed)\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
+        r"set \1 to ds_reversed(\1)",
+        masked,
+        flags=re.IGNORECASE
+    )
 
     # Standalone data operations (implicit target __it_{line_num})
     replace_inplace_m = re.match(
@@ -1452,6 +1510,13 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
                 suggestion="assign a variable first or use an explicit variable name"
             )
         masked = re.sub(r"\b(it|that)\b", last_var, masked, flags=re.IGNORECASE)
+
+    # Plural pronoun resolution ('them', 'these', 'those')
+    plural_pronoun_match = re.search(r"\b(them|these|those)\b", masked, re.IGNORECASE)
+    if plural_pronoun_match:
+        last_pl = scope.get_last_plural() or scope.get_last_var()
+        if last_pl:
+            masked = re.sub(r"\b(them|these|those)\b", last_pl, masked, flags=re.IGNORECASE)
 
     # Restore protected keywords (also normalizes 'if that fails' to 'if it fails')
     masked = masked.replace("__VERIFY_THAT__", "verify that")
@@ -1839,7 +1904,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     # List operations
     masked = re.sub(r"^\s*set\s+item\s+(.+?)\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s+to\s+(.+)$", r"set_item(\1, \2, \3)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bitem\s+(\d+|[A-Za-z_]\w*)\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"item_of(\1, \2)", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\bfirst\s+(\d+|[A-Za-z_]\w*)\s+items\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"first_n_items(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bfirst\s+(\d+|[A-Za-z_]\w*)\s+items\s+of\s+([A-Za-z_]\w*(?:\([^)]*\)|(?:'s\s+[A-Za-z_]\w*)?)|\[[^\]]+\])", r"first_n_items(\1, \2)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\blast\s+(\d+|[A-Za-z_]\w*)\s+items\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"last_n_items(\1, \2)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\b(?:title|titlecase)\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)", r"str_title(\1)", masked, flags=re.IGNORECASE)
 
@@ -1947,7 +2012,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     # Participle case: X uppercase / X lowercase (excluding keywords & verbs)
     masked = re.sub(r"\b(?!(?:to|in|into|of|from|as|with|say|show|print|display|set|let|put|the|a|an|ds_\w+)\b)([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s+uppercase\b", r"ds_uppercase(\1)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\b(?!(?:to|in|into|of|from|as|with|say|show|print|display|set|let|put|the|a|an|ds_\w+)\b)([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s+lowercase\b", r"ds_lowercase(\1)", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\b([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s+reversed\b", r"ds_reversed(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(?!(?:to|in|into|of|from|as|with|say|show|print|display|set|let|put|the|a|an|ds_\w+)\b)([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s+reversed\b", r"ds_reversed(\1)", masked, flags=re.IGNORECASE)
 
     # Frontier 4: Range Literals and Loops
     masked = re.sub(
@@ -3271,6 +3336,57 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
 
         code = canonicalize_synonyms(code)
 
+        # Milestone 5 & 6: Pre-split compositional blocks
+        # Transfer: transfer <amt> from <src> to <dst>
+        transfer_m = re.match(r"^transfer\s+(.+?)\s+from\s+([A-Za-z_]\w*)\s+to\s+([A-Za-z_]\w*)$", code.strip(), re.IGNORECASE)
+        if transfer_m:
+            amt, src, dst = transfer_m.group(1).strip(), transfer_m.group(2).strip(), transfer_m.group(3).strip()
+            code = f"decrease {src} by {amt} and then increase {dst} by {amt}"
+
+        # Safely do: <action> otherwise <fallback>
+        safely_m = re.match(r"^safely\s+(?:do\s*)?:\s*(.+?)\s+otherwise\s+(.+)$", code.strip(), re.IGNORECASE)
+        if safely_m:
+            main_act = safely_m.group(1).strip()
+            fallback = safely_m.group(2).strip()
+            emit(f"{indent}try:", line_idx)
+            norm_main = normalize_statement_text(main_act, scope, line_idx)
+            emit(f"{indent}    {norm_main}", line_idx)
+            emit(f"{indent}if it fails:", line_idx)
+            into_m = re.search(r"\binto\s+([A-Za-z_]\w*)", main_act, re.IGNORECASE)
+            is_stmt = re.match(r"^(?:say|show|print|display|set|let|put|write|read|raise|return|pause|stop)\b", fallback, re.IGNORECASE)
+            if into_m and not is_stmt:
+                target_var = into_m.group(1).strip()
+                emit(f"{indent}    set {target_var} to {fallback}", line_idx)
+            else:
+                norm_fallback = normalize_statement_text(fallback, scope, line_idx)
+                emit(f"{indent}    {norm_fallback}", line_idx)
+            continue
+
+        # Retry N times: <action>
+        retry_m = re.match(r"^retry\s+(\d+)\s+times?\s*:\s*(.+)$", code.strip(), re.IGNORECASE)
+        if retry_m:
+            times = retry_m.group(1).strip()
+            act = retry_m.group(2).strip()
+            norm_act = normalize_statement_text(act, scope, line_idx)
+            emit(f"{indent}for each _retry_iter from 1 to {times}:", line_idx)
+            emit(f"{indent}    try:", line_idx)
+            emit(f"{indent}        {norm_act}", line_idx)
+            emit(f"{indent}        stop", line_idx)
+            emit(f"{indent}    if it fails:", line_idx)
+            emit(f"{indent}        skip", line_idx)
+            continue
+
+        # In N seconds: <action>
+        temporal_m = re.match(r"^in\s+(\d+(?:\.\d+)?)\s+(seconds?|secs?|minutes?|mins?|hours?)\s*:\s*(.+)$", code.strip(), re.IGNORECASE)
+        if temporal_m:
+            delay = temporal_m.group(1).strip()
+            unit = temporal_m.group(2).strip()
+            act = temporal_m.group(3).strip()
+            emit(f"{indent}wait {delay} {unit}", line_idx)
+            norm_act = normalize_statement_text(act, scope, line_idx)
+            emit(f"{indent}{norm_act}", line_idx)
+            continue
+
         # Domain Activation: use <domain>, using <domain>, import <domain>, enable <domain> (supports comma and 'and' lists)
         use_domain_m = re.match(
             r"^(?:use|using|import|enable|domain|domains)\s+(.+)$",
@@ -4015,10 +4131,10 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
                 masked_code,
                 flags=re.IGNORECASE,
             )
-            # Rule 3: '... and <imperative_verb> ...' (say, show, print, ask, set, put, create, make, change, modify, update, verify, tell, or var =)
+            # Rule 3: '... and <imperative_verb> ...' (all statement verbs)
             masked_code = re.sub(
-                r"(?<!\band\sthen)\s+and\s+((?:say|show|display|print|ask|set|put|create|make|change|modify|update|verify|tell)\b|[A-Za-z_]\w*\s*=[^=])",
-                r" and then \1",
+                r"(?<!\band\sthen)\s+and\s+([A-Za-z_]\w*)",
+                lambda m: f" and then {m.group(1)}" if m.group(1).lower() in STATEMENT_START_KEYWORDS and m.group(1).lower() not in ("then", "of", "in", "to", "as", "with", "by", "from") else m.group(0),
                 masked_code,
                 flags=re.IGNORECASE,
             )
