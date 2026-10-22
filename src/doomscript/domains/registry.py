@@ -364,6 +364,11 @@ class DomainRegistry:
             domain = self._domains.get(name)
             if domain:
                 try:
+                    from doomscript.domains.thought_paradigms import parse_thought_paradigm
+                    tp_res = parse_thought_paradigm(name, line, line_no)
+                    if tp_res is not None:
+                        self._last_parsed = (line, line_no, domain, tp_res)
+                        return tp_res
                     res = domain.parser.parse_inspect(line, line_no)
                     if res is not None:
                         self._last_parsed = (line, line_no, domain, res)
@@ -425,6 +430,18 @@ class DomainRegistry:
                 except Exception:
                     pass
 
+        # 4. Check thought paradigms across all registered domains (Zero-Import auto-routing)
+        try:
+            from doomscript.domains.thought_paradigms import parse_thought_paradigm
+            for dom_name, dom_inst in self._domains.items():
+                tp_res = parse_thought_paradigm(dom_name, line, line_no)
+                if tp_res is not None:
+                    self.activate(dom_name)
+                    self._last_parsed = (line, line_no, dom_inst, tp_res)
+                    return tp_res
+        except Exception:
+            pass
+
         return None
 
     def find_domain_for_line(self, line: str, active_only: bool = True) -> Optional[DomainContract]:
@@ -483,6 +500,14 @@ class DomainRegistry:
                         if getattr(v, "__module__", "") in ("typing", "typing_extensions"):
                             continue
                         exports[k] = v
+        # Export Thought-to-Code paradigm runtime functions
+        try:
+            import doomscript.domains.thought_paradigms as tp
+            for k, v in vars(tp).items():
+                if k.startswith("ds_"):
+                    exports[k] = v
+        except Exception:
+            pass
         return exports
 
 

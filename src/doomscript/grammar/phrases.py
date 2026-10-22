@@ -3273,7 +3273,7 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
 
         # Domain Activation: use <domain>, using <domain>, import <domain>, enable <domain> (supports comma and 'and' lists)
         use_domain_m = re.match(
-            r"^(?:use|using|import|enable)\s+(.+)$",
+            r"^(?:use|using|import|enable|domain|domains)\s+(.+)$",
             code.strip(),
             re.IGNORECASE,
         )
