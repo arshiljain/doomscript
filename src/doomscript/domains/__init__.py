@@ -49,6 +49,26 @@ from doomscript.domains.neuro import NEURO_DOMAIN
 from doomscript.domains.automata import AUTOMATA_DOMAIN
 from doomscript.domains.metrics import METRICS_DOMAIN
 from doomscript.domains.spatial_audio import SPATIAL_AUDIO_DOMAIN
+from doomscript.domains.genai import GENAI_DOMAIN
+from doomscript.domains.cache import CACHE_DOMAIN
+from doomscript.domains.queue import QUEUE_DOMAIN
+from doomscript.domains.crypto_zk import CRYPTO_ZK_DOMAIN
+from doomscript.domains.climate import CLIMATE_DOMAIN
+from doomscript.domains.genomics import GENOMICS_DOMAIN
+from doomscript.domains.hydrology import HYDROLOGY_DOMAIN
+from doomscript.domains.materials import MATERIALS_DOMAIN
+from doomscript.domains.aerospace import AEROSPACE_DOMAIN
+from doomscript.domains.control import CONTROL_DOMAIN
+from doomscript.domains.ecology import ECOLOGY_DOMAIN
+from doomscript.domains.epidemiology import EPIDEMIOLOGY_DOMAIN
+from doomscript.domains.logistics import LOGISTICS_DOMAIN
+from doomscript.domains.forensics import FORENSICS_DOMAIN
+from doomscript.domains.microecon import MICROECON_DOMAIN
+from doomscript.domains.risk import RISK_DOMAIN
+from doomscript.domains.social import SOCIAL_DOMAIN
+from doomscript.domains.linguistics import LINGUISTICS_DOMAIN
+from doomscript.domains.geophysics import GEOPHYSICS_DOMAIN
+from doomscript.domains.synthetic_bio import SYNTHETIC_BIO_DOMAIN
 
 __all__ = [
     "DomainContract",
@@ -99,4 +119,24 @@ __all__ = [
     "AUTOMATA_DOMAIN",
     "METRICS_DOMAIN",
     "SPATIAL_AUDIO_DOMAIN",
+    "GENAI_DOMAIN",
+    "CACHE_DOMAIN",
+    "QUEUE_DOMAIN",
+    "CRYPTO_ZK_DOMAIN",
+    "CLIMATE_DOMAIN",
+    "GENOMICS_DOMAIN",
+    "HYDROLOGY_DOMAIN",
+    "MATERIALS_DOMAIN",
+    "AEROSPACE_DOMAIN",
+    "CONTROL_DOMAIN",
+    "ECOLOGY_DOMAIN",
+    "EPIDEMIOLOGY_DOMAIN",
+    "LOGISTICS_DOMAIN",
+    "FORENSICS_DOMAIN",
+    "MICROECON_DOMAIN",
+    "RISK_DOMAIN",
+    "SOCIAL_DOMAIN",
+    "LINGUISTICS_DOMAIN",
+    "GEOPHYSICS_DOMAIN",
+    "SYNTHETIC_BIO_DOMAIN",
 ]
