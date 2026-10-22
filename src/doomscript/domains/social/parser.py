@@ -17,6 +17,10 @@ class SocialDomainParser(DomainParser):
         if m_bet:
             return f"set {m_bet.group(2)} to social_betweenness_centrality({m_bet.group(1)})"
 
+        m_pr = re.match(r"^calculate\s+pagerank\s+for\s+graph\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
+        if m_pr:
+            return f"set {m_pr.group(2)} to social_pagerank({m_pr.group(1)})"
+
         m_dens = re.match(r"^calculate\s+network\s+density\s+for\s+graph\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
         if m_dens:
             return f"set {m_dens.group(2)} to social_network_density({m_dens.group(1)})"

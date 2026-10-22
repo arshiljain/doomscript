@@ -1,4 +1,4 @@
-"""Social Network Analysis Domain Runtime: Centrality, Clustering, Density, and Shortest Paths."""
+"""Social Network Analysis Domain Runtime: Degree/Closeness/Betweenness centrality, PageRank, Network density, and Clustering."""
 from collections import deque
 from typing import Dict, List, Any
 
@@ -70,6 +70,30 @@ def social_betweenness_centrality(graph: Dict[Any, List[Any]]) -> Dict[Any, floa
     scale = 1.0 / ((n - 1) * (n - 2)) if n > 2 else 1.0
     return {v: round(cb[v] * scale, 4) for v in nodes}
 
+def social_pagerank(graph: Dict[Any, List[Any]], damping: float = 0.85, max_iter: int = 50) -> Dict[Any, float]:
+    """Computes PageRank vector via power iteration."""
+    nodes = list(graph.keys())
+    n = len(nodes)
+    if n == 0:
+        return {}
+    ranks = {v: 1.0 / n for v in nodes}
+    d = float(damping)
+    for _ in range(max_iter):
+        new_ranks = {v: (1.0 - d) / n for v in nodes}
+        for u in nodes:
+            out_neighbors = graph.get(u, [])
+            if out_neighbors:
+                share = (d * ranks[u]) / len(out_neighbors)
+                for v in out_neighbors:
+                    if v in new_ranks:
+                        new_ranks[v] += share
+            else:
+                # Dangling node distributed evenly
+                for v in nodes:
+                    new_ranks[v] += (d * ranks[u]) / n
+        ranks = new_ranks
+    return {k: round(v, 4) for k, v in ranks.items()}
+
 def social_network_density(graph: Dict[Any, List[Any]], directed: bool = False) -> float:
     """Computes edge density of the network: edges / max_possible_edges."""
     n = len(graph)
@@ -100,7 +124,6 @@ def social_clustering_coefficient(graph: Dict[Any, List[Any]]) -> float:
             for v in graph.get(u, []):
                 if v in neighbor_set and u != v:
                     links += 1
-        # links counted twice for undirected
         links = links / 2.0
         coeffs.append(links / (k * (k - 1) / 2.0))
     return round(sum(coeffs) / n, 4)

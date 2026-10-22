@@ -1,4 +1,4 @@
-"""Synthetic Biology Domain Runtime: Hill kinetics, Genetic Toggle Switch, Repressilator, and Codon Adaptation Index."""
+"""Synthetic Biology Domain Runtime: Hill kinetics, Toggle Switch, Repressilator, Michaelis-Menten enzyme kinetics, Gibson assembly, and CAI."""
 import math
 from typing import Dict, Any
 
@@ -27,13 +27,40 @@ def synbio_hill_repression(conc: float, k_half: float, n_hill: float, v_max: flo
     denom = 1.0 + (x / k) ** n
     return round(v / denom, 4)
 
+def synbio_michaelis_menten(substrate_conc: float, v_max: float, km: float, inhibitor_conc: float = 0.0, ki: float = 1.0) -> float:
+    """Calculates enzyme reaction rate v = (Vmax * [S]) / (Km * (1 + [I]/Ki) + [S]) with competitive inhibition."""
+    s = float(substrate_conc)
+    vmax = float(v_max)
+    km_val = float(km)
+    i_conc = float(inhibitor_conc)
+    ki_val = float(ki)
+    if s <= 0.0 or vmax <= 0.0:
+        return 0.0
+    apparent_km = km_val * (1.0 + (i_conc / ki_val)) if ki_val > 0 else km_val
+    rate = (vmax * s) / (apparent_km + s)
+    return round(rate, 4)
+
+def synbio_gibson_assembly_overlap(frag1: str, frag2: str, min_overlap: int = 10) -> Dict[str, Any]:
+    """Scans for matching terminal overlapping homologous regions between two DNA fragments."""
+    s1 = str(frag1).upper().strip()
+    s2 = str(frag2).upper().strip()
+    min_len = int(min_overlap)
+    best_overlap = ""
+    for length in range(min_len, min(len(s1), len(s2)) + 1):
+        suffix = s1[-length:]
+        if s2.startswith(suffix):
+            best_overlap = suffix
+    has_match = len(best_overlap) >= min_len
+    # Tm of overlap
+    gc = sum(1 for c in best_overlap if c in "GC")
+    tm = (64.9 + 41.0 * (gc - 16.4) / len(best_overlap)) if best_overlap else 0.0
+    return {"compatible": has_match, "overlap_length": len(best_overlap), "sequence": best_overlap, "overlap_tm": round(tm, 2)}
+
 def synbio_toggle_switch_step(u: float, v: float, alpha1: float = 10.0, alpha2: float = 10.0, beta: float = 2.0, gamma: float = 2.0, dt: float = 0.05) -> Dict[str, float]:
     """Single Euler integration step for Gardner bistable toggle switch."""
     u_val = float(u)
     v_val = float(v)
     dt_val = float(dt)
-    # du/dt = alpha1 / (1 + v^beta) - u
-    # dv/dt = alpha2 / (1 + u^gamma) - v
     du = (float(alpha1) / (1.0 + (v_val ** float(beta))) - u_val) * dt_val
     dv = (float(alpha2) / (1.0 + (u_val ** float(gamma))) - v_val) * dt_val
     return {"u": round(max(0.0, u_val + du), 4), "v": round(max(0.0, v_val + dv), 4)}
@@ -46,7 +73,6 @@ def synbio_repressilator_step(p1: float, p2: float, p3: float, alpha: float = 10
     dt_v = float(dt)
     a = float(alpha)
     n = float(n_hill)
-    # p1 is repressed by p3, p2 by p1, p3 by p2
     dp1 = (a / (1.0 + p3_v ** n) - p1_v) * dt_v
     dp2 = (a / (1.0 + p1_v ** n) - p2_v) * dt_v
     dp3 = (a / (1.0 + p2_v ** n) - p3_v) * dt_v

@@ -1,6 +1,7 @@
-"""Digital Forensics Runtime: Magic byte signature matching, Shannon entropy, and base64 deobfuscation."""
+"""Digital Forensics Runtime: Magic byte headers, Shannon entropy, Base64 deobfuscation, DGA detection, and NOP sled scans."""
 import math
 import base64
+import re
 from typing import Dict, Any, Optional
 
 FILE_SIGNATURES = {
@@ -40,18 +41,45 @@ def forensics_shannon_entropy(data: Any) -> float:
             entropy -= p * math.log2(p)
     return round(entropy, 4)
 
-def forensics_deobfuscate_base64(text: str, max_depth: int = 5) -> str:
-    """Recursively decodes nested base64 encoded strings."""
-    curr = str(text).strip()
-    depth = 0
-    while depth < max_depth:
+def forensics_deobfuscate_base64(data: str, max_depth: int = 5) -> str:
+    """Recursively decodes nested base64 layers until plain text is recovered."""
+    curr = str(data).strip()
+    for _ in range(max_depth):
         try:
-            decoded = base64.b64decode(curr, validate=True).decode('utf-8')
-            if decoded.isprintable() and len(decoded) > 0:
+            decoded = base64.b64decode(curr, validate=True).decode('utf-8', errors='ignore')
+            if decoded and decoded != curr:
                 curr = decoded
-                depth += 1
             else:
                 break
         except Exception:
             break
     return curr
+
+def forensics_dga_score(domain_name: str) -> Dict[str, Any]:
+    """Scores a domain name for DGA (Domain Generation Algorithm) malware characteristics."""
+    d = str(domain_name).split(".")[0].lower()
+    if not d:
+        return {"dga_score": 0.0, "is_dga": False}
+    # Calculate vowel ratio
+    vowels = sum(1 for c in d if c in "aeiou")
+    vowel_ratio = vowels / len(d)
+    # Consecutive consonants
+    max_consonants = max(len(s) for s in re.findall(r"[^aeiou\d]+", d)) if re.findall(r"[^aeiou\d]+", d) else 0
+    # Shannon entropy of characters
+    char_freq = {}
+    for c in d:
+        char_freq[c] = char_freq.get(c, 0) + 1
+    ent = -sum((cnt / len(d)) * math.log2(cnt / len(d)) for cnt in char_freq.values())
+    is_dga = ent > 3.2 or max_consonants >= 5 or vowel_ratio < 0.15
+    score = min(1.0, (ent / 4.0) * 0.5 + (max_consonants / 6.0) * 0.5)
+    return {"dga_score": round(score, 2), "is_dga": is_dga, "entropy": round(ent, 2), "max_consonants": max_consonants}
+
+def forensics_detect_shellcode_nop_sled(data: Any, min_sled: int = 8) -> Dict[str, Any]:
+    """Detects x86 NOP sled (0x90 sequence) landing pads."""
+    if isinstance(data, str):
+        b = data.encode('latin1')
+    else:
+        b = bytes(data)
+    nop = b"\x90" * int(min_sled)
+    idx = b.find(nop)
+    return {"has_nop_sled": idx != -1, "offset": idx if idx != -1 else None}

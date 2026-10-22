@@ -13,9 +13,17 @@ class MaterialsDomainParser(DomainParser):
         if m_mohr:
             return f"set {m_mohr.group(4)} to materials_mohrs_circle({m_mohr.group(1)}, {m_mohr.group(2)}, {m_mohr.group(3)})"
 
-        m_th = re.match(r"^calculate\s+thermal\s+expansion\s+for\s+length\s+(.+?)\s+coeff\s+(.+?)\s+delta\s+temp\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
-        if m_th:
-            return f"set {m_th.group(4)} to materials_thermal_expansion({m_th.group(1)}, {m_th.group(2)}, {m_th.group(3)})"
+        m_therm = re.match(r"^calculate\s+thermal\s+expansion\s+for\s+length\s+(.+?)\s+coeff\s+(.+?)\s+delta\s+temp\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
+        if m_therm:
+            return f"set {m_therm.group(4)} to materials_thermal_expansion({m_therm.group(1)}, {m_therm.group(2)}, {m_therm.group(3)})"
+
+        m_k1 = re.match(r"^calculate\s+stress\s+intensity\s+for\s+stress\s+(.+?)\s+crack\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
+        if m_k1:
+            return f"set {m_k1.group(3)} to materials_stress_intensity({m_k1.group(1)}, {m_k1.group(2)})"
+
+        m_rom = re.match(r"^calculate\s+composite\s+modulus\s+fiber\s+(.+?)\s+matrix\s+(.+?)\s+fraction\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
+        if m_rom:
+            return f"set {m_rom.group(4)} to materials_rule_of_mixtures({m_rom.group(1)}, {m_rom.group(2)}, {m_rom.group(3)})"
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

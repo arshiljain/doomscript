@@ -7,11 +7,11 @@ class LogisticsDomainParser(DomainParser):
         s = line.strip()
         m_eoq = re.match(r"^calculate\s+economic\s+order\s+quantity\s+for\s+demand\s+(.+?)\s+order\s+cost\s+(.+?)\s+holding\s+cost\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
         if m_eoq:
-            return f"set {m_eoq.group(4)} to logistics_eoq({m_eoq.group(1)}, {m_eoq.group(2)}, {m_eoq.group(3)})"
+            return f"set {m_eoq.group(4)} to logistics_economic_order_quantity({m_eoq.group(1)}, {m_eoq.group(2)}, {m_eoq.group(3)})"
 
         m_rop = re.match(r"^calculate\s+reorder\s+point\s+for\s+lead\s+time\s+(.+?)\s+daily\s+demand\s+(.+?)(?:\s+safety\s+stock\s+(.+?))?\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
         if m_rop:
-            ss = m_rop.group(3) or "0.0"
+            ss = m_rop.group(3) if m_rop.group(3) else "0.0"
             return f"set {m_rop.group(4)} to logistics_reorder_point({m_rop.group(1)}, {m_rop.group(2)}, {ss})"
 
         m_ss = re.match(r"^calculate\s+safety\s+stock\s+for\s+z\s+(.+?)\s+std\s+demand\s+(.+?)\s+lead\s+time\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
@@ -21,6 +21,14 @@ class LogisticsDomainParser(DomainParser):
         m_tsp = re.match(r"^solve\s+tsp\s+nearest\s+neighbor\s+for\s+matrix\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
         if m_tsp:
             return f"set {m_tsp.group(2)} to logistics_tsp_nearest_neighbor({m_tsp.group(1)})"
+
+        m_nv = re.match(r"^calculate\s+newsvendor\s+cost\s+(.+?)\s+price\s+(.+?)\s+salvage\s+(.+?)\s+demand\s+(.+?)\s+std\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
+        if m_nv:
+            return f"set {m_nv.group(6)} to logistics_newsvendor_optimal({m_nv.group(1)}, {m_nv.group(2)}, {m_nv.group(3)}, {m_nv.group(4)}, {m_nv.group(5)})"
+
+        m_bull = re.match(r"^calculate\s+bullwhip\s+effect\s+orders\s+(.+?)\s+demand\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
+        if m_bull:
+            return f"set {m_bull.group(3)} to logistics_bullwhip_effect({m_bull.group(1)}, {m_bull.group(2)})"
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

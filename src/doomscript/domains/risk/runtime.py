@@ -1,17 +1,15 @@
-"""Risk Management Domain Runtime: Value-at-Risk, CVaR, Drawdown, and Risk-Adjusted Ratios."""
+"""Risk Management Domain Runtime: VaR, CVaR, Drawdown, Sharpe/Sortino/Calmar, and Portfolio Volatility."""
 import math
 from typing import List, Dict, Any
 
 def risk_value_at_risk_historical(returns: List[float], confidence: float = 0.95) -> float:
-    """Historical Value at Risk (VaR). Returns the loss threshold at given confidence level (e.g. 0.95)."""
+    """Historical Value at Risk (VaR). Returns the loss threshold at given confidence level."""
     if not returns:
         return 0.0
     sorted_ret = sorted([float(r) for r in returns])
-    # VaR is the negative of the quantile loss
     idx = int((1.0 - float(confidence)) * len(sorted_ret))
     idx = max(0, min(len(sorted_ret) - 1, idx))
     val = sorted_ret[idx]
-    # Return as positive loss magnitude if negative, or negative if positive
     return round(-val if val < 0 else 0.0, 4)
 
 def risk_conditional_var(returns: List[float], confidence: float = 0.95) -> float:
@@ -70,3 +68,21 @@ def risk_sortino_ratio(returns: List[float], target_return: float = 0.0) -> floa
     if downside_std == 0.0:
         return 0.0
     return round((mean_r - target) / downside_std, 4)
+
+def risk_calmar_ratio(annualized_return: float, max_drawdown: float) -> float:
+    """Computes Calmar Ratio = Annualized Return / Maximum Drawdown."""
+    mdd = abs(float(max_drawdown))
+    if mdd <= 0.0:
+        return 0.0
+    return round(float(annualized_return) / mdd, 3)
+
+def risk_portfolio_volatility(weights: List[float], covariance_matrix: List[List[float]]) -> float:
+    """Calculates total portfolio volatility sigma_p = sqrt(w^T * Sigma * w)."""
+    w = [float(x) for x in weights]
+    n = len(w)
+    var = 0.0
+    for i in range(n):
+        for j in range(n):
+            cov_ij = float(covariance_matrix[i][j]) if i < len(covariance_matrix) and j < len(covariance_matrix[i]) else 0.0
+            var += w[i] * w[j] * cov_ij
+    return round(math.sqrt(max(0.0, var)), 4)

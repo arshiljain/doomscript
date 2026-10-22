@@ -24,6 +24,14 @@ class RiskDomainParser(DomainParser):
         m_sortino = re.match(r"^calculate\s+sortino\s+ratio\s+for\s+returns\s+(.+?)\s+target\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
         if m_sortino:
             return f"set {m_sortino.group(3)} to risk_sortino_ratio({m_sortino.group(1)}, {m_sortino.group(2)})"
+
+        m_calmar = re.match(r"^calculate\s+calmar\s+ratio\s+for\s+return\s+(.+?)\s+mdd\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
+        if m_calmar:
+            return f"set {m_calmar.group(3)} to risk_calmar_ratio({m_calmar.group(1)}, {m_calmar.group(2)})"
+
+        m_pvol = re.match(r"^calculate\s+portfolio\s+volatility\s+weights\s+(.+?)\s+covariance\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
+        if m_pvol:
+            return f"set {m_pvol.group(3)} to risk_portfolio_volatility({m_pvol.group(1)}, {m_pvol.group(2)})"
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

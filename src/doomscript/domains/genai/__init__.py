@@ -3,37 +3,42 @@ from doomscript.domains.base import DomainContract, DomainRuntime, VerbSpec
 from doomscript.domains.registry import get_domain_registry
 from doomscript.domains.genai.runtime import (
     genai_chunk_text, genai_cosine_similarity, genai_retrieve_top_k,
-    genai_estimate_tokens, genai_apply_template
+    genai_estimate_tokens, genai_apply_template, genai_bm25_score,
+    genai_reciprocal_rank_fusion, genai_softmax_sample,
+    genai_detect_prompt_injection, genai_rouge_l, genai_bleu_score
 )
 from doomscript.domains.genai.parser import GenaiDomainParser
 from doomscript.domains.genai.exporter import GenaiASTExporter
 
-class GenaiRuntime(DomainRuntime):
+class GenAIRuntime(DomainRuntime):
     def execute_ir(self, ir: Any, env: Dict[str, Any]) -> Any:
         return None
 
-class GenaiDomain(DomainContract):
+class GenAIDomain(DomainContract):
     name = "genai"
-    aliases = ["llm", "rag", "prompts"]
-    description = "Generative AI, LLM prompting, RAG chunking, and vector retrieval"
+    aliases = ["generative_ai", "llm", "embeddings"]
+    description = "GenAI, LLMs & RAG: Vector search, chunking, BM25, RRF, prompt safety, ROUGE/BLEU"
     parser = GenaiDomainParser()
-    runtime = GenaiRuntime()
+    runtime = GenAIRuntime()
     exporter = GenaiASTExporter()
-    capabilities = ["chunk_text", "cosine_similarity", "estimate_tokens", "apply_template"]
+    capabilities = ["chunk_text", "cosine_similarity", "retrieve_top_k", "estimate_tokens", "prompt_template", "bm25", "rrf", "prompt_injection", "rouge", "bleu"]
     verbs = [
-        VerbSpec(pattern="chunk text {t:expr} with size {s:expr} overlap {o:expr} into {target:ident}", description="Split text into overlapping chunks"),
-        VerbSpec(pattern="calculate cosine similarity between {v1:expr} and {v2:expr} into {target:ident}", description="Compute cosine similarity between two vectors")
+        VerbSpec(pattern="calculate cosine similarity between {v1:expr} and {v2:expr} into {target:ident}", description="Cosine similarity"),
+        VerbSpec(pattern="fuse rankings for lists {lists:expr} into {target:ident}", description="RRF rank fusion"),
+        VerbSpec(pattern="check prompt injection for text {text:expr} into {target:ident}", description="Prompt injection detection")
     ]
     blocks = []
     def can_handle_line(self, line: str) -> bool:
         s = line.strip().lower()
-        return s.startswith("chunk text ") or s.startswith("calculate cosine similarity ") or s.startswith("estimate token count ") or s.startswith("apply prompt template ")
+        return s.startswith("chunk text ") or s.startswith("calculate cosine similarity ") or s.startswith("estimate token count ") or s.startswith("apply prompt template ") or s.startswith("fuse rankings ") or s.startswith("check prompt injection ") or s.startswith("calculate rouge score ") or s.startswith("calculate bleu score ")
 
-GENAI_DOMAIN = GenaiDomain()
+GENAI_DOMAIN = GenAIDomain()
 get_domain_registry().register(GENAI_DOMAIN)
 
 __all__ = [
-    "GenaiDomain", "GENAI_DOMAIN", "GenaiRuntime",
+    "GenAIDomain", "GENAI_DOMAIN", "GenAIRuntime",
     "genai_chunk_text", "genai_cosine_similarity", "genai_retrieve_top_k",
-    "genai_estimate_tokens", "genai_apply_template"
+    "genai_estimate_tokens", "genai_apply_template", "genai_bm25_score",
+    "genai_reciprocal_rank_fusion", "genai_softmax_sample",
+    "genai_detect_prompt_injection", "genai_rouge_l", "genai_bleu_score"
 ]

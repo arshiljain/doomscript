@@ -2,8 +2,9 @@ from typing import Any, Dict
 from doomscript.domains.base import DomainContract, DomainRuntime, VerbSpec
 from doomscript.domains.registry import get_domain_registry
 from doomscript.domains.climate.runtime import (
-    climate_dew_point, climate_heat_index, climate_barometric_pressure,
-    climate_co2_equivalent
+    climate_dew_point, climate_heat_index, climate_wind_chill,
+    climate_vapor_pressure_deficit, climate_barometric_altitude,
+    climate_co2_equivalent, climate_radiative_forcing
 )
 from doomscript.domains.climate.parser import ClimateDomainParser
 from doomscript.domains.climate.exporter import ClimateASTExporter
@@ -14,26 +15,29 @@ class ClimateRuntime(DomainRuntime):
 
 class ClimateDomain(DomainContract):
     name = "climate"
-    aliases = ["meteorology", "weather", "carbon"]
-    description = "Climate science, meteorology, dew point, heat index, and carbon accounting"
+    aliases = ["meteorology", "weather", "atmosphere"]
+    description = "Meteorology & climate: Dew point, heat index, wind chill, VPD, and radiative forcing"
     parser = ClimateDomainParser()
     runtime = ClimateRuntime()
     exporter = ClimateASTExporter()
-    capabilities = ["dew_point", "heat_index", "barometric_pressure", "co2_equivalent"]
+    capabilities = ["dew_point", "heat_index", "wind_chill", "vpd", "barometric_pressure", "co2_equivalent", "radiative_forcing"]
     verbs = [
-        VerbSpec(pattern="calculate dew point for temperature {t:expr} humidity {rh:expr} into {target:ident}", description="Calculate dew point"),
-        VerbSpec(pattern="convert emissions {amt:expr} of gas {g:expr} to co2 equivalent into {target:ident}", description="GHG GWP conversion")
+        VerbSpec(pattern="calculate dew point for temperature {t:expr} humidity {h:expr} into {target:ident}", description="Dew point"),
+        VerbSpec(pattern="calculate wind chill for temperature {t:expr} wind {w:expr} into {target:ident}", description="Wind chill"),
+        VerbSpec(pattern="calculate vpd for temperature {t:expr} humidity {h:expr} into {target:ident}", description="VPD"),
+        VerbSpec(pattern="calculate radiative forcing for co2 {ppm:expr} into {target:ident}", description="Radiative forcing")
     ]
     blocks = []
     def can_handle_line(self, line: str) -> bool:
         s = line.strip().lower()
-        return s.startswith("calculate dew point ") or s.startswith("calculate heat index ") or s.startswith("calculate barometric pressure ") or s.startswith("convert emissions ")
+        return s.startswith("calculate dew point ") or s.startswith("calculate heat index ") or s.startswith("calculate wind chill ") or s.startswith("calculate vpd ") or s.startswith("calculate barometric pressure ") or s.startswith("convert emissions ") or s.startswith("calculate radiative forcing ")
 
 CLIMATE_DOMAIN = ClimateDomain()
 get_domain_registry().register(CLIMATE_DOMAIN)
 
 __all__ = [
     "ClimateDomain", "CLIMATE_DOMAIN", "ClimateRuntime",
-    "climate_dew_point", "climate_heat_index", "climate_barometric_pressure",
-    "climate_co2_equivalent"
+    "climate_dew_point", "climate_heat_index", "climate_wind_chill",
+    "climate_vapor_pressure_deficit", "climate_barometric_altitude",
+    "climate_co2_equivalent", "climate_radiative_forcing"
 ]

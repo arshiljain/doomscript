@@ -13,6 +13,10 @@ class EcologyDomainParser(DomainParser):
         if m_simp:
             return f"set {m_simp.group(2)} to ecology_simpson_diversity({m_simp.group(1)})"
 
+        m_piel = re.match(r"^calculate\s+pielou\s+evenness\s+for\s+abundances\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
+        if m_piel:
+            return f"set {m_piel.group(2)} to ecology_pielou_evenness({m_piel.group(1)})"
+
         m_lv = re.match(r"^step\s+lotka\s+volterra\s+prey\s+(.+?)\s+pred\s+(.+?)\s+alpha\s+(.+?)\s+beta\s+(.+?)\s+gamma\s+(.+?)\s+delta\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
         if m_lv:
             return f"set {m_lv.group(7)} to ecology_lotka_volterra_step({m_lv.group(1)}, {m_lv.group(2)}, {m_lv.group(3)}, {m_lv.group(4)}, {m_lv.group(5)}, {m_lv.group(6)})"
@@ -20,6 +24,10 @@ class EcologyDomainParser(DomainParser):
         m_log = re.match(r"^calculate\s+logistic\s+growth\s+for\s+n0\s+(.+?)\s+r\s+(.+?)\s+k\s+(.+?)\s+time\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
         if m_log:
             return f"set {m_log.group(5)} to ecology_logistic_growth({m_log.group(1)}, {m_log.group(2)}, {m_log.group(3)}, {m_log.group(4)})"
+
+        m_lp = re.match(r"^estimate\s+population\s+marked\s+(.+?)\s+captured\s+(.+?)\s+recaptured\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
+        if m_lp:
+            return f"set {m_lp.group(4)} to ecology_lincoln_petersen_estimate({m_lp.group(1)}, {m_lp.group(2)}, {m_lp.group(3)})"
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

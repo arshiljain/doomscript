@@ -16,6 +16,14 @@ class ForensicsDomainParser(DomainParser):
         m_b64 = re.match(r"^deobfuscate\s+nested\s+base64\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
         if m_b64:
             return f"set {m_b64.group(2)} to forensics_deobfuscate_base64({m_b64.group(1)})"
+
+        m_dga = re.match(r"^check\s+dga\s+domain\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
+        if m_dga:
+            return f"set {m_dga.group(2)} to forensics_dga_score({m_dga.group(1)})"
+
+        m_sled = re.match(r"^check\s+nop\s+sled\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
+        if m_sled:
+            return f"set {m_sled.group(2)} to forensics_detect_shellcode_nop_sled({m_sled.group(1)})"
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

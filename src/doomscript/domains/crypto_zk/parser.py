@@ -2,24 +2,36 @@ import re
 from typing import Optional
 from doomscript.domains.base import DomainParser
 
-class CryptoZkDomainParser(DomainParser):
+class Crypto_zkDomainParser(DomainParser):
     def parse_line(self, line: str) -> Optional[str]:
         s = line.strip()
         m_split = re.match(r"^split\s+secret\s+(.+?)\s+into\s+(\d+|[A-Za-z_]\w*)\s+shares\s+with\s+threshold\s+(\d+|[A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
         if m_split:
-            return f"set {m_split.group(4)} to zk_shamir_split({m_split.group(1)}, {m_split.group(2)}, {m_split.group(3)})"
+            return f"set {m_split.group(4)} to crypto_shamir_split({m_split.group(1)}, {m_split.group(2)}, {m_split.group(3)})"
 
         m_rec = re.match(r"^reconstruct\s+secret\s+from\s+shares\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
         if m_rec:
-            return f"set {m_rec.group(2)} to zk_shamir_reconstruct({m_rec.group(1)})"
+            return f"set {m_rec.group(2)} to crypto_shamir_reconstruct({m_rec.group(1)})"
 
         m_ped = re.match(r"^create\s+pedersen\s+commitment\s+for\s+message\s+(.+?)\s+with\s+blinding\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
         if m_ped:
-            return f"set {m_ped.group(3)} to zk_pedersen_commit({m_ped.group(1)}, {m_ped.group(2)})"
+            return f"set {m_ped.group(3)} to crypto_pedersen_commit({m_ped.group(1)}, {m_ped.group(2)})"
 
         m_dh = re.match(r"^perform\s+diffie\s+hellman\s+between\s+private\s+(.+?)\s+and\s+public\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
         if m_dh:
-            return f"set {m_dh.group(3)} to zk_diffie_hellman({m_dh.group(1)}, {m_dh.group(2)})"
+            return f"set {m_dh.group(3)} to crypto_diffie_hellman({m_dh.group(1)}, {m_dh.group(2)})"
+
+        m_merkle = re.match(r"^build\s+merkle\s+tree\s+for\s+leaves\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
+        if m_merkle:
+            return f"set {m_merkle.group(2)} to crypto_merkle_tree({m_merkle.group(1)})"
+
+        m_schnorr = re.match(r"^generate\s+schnorr\s+zk\s+proof\s+for\s+secret\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
+        if m_schnorr:
+            return f"set {m_schnorr.group(2)} to crypto_schnorr_prove({m_schnorr.group(1)})"
+
+        m_schnorr_v = re.match(r"^verify\s+schnorr\s+zk\s+proof\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
+        if m_schnorr_v:
+            return f"set {m_schnorr_v.group(2)} to crypto_schnorr_verify_proof({m_schnorr_v.group(1)})"
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

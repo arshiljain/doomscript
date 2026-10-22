@@ -13,13 +13,25 @@ class ClimateDomainParser(DomainParser):
         if m_hi:
             return f"set {m_hi.group(3)} to climate_heat_index({m_hi.group(1)}, {m_hi.group(2)})"
 
-        m_baro = re.match(r"^calculate\s+barometric\s+pressure\s+at\s+altitude\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
-        if m_baro:
-            return f"set {m_baro.group(2)} to climate_barometric_pressure({m_baro.group(1)})"
+        m_wc = re.match(r"^calculate\s+wind\s+chill\s+for\s+temperature\s+(.+?)\s+wind\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
+        if m_wc:
+            return f"set {m_wc.group(3)} to climate_wind_chill({m_wc.group(1)}, {m_wc.group(2)})"
+
+        m_vpd = re.match(r"^calculate\s+vpd\s+for\s+temperature\s+(.+?)\s+humidity\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
+        if m_vpd:
+            return f"set {m_vpd.group(3)} to climate_vapor_pressure_deficit({m_vpd.group(1)}, {m_vpd.group(2)})"
+
+        m_press = re.match(r"^calculate\s+barometric\s+pressure\s+at\s+altitude\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
+        if m_press:
+            return f"set {m_press.group(2)} to climate_barometric_altitude({m_press.group(1)})"
 
         m_co2 = re.match(r"^convert\s+emissions\s+(.+?)\s+of\s+gas\s+(.+?)\s+to\s+co2\s+equivalent\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
         if m_co2:
             return f"set {m_co2.group(3)} to climate_co2_equivalent({m_co2.group(1)}, {m_co2.group(2)})"
+
+        m_rad = re.match(r"^calculate\s+radiative\s+forcing\s+for\s+co2\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
+        if m_rad:
+            return f"set {m_rad.group(2)} to climate_radiative_forcing({m_rad.group(1)})"
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

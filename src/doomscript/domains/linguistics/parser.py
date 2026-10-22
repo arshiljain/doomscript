@@ -9,6 +9,10 @@ class LinguisticsDomainParser(DomainParser):
         if m_dist:
             return f"set {m_dist.group(3)} to ling_levenshtein_distance({m_dist.group(1)}, {m_dist.group(2)})"
 
+        m_jw = re.match(r"^calculate\s+jaro\s+winkler\s+for\s+word1\s+(.+?)\s+word2\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
+        if m_jw:
+            return f"set {m_jw.group(3)} to ling_jaro_winkler({m_jw.group(1)}, {m_jw.group(2)})"
+
         m_snd = re.match(r"^calculate\s+soundex\s+for\s+word\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
         if m_snd:
             return f"set {m_snd.group(2)} to ling_soundex({m_snd.group(1)})"
@@ -20,6 +24,10 @@ class LinguisticsDomainParser(DomainParser):
         m_read = re.match(r"^calculate\s+flesch\s+readability\s+for\s+text\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
         if m_read:
             return f"set {m_read.group(2)} to ling_flesch_reading_ease({m_read.group(1)})"
+
+        m_fog = re.match(r"^calculate\s+gunning\s+fog\s+for\s+text\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
+        if m_fog:
+            return f"set {m_fog.group(2)} to ling_gunning_fog({m_fog.group(1)})"
 
         m_ttr = re.match(r"^calculate\s+lexical\s+diversity\s+for\s+text\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
         if m_ttr:
