@@ -1055,8 +1055,10 @@ def ds_coalesce(val, default):
     return default if val is None else val
 
 
-def ds_sorted_by(collection, key: str, reverse: bool = False):
+def ds_sorted_by(collection, key: str, reverse: bool = False, descending: bool = None):
     """Returns a sorted list of dicts/Records/objects by key attribute."""
+    if descending is not None:
+        reverse = descending
     def key_fn(item):
         if isinstance(item, dict):
             val = item.get(key, 0)
@@ -1096,6 +1098,179 @@ def ds_lowercase(text):
 def ds_reversed(collection):
     """Returns a reversed copy of the collection."""
     return list(reversed(collection))
+
+
+def ds_wait_until(predicate, timeout=30.0, poll_interval=0.05, seconds=None):
+    """Wait until predicate() returns truthy, raising DoomTimeoutError if timeout exceeded."""
+    import time
+    if seconds is not None:
+        timeout = seconds
+    timeout = float(timeout)
+    start = time.time()
+    while True:
+        try:
+            res = predicate()
+            if res:
+                return res
+        except Exception:
+            pass
+        if time.time() - start >= timeout:
+            from doomscript.exceptions import DoomTimeoutError
+            raise DoomTimeoutError(f"Condition not met within {timeout} seconds")
+        time.sleep(poll_interval)
+
+
+def ds_time_ago(**kwargs):
+    """Returns a datetime offset in the past (e.g. days=3)."""
+    from datetime import datetime, timedelta
+    return datetime.now() - timedelta(**kwargs)
+
+
+def ds_time_from_now(**kwargs):
+    """Returns a datetime offset in the future (e.g. days=3)."""
+    from datetime import datetime, timedelta
+    return datetime.now() + timedelta(**kwargs)
+
+
+def ds_interval(n, unit="seconds"):
+    """Periodic pulse generator for 'every N units:' loops."""
+    import time
+    multiplier = 1.0
+    u = unit.lower()
+    if u in ("minutes", "minute", "mins", "min"):
+        multiplier = 60.0
+    elif u in ("hours", "hour", "hrs", "hr"):
+        multiplier = 3600.0
+    elif u in ("ms", "milliseconds", "millisecond"):
+        multiplier = 0.001
+    sleep_sec = float(n) * multiplier
+    pulse_count = 0
+    while True:
+        yield pulse_count
+        pulse_count += 1
+        time.sleep(sleep_sec)
+
+
+def ds_clamp(val, min_v, max_v):
+    """Clamp a value between minimum and maximum bounds."""
+    return max(min_v, min(max_v, val))
+
+
+def ds_union(a, b):
+    """Returns the set union of two collections as a list preserving order."""
+    res = list(a)
+    seen = set(res)
+    for x in b:
+        if x not in seen:
+            seen.add(x)
+            res.append(x)
+    return res
+
+
+def ds_intersection(a, b):
+    """Returns the set intersection of two collections as a list."""
+    b_set = set(b)
+    return [x for x in a if x in b_set]
+
+
+def ds_difference(a, b):
+    """Returns elements in a that are not in b."""
+    b_set = set(b)
+    return [x for x in a if x not in b_set]
+
+
+def ds_most(coll, predicate):
+    """Returns True if strictly more than 50% of items satisfy predicate."""
+    items = list(coll)
+    if not items:
+        return False
+    return sum(1 for x in items if predicate(x)) > (len(items) * 0.5)
+
+
+def ds_almost_all(coll, predicate):
+    """Returns True if at least 90% of items satisfy predicate."""
+    items = list(coll)
+    if not items:
+        return False
+    return sum(1 for x in items if predicate(x)) >= (len(items) * 0.9)
+
+
+def ds_few(coll, predicate):
+    """Returns True if at most 10% of items satisfy predicate."""
+    items = list(coll)
+    if not items:
+        return True
+    return sum(1 for x in items if predicate(x)) <= (len(items) * 0.1)
+
+
+_ENTITY_ALLOWED_STATES = {}
+
+def ds_register_states(entity_name, states):
+    """Registers allowed state values for an entity."""
+    _ENTITY_ALLOWED_STATES[str(entity_name).lower()] = [str(s).strip("'\"").lower() for s in states]
+
+
+def ds_transition(entity, target_state, expected_current=None):
+    """Transitions entity to target_state with validation."""
+    cname = getattr(entity, "__class__", type(entity)).__name__.lower()
+    allowed = _ENTITY_ALLOWED_STATES.get(cname)
+    target_clean = str(target_state).strip("'\"").lower()
+    if allowed and target_clean not in allowed:
+        from doomscript.exceptions import DoomValueError
+        raise DoomValueError(f"Invalid state '{target_state}' for {cname.capitalize()}. Allowed states: {allowed}")
+    
+    current = getattr(entity, "status", getattr(entity, "state", None))
+    if expected_current is not None:
+        exp_clean = str(expected_current).strip("'\"").lower()
+        if str(current).lower() != exp_clean:
+            from doomscript.exceptions import DoomValueError
+            raise DoomValueError(f"Cannot transition {cname.capitalize()} from '{current}': expected '{expected_current}'")
+    
+    if hasattr(entity, "status"):
+        entity.status = target_clean
+    else:
+        entity.state = target_clean
+    return entity
+
+
+def ds_get_children(obj):
+    """Retrieve child nodes or elements of a hierarchical object."""
+    if hasattr(obj, "children"):
+        return obj.children
+    if hasattr(obj, "get_children"):
+        return obj.get_children()
+    return []
+
+
+def ds_get_parent(obj):
+    """Retrieve parent node of a hierarchical object."""
+    if hasattr(obj, "parent"):
+        return obj.parent
+    if hasattr(obj, "get_parent"):
+        return obj.get_parent()
+    return None
+
+
+def ds_pipeline(source_coll, *operations):
+    """Executes a chain of functional pipeline transformations on a collection."""
+    current = source_coll
+    for op in operations:
+        current = op(current)
+    return current
+
+
+def ds_safe_access(getter_fn, default=None):
+    """Safely evaluates getter_fn, returning default if AttributeError, KeyError, or IndexError is raised."""
+    try:
+        val = getter_fn()
+        return default if val is None else val
+    except (AttributeError, KeyError, IndexError, TypeError):
+        return default
+
+
+def ds_group_by(collection, key_field: str):
+    """Groups records or dicts by a key field into a Record of lists."""
+    return group_by(collection, key_field)
 
 
 def ds_percent_of(pct, total):

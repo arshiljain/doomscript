@@ -58,6 +58,7 @@ def stem_verb(verb: str) -> str:
 
 
 _PENDING_RELATIONS: List[Tuple[str, str, str, str, str]] = []
+_ALL_RELATIONS: List[Tuple[str, str, str, str, str]] = []
 _ENTITY_REGISTRY: Dict[str, type] = {}
 
 
@@ -83,8 +84,7 @@ def _apply_has_one(owner_cls: type, prop_name: str, target_cls: type, inv_name: 
 
 def _resolve_pending_relations() -> None:
     global _PENDING_RELATIONS
-    remaining = []
-    for rel_type, owner, a, target, b in _PENDING_RELATIONS:
+    for rel_type, owner, a, target, b in _ALL_RELATIONS:
         o_cls = _ENTITY_REGISTRY.get(owner) if isinstance(owner, str) else owner
         t_cls = _ENTITY_REGISTRY.get(target) if isinstance(target, str) else target
         if o_cls is not None and t_cls is not None:
@@ -94,9 +94,6 @@ def _resolve_pending_relations() -> None:
                 _apply_has_one(o_cls, a, t_cls, b)
             elif rel_type == "belongs_to":
                 _apply_has_many(t_cls, b, o_cls, a)
-        else:
-            remaining.append((rel_type, owner, a, target, b))
-    _PENDING_RELATIONS = remaining
 
 
 class DoomEntity(Record):
@@ -228,6 +225,7 @@ def ds_register_relation_has_many(owner_cls, col_name: str, target_cls, inv_name
         _ENTITY_REGISTRY[o_name] = owner_cls
     if isinstance(target_cls, type):
         _ENTITY_REGISTRY[t_name] = target_cls
+    _ALL_RELATIONS.append(("has_many", o_name, col_name, t_name, inv_name))
     _PENDING_RELATIONS.append(("has_many", o_name, col_name, t_name, inv_name))
     _resolve_pending_relations()
 
@@ -240,6 +238,7 @@ def ds_register_relation_belongs_to(owner_cls, inv_name: str, target_cls, col_na
         _ENTITY_REGISTRY[o_name] = owner_cls
     if isinstance(target_cls, type):
         _ENTITY_REGISTRY[t_name] = target_cls
+    _ALL_RELATIONS.append(("belongs_to", o_name, inv_name, t_name, col_name))
     _PENDING_RELATIONS.append(("belongs_to", o_name, inv_name, t_name, col_name))
     _resolve_pending_relations()
 
@@ -252,5 +251,6 @@ def ds_register_relation_has_one(owner_cls, prop_name: str, target_cls, inv_name
         _ENTITY_REGISTRY[o_name] = owner_cls
     if isinstance(target_cls, type):
         _ENTITY_REGISTRY[t_name] = target_cls
+    _ALL_RELATIONS.append(("has_one", o_name, prop_name, t_name, inv_name))
     _PENDING_RELATIONS.append(("has_one", o_name, prop_name, t_name, inv_name))
     _resolve_pending_relations()

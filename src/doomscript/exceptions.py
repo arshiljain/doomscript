@@ -134,6 +134,11 @@ class DoomRuntimeError(DoomError, RuntimeError):
     pass
 
 
+class DoomTimeoutError(DoomError, TimeoutError):
+    """Raised when an operation or polling guard exceeds its timeout deadline."""
+    pass
+
+
 class DoomRecursionError(DoomError, RecursionError):
     """Raised when maximum recursion depth is exceeded."""
     pass
@@ -169,6 +174,7 @@ EXCEPTION_CLASS_MAP = [
     (ImportError, DoomImportError),
     (OverflowError, DoomOverflowError),
     (LookupError, DoomLookupError),
+    (TimeoutError, DoomTimeoutError),
     (RuntimeError, DoomRuntimeError),
 ]
 

@@ -286,6 +286,8 @@ class ScopeTracker:
             "last_var": None,
             "last_singular": None,
             "last_plural": None,
+            "last_subject": None,
+            "last_object": None,
             "diverged": False,
             "in_class": False,
         }]
@@ -300,6 +302,10 @@ class ScopeTracker:
                 self.scopes[-1]["last_singular"] = popped["last_singular"]
             if self.scopes[-1]["last_plural"] is None and not popped["diverged"]:
                 self.scopes[-1]["last_plural"] = popped["last_plural"]
+            if self.scopes[-1].get("last_subject") is None and not popped["diverged"]:
+                self.scopes[-1]["last_subject"] = popped.get("last_subject")
+            if self.scopes[-1].get("last_object") is None and not popped["diverged"]:
+                self.scopes[-1]["last_object"] = popped.get("last_object")
 
         # If indent increased, push new scope inheriting current discourse referents
         if indent > self.scopes[-1]["indent"]:
@@ -308,6 +314,8 @@ class ScopeTracker:
                 "last_var": self.scopes[-1]["last_var"],
                 "last_singular": self.scopes[-1]["last_singular"],
                 "last_plural": self.scopes[-1]["last_plural"],
+                "last_subject": self.scopes[-1].get("last_subject"),
+                "last_object": self.scopes[-1].get("last_object"),
                 "diverged": False,
                 "in_class": self.scopes[-1]["in_class"],
             })
@@ -328,6 +336,11 @@ class ScopeTracker:
             self.scopes[-1]["last_singular"] = var_name
         else:
             lower = var_name.lower()
+            if lower in ("sender", "actor", "author", "creator", "caller", "source", "user"):
+                self.scopes[-1]["last_subject"] = var_name
+            elif lower in ("recipient", "target", "receiver", "callee", "dest", "destination"):
+                self.scopes[-1]["last_object"] = var_name
+
             if lower.endswith(("s", "list", "array", "collection", "batch", "data", "records", "items", "results", "table")) and not lower.endswith(("is", "ss", "us")):
                 self.scopes[-1]["last_plural"] = var_name
             else:
@@ -347,6 +360,12 @@ class ScopeTracker:
 
     def get_last_plural(self) -> Optional[str]:
         return self.scopes[-1]["last_plural"]
+
+    def get_last_subject(self) -> Optional[str]:
+        return self.scopes[-1].get("last_subject") or self.scopes[-1].get("last_singular") or self.scopes[-1].get("last_var")
+
+    def get_last_object(self) -> Optional[str]:
+        return self.scopes[-1].get("last_object") or self.scopes[-1].get("last_singular") or self.scopes[-1].get("last_var")
 
     @property
     def in_class(self) -> bool:
@@ -585,7 +604,22 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
             masked = w1_lower + first_word_m.group(2)
 
     # Units of measurement normalization (numbers with units, conversions, currency)
+    # Paradigm 36: Relative Time Offsets (before and after units normalization)
+    def _repl_time_ago(m):
+        unit = m.group(2).lower().rstrip('s') + 's'
+        return f"ds_time_ago({unit}={m.group(1)})"
+
+    def _repl_time_from_now(m):
+        unit = m.group(2).lower().rstrip('s') + 's'
+        return f"ds_time_from_now({unit}={m.group(1)})"
+
+    masked = re.sub(r"\b(\d+)\s+(days?|hours?|minutes?|seconds?)\s+ago\b", _repl_time_ago, masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bin\s+(\d+)\s+(days?|hours?|minutes?|seconds?)\b", _repl_time_from_now, masked, flags=re.IGNORECASE)
+
     masked = normalize_units(masked)
+
+    masked = re.sub(r'\bin\s+make_quantity\s*\(\s*(\d+)\s*,\s*["\'](\w+)["\']\s*\)', _repl_time_from_now, masked, flags=re.IGNORECASE)
+
 
     # Normalize 'attempt' to 'try'
     if re.match(r"^attempt\b", masked, re.IGNORECASE):
@@ -740,11 +774,25 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         else:
             masked = retry_call
 
-    timeout_m = re.match(
-        r"^\s*(?:call\s+)?(.+?)\s+with\s+timeout\s+of\s+(.+?)(?:\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?))?\s*$",
+    # Paradigm 33: Synchronous Polling Guards
+    wait_until_m = re.match(
+        r"^\s*wait\s+until\s+(.+?)\s+with\s+timeout\s+of\s+(.+?)$",
         masked,
         re.IGNORECASE
     )
+    if wait_until_m:
+        masked = f"ds_wait_until(lambda: {wait_until_m.group(1).strip()}, timeout={wait_until_m.group(2).strip()})"
+    elif re.match(r"^\s*wait\s+until\s+(.+?)\s*$", masked, re.IGNORECASE):
+        wait_m = re.match(r"^\s*wait\s+until\s+(.+?)\s*$", masked, re.IGNORECASE)
+        masked = f"ds_wait_until(lambda: {wait_m.group(1).strip()})"
+
+    timeout_m = None
+    if not masked.strip().startswith("ds_wait_until("):
+        timeout_m = re.match(
+            r"^\s*(?:call\s+)?(?!wait\s+until\b)(.+?)\s+with\s+timeout\s+of\s+(.+?)(?:\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?))?\s*$",
+            masked,
+            re.IGNORECASE
+        )
     if timeout_m:
         fn_expr = timeout_m.group(1).strip()
         secs_v = timeout_m.group(2).strip()
@@ -980,6 +1028,15 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         last_sing = scope.get_last_singular() or scope.get_last_var()
         if last_sing:
             masked = re.sub(r"\bits\s+([A-Za-z_]\w*)", rf"{last_sing}.\1", masked, flags=re.IGNORECASE)
+        subj = scope.get_last_subject()
+        obj = scope.get_last_object()
+        last_pl = scope.get_last_plural() or scope.get_last_var()
+        if subj:
+            masked = re.sub(r"\bher\s+([A-Za-z_]\w*)", rf"{subj}.\1", masked, flags=re.IGNORECASE)
+        if obj:
+            masked = re.sub(r"\bhis\s+([A-Za-z_]\w*)", rf"{obj}.\1", masked, flags=re.IGNORECASE)
+        if last_pl:
+            masked = re.sub(r"\btheir\s+(?!count\b)([A-Za-z_]\w*)", rf"{last_pl}.\1", masked, flags=re.IGNORECASE)
 
     # Phase 4: Lambdas and Comprehensions in English
     # English List Comprehensions and Ranges
@@ -1375,6 +1432,15 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         if last_pl:
             masked = re.sub(r"\b(in|from|to|with|for|each)\s+(?:them|these|those)\b", rf"\1 {last_pl}", masked, flags=re.IGNORECASE)
 
+    if re.search(r"\b(to|from|with|for)\s+her\b", masked, re.IGNORECASE):
+        subj = scope.get_last_subject()
+        if subj:
+            masked = re.sub(r"\b(to|from|with|for)\s+her\b", rf"\1 {subj}", masked, flags=re.IGNORECASE)
+    if re.search(r"\b(to|from|with|for)\s+him\b", masked, re.IGNORECASE):
+        obj = scope.get_last_object()
+        if obj:
+            masked = re.sub(r"\b(to|from|with|for)\s+him\b", rf"\1 {obj}", masked, flags=re.IGNORECASE)
+
     pronoun_match = re.search(r"\b(it|that)\b", masked, re.IGNORECASE)
     if pronoun_match:
         last_var = scope.get_last_singular() or scope.get_last_var()
@@ -1426,6 +1492,15 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     # 9. Phase 2 Everyday Programming Rewrites
     masked = re.sub(r"^\s*(?:otherwise\s+if|else\s+if)\b", "elif", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*otherwise\b", "else", masked, flags=re.IGNORECASE)
+    # Paradigm 36: Relative Time Offsets
+    masked = re.sub(r"\b(\d+)\s+days?\s+ago\b", r"ds_time_ago(days=\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(\d+)\s+hours?\s+ago\b", r"ds_time_ago(hours=\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(\d+)\s+minutes?\s+ago\b", r"ds_time_ago(minutes=\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(\d+)\s+seconds?\s+ago\b", r"ds_time_ago(seconds=\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bin\s+(\d+)\s+days?\b", r"ds_time_from_now(days=\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bin\s+(\d+)\s+hours?\b", r"ds_time_from_now(hours=\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bin\s+(\d+)\s+minutes?\b", r"ds_time_from_now(minutes=\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bin\s+(\d+)\s+seconds?\b", r"ds_time_from_now(seconds=\1)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*random\s+number\b", "roll", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*open\s+window\b", "open_window", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*with\s+(.+?)\s+(?:as|into)\s+([A-Za-z_]\w*)\s*:?", r"with \1 into \2:", masked, flags=re.IGNORECASE)
@@ -1784,6 +1859,12 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         masked,
         flags=re.IGNORECASE
     )
+    masked = re.sub(
+        r"\b([A-Za-z_]\w*)\[([^\]]+)\]\s+(?:otherwise|default)\s+([^\s,:\);]+(?:\s+[^\s,:\);]+)*)",
+        r"ds_attr(\1, \2, \3)",
+        masked,
+        flags=re.IGNORECASE
+    )
     if not is_verify_stmt:
         def _coal_repl(m):
             w = m.group(1)
@@ -1905,7 +1986,9 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     )
 
     # Elliptical branching: if so: / if not:
-    masked = re.sub(r"^\s*if\s+so\s*:", "if that:", masked, flags=re.IGNORECASE)
+    if re.match(r"^\s*if\s+so\s*:", masked, re.IGNORECASE):
+        last_v = scope.get_last_singular() or scope.get_last_var() or "true"
+        masked = f"if {last_v}:"
     masked = re.sub(r"^\s*if\s+not\s*:", "else:", masked, flags=re.IGNORECASE)
 
     # Imperative & Nominal string case transformations
@@ -2898,6 +2981,140 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     if p_mini_m:
         masked = f"set {p_mini_m.group(2)} to minify_doomscript_source({p_mini_m.group(1).strip()})"
 
+
+    # -----------------------------------------------------------------------
+    # 100 Thought-to-Code Paradigms (Clusters 1 - 10)
+    # -----------------------------------------------------------------------
+    # Paradigm 8: Reciprocal Swapping ('swap a and b')
+    swap_m = re.match(r"^\s*swap\s+([A-Za-z_]\w*)\s+and\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if swap_m:
+        masked = f"{swap_m.group(1)}, {swap_m.group(2)} = {swap_m.group(2)}, {swap_m.group(1)}"
+
+    # Paradigm 10, 46, 47: Epistemic & Contractual Assertions
+    surely_m = re.match(r"^\s*surely\s+(.+)$", masked, re.IGNORECASE)
+    if surely_m:
+        masked = f'verify that {surely_m.group(1)} otherwise "Invariant violated: surely {surely_m.group(1)}"'
+
+    pres_m = re.match(r"^\s*presumably\s+(.+)$", masked, re.IGNORECASE)
+    if pres_m:
+        masked = f'verify that {pres_m.group(1)} otherwise "Presumption failed: presumably {pres_m.group(1)}"'
+
+    req_m = re.match(r"^\s*requires\s+(.+)$", masked, re.IGNORECASE)
+    if req_m:
+        masked = f'verify that {req_m.group(1)} otherwise "Precondition failed: requires {req_m.group(1)}"'
+
+    ens_m = re.match(r"^\s*ensures\s+(.+)$", masked, re.IGNORECASE)
+    if ens_m:
+        masked = f'verify that {ens_m.group(1)} otherwise "Postcondition failed: ensures {ens_m.group(1)}"'
+
+    inv_m = re.match(r"^\s*invariant\s+(.+)$", masked, re.IGNORECASE)
+    if inv_m:
+        masked = f'verify that {inv_m.group(1)} otherwise "Invariant violated: {inv_m.group(1)}"'
+
+    # Paradigm 99: Purpose Docstring Statements
+    masked = re.sub(r"^\s*purpose:\s*(.+)$", r"# purpose: \1", masked, flags=re.IGNORECASE)
+
+    # Paradigm 18: Set-Theoretic Algebra
+    masked = re.sub(
+        r"^\s*union\s+of\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$",
+        r"set \3 to ds_union(\1, \2)",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"^\s*intersection\s+of\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$",
+        r"set \3 to ds_intersection(\1, \2)",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"^\s*difference\s+between\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$",
+        r"set \3 to ds_difference(\1, \2)",
+        masked,
+        flags=re.IGNORECASE
+    )
+    # Inline set operations
+    masked = re.sub(r"\bunion\s+of\s+([A-Za-z_]\w*)\s+and\s+([A-Za-z_]\w*)\b", r"ds_union(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bintersection\s+of\s+([A-Za-z_]\w*)\s+and\s+([A-Za-z_]\w*)\b", r"ds_intersection(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bdifference\s+between\s+([A-Za-z_]\w*)\s+and\s+([A-Za-z_]\w*)\b", r"ds_difference(\1, \2)", masked, flags=re.IGNORECASE)
+
+    # Paradigm 20: Semantic Multi-Bucket Grouping
+    masked = re.sub(
+        r"^\s*(?:group|bucket)\s+(.+?)\s+by\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)\s*$",
+        r'set \3 to ds_group_by(\1, "\2")',
+        masked,
+        flags=re.IGNORECASE
+    )
+
+    # Paradigm 66: Boundary Clamping Directives
+    clamp_m = re.match(r"^\s*clamp\s+([A-Za-z_]\w*)\s+between\s+(.+?)\s+and\s+(.+?)\s*$", masked, re.IGNORECASE)
+    if clamp_m:
+        masked = f"set {clamp_m.group(1)} to ds_clamp({clamp_m.group(1)}, {clamp_m.group(2)}, {clamp_m.group(3)})"
+
+    # Paradigm 62: Hierarchical Family Traversal
+    masked = re.sub(r"\b(?:all\s+)?children\s+of\s+([A-Za-z_]\w*)\b", r"ds_get_children(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bparent\s+of\s+([A-Za-z_]\w*)\b", r"ds_get_parent(\1)", masked, flags=re.IGNORECASE)
+
+    # Paradigm 53: Approximate Natural Quantifiers
+    masked = re.sub(
+        r"^\s*if\s+most\s+of\s+(.+?)\s+are\s+([A-Za-z_]\w*)\s*:",
+        r'if ds_most(\1, lambda _x: bool(ds_attr(_x, "\2", _x))):',
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"^\s*if\s+almost\s+all\s+(?:of\s+)?(.+?)\s+are\s+([A-Za-z_]\w*)\s*:",
+        r'if ds_almost_all(\1, lambda _x: bool(ds_attr(_x, "\2", _x))):',
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"^\s*if\s+few\s+(?:of\s+)?(.+?)\s+are\s+([A-Za-z_]\w*)\s*:",
+        r'if ds_few(\1, lambda _x: bool(ds_attr(_x, "\2", _x))):',
+        masked,
+        flags=re.IGNORECASE
+    )
+
+    # Paradigm 72: Event-Driven State Transitions
+    trans_from_m = re.match(r"^\s*transition\s+([A-Za-z_]\w*)\s+from\s+(.+?)\s+to\s+(.+?)\s*$", masked, re.IGNORECASE)
+    if trans_from_m:
+        masked = f"ds_transition({trans_from_m.group(1)}, {trans_from_m.group(3)}, {trans_from_m.group(2)})"
+    else:
+        trans_to_m = re.match(r"^\s*transition\s+([A-Za-z_]\w*)\s+to\s+(.+?)\s*$", masked, re.IGNORECASE)
+        if trans_to_m:
+            masked = f"ds_transition({trans_to_m.group(1)}, {trans_to_m.group(2)})"
+
+    # Paradigm 33: Synchronous Polling Guards
+    wait_until_m = re.match(
+        r"^\s*wait\s+until\s+(.+?)\s+with\s+timeout\s+of\s+(\d+(?:\.\d+)?)\s*(?:seconds?)?\s*$",
+        masked,
+        re.IGNORECASE
+    )
+    if wait_until_m:
+        masked = f"ds_wait_until(lambda: {wait_until_m.group(1).strip()}, timeout={wait_until_m.group(2).strip()})"
+    elif re.match(r"^\s*wait\s+until\s+(.+?)\s*$", masked, re.IGNORECASE):
+        wait_m = re.match(r"^\s*wait\s+until\s+(.+?)\s*$", masked, re.IGNORECASE)
+        masked = f"ds_wait_until(lambda: {wait_m.group(1).strip()})"
+
+
+
+    # Paradigm 86: Safe Navigation Chains
+    safe_acc_m = re.match(
+        r"^\s*safely\s+access\s+(.+?)\s+otherwise\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$",
+        masked,
+        re.IGNORECASE
+    )
+    if safe_acc_m:
+        masked = f"set {safe_acc_m.group(3)} to ds_safe_access(lambda: {safe_acc_m.group(1).strip()}, {safe_acc_m.group(2).strip()})"
+
+    say_safe_m = re.match(
+        r"^\s*say\s+safely\s+access\s+(.+?)\s+otherwise\s+(.+?)\s*$",
+        masked,
+        re.IGNORECASE
+    )
+    if say_safe_m:
+        masked = f"say ds_safe_access(lambda: {say_safe_m.group(1).strip()}, {say_safe_m.group(2).strip()})"
+
     # Restore strings
     normalized = unmask_strings(masked, strings)
 
@@ -2935,6 +3152,7 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
     plot_stack: List[Dict[str, Any]] = []
     domain_block_stack: List[Dict[str, Any]] = []
     scoped_domain_stack: List[Tuple[int, str]] = []
+    suppose_stack: List[Tuple[int, str, str]] = []
     in_research_mode: bool = False
 
     from doomscript.domains.registry import get_domain_registry
@@ -3005,6 +3223,11 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
         while scoped_domain_stack and indent_len <= scoped_domain_stack[-1][0]:
             _, d_to_pop = scoped_domain_stack.pop()
             reg.deactivate(d_to_pop)
+
+        # Pop suppose_stack if indentation returned to parent level
+        while suppose_stack and indent_len <= suppose_stack[-1][0]:
+            _, s_var, p_ind = suppose_stack.pop()
+            emit(f"{p_ind}set {s_var} to _suppose_saved_{s_var}", line_idx)
 
         # If inside active domain block, buffer line and continue
         if domain_block_stack:
@@ -3193,6 +3416,43 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
                 scoped_domain_stack.append((indent_len, dom_name))
                 emit(f"{indent}if true:  # in {dom_name}", line_idx)
                 continue
+
+        # Paradigm 44: Scoped Assumptions ('suppose <var> is <val>:')
+        suppose_m = re.match(r"^suppose\s+([A-Za-z_]\w*)\s+is\s+(.+?):$", code.strip(), re.IGNORECASE)
+        if suppose_m:
+            s_var = suppose_m.group(1)
+            s_val = suppose_m.group(2)
+            emit(f"{indent}_suppose_saved_{s_var} = {s_var}", line_idx)
+            emit(f"{indent}set {s_var} to {s_val}", line_idx)
+            emit(f"{indent}if true:", line_idx)
+            suppose_stack.append((indent_len, s_var, indent))
+            continue
+
+        # Paradigm 31: Periodic Interval Timers ('every 5 seconds:')
+        every_m = re.match(r"^every\s+(\d+(?:\.\d+)?)\s+(seconds?|minutes?|hours?|ms|milliseconds?)\s*:$", code.strip(), re.IGNORECASE)
+        if every_m:
+            n_val = every_m.group(1)
+            u_val = every_m.group(2)
+            emit(f"{indent}for _pulse in ds_interval({n_val}, '{u_val}'):", line_idx)
+            continue
+
+        # Paradigm 71: Declarative State Machine Specification
+        can_be_m = re.match(r"^(?:(?:a|an)\s+)?([A-Z]\w*)\s+can\s+be\s+(.+)$", code.strip(), re.IGNORECASE)
+        if can_be_m:
+            ent_name = can_be_m.group(1)
+            raw_states = can_be_m.group(2).strip()
+            parts = [p.strip().strip("'\"") for p in re.split(r",\s*(?:or\s+)?|\s+or\s+", raw_states) if p.strip()]
+            cleaned_states = [f'\"{p}\"' for p in parts]
+            emit(f'{indent}ds_register_states("{ent_name}", [{", ".join(cleaned_states)}])', line_idx)
+            continue
+
+        # Paradigm 89: Safe Resource Decontamination
+        safe_open_m = re.match(r"^safely\s+open\s+file\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s+ensuring\s+it\s+closes\s*:$", code.strip(), re.IGNORECASE)
+        if safe_open_m:
+            f_path = safe_open_m.group(1).strip()
+            f_var = safe_open_m.group(2).strip()
+            emit(f"{indent}with open({f_path}) as {f_var}:", line_idx)
+            continue
 
         # Check domain block header (e.g. pipeline "name" from src into target:)
         if code.rstrip().endswith(":"):
@@ -3816,6 +4076,10 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
     while scoped_domain_stack:
         _, d_to_pop = scoped_domain_stack.pop(0)
         reg.deactivate(d_to_pop)
+
+    while suppose_stack:
+        _, s_var, p_ind = suppose_stack.pop(0)
+        emit(f"{p_ind}set {s_var} to _suppose_saved_{s_var}", len(lines))
 
     res_str = "\n".join(output_lines) + ("\n" if source.endswith("\n") else "")
     return res_str, line_map
