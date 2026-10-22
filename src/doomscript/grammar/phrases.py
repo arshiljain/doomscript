@@ -3463,6 +3463,7 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
     domain_block_stack: List[Dict[str, Any]] = []
     scoped_domain_stack: List[Tuple[int, str]] = []
     suppose_stack: List[Tuple[int, str, str]] = []
+    discourse_stack: List[Dict[str, Any]] = []
     in_research_mode: bool = False
 
     from doomscript.domains.registry import get_domain_registry
@@ -3554,6 +3555,10 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
         while match_stack and indent_len <= match_stack[-1]["match_indent"]:
             match_stack.pop()
 
+        # Pop discourse_stack if indentation returned to parent level
+        while discourse_stack and indent_len <= discourse_stack[-1]["indent"]:
+            discourse_stack.pop()
+
         # Check pending deferred routes if indentation returned to parent level
         while pending_routes and indent_len <= pending_routes[-1][0]:
             _, r_stmt, r_line = pending_routes.pop()
@@ -3580,6 +3585,189 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
             continue
 
         code = canonicalize_synonyms(code)
+
+        # Phase 22: Discourse-Flow Architecture (Topic-Comment Intent Pipelining)
+        if discourse_stack and indent_len > discourse_stack[-1]["indent"]:
+            curr = discourse_stack[-1]["target"]
+            p_ind = discourse_stack[-1]["parent_indent"]
+            scope.record_assignment(curr)
+
+            m_keep = re.match(r"^(?:keep\s+only\s+|keep\s+)(?:items\s+)?where\s+(.+)$", code.strip(), re.IGNORECASE)
+            if m_keep:
+                cond = m_keep.group(1).strip()
+                var_name = "x" if re.search(r"\bx\b", cond) else "item"
+                cond_expr = f"ds_attr({var_name}, '{cond}')" if re.match(r"^[A-Za-z_]\w*$", cond) else cond
+                norm_step = normalize_statement_text(f"set {curr} to [{var_name} for {var_name} in {curr} if {cond_expr}]", scope, line_idx)
+                emit(f"{p_ind}{norm_step}", line_idx)
+                continue
+
+            m_disc = re.match(r"^(?:discard|exclude|filter\s+out)(?:\s+items)?\s+where\s+(.+)$", code.strip(), re.IGNORECASE)
+            if m_disc:
+                cond = m_disc.group(1).strip()
+                var_name = "x" if re.search(r"\bx\b", cond) else "item"
+                cond_expr = f"ds_attr({var_name}, '{cond}')" if re.match(r"^[A-Za-z_]\w*$", cond) else cond
+                norm_step = normalize_statement_text(f"set {curr} to [{var_name} for {var_name} in {curr} if not ({cond_expr})]", scope, line_idx)
+                emit(f"{p_ind}{norm_step}", line_idx)
+                continue
+
+            m_sort_plain = re.match(r"^sort(?:\s+(descending|ascending))?$", code.strip(), re.IGNORECASE)
+            if m_sort_plain:
+                order = m_sort_plain.group(1).strip() if m_sort_plain.group(1) else "ascending"
+                rev = "True" if order.lower() == "descending" else "False"
+                norm_step = normalize_statement_text(f"set {curr} to sorted({curr}, reverse={rev})", scope, line_idx)
+                emit(f"{p_ind}{norm_step}", line_idx)
+                continue
+
+            m_sort = re.match(r"^sort\s+by\s+([A-Za-z_]\w*)(?:\s+(descending|ascending))?$", code.strip(), re.IGNORECASE)
+            if m_sort:
+                field = m_sort.group(1).strip()
+                order = m_sort.group(2).strip() if m_sort.group(2) else "ascending"
+                if field.lower() in ("item", "val", "value", "it", "self"):
+                    rev = "True" if order.lower() == "descending" else "False"
+                    norm_step = normalize_statement_text(f"set {curr} to sorted({curr}, reverse={rev})", scope, line_idx)
+                else:
+                    norm_step = normalize_statement_text(f"sort {curr} by {field} {order} into {curr}", scope, line_idx)
+                emit(f"{p_ind}{norm_step}", line_idx)
+                continue
+
+            m_take = re.match(r"^(?:take\s+)?(?:first\s+|top\s+)?(\d+|[A-Za-z_]\w*)(?:\s+items)?$", code.strip(), re.IGNORECASE)
+            if m_take and (code.strip().lower().startswith(("take ", "first ", "top ")) or code.strip().isdigit()):
+                n = m_take.group(1).strip()
+                norm_step = normalize_statement_text(f"set {curr} to ds_take({curr}, {n})", scope, line_idx)
+                emit(f"{p_ind}{norm_step}", line_idx)
+                continue
+
+            m_take_last = re.match(r"^(?:take\s+)?last\s+(\d+|[A-Za-z_]\w*)(?:\s+items)?$", code.strip(), re.IGNORECASE)
+            if m_take_last:
+                n = m_take_last.group(1).strip()
+                norm_step = normalize_statement_text(f"set {curr} to ds_take_last({curr}, {n})", scope, line_idx)
+                emit(f"{p_ind}{norm_step}", line_idx)
+                continue
+
+            m_drop = re.match(r"^drop\s+(?:first\s+)?(\d+|[A-Za-z_]\w*)(?:\s+items)?$", code.strip(), re.IGNORECASE)
+            if m_drop:
+                n = m_drop.group(1).strip()
+                norm_step = normalize_statement_text(f"set {curr} to ds_drop({curr}, {n})", scope, line_idx)
+                emit(f"{p_ind}{norm_step}", line_idx)
+                continue
+
+            if re.match(r"^for\s+each\s*:?$", code.strip(), re.IGNORECASE):
+                emit(f"{p_ind}for each item in {curr}:", line_idx)
+                continue
+
+            rel_indent_len = indent_len - discourse_stack[-1]["indent"]
+            adjusted_indent = p_ind + (" " * (rel_indent_len - 4)) if rel_indent_len >= 4 else p_ind
+            norm_stmt = normalize_statement_text(code, scope, line_idx)
+            emit(f"{adjusted_indent}{norm_stmt}", line_idx)
+            continue
+
+        take_block_m = re.match(r"^(?:take|focus\s+on)\s+(.+?)(?:\s+into\s+([A-Za-z_]\w*))?\s*:$", code.strip(), re.IGNORECASE)
+        if take_block_m:
+            source_expr = take_block_m.group(1).strip()
+            target_var = take_block_m.group(2).strip() if take_block_m.group(2) else (source_expr if re.match(r"^[A-Za-z_]\w*$", source_expr) else "_topic")
+            if target_var != source_expr:
+                norm_init = normalize_statement_text(f"set {target_var} to {source_expr}", scope, line_idx)
+                emit(f"{indent}{norm_init}", line_idx)
+            discourse_stack.append({
+                "indent": indent_len,
+                "target": target_var,
+                "parent_indent": indent
+            })
+            scope.record_assignment(target_var)
+            continue
+
+        inline_discourse_m = re.match(
+            r"^(?:take|focus\s+on)\s+(.+?)(?:\s+then\s+|,\s*then\s+|,\s*|\s+)(keep\b|discard\b|filter\s+out\b|sort\s+by\b|take\s+first\b|take\s+top\b|take\s+last\b|drop\b)(.+)$",
+            code.strip(),
+            re.IGNORECASE
+        )
+        if inline_discourse_m and not code.strip().endswith(":"):
+            source_expr = inline_discourse_m.group(1).strip()
+            first_verb = inline_discourse_m.group(2).strip()
+            rest = inline_discourse_m.group(3).strip()
+            full_chain = first_verb + " " + rest
+
+            into_m = re.search(r"\s+into\s+([A-Za-z_]\w*)\s*$", full_chain, re.IGNORECASE)
+            if into_m:
+                target_var = into_m.group(1).strip()
+                chain_body = full_chain[:into_m.start()].strip()
+            else:
+                target_var = source_expr if re.match(r"^[A-Za-z_]\w*$", source_expr) else "_result"
+                chain_body = full_chain
+
+            steps = re.split(
+                r"(?:\s+then\s+|,\s*then\s+|,\s*(?=(?:keep|discard|filter|sort|take|drop)\b))",
+                chain_body,
+                flags=re.IGNORECASE
+            )
+
+            norm_init = normalize_statement_text(f"set {target_var} to {source_expr}", scope, line_idx)
+            emit(f"{indent}{norm_init}", line_idx)
+            scope.record_assignment(target_var)
+
+            for step in steps:
+                step = step.strip()
+                if not step:
+                    continue
+                m_k = re.match(r"^(?:keep\s+only\s+|keep\s+)(?:items\s+)?where\s+(.+)$", step, re.IGNORECASE)
+                if m_k:
+                    cond = m_k.group(1).strip()
+                    var_name = "x" if re.search(r"\bx\b", cond) else "item"
+                    cond_expr = f"ds_attr({var_name}, '{cond}')" if re.match(r"^[A-Za-z_]\w*$", cond) else cond
+                    norm_s = normalize_statement_text(f"set {target_var} to [{var_name} for {var_name} in {target_var} if {cond_expr}]", scope, line_idx)
+                    emit(f"{indent}{norm_s}", line_idx)
+                    continue
+
+                m_d = re.match(r"^(?:discard|exclude|filter\s+out)(?:\s+items)?\s+where\s+(.+)$", step, re.IGNORECASE)
+                if m_d:
+                    cond = m_d.group(1).strip()
+                    var_name = "x" if re.search(r"\bx\b", cond) else "item"
+                    cond_expr = f"ds_attr({var_name}, '{cond}')" if re.match(r"^[A-Za-z_]\w*$", cond) else cond
+                    norm_s = normalize_statement_text(f"set {target_var} to [{var_name} for {var_name} in {target_var} if not ({cond_expr})]", scope, line_idx)
+                    emit(f"{indent}{norm_s}", line_idx)
+                    continue
+
+                m_s_plain = re.match(r"^sort(?:\s+(descending|ascending))?$", step, re.IGNORECASE)
+                if m_s_plain:
+                    order = m_s_plain.group(1).strip() if m_s_plain.group(1) else "ascending"
+                    rev = "True" if order.lower() == "descending" else "False"
+                    norm_s = normalize_statement_text(f"set {target_var} to sorted({target_var}, reverse={rev})", scope, line_idx)
+                    emit(f"{indent}{norm_s}", line_idx)
+                    continue
+
+                m_s = re.match(r"^sort\s+by\s+([A-Za-z_]\w*)(?:\s+(descending|ascending))?$", step, re.IGNORECASE)
+                if m_s:
+                    field = m_s.group(1).strip()
+                    order = m_s.group(2).strip() if m_s.group(2) else "ascending"
+                    if field.lower() in ("item", "val", "value", "it", "self"):
+                        rev = "True" if order.lower() == "descending" else "False"
+                        norm_s = normalize_statement_text(f"set {target_var} to sorted({target_var}, reverse={rev})", scope, line_idx)
+                    else:
+                        norm_s = normalize_statement_text(f"sort {target_var} by {field} {order} into {target_var}", scope, line_idx)
+                    emit(f"{indent}{norm_s}", line_idx)
+                    continue
+
+                m_t = re.match(r"^(?:take\s+)?(?:first\s+|top\s+)?(\d+|[A-Za-z_]\w*)(?:\s+items)?$", step, re.IGNORECASE)
+                if m_t and (step.lower().startswith(("take ", "first ", "top ")) or step.isdigit()):
+                    n = m_t.group(1).strip()
+                    norm_s = normalize_statement_text(f"set {target_var} to ds_take({target_var}, {n})", scope, line_idx)
+                    emit(f"{indent}{norm_s}", line_idx)
+                    continue
+
+                m_tl = re.match(r"^(?:take\s+)?last\s+(\d+|[A-Za-z_]\w*)(?:\s+items)?$", step, re.IGNORECASE)
+                if m_tl:
+                    n = m_tl.group(1).strip()
+                    norm_s = normalize_statement_text(f"set {target_var} to ds_take_last({target_var}, {n})", scope, line_idx)
+                    emit(f"{indent}{norm_s}", line_idx)
+                    continue
+
+                m_dr = re.match(r"^drop\s+(?:first\s+)?(\d+|[A-Za-z_]\w*)(?:\s+items)?$", step, re.IGNORECASE)
+                if m_dr:
+                    n = m_dr.group(1).strip()
+                    norm_s = normalize_statement_text(f"set {target_var} to ds_drop({target_var}, {n})", scope, line_idx)
+                    emit(f"{indent}{norm_s}", line_idx)
+                    continue
+            continue
 
         # Milestone 5 & 6: Pre-split compositional blocks
         # Transfer: transfer <amt> from <src> to <dst>
