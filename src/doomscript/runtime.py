@@ -250,6 +250,50 @@ def ds_is_property(target, prop_name: str) -> bool:
     return False
 
 
+def ds_is_compare(target, word_val, prop_name: str = "") -> bool:
+    """
+    Evaluates variable equality comparison (target == word_val).
+    Warns on ambiguity if target also possesses a property/attribute/key matching prop_name or is_<prop_name>.
+    """
+    if prop_name:
+        has_prop = False
+        if isinstance(target, dict):
+            has_prop = (prop_name in target) or (f"is_{prop_name}" in target)
+        elif hasattr(target, prop_name) or hasattr(target, f"is_{prop_name}"):
+            if not prop_name.startswith("__"):
+                has_prop = True
+        if has_prop:
+            import warnings
+            warnings.warn(
+                f"Ambiguous 'is': '{prop_name}' is both a variable in scope and a property on {type(target).__name__}. Evaluated as variable equality comparison.",
+                UserWarning,
+                stacklevel=2,
+            )
+    return target == word_val
+
+
+def ds_is_not_compare(target, word_val, prop_name: str = "") -> bool:
+    """
+    Evaluates variable inequality comparison (target != word_val).
+    Warns on ambiguity if target also possesses a property/attribute/key matching prop_name or is_<prop_name>.
+    """
+    if prop_name:
+        has_prop = False
+        if isinstance(target, dict):
+            has_prop = (prop_name in target) or (f"is_{prop_name}" in target)
+        elif hasattr(target, prop_name) or hasattr(target, f"is_{prop_name}"):
+            if not prop_name.startswith("__"):
+                has_prop = True
+        if has_prop:
+            import warnings
+            warnings.warn(
+                f"Ambiguous 'is not': '{prop_name}' is both a variable in scope and a property on {type(target).__name__}. Evaluated as variable inequality comparison.",
+                UserWarning,
+                stacklevel=2,
+            )
+    return target != word_val
+
+
 def ds_query_agg(op: str, field, collection, predicate=None):
     """Declarative query aggregation over collections of dicts, Records, or primitives."""
     if collection is None:

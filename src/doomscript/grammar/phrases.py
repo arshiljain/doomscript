@@ -277,7 +277,8 @@ def canonicalize_synonyms(text: str) -> str:
 class ScopeTracker:
     """
     Maintains a stack of lexical scopes to track discourse referents:
-    both singular ('it', 'that', 'its') and plural ('them', 'these', 'those', 'their').
+    both singular ('it', 'that', 'its') and plural ('them', 'these', 'those', 'their'),
+    as well as declared variable names for scope-aware syntax disambiguation.
     """
     def __init__(self):
         # Stack of indent levels and their discourse referents
@@ -290,12 +291,24 @@ class ScopeTracker:
             "last_object": None,
             "diverged": False,
             "in_class": False,
+            "is_func": False,
+            "vars": set(),
         }]
+        self.pending_block_vars: List[str] = []
+        self._next_is_func: bool = False
+        self.builtin_vars: Set[str] = {
+            "PI", "E", "math", "random", "json", "re", "sys", "os",
+            "True", "False", "None"
+        }
 
     def update_indent(self, indent: int):
         # If indent decreased, pop deeper scopes
         while len(self.scopes) > 1 and self.scopes[-1]["indent"] > indent:
             popped = self.scopes.pop()
+            # If popped scope was not an isolated function, merge declared variables into enclosing scope
+            if not popped.get("is_func", False):
+                self.scopes[-1]["vars"].update(popped.get("vars", set()))
+
             if self.scopes[-1]["last_var"] is None and not popped["diverged"]:
                 self.scopes[-1]["last_var"] = popped["last_var"]
             if self.scopes[-1]["last_singular"] is None and not popped["diverged"]:
@@ -309,6 +322,10 @@ class ScopeTracker:
 
         # If indent increased, push new scope inheriting current discourse referents
         if indent > self.scopes[-1]["indent"]:
+            new_vars = set(self.pending_block_vars)
+            self.pending_block_vars = []
+            is_func = self._next_is_func
+            self._next_is_func = False
             self.scopes.append({
                 "indent": indent,
                 "last_var": self.scopes[-1]["last_var"],
@@ -318,18 +335,48 @@ class ScopeTracker:
                 "last_object": self.scopes[-1].get("last_object"),
                 "diverged": False,
                 "in_class": self.scopes[-1]["in_class"],
+                "is_func": is_func,
+                "vars": new_vars,
             })
+        elif indent <= self.scopes[-1]["indent"] and self.pending_block_vars:
+            self.pending_block_vars = []
+            self._next_is_func = False
+
+    def set_pending_vars(self, var_names: List[str], is_func: bool = False):
+        for v in var_names:
+            clean = re.split(r"[.\[\(\s]", v.strip())[0]
+            if clean and re.match(r"^[A-Za-z_]\w*$", clean):
+                self.pending_block_vars.append(clean)
+        self._next_is_func = is_func
+
+    def record_var(self, var_name: str):
+        clean = re.split(r"[.\[\(\s]", var_name.strip())[0]
+        if clean and re.match(r"^[A-Za-z_]\w*$", clean):
+            self.scopes[-1]["vars"].add(clean)
+
+    def is_var_in_scope(self, name: str) -> bool:
+        if not name or not re.match(r"^[A-Za-z_]\w*$", name):
+            return False
+        if name in self.builtin_vars:
+            return True
+        for s in self.scopes:
+            if name in s.get("vars", set()):
+                return True
+        return False
 
     def record_singular(self, var_name: str):
         self.scopes[-1]["last_singular"] = var_name
         self.scopes[-1]["last_var"] = var_name
+        self.record_var(var_name)
 
     def record_plural(self, var_name: str):
         self.scopes[-1]["last_plural"] = var_name
         self.scopes[-1]["last_var"] = var_name
+        self.record_var(var_name)
 
     def record_assignment(self, var_name: str, is_plural: Optional[bool] = None):
         self.scopes[-1]["last_var"] = var_name
+        self.record_var(var_name)
         if is_plural is True:
             self.scopes[-1]["last_plural"] = var_name
         elif is_plural is False:
@@ -380,6 +427,8 @@ class ScopeTracker:
 ASSIGN_VAR_PATTERNS = [
     re.compile(r"^\s*set\s+([A-Za-z_]\w*)\s+to\b", re.IGNORECASE),
     re.compile(r"^\s*([A-Za-z_]\w*)\s*=\s*(?!=\s*)"),
+    re.compile(r"^\s*let\s+([A-Za-z_]\w*)\s*=\s*", re.IGNORECASE),
+    re.compile(r"^\s*let\s+([A-Za-z_]\w*)\s+be\b", re.IGNORECASE),
     re.compile(r"^\s*increase\s+([A-Za-z_]\w*)\s+by\b", re.IGNORECASE),
     re.compile(r"^\s*decrease\s+([A-Za-z_]\w*)\s+by\b", re.IGNORECASE),
     re.compile(r"\binto\s+([A-Za-z_]\w*)\s*$", re.IGNORECASE),
@@ -1218,14 +1267,16 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         flags=re.IGNORECASE
     )
 
-    # 5. Boolean Property Ergonomics
-    _RESERVED_ADJ = {'none', 'true', 'false', 'even', 'odd', 'positive', 'negative', 'empty', 'zero', 'a', 'an', 'one', 'between', 'outside', 'inside', 'in', 'greater', 'less', 'at', 'over', 'under', 'equal', 'not'}
-    if re.match(r"^\s*(?:if|unless|while|repeat\s+while|repeat\s+until|verify(?:\s+that)?|ensure|require|assert|check(?:\s+that)?)\b", masked, re.IGNORECASE):
+        # 5. Boolean Property Ergonomics vs Variable Equality Disambiguation
+    _RESERVED_ADJ = {'none', 'true', 'false', 'even', 'odd', 'positive', 'negative', 'empty', 'zero', 'a', 'an', 'one', 'between', 'outside', 'inside', 'in', 'greater', 'less', 'at', 'over', 'under', 'equal', 'not', 'more', 'above', 'below'}
+    if re.match(r"^\s*(?:if|unless|while|repeat\s+while|repeat\s+until|verify(?:\s+that)?|ensure|require|assert|check(?:\s+that)?)\b", masked, re.IGNORECASE) or re.search(r"\([^\)]*?\bis\b[^\)]*?\)", masked, re.IGNORECASE):
         def _repl_is_prop(m):
             subj = m.group(1).strip()
             adj = m.group(2).strip()
             if adj.lower() in _RESERVED_ADJ:
                 return m.group(0)
+            if scope.is_var_in_scope(adj):
+                return f"ds_is_compare({subj}, {adj}, '{adj}')"
             return f"ds_is_property({subj}, '{adj}')"
 
         def _repl_is_not_prop(m):
@@ -1233,16 +1284,18 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
             adj = m.group(2).strip()
             if adj.lower() in _RESERVED_ADJ:
                 return m.group(0)
+            if scope.is_var_in_scope(adj):
+                return f"ds_is_not_compare({subj}, {adj}, '{adj}')"
             return f"not (ds_is_property({subj}, '{adj}'))"
 
         masked = re.sub(
-            r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+(?:is\s+not|isn't)\s+([A-Za-z_]\w+)(?=\s+(?:and|or|then|otherwise)\b|:|\n|$)",
+            r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+(?:is\s+not|isn't)\s+([A-Za-z_]\w+)(?=\s*(?:\)|and\b|or\b|then\b|otherwise\b)|:|\n|$)",
             _repl_is_not_prop,
             masked,
             flags=re.IGNORECASE
         )
         masked = re.sub(
-            r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+is\s+([A-Za-z_]\w+)(?=\s+(?:and|or|then|otherwise)\b|:|\n|$)",
+            r"\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+is\s+([A-Za-z_]\w+)(?=\s*(?:\)|and\b|or\b|then\b|otherwise\b)|:|\n|$)",
             _repl_is_prop,
             masked,
             flags=re.IGNORECASE
@@ -3927,6 +3980,70 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
             norm_act = normalize_statement_text(act, scope, line_idx)
             emit(f"{indent}{norm_act}", line_idx)
             continue
+
+                # Python module interop: use python module X [as Y], from python module X use Y
+        py_mod_m = re.match(
+            r"^\b(?:use|import)\s+python\s+module\s+([A-Za-z_][\w\.]*)(?:\s+as\s+([A-Za-z_]\w*))?$",
+            code.strip(),
+            re.IGNORECASE,
+        )
+        if py_mod_m:
+            mod_path = py_mod_m.group(1).strip()
+            as_alias = py_mod_m.group(2).strip() if py_mod_m.group(2) else None
+            bound_name = as_alias if as_alias else mod_path.split(".")[0]
+            scope.record_var(bound_name)
+            alias_part = f" as {as_alias}" if as_alias else ""
+            emit(f"{indent}use python module {mod_path}{alias_part}", line_idx)
+            continue
+
+        from_py_mod_m = re.match(
+            r"^from\s+python\s+module\s+([A-Za-z_][\w\.]*)\s+(?:use|import)\s+(.+)$",
+            code.strip(),
+            re.IGNORECASE,
+        )
+        if from_py_mod_m:
+            mod_path = from_py_mod_m.group(1).strip()
+            raw_imports = from_py_mod_m.group(2).strip()
+            for item in raw_imports.split(","):
+                item = item.strip()
+                if not item:
+                    continue
+                as_match = re.search(r"\bas\s+([A-Za-z_]\w*)$", item, re.IGNORECASE)
+                if as_match:
+                    scope.record_var(as_match.group(1).strip())
+                else:
+                    first_w = item.split()[0].strip()
+                    if re.match(r"^[A-Za-z_]\w*$", first_w):
+                        scope.record_var(first_w)
+            emit(f"{indent}from python module {mod_path} use {raw_imports}", line_idx)
+            continue
+
+        # Track function definitions and loop headers for scope variables
+        m_func_hdr = re.match(r"^\s*to\s+([A-Za-z_]\w*)(?:\s+with\s+(.+?))?:", code, re.IGNORECASE)
+        if m_func_hdr:
+            scope.record_var(m_func_hdr.group(1))
+            f_params = []
+            if m_func_hdr.group(2):
+                for p in m_func_hdr.group(2).split(","):
+                    p_clean = p.strip().split("=")[0].strip()
+                    if re.match(r"^[A-Za-z_]\w*$", p_clean):
+                        f_params.append(p_clean)
+            scope.set_pending_vars(f_params, is_func=True)
+
+        m_for_hdr = re.match(r"^\s*for\s+each\s+(.+?)\s+in\b", code, re.IGNORECASE)
+        if m_for_hdr:
+            l_vars = []
+            for v in m_for_hdr.group(1).split(","):
+                v_clean = v.strip()
+                if re.match(r"^[A-Za-z_]\w*$", v_clean):
+                    l_vars.append(v_clean)
+            if "with index" in code.lower() or "with 0-based index" in code.lower():
+                l_vars.append("index")
+            scope.set_pending_vars(l_vars, is_func=False)
+
+        m_from_hdr = re.match(r"^\s*for\s+(?:each\s+)?([A-Za-z_]\w*)\s+from\b", code, re.IGNORECASE)
+        if m_from_hdr:
+            scope.set_pending_vars([m_from_hdr.group(1).strip()], is_func=False)
 
         # Domain Activation: use <domain>, using <domain>, import <domain>, enable <domain> (supports comma and 'and' lists)
         use_domain_m = re.match(

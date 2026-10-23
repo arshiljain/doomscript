@@ -43,6 +43,8 @@ CORE_EXPORT_NAMES: frozenset[str] = frozenset([
     "ds_format_currency",
     "ds_format_percentage",
     "ds_is_property",
+    "ds_is_compare",
+    "ds_is_not_compare",
     "ds_query_agg",
     "ds_filter_val",
     "ds_percent_of",
