@@ -28,6 +28,7 @@ class MockAPIHandler(http.server.BaseHTTPRequestHandler):
 
 @pytest.fixture(scope="module")
 def mock_server():
+    socketserver.TCPServer.allow_reuse_address = True
     server = socketserver.TCPServer(("127.0.0.1", 0), MockAPIHandler)
     port = server.server_address[1]
     thread = threading.Thread(target=server.serve_forever, daemon=True)

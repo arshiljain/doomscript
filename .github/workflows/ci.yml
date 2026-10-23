@@ -37,17 +37,15 @@ jobs:
         doom check examples/todo_app.doom
 
     - name: Run Pytest test suite (Core)
-      shell: bash
       env:
         MPLBACKEND: Agg
       run: |
-        python -m pytest -v --tb=short || {
-          echo "### Test Failures on ${{ matrix.os }} Python ${{ matrix.python-version }}" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          python -m pytest --last-failed -v --tb=long >> "$GITHUB_STEP_SUMMARY" 2>&1 || true
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          exit 1
-        }
+        python -m pytest -v --tb=short
+
+    - name: Dump test failures on failure
+      if: failure()
+      run: |
+        python -m pytest --last-failed -v --tb=long
 
     - name: Run English Corpus Benchmark
       run: |
