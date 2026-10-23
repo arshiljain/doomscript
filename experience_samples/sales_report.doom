@@ -1,0 +1,18 @@
+# Make a simple audit report from messy sales data.
+# Keep paid orders above $50, sort largest first, then export.
+
+read csv file "experience_samples/sales_raw.csv" into orders
+orders where status is "paid" into paid_orders
+paid_orders where amount > 50 into qualified_orders
+sort qualified_orders by amount descending
+
+set top_order to first item of qualified_orders
+set top_customer to customer of top_order
+set qualified_count to count of qualified_orders
+set qualified_revenue to sum of amount of qualified_orders
+
+write csv qualified_orders into file "experience_samples/clean_report.csv"
+
+say "Qualified orders:", qualified_count
+say "Qualified revenue:", qualified_revenue
+say "Largest customer:", top_customer
