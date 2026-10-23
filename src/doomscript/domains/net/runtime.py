@@ -256,6 +256,8 @@ def net_resolve_dns(host: Any) -> List[str]:
         try:
             return [socket.gethostbyname(h)]
         except Exception:
+            if h in ('localhost', '127.0.0.1'):
+                return ['127.0.0.1']
             return []
 
 

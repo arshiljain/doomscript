@@ -104,7 +104,7 @@ to increment_counter:
     increase tracker.count by 1
 
 schedule every 0.01 seconds increment_counter
-run scheduler for 0.05 seconds
+run scheduler for 0.1 seconds
 """
     ns = execute(code)
     assert ns["tracker"].count >= 1

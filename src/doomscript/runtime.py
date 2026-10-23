@@ -3052,6 +3052,7 @@ class DoomScheduler:
                     task["fn"](*task["args"])
                     last_runs[i] = now
             time.sleep(0.01)
+        self.tasks.clear()
 
 _SCHEDULER = DoomScheduler()
 
