@@ -42,10 +42,22 @@ jobs:
       run: |
         python -m pytest -v --tb=short
 
-    - name: Dump test failures on failure
+    - name: Capture and annotate test failures
       if: failure()
       run: |
-        python -m pytest --last-failed -v --tb=long
+        python -m pytest --last-failed -v --tb=long > failures.txt 2>&1 || true
+        cat failures.txt
+        python -c "
+        import re
+        try:
+            content = open('failures.txt', encoding='utf-8', errors='ignore').read()
+            for line in content.splitlines():
+                if line.startswith('FAILED ') or line.startswith('E   '):
+                    safe = line.replace('%', '%25').replace('\r', '').replace('\n', '%0A')
+                    print(f'::error::{safe}')
+        except Exception as e:
+            print(f'::error::Failed to parse failures: {e}')
+        "
 
     - name: Run English Corpus Benchmark
       run: |
