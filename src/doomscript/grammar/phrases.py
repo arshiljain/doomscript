@@ -243,6 +243,106 @@ def _split_respecting_delimiters(s: str, delimiter: str = ",") -> List[str]:
     return [p for p in parts if p]
 
 
+def _desugar_inline_entities(text: str) -> str:
+    """Desugars inline entity instantiations in collections, calls, and expressions.
+    E.g. [a User with name "Alice", age 30, a User with name "Bob", age 25]
+    -> [make_entity("User", name="Alice", age=30), make_entity("User", name="Bob", age=25)]
+    """
+    tokens = []
+    idx = 0
+    pattern = re.compile(r'\b(?:a|an|new)\s+([A-Z]\w*)\s+with\s+', re.IGNORECASE)
+    while True:
+        m = pattern.search(text, idx)
+        if not m:
+            tokens.append(text[idx:])
+            break
+        tokens.append(text[idx:m.start()])
+        ename = m.group(1)
+        cur = m.end()
+        bracket_depth = 0
+        paren_depth = 0
+        brace_depth = 0
+        in_str = None
+        start_args = cur
+
+        while cur < len(text):
+            ch = text[cur]
+            if in_str:
+                if ch == '\\':
+                    cur += 2
+                    continue
+                elif ch == in_str:
+                    in_str = None
+                cur += 1
+                continue
+            if ch in ('"', "'"):
+                in_str = ch
+                cur += 1
+                continue
+            if ch == '[':
+                bracket_depth += 1
+            elif ch == ']':
+                if bracket_depth > 0:
+                    bracket_depth -= 1
+                else:
+                    break
+            elif ch == '(':
+                paren_depth += 1
+            elif ch == ')':
+                if paren_depth > 0:
+                    paren_depth -= 1
+                else:
+                    break
+            elif ch == '{':
+                brace_depth += 1
+            elif ch == '}':
+                if brace_depth > 0:
+                    brace_depth -= 1
+                else:
+                    break
+            elif ch in (';', '\n'):
+                if bracket_depth == 0 and paren_depth == 0 and brace_depth == 0:
+                    break
+            elif ch == ',' and bracket_depth == 0 and paren_depth == 0 and brace_depth == 0:
+                rest = text[cur+1:].lstrip()
+                if re.match(r'^(?:a|an|new)\s+[A-Z]\w*\b', rest, re.IGNORECASE):
+                    break
+                if not re.match(r'^[A-Za-z_]\w*\s*(?:[:=]|\s+[^,\s\]\)])', rest):
+                    break
+            cur += 1
+
+        vals_str = text[start_args:cur].strip().rstrip(',')
+        val_pairs = _split_respecting_delimiters(vals_str, ',')
+        kwargs = []
+        for vp in val_pairs:
+            vp = vp.strip()
+            if not vp:
+                continue
+            m_vp = re.match(r"^([A-Za-z_]\w*)[:\s=]+(.+)$", vp)
+            if m_vp:
+                kwargs.append(f"{m_vp.group(1)}={m_vp.group(2).strip()}")
+        kwargs_str = f", {', '.join(kwargs)}" if kwargs else ""
+        tokens.append(f'make_entity("{ename}"{kwargs_str})')
+        idx = cur
+
+    res = "".join(tokens)
+
+    # Bare entity creation inside lists/arguments: [a User, a Customer] or func(a User)
+    def _repl_bare(m):
+        prefix = m.group(1)
+        ename = m.group(2)
+        return f'{prefix}make_entity("{ename}")'
+
+    res = re.sub(
+        r'([\[\(,=]\s*)(?:a|an|new)\s+([A-Z]\w*)\b(?!\s+(?:with|has|class|record|can|must|should|that|is|inherits|extends)\b)',
+        _repl_bare,
+        res,
+        flags=re.IGNORECASE
+    )
+
+    return res
+
+
 SYNONYM_REPLACEMENTS = [
     # Math & Metric Verbs (calculate is the canonical verb across 300+ domain signatures)
     (re.compile(r"\bcompute\b", re.IGNORECASE), "calculate"),
@@ -1818,6 +1918,25 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         flags=re.IGNORECASE
     )
 
+    # Prose comprehensions:
+    # 1. Bracketed: [the prop of each item in collection] -> [item's prop for each item in collection]
+    masked = re.sub(
+        r"\[\s*(?:the\s+)?([A-Za-z_]\w*)\s+of\s+each\s+([A-Za-z_]\w*)\s+in\s+([^\]\n]+)\]",
+        lambda m: f"[{m.group(2)}'s {m.group(1)} for each {m.group(2)} in {m.group(3).strip()}]",
+        masked,
+        flags=re.IGNORECASE
+    )
+
+    # 2. Assignment statement: target (is|=|to) (the) prop of each item in collection
+    prose_comp_stmt_m = re.match(
+        r"^\s*(?:set\s+)?(?!if\b|while\b|for\b|assert\b|return\b|verify\b|print\b|say\b|tell\b|case\b|when\b|match\b)([A-Za-z_]\w*)\s*(?:=|to|\bis\b)\s+(?:the\s+)?([A-Za-z_]\w*)\s+of\s+each\s+([A-Za-z_]\w*)\s+in\s+(.+)$",
+        masked,
+        re.IGNORECASE
+    )
+    if prose_comp_stmt_m:
+        tgt, prop, item, rest = prose_comp_stmt_m.group(1), prose_comp_stmt_m.group(2), prose_comp_stmt_m.group(3), prose_comp_stmt_m.group(4).strip()
+        masked = f"set {tgt} to [{item}'s {prop} for each {item} in {rest}]"
+
     # Trailing type cast in input: ask "..." into age as number
     masked = re.sub(
         r"^\s*ask\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s+as\s+(number|text|string|boolean|bool)\s*$",
@@ -2509,11 +2628,11 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
 
     # Filter statements with assignment, set, or leading 'filter'
     masked = re.sub(r"^\s*filter\s+(.+?\s+where\s+.+)$", r"\1", masked, flags=re.IGNORECASE)
-    filter_into_m = re.match(r"^\s*(?:set\s+)?([A-Za-z_]\w*)\s*(?:=|to)\s+(.+?)\s+where\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    filter_into_m = re.match(r"^\s*(?:set\s+)?([A-Za-z_]\w*)\s*(?:=|to)\s+(?![\[\(])(.+?)\s+where\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
     if filter_into_m:
         masked = f"{filter_into_m.group(2)} where {filter_into_m.group(3)} into {filter_into_m.group(4)}"
     else:
-        filter_assign_m = re.match(r"^\s*(?:set\s+)?([A-Za-z_]\w*)\s*(?:=|to)\s+(.+?)\s+where\s+(.+?)$", masked, re.IGNORECASE)
+        filter_assign_m = re.match(r"^\s*(?:set\s+)?([A-Za-z_]\w*)\s*(?:=|to)\s+(?![\[\(])(.+?)\s+where\s+(.+?)$", masked, re.IGNORECASE)
         if filter_assign_m:
             masked = f"{filter_assign_m.group(2)} where {filter_assign_m.group(3)} into {filter_assign_m.group(1)}"
 
@@ -2722,10 +2841,10 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     if range_assign_m:
         masked = f"set {range_assign_m.group(1)} to ds_range({range_assign_m.group(2).strip()}, {range_assign_m.group(3).strip()})"
 
-    # Natural Ranges in for loops: for i in 1 to 5: / for each i in 1 through 10:
+    # Natural Ranges in for loops & comprehensions: for i in 1 to 5: / for each x in 1 through 10
     masked = re.sub(
-        r"^\s*for\s+(?:each\s+)?([A-Za-z_]\w*)\s+in\s+(-?\d+|[A-Za-z_]\w*|__STR_\d+__)\s+(?:to|through|up\s+to)\s+(-?\d+|[A-Za-z_]\w*|__STR_\d+__)\s*:",
-        r"for each \1 in ds_range(\2, \3):",
+        r"\bfor\s+(?:each\s+)?([A-Za-z_]\w*)\s+in\s+(-?\d+|[A-Za-z_]\w*|__STR_\d+__)\s+(?:to|through|up\s+to)\s+(-?\d+|[A-Za-z_]\w*|__STR_\d+__)(?=\s+(?:where|if)|[\]\):;\n\r]|$)",
+        r"for each \1 in ds_range(\2, \3)",
         masked,
         flags=re.IGNORECASE
     )
@@ -3410,6 +3529,11 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
                     kwargs.append(f'{m_vp.group(1)}={m_vp.group(2).strip()}')
         kwargs_str = f', {", ".join(kwargs)}' if kwargs else ""
         masked = f'return make_entity("{ename}"{kwargs_str})' 
+
+    # Inline entity construction in collections, calls, and expressions:
+    # users = [a User with name "Alice", age 30, a User with name "Bob", age 25]
+    if re.search(r"\b(?:a|an|new)\s+[A-Z]\w*\b", masked):
+        masked = _desugar_inline_entities(masked) 
 
     orm_find_all_m = re.match(r"^find\s+all\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
     if orm_find_all_m:
