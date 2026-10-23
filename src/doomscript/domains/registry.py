@@ -457,20 +457,29 @@ class DomainRegistry:
     def find_domain_for_line(self, line: str, active_only: bool = True) -> Optional[DomainContract]:
         """Finds a domain capable of handling the line. When active_only=True (default), inactive domains are strictly ignored."""
         if self._last_parsed and self._last_parsed[0] == line:
-            return self._last_parsed[2]
+            dom = self._last_parsed[2]
+            if not active_only or dom.name.lower() in self._active_domains:
+                return dom
 
-        parsed = self.try_parse_domain_line(line, 0)
-        if parsed is not None and self._last_parsed and self._last_parsed[0] == line:
-            return self._last_parsed[2]
+        for name in reversed(self._active_domains):
+            domain = self._domains.get(name)
+            if domain:
+                try:
+                    res = domain.parser.parse_inspect(line, 0)
+                    if res is None:
+                        res = domain.parser.parse_operation(line, 0)
+                    if res is not None:
+                        return domain
+                except Exception:
+                    pass
 
         if not active_only:
             for domain in self._domains.values():
                 if domain.name.lower() not in self._active_domains:
                     try:
                         res = domain.parser.parse_inspect(line, 0)
-                        if res is not None:
-                            return domain
-                        res = domain.parser.parse_operation(line, 0)
+                        if res is None:
+                            res = domain.parser.parse_operation(line, 0)
                         if res is not None:
                             return domain
                     except Exception:

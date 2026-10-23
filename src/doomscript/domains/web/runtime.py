@@ -24,6 +24,110 @@ try:
 except ImportError:
     HAS_BS4 = False
 
+class AutoNum(str):
+    """Polymorphic cell value: compares and behaves as both a string and numeric value."""
+    def __eq__(self, other):
+        res = super().__eq__(other)
+        if res is True:
+            return True
+        try:
+            num = float(self) if "." in self else int(self)
+            return num == other
+        except (ValueError, TypeError):
+            return False
+
+    def __hash__(self):
+        return super().__hash__()
+
+    def __lt__(self, other):
+        try:
+            num = float(self) if "." in self else int(self)
+            return num < other
+        except Exception:
+            return super().__lt__(other)
+
+    def __gt__(self, other):
+        try:
+            num = float(self) if "." in self else int(self)
+            return num > other
+        except Exception:
+            return super().__gt__(other)
+
+    def __le__(self, other):
+        try:
+            num = float(self) if "." in self else int(self)
+            return num <= other
+        except Exception:
+            return super().__le__(other)
+
+    def __ge__(self, other):
+        try:
+            num = float(self) if "." in self else int(self)
+            return num >= other
+        except Exception:
+            return super().__ge__(other)
+
+    def __add__(self, other):
+        if isinstance(other, (int, float)):
+            num = float(self) if "." in self else int(self)
+            return num + other
+        return super().__add__(other)
+
+    def __radd__(self, other):
+        if isinstance(other, (int, float)):
+            num = float(self) if "." in self else int(self)
+            return other + num
+        return other + str(self)
+
+    def __sub__(self, other):
+        num = float(self) if "." in self else int(self)
+        return num - other
+
+    def __rsub__(self, other):
+        num = float(self) if "." in self else int(self)
+        return other - num
+
+    def __mul__(self, other):
+        if isinstance(other, (int, float)):
+            num = float(self) if "." in self else int(self)
+            return num * other
+        return super().__mul__(other)
+
+    def __rmul__(self, other):
+        if isinstance(other, (int, float)):
+            num = float(self) if "." in self else int(self)
+            return other * num
+        return super().__rmul__(other)
+
+    def __truediv__(self, other):
+        num = float(self) if "." in self else int(self)
+        return num / other
+
+    def __rtruediv__(self, other):
+        num = float(self) if "." in self else int(self)
+        return other / num
+
+    def __float__(self):
+        return float(str(self))
+
+    def __int__(self):
+        return int(str(self))
+
+
+def _parse_html_cell_value(val: Any) -> Any:
+    if not isinstance(val, str):
+        return val
+    val_clean = val.strip()
+    if re.match(r"^-?\d+$", val_clean):
+        return AutoNum(val_clean)
+    if re.match(r"^-?\d+\.\d+$", val_clean):
+        return AutoNum(val_clean)
+    m = re.match(r"^[$€£¥]\s*(\d+(?:\.\d+)?)$", val_clean)
+    if m:
+        return AutoNum(m.group(1))
+    return val_clean
+
+
 
 class SimpleHTMLTextParser(HTMLParser):
     """Fallback standard-library HTML parser for text and link extraction."""
@@ -148,16 +252,9 @@ class WebPage:
                     if not cells:
                         continue
                     if headers and len(cells) == len(headers):
-                        rec_dict = {}
-                        for h, val in zip(headers, cells):
-                            try:
-                                num = float(val) if "." in val else int(val)
-                                rec_dict[h] = num
-                            except ValueError:
-                                rec_dict[h] = val
-                        rows.append(Record(rec_dict))
+                        rows.append(Record({h: _parse_html_cell_value(val) for h, val in zip(headers, cells)}))
                     else:
-                        rows.append(Record({f"col_{i}": c for i, c in enumerate(cells)}))
+                        rows.append(Record({f"col_{i}": _parse_html_cell_value(c) for i, c in enumerate(cells)}))
                 if rows:
                     tables_res.append(rows)
             return tables_res
@@ -174,9 +271,9 @@ class WebPage:
                 cells = [re.sub(r"<.*?>", "", td).strip() for td in tds]
                 if cells:
                     if headers and len(cells) == len(headers):
-                        rows.append(Record(dict(zip(headers, cells))))
+                        rows.append(Record({h: _parse_html_cell_value(c) for h, c in zip(headers, cells)}))
                     else:
-                        rows.append(Record({f"col_{i}": c for i, c in enumerate(cells)}))
+                        rows.append(Record({f"col_{i}": _parse_html_cell_value(c) for i, c in enumerate(cells)}))
             if rows:
                 tables_res.append(rows)
         return tables_res
@@ -339,9 +436,9 @@ def web_extract_tables(html_or_page: Any) -> List[List[Dict[str, Any]]]:
             cells = [re.sub(r"<[^>]+>", "", td).strip() for td in re.findall(r"<td[^>]*>(.*?)</td>", r_block, re.DOTALL | re.IGNORECASE)]
             if cells:
                 if headers and len(cells) == len(headers):
-                    records.append({headers[i]: cells[i] for i in range(len(headers))})
+                    records.append({headers[i]: _parse_html_cell_value(cells[i]) for i in range(len(headers))})
                 else:
-                    records.append({f"col_{i}": cells[i] for i in range(len(cells))})
+                    records.append({f"col_{i}": _parse_html_cell_value(cells[i]) for i in range(len(cells))})
         if records:
             tables.append(records)
     return tables[0] if len(tables) == 1 else tables

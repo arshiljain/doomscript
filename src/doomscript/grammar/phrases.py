@@ -2361,22 +2361,31 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
 
     # Conversational Finance & Simulation:
     sim_port_m = re.match(
-        r"^\s*simulate\s+portfolio\s+with\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
+        r"^\s*simulate\s+portfolio\s+(?:with|using)\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
         masked,
         re.IGNORECASE,
     )
     if sim_port_m:
         raw_with = sim_port_m.group(1).strip()
         target_var = sim_port_m.group(2).strip()
-        if "%" in raw_with:
-            pct_pairs = re.findall(r"(\d+(?:\.\d+)?)\s*%\s*([A-Za-z_]\w*)", raw_with)
-            if pct_pairs:
-                dict_body = ", ".join(f'"{sym}": {float(p)/100.0}' for p, sym in pct_pairs)
-                masked = f"{target_var} = simulate_portfolio({{{dict_body}}})"
+        pct_pairs = re.findall(
+            r"(?:(\d+(?:\.\d+)?)\s*%\s*([A-Za-z_]\w*)|\(\s*(\d+(?:\.\d+)?)\s*\/\s*100(?:\.0)?\s*\)\s*([A-Za-z_]\w*))",
+            raw_with,
+        )
+        if pct_pairs:
+            dict_items = []
+            for m1, s1, m2, s2 in pct_pairs:
+                if s1:
+                    dict_items.append(f'"{s1}": {float(m1)/100.0}')
+                elif s2:
+                    dict_items.append(f'"{s2}": {float(m2)/100.0}')
+            if dict_items:
+                dict_body = ", ".join(dict_items)
+                masked = f"set {target_var} to simulate_portfolio({{{dict_body}}})"
             else:
-                masked = f"{target_var} = simulate_portfolio({raw_with})"
+                masked = f"set {target_var} to simulate_portfolio({raw_with})"
         else:
-            masked = f"{target_var} = simulate_portfolio({raw_with})"
+            masked = f"set {target_var} to simulate_portfolio({raw_with})"
 
     calc_ci_m = re.match(
         r"^\s*calculate\s+compound\s+interest\s+on\s+principal\s+(.+?)\s+at\s+rate\s+(.+?)\s+(?:over|for)\s+(.+?)\s+years\s+into\s+([A-Za-z_]\w*)$",
@@ -2657,7 +2666,12 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         masked,
         flags=re.IGNORECASE
     )
-    masked = re.sub(r"\b([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s+trimmed\b", r"ds_trim(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(
+        r"\b(?!(?:to|in|into|of|from|as|with|say|show|print|display|set|let|put|the|a|an|ds_\w+)\b)([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s+trimmed\b(?!\s+(?:to|in|into|=)\b)",
+        r"ds_trim(\1)",
+        masked,
+        flags=re.IGNORECASE
+    )
     
     # Nested and composable casing: uppercase of X / lowercase of X / trim of X
     first_last_of = r"(?:first|last)\s+(?:item\s+)?of\s+[A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?"
@@ -4383,8 +4397,9 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
                     pass
                 if d_name == "research":
                     in_research_mode = True
-            emit(f"{indent}# use {raw_domains}", line_idx)
-            continue
+            if activated_any:
+                emit(f"{indent}# use {raw_domains}", line_idx)
+                continue
 
         # Declarative Entity with initial lifecycle:
         # a BankAccount begins with balance = 100, status = "active", transactions = []
