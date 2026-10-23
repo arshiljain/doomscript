@@ -1458,7 +1458,8 @@ def normalize_batch2_paradigms(masked: str) -> str:
     masked = re.sub(r"\brandom\s+float\s+between\s+([^,\n;]+?)\s+and\s+([^\n,;()]+)", r"ds_random_float(\1, \2)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\brandom\s+integer\s+between\s+([^,\n;]+?)\s+and\s+([^\n,;()]+)", r"ds_random_int(\1, \2)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\brandom\s+choice\s+from\s+(\[[^\]]*\]|[A-Za-z_]\w*(?:\[[^\]]+\])?|\([^)]+\))", r"ds_random_choice(\1)", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\bclamp\s+(.+?)\s+between\s+(.+?)\s+and\s+([^\n,;()]+)", r"ds_clamp(\1, \2, \3)", masked, flags=re.IGNORECASE)
+    if not re.search(r"\binto\b", masked, re.IGNORECASE):
+        masked = re.sub(r"\bclamp\s+([^,\n;]+?)\s+between\s+([^,\n;]+?)\s+and\s+([A-Za-z0-9_.\"\'\[\]\(\)]+)", r"ds_clamp(\1, \2, \3)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\blinear\s+interpolate\s+from\s+(.+?)\s+to\s+(.+?)\s+with\s+fraction\s+([^\n,;()]+)", r"ds_lerp(\1, \2, \3)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bsigmoid\s+of\s+([^\n,;()]+)", r"ds_sigmoid(\1)", masked, flags=re.IGNORECASE)
 
@@ -1627,8 +1628,9 @@ def normalize_batch1_paradigms(masked: str) -> str:
     masked = re.sub(r"\bfile\s+extension\s+of\s+([^\n,;()]+)", r"ds_file_extension(\1)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bfilename\s+of\s+([^\n,;()]+)", r"ds_filename(\1)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bparent\s+folder\s+of\s+([^\n,;()]+)", r"ds_parent_folder(\1)", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\bfile\s+([^\n,;()]+?)\s+exists\b", r"ds_file_exists(\1)", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\bfolder\s+([^\n,;()]+?)\s+exists\b", r"ds_folder_exists(\1)", masked, flags=re.IGNORECASE)
+    if not re.search(r"\bcheck\s+if\b", masked, re.IGNORECASE):
+        masked = re.sub(r"\bfile\s+([^\n,;()]+?)\s+exists(?!\s+into\b)\b", r"ds_file_exists(\1)", masked, flags=re.IGNORECASE)
+        masked = re.sub(r"\bfolder\s+([^\n,;()]+?)\s+exists(?!\s+into\b)\b", r"ds_folder_exists(\1)", masked, flags=re.IGNORECASE)
 
     # Cluster 12: Network, Web & HTTP
     m_ue = re.match(r"^\s*url\s+encode\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
