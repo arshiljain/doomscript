@@ -1354,7 +1354,7 @@ def normalize_batch3_paradigms(masked: str) -> str:
     masked = re.sub(r"([A-Za-z_]\w*|\d+)\s+is\s+leap\s+year\b", r"ds_is_leap_year(\1)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bday\s+of\s+year\s+of\s+([A-Za-z_]\w*|\"[^\"]*\"|'[^']*')\b", r"ds_day_of_year(\1)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bweek\s+number\s+of\s+([A-Za-z_]\w*|\"[^\"]*\"|'[^']*')\b", r"ds_week_number(\1)", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\bquarter\s+of\s+([A-Za-z_]\w*|\"[^\"]*\"|'[^']*')\b", r"ds_quarter_of_year(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bquarter\s+of\s+(__STR_LITERAL_\d+__|__STR_\d+__|\"[^\"]*\"|'[^']*'|date\s+[A-Za-z_]\w*|year\s+of\s+[A-Za-z_]\w*)\b", r"ds_quarter_of_year(\1)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\badd\s+(\d+|[A-Za-z_]\w*)\s+business\s+days\s+to\s+([A-Za-z_]\w*|\"[^\"]*\"|'[^']*')\b", r"ds_add_business_days(\2, \1)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bsubtract\s+(\d+|[A-Za-z_]\w*)\s+business\s+days\s+from\s+([A-Za-z_]\w*|\"[^\"]*\"|'[^']*')\b", r"ds_sub_business_days(\2, \1)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bbusiness\s+days\s+between\s+([^\s]+)\s+and\s+([^\n;()]+)", r"ds_business_days_between(\1, \2)", masked, flags=re.IGNORECASE)
@@ -1437,7 +1437,8 @@ def normalize_batch2_paradigms(masked: str) -> str:
     # Cluster 16: Mathematical Distributions & Vector Math
     masked = re.sub(r"\bdot\s+(?:math_)?product\s+of\s+(.+?)\s+and\s+(\[[^\]]*\]|[A-Za-z_]\w*(?:\[[^\]]+\])?|\([^)]+\)|\d+(?:\.\d+)?)", r"ds_vector_dot(\1, \2)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bcross\s+(?:math_)?product\s+of\s+(.+?)\s+and\s+(\[[^\]]*\]|[A-Za-z_]\w*(?:\[[^\]]+\])?|\([^)]+\)|\d+(?:\.\d+)?)", r"ds_vector_cross(\1, \2)", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\bvector\s+magnitude\s+of\s+(\[[^\]]*\]|[A-Za-z_]\w*(?:\[[^\]]+\])?|\([^)]+\)|\d+(?:\.\d+)?)", r"ds_vector_magnitude(\1)", masked, flags=re.IGNORECASE)
+    if not re.search(r"\binto\b", masked, re.IGNORECASE):
+        masked = re.sub(r"\bvector\s+magnitude\s+of\s+(\[[^\]]*\]|[A-Za-z_]\w*(?:\[[^\]]+\])?|\([^)]+\)|\d+(?:\.\d+)?)", r"ds_vector_magnitude(\1)", masked, flags=re.IGNORECASE)
     m = re.match(r"^\s*normalize\s+vector\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
     if m:
         return f"set {m.group(2)} to ds_vector_normalize({m.group(1).strip()})"
@@ -1458,8 +1459,6 @@ def normalize_batch2_paradigms(masked: str) -> str:
     masked = re.sub(r"\brandom\s+float\s+between\s+([^,\n;]+?)\s+and\s+([^\n,;()]+)", r"ds_random_float(\1, \2)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\brandom\s+integer\s+between\s+([^,\n;]+?)\s+and\s+([^\n,;()]+)", r"ds_random_int(\1, \2)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\brandom\s+choice\s+from\s+(\[[^\]]*\]|[A-Za-z_]\w*(?:\[[^\]]+\])?|\([^)]+\))", r"ds_random_choice(\1)", masked, flags=re.IGNORECASE)
-    if not re.search(r"\binto\b", masked, re.IGNORECASE):
-        masked = re.sub(r"\bclamp\s+([^,\n;]+?)\s+between\s+([^,\n;]+?)\s+and\s+([A-Za-z0-9_.\"\'\[\]\(\)]+)", r"ds_clamp(\1, \2, \3)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\blinear\s+interpolate\s+from\s+(.+?)\s+to\s+(.+?)\s+with\s+fraction\s+([^\n,;()]+)", r"ds_lerp(\1, \2, \3)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bsigmoid\s+of\s+([^\n,;()]+)", r"ds_sigmoid(\1)", masked, flags=re.IGNORECASE)
 
@@ -1586,10 +1585,10 @@ def normalize_batch2_paradigms(masked: str) -> str:
 
 def normalize_batch1_paradigms(masked: str) -> str:
     # Cluster 11: File System & File I/O
-    m_w = re.match(r"^\s*write\s+(.+?)\s+to\s+file\s+(.+?)\s*$", masked, re.IGNORECASE)
+    m_w = re.match(r"^\s*write\s+(?!csv\b)(.+?)\s+to\s+file\s+(.+?)\s*$", masked, re.IGNORECASE)
     if m_w:
         return f"ds_file_write_text({m_w.group(2).strip()}, {m_w.group(1).strip()})"
-    m_a = re.match(r"^\s*append\s+(.+?)\s+to\s+file\s+(.+?)\s*$", masked, re.IGNORECASE)
+    m_a = re.match(r"^\s*append\s+(?!csv\b)(.+?)\s+to\s+file\s+(.+?)\s*$", masked, re.IGNORECASE)
     if m_a:
         return f"ds_file_append_text({m_a.group(2).strip()}, {m_a.group(1).strip()})"
     m_rl = re.match(r"^\s*read\s+lines\s+of\s+file\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
@@ -1717,9 +1716,10 @@ def normalize_batch1_paradigms(masked: str) -> str:
     m_rcc = re.match(r"^\s*run\s+command\s+(.+?)\s+capturing\s+exit\s+code\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
     if m_rcc:
         return f"set {m_rcc.group(2)} to ds_sys_run_command_exit_code({m_rcc.group(1).strip()})"
-    m_rcm = re.match(r"^\s*run\s+command\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
-    if m_rcm:
-        return f"set {m_rcm.group(2)} to ds_sys_run_command({m_rcm.group(1).strip()})"
+    if not re.search(r"\b(?:using\s+shell|piped|capturing)\b", masked, re.IGNORECASE):
+        m_rcm = re.match(r"^\s*run\s+command\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+        if m_rcm:
+            return f"set {m_rcm.group(2)} to run_command({m_rcm.group(1).strip()})"
     m_sls = re.match(r"^\s*sleep\s+for\s+(.+?)\s+seconds?\s*$", masked, re.IGNORECASE)
     if m_sls:
         return f"ds_sys_sleep_seconds({m_sls.group(1).strip()})"
@@ -1759,12 +1759,13 @@ def normalize_batch1_paradigms(masked: str) -> str:
             return f"{fn}({val})"
         return cm.group(0)
 
-    masked = re.sub(
-        r"\bconvert\s+([0-9.]+|[A-Za-z_]\w*|\([^)]+\))\s+(miles|kilometers|meters|feet|inches|centimeters|fahrenheit|celsius|kelvin|pounds|kilograms|ounces|grams|bytes|kilobytes|megabytes|gigabytes|degrees|radians)\s+to\s+(miles|kilometers|meters|feet|inches|centimeters|fahrenheit|celsius|kelvin|pounds|kilograms|ounces|grams|bytes|kilobytes|megabytes|gigabytes|degrees|radians)\b",
-        _repl_conv,
-        masked,
-        flags=re.IGNORECASE
-    )
+    if not re.search(r"\binto\b", masked, re.IGNORECASE):
+        masked = re.sub(
+            r"\bconvert\s+([0-9.]+|[A-Za-z_]\w*|\([^)]+\))\s+(miles|kilometers|meters|feet|inches|centimeters|fahrenheit|celsius|kelvin|pounds|kilograms|ounces|grams|bytes|kilobytes|megabytes|gigabytes|degrees|radians)\s+to\s+(miles|kilometers|meters|feet|inches|centimeters|fahrenheit|celsius|kelvin|pounds|kilograms|ounces|grams|bytes|kilobytes|megabytes|gigabytes|degrees|radians)\b",
+            _repl_conv,
+            masked,
+            flags=re.IGNORECASE
+        )
     return masked
 
 

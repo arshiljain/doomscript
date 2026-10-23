@@ -2172,6 +2172,8 @@ def run_command(cmd: Union[str, List[str]], shell: bool = False):
                     args = shlex.split(cmd, posix=True)
                 except ValueError:
                     args = cmd.split()
+            if sys.platform == "win32" and args and args[0].lower() in ("echo", "dir", "type", "cls"):
+                args = ["cmd.exe", "/c"] + args
             res = subprocess.run(args, shell=False, capture_output=True, text=True)
         else:
             res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
@@ -7064,7 +7066,23 @@ def ds_channel_close(chan: Any) -> None:
     chan.close()
 
 def ds_channel_is_closed(chan: Any) -> bool:
-    return chan.is_closed()
+    if isinstance(chan, dict):
+        if "is_closed" in chan:
+            return bool(chan["is_closed"])
+        if "closed" in chan:
+            return bool(chan["closed"])
+    if hasattr(chan, "_is_closed"):
+        return bool(chan._is_closed)
+    try:
+        val = getattr(chan, "is_closed", None)
+        if val is not None:
+            return val() if callable(val) else bool(val)
+        val = getattr(chan, "closed", None)
+        if val is not None:
+            return val() if callable(val) else bool(val)
+    except Exception:
+        pass
+    return False
 
 def ds_channel_is_empty(chan: Any) -> bool:
     return chan.is_empty()
@@ -7132,7 +7150,11 @@ def ds_try_fallback(primary_fn: Any, default_val: Any) -> Any:
         _CURRENT_ERROR_STATE["type"] = type(e).__name__
         return default_val
 
-def ds_retry(fn: Any, max_tries: Any = 3, delay: Any = 0.0, backoff: Any = 1.0) -> Any:
+def ds_retry(fn: Any, max_tries: Any = 3, delay: Any = 0.0, backoff: Any = 1.0, max_attempts: Any = None, **kwargs) -> Any:
+    if max_attempts is not None:
+        max_tries = max_attempts
+    if hasattr(backoff, "magnitude"):
+        backoff = backoff.magnitude
     tries = int(max_tries)
     d = float(delay)
     b = float(backoff)
@@ -7144,12 +7166,13 @@ def ds_retry(fn: Any, max_tries: Any = 3, delay: Any = 0.0, backoff: Any = 1.0) 
             last_err = e
             _CURRENT_ERROR_STATE["msg"] = str(e)
             _CURRENT_ERROR_STATE["type"] = type(e).__name__
-            if attempt < tries - 1 and d > 0:
-                time.sleep(d)
-                d *= b
+            if attempt < tries - 1:
+                sleep_time = d if d > 0 else 0.01
+                time.sleep(sleep_time)
+                if d > 0:
+                    d *= b
     if last_err:
         raise last_err
-
 def ds_ignore_errors(fn: Any, default_val: Any = None) -> Any:
     try:
         return fn() if callable(fn) else fn
