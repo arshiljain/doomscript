@@ -543,20 +543,16 @@ class DoomToPython(Transformer):
         return ast.Assign(targets=[target], value=call)
 
     def expr_split(self, args):
-        if len(args) == 2:
-            text, delimiter = args
-            return ast.Call(
-                func=ast.Name(id='str_split', ctx=ast.Load()),
-                args=[text, delimiter],
-                keywords=[]
-            )
-        else:
-            text = args[0]
-            return ast.Call(
-                func=ast.Name(id='str_split', ctx=ast.Load()),
-                args=[text],
-                keywords=[]
-            )
+        text = args[0]
+        delimiter = args[1] if len(args) > 1 and args[1] is not None else None
+        call_args = [text]
+        if delimiter is not None:
+            call_args.append(delimiter)
+        return ast.Call(
+            func=ast.Name(id='str_split', ctx=ast.Load()),
+            args=call_args,
+            keywords=[]
+        )
 
     def string_join(self, args):
         items, delimiter, target = args

@@ -1841,6 +1841,12 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         masked,
         flags=re.IGNORECASE
     )
+    masked = re.sub(
+        r"(=|to|\bsay\b|\bprint\b|\breturn\b)\s+reverse\s+(?!of\b)(?!in\b)(?!into\b)([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)(?!\s*[\(=])\b",
+        r"\1 reversed of \2",
+        masked,
+        flags=re.IGNORECASE
+    )
 
     # Desugar data operations to canonical expression assignments
     masked = re.sub(
@@ -2439,7 +2445,11 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
 
     shuffle_m = re.match(r"^\s*shuffle\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
     if shuffle_m:
-        masked = f"set {shuffle_m.group(2)} to shuffle_list({shuffle_m.group(1).strip()})"
+        masked = f"set {shuffle_m.group(2)} to ds_shuffled({shuffle_m.group(1).strip()})"
+    else:
+        shuffle_set_m = re.match(r"^(?:set\s+)?([A-Za-z_]\w*)\s*(?:=|\bto\b)\s*(?:shuffle|shuffled)\s+(?:of\s+)?(.+?)$", masked, re.IGNORECASE)
+        if shuffle_set_m:
+            masked = f"set {shuffle_set_m.group(1)} to ds_shuffled({shuffle_set_m.group(2).strip()})"
 
     masked = re.sub(
         r"^\s*pick\s+random\s+item\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)$",
@@ -2484,7 +2494,8 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"\bjson\s+parse\b", "parse json", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bjson\s+stringify\s+(.+?)\s+into\b", r"convert \1 to json into", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bget\s+environment\s+variable\b", "environment variable", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\bround\s+(.+?)\s+to\s+(.+?)\s+places\s+into\b", r"round \1 to \2 decimals into", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bround\s+(.+?)\s+to\s+(\d+|[A-Za-z_]\w*)\s+(?:decimal\s+places?|places?|decimals?)\s+into\b", r"round \1 to \2 decimals into", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bround\s+(?!of\b)(.+?)\s+to\s+(\d+|[A-Za-z_]\w*)\s+(?:decimal\s+places?|places?|decimals?)\b(?!\s+into\b)", r"round of \1 to \2 decimals", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bsort\s+(.+?)\s+by\s+([A-Za-z_]\w*)\s+\((?:descending|desc)\)", r"sort \1 by \2 descending", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bsort\s+(.+?)\s+by\s+([A-Za-z_]\w*)\s+desc\b", r"sort \1 by \2 descending", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\binsert\s+(.+?)\s+at\s+(?:index|position)\s+(.+?)\s+in\b", r"insert \1 at \2 in", masked, flags=re.IGNORECASE)
@@ -2702,6 +2713,23 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         flags=re.IGNORECASE
     )
 
+    # Natural Ranges in assignment: numbers = 1 to 5 / set numbers to 1 through 10 / numbers = 1 up to 10
+    range_assign_m = re.match(
+        r"^(?:set\s+)?([A-Za-z_]\w*)\s*(?:=|\bto\b)\s*(-?\d+|[A-Za-z_]\w*|__STR_\d+__)\s+(?:to|through|up\s+to)\s+(-?\d+|[A-Za-z_]\w*|__STR_\d+__)\s*$",
+        masked,
+        re.IGNORECASE
+    )
+    if range_assign_m:
+        masked = f"set {range_assign_m.group(1)} to ds_range({range_assign_m.group(2).strip()}, {range_assign_m.group(3).strip()})"
+
+    # Natural Ranges in for loops: for i in 1 to 5: / for each i in 1 through 10:
+    masked = re.sub(
+        r"^\s*for\s+(?:each\s+)?([A-Za-z_]\w*)\s+in\s+(-?\d+|[A-Za-z_]\w*|__STR_\d+__)\s+(?:to|through|up\s+to)\s+(-?\d+|[A-Za-z_]\w*|__STR_\d+__)\s*:",
+        r"for each \1 in ds_range(\2, \3):",
+        masked,
+        flags=re.IGNORECASE
+    )
+
     # Membership: collection has item -> collection contains item
     def _repl_has_membership(m):
         subj = m.group(1).strip()
@@ -2811,6 +2839,39 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"^\s*(?:discard|delete)\s+(.+?)\s+from\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s*$", r"remove \1 from \2", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*(?:pop\s+(?:from\s+)?|remove\s+last\s+(?:item\s+)?from\s+)([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s*$", r"pop(\1)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"(?<!def\s)(?<!to\s)\bpop\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\b", r"pop(\1)", masked, flags=re.IGNORECASE)
+
+    # Sampling / Random Picking Directives
+    pick_single_into_m = re.match(
+        r"^\s*pick\s+(?:a|an|one)\s+(?:random\s+)?item\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$",
+        masked,
+        re.IGNORECASE
+    )
+    if pick_single_into_m:
+        masked = f"set {pick_single_into_m.group(2)} to pick_random({pick_single_into_m.group(1).strip()})"
+    else:
+        pick_single_set_m = re.match(
+            r"^(?:set\s+)?([A-Za-z_]\w*)\s*(?:=|\bto\b)\s*pick\s+(?:a|an|one)\s+(?:random\s+)?item\s+from\s+(.+?)\s*$",
+            masked,
+            re.IGNORECASE
+        )
+        if pick_single_set_m:
+            masked = f"set {pick_single_set_m.group(1)} to pick_random({pick_single_set_m.group(2).strip()})"
+        else:
+            pick_multi_into_m = re.match(
+                r"^\s*(?:pick|sample)\s+(\d+|[A-Za-z_]\w*)\s*(?:random\s+)?items?\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$",
+                masked,
+                re.IGNORECASE
+            )
+            if pick_multi_into_m:
+                masked = f"set {pick_multi_into_m.group(3)} to ds_sample({pick_multi_into_m.group(2).strip()}, {pick_multi_into_m.group(1).strip()})"
+            else:
+                pick_multi_set_m = re.match(
+                    r"^(?:set\s+)?([A-Za-z_]\w*)\s*(?:=|\bto\b)\s*(?:pick|sample)\s+(\d+|[A-Za-z_]\w*)\s*(?:random\s+)?items?\s+from\s+(.+?)\s*$",
+                    masked,
+                    re.IGNORECASE
+                )
+                if pick_multi_set_m:
+                    masked = f"set {pick_multi_set_m.group(1)} to ds_sample({pick_multi_set_m.group(3).strip()}, {pick_multi_set_m.group(2).strip()})"
 
     # Loop Controls & Flow
     masked = re.sub(
@@ -3896,9 +3957,32 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     )
 
     # Paradigm 66: Boundary Clamping Directives
-    clamp_m = re.match(r"^\s*clamp\s+([A-Za-z_]\w*)\s+between\s+(.+?)\s+and\s+(.+?)\s*$", masked, re.IGNORECASE)
-    if clamp_m:
-        masked = f"set {clamp_m.group(1)} to ds_clamp({clamp_m.group(1)}, {clamp_m.group(2)}, {clamp_m.group(3)})"
+    # clamp score between 0 and 100 into clamped
+    # set clamped to clamp score between 0 and 100 / clamped = clamp score between 0 and 100
+    # clamp score between 0 and 100
+    clamp_into_m = re.match(
+        r"^\s*clamp\s+(.+?)\s+(?:between|within)\s+(.+?)\s+(?:and|to)\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$",
+        masked,
+        re.IGNORECASE
+    )
+    if clamp_into_m:
+        masked = f"set {clamp_into_m.group(4)} to ds_clamp({clamp_into_m.group(1).strip()}, {clamp_into_m.group(2).strip()}, {clamp_into_m.group(3).strip()})"
+    else:
+        clamp_set_m = re.match(
+            r"^(?:set\s+)?([A-Za-z_]\w*)\s*(?:=|\bto\b)\s*clamp\s+(.+?)\s+(?:between|within)\s+(.+?)\s+(?:and|to)\s+(.+?)\s*$",
+            masked,
+            re.IGNORECASE
+        )
+        if clamp_set_m:
+            masked = f"set {clamp_set_m.group(1)} to ds_clamp({clamp_set_m.group(2).strip()}, {clamp_set_m.group(3).strip()}, {clamp_set_m.group(4).strip()})"
+        else:
+            clamp_in_place_m = re.match(
+                r"^\s*clamp\s+([A-Za-z_]\w*)\s+(?:between|within)\s+(.+?)\s+(?:and|to)\s+(.+?)\s*$",
+                masked,
+                re.IGNORECASE
+            )
+            if clamp_in_place_m:
+                masked = f"set {clamp_in_place_m.group(1)} to ds_clamp({clamp_in_place_m.group(1)}, {clamp_in_place_m.group(2).strip()}, {clamp_in_place_m.group(3).strip()})"
 
     # Paradigm 62: Hierarchical Family Traversal
     masked = re.sub(r"\b(?:all\s+)?children\s+of\s+([A-Za-z_]\w*)\b", r"ds_get_children(\1)", masked, flags=re.IGNORECASE)

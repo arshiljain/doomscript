@@ -402,11 +402,27 @@ def pick_random(collection):
     return random.choice(list(collection))
 
 
+def ds_sample(collection, n):
+    """Sample n random items without replacement from a collection."""
+    if not collection:
+        return []
+    coll_list = list(collection)
+    count = min(int(n), len(coll_list))
+    return random.sample(coll_list, count)
+
+
 def shuffle_list(collection):
     """Shuffle a list in place."""
     if isinstance(collection, list):
         random.shuffle(collection)
     return collection
+
+
+def ds_shuffled(collection):
+    """Returns a new shuffled copy of collection."""
+    coll = list(collection)
+    random.shuffle(coll)
+    return coll
 
 
 # Aggregate Functions

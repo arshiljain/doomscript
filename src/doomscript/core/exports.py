@@ -80,6 +80,8 @@ CORE_EXPORT_NAMES: frozenset[str] = frozenset([
     "ds_time_from_now",
     "ds_interval",
     "ds_clamp",
+    "ds_sample",
+    "ds_shuffled",
     "ds_union",
     "ds_intersection",
     "ds_difference",
