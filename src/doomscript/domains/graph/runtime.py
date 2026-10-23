@@ -82,6 +82,127 @@ class DoomGraph:
         path.reverse()
         return path
 
+    def remove_edge(self, u: Any, v: Any) -> None:
+        uid, vid = str(u), str(v)
+        if uid in self.adj and vid in self.adj[uid]:
+            del self.adj[uid][vid]
+        if not self.directed and vid in self.adj and uid in self.adj[vid]:
+            del self.adj[vid][uid]
+
+    def neighbors(self, n: Any) -> List[str]:
+        return list(self.adj.get(str(n), {}).keys())
+
+    def shortest_path_len(self, start: Any, end: Any) -> int:
+        p = self.shortest_path(start, end)
+        return max(0, len(p) - 1) if p else -1
+
+    def has_path(self, start: Any, end: Any) -> bool:
+        return len(self.shortest_path(start, end)) > 0
+
+    def connected_components(self) -> List[List[str]]:
+        visited: Set[str] = set()
+        components = []
+        for n in self.nodes:
+            if n not in visited:
+                comp = []
+                q = [n]
+                visited.add(n)
+                while q:
+                    curr = q.pop(0)
+                    comp.append(curr)
+                    for nbr in self.adj.get(curr, {}):
+                        if nbr not in visited:
+                            visited.add(nbr)
+                            q.append(nbr)
+                components.append(comp)
+        return components
+
+    def is_connected(self) -> bool:
+        if not self.nodes:
+            return True
+        return len(self.connected_components()) == 1
+
+    def is_acyclic(self) -> bool:
+        visited: Set[str] = set()
+        rec_stack: Set[str] = set()
+
+        def _dfs(node: str, parent: Optional[str]) -> bool:
+            visited.add(node)
+            rec_stack.add(node)
+            for nbr in self.adj.get(node, {}):
+                if nbr not in visited:
+                    if _dfs(nbr, node):
+                        return True
+                elif self.directed:
+                    if nbr in rec_stack:
+                        return True
+                elif nbr != parent:
+                    return True
+            rec_stack.remove(node)
+            return False
+
+        for n in self.nodes:
+            if n not in visited:
+                if _dfs(n, None):
+                    return False
+        return True
+
+    def topological_sort(self) -> List[str]:
+        in_deg = {n: 0 for n in self.nodes}
+        for u in self.adj:
+            for v in self.adj[u]:
+                in_deg[v] = in_deg.get(v, 0) + 1
+        q = [n for n in self.nodes if in_deg[n] == 0]
+        order = []
+        while q:
+            curr = q.pop(0)
+            order.append(curr)
+            for nbr in self.adj.get(curr, {}):
+                in_deg[nbr] -= 1
+                if in_deg[nbr] == 0:
+                    q.append(nbr)
+        return order
+
+    def dfs(self, start: Any) -> List[str]:
+        s = str(start)
+        if s not in self.nodes:
+            return []
+        visited: Set[str] = set()
+        order: List[str] = []
+
+        def _explore(curr: str) -> None:
+            visited.add(curr)
+            order.append(curr)
+            for nbr in self.adj.get(curr, {}):
+                if nbr not in visited:
+                    _explore(nbr)
+
+        _explore(s)
+        return order
+
+    def bfs(self, start: Any) -> List[str]:
+        s = str(start)
+        if s not in self.nodes:
+            return []
+        visited = {s}
+        order = []
+        q = [s]
+        while q:
+            curr = q.pop(0)
+            order.append(curr)
+            for nbr in self.adj.get(curr, {}):
+                if nbr not in visited:
+                    visited.add(nbr)
+                    q.append(nbr)
+        return order
+
+    def in_degree(self, n: Any) -> int:
+        nid = str(n)
+        return sum(1 for u in self.adj if nid in self.adj[u])
+
+    def out_degree(self, n: Any) -> int:
+        return len(self.adj.get(str(n), {}))
+
     def pagerank(self, damping: float = 0.85, max_iter: int = 50) -> Dict[str, float]:
         """Computes PageRank centrality scores for all nodes."""
         n = len(self.nodes)

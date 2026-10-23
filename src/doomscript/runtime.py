@@ -5806,6 +5806,2200 @@ def ds_format_date(d: Any, fmt: str) -> str:
     return dt.strftime(fmt)
 
 
+
+# ---------------------------------------------------------------------------
+# Batch 1: Clusters 11-15 Runtime Primitives (Paradigms 101 - 200)
+# ---------------------------------------------------------------------------
+
+def ds_file_read_lines(path: Any) -> List[str]:
+    with open(str(path), "r", encoding="utf-8") as f:
+        return [line.rstrip("\r\n") for line in f]
+
+def ds_file_read_text(path: Any) -> str:
+    with open(str(path), "r", encoding="utf-8") as f:
+        return f.read()
+
+def ds_file_write_text(path: Any, content: Any) -> None:
+    p = str(path)
+    parent = os.path.dirname(p)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    with open(p, "w", encoding="utf-8") as f:
+        f.write(str(content).replace("\\n", "\n"))
+
+def ds_file_append_text(path: Any, content: Any) -> None:
+    p = str(path)
+    parent = os.path.dirname(p)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    with open(p, "a", encoding="utf-8") as f:
+        f.write(str(content).replace("\\n", "\n"))
+
+def ds_file_exists(path: Any) -> bool:
+    return os.path.isfile(str(path))
+
+def ds_folder_exists(path: Any) -> bool:
+    return os.path.isdir(str(path))
+
+def ds_file_delete(path: Any) -> None:
+    p = str(path)
+    if os.path.isfile(p):
+        os.remove(p)
+
+def ds_folder_delete(path: Any) -> None:
+    p = str(path)
+    if os.path.isdir(p):
+        shutil.rmtree(p)
+
+def ds_file_copy(src: Any, dst: Any) -> None:
+    shutil.copy2(str(src), str(dst))
+
+def ds_file_move(src: Any, dst: Any) -> None:
+    shutil.move(str(src), str(dst))
+
+def ds_folder_ensure(path: Any) -> None:
+    os.makedirs(str(path), exist_ok=True)
+
+def ds_folder_list_files(path: Any) -> List[str]:
+    p = str(path)
+    if not os.path.isdir(p):
+        return []
+    return [f for f in os.listdir(p) if os.path.isfile(os.path.join(p, f))]
+
+def ds_folder_list_matching(path: Any, pattern: str) -> List[str]:
+    import fnmatch
+    p = str(path)
+    if not os.path.isdir(p):
+        return []
+    return [f for f in os.listdir(p) if fnmatch.fnmatch(f, str(pattern))]
+
+def ds_folder_list_subfolders(path: Any) -> List[str]:
+    p = str(path)
+    if not os.path.isdir(p):
+        return []
+    return [d for d in os.listdir(p) if os.path.isdir(os.path.join(p, d))]
+
+def ds_file_size_bytes(path: Any) -> int:
+    return os.path.getsize(str(path))
+
+def ds_file_size_kb(path: Any) -> float:
+    return os.path.getsize(str(path)) / 1024.0
+
+def ds_file_size_mb(path: Any) -> float:
+    return os.path.getsize(str(path)) / (1024.0 * 1024.0)
+
+def ds_file_extension(path: Any) -> str:
+    return os.path.splitext(str(path))[1]
+
+def ds_filename(path: Any) -> str:
+    return os.path.basename(str(path))
+
+def ds_parent_folder(path: Any) -> str:
+    return os.path.dirname(os.path.abspath(str(path)))
+
+# Cluster 12: Network & HTTP
+def ds_http_get_json(url: Any) -> Any:
+    req = urllib.request.Request(str(url), headers={"User-Agent": "DoomScript/1.0"})
+    with urllib.request.urlopen(req) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+def ds_http_get_text(url: Any) -> str:
+    req = urllib.request.Request(str(url), headers={"User-Agent": "DoomScript/1.0"})
+    with urllib.request.urlopen(req) as resp:
+        return resp.read().decode("utf-8")
+
+def ds_http_post_json(url: Any, payload: Any) -> Any:
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(str(url), data=data, headers={"Content-Type": "application/json", "User-Agent": "DoomScript/1.0"}, method="POST")
+    with urllib.request.urlopen(req) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+def ds_http_post_text(url: Any, payload: Any) -> str:
+    data = str(payload).encode("utf-8")
+    req = urllib.request.Request(str(url), data=data, headers={"Content-Type": "text/plain", "User-Agent": "DoomScript/1.0"}, method="POST")
+    with urllib.request.urlopen(req) as resp:
+        return resp.read().decode("utf-8")
+
+def ds_http_put_json(url: Any, payload: Any) -> Any:
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(str(url), data=data, headers={"Content-Type": "application/json", "User-Agent": "DoomScript/1.0"}, method="PUT")
+    with urllib.request.urlopen(req) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+def ds_http_delete(url: Any) -> Any:
+    req = urllib.request.Request(str(url), headers={"User-Agent": "DoomScript/1.0"}, method="DELETE")
+    with urllib.request.urlopen(req) as resp:
+        return {"status": resp.status, "body": resp.read().decode("utf-8")}
+
+def ds_http_download(url: Any, path: Any) -> None:
+    urllib.request.urlretrieve(str(url), str(path))
+
+def ds_url_encode(text: Any) -> str:
+    return urllib.parse.quote(str(text))
+
+def ds_url_decode(text: Any) -> str:
+    return urllib.parse.unquote(str(text))
+
+def ds_url_parse(url: Any) -> Dict[str, Any]:
+    u = urllib.parse.urlparse(str(url))
+    return {
+        "scheme": u.scheme,
+        "host": u.hostname or "",
+        "port": u.port or (443 if u.scheme == "https" else (80 if u.scheme == "http" else None)),
+        "path": u.path or "",
+        "query": u.query or "",
+        "fragment": u.fragment or ""
+    }
+
+def ds_url_domain(url: Any) -> str:
+    return urllib.parse.urlparse(str(url)).netloc or urllib.parse.urlparse(str(url)).path
+
+def ds_url_path(url: Any) -> str:
+    return urllib.parse.urlparse(str(url)).path
+
+def ds_url_query_params(url: Any) -> Dict[str, str]:
+    q = urllib.parse.urlparse(str(url)).query
+    parsed = urllib.parse.parse_qs(q)
+    return {k: v[0] if len(v) == 1 else v for k, v in parsed.items()}
+
+def ds_url_protocol(url: Any) -> str:
+    return urllib.parse.urlparse(str(url)).scheme
+
+def ds_is_http_ok(resp: Any) -> bool:
+    if isinstance(resp, dict):
+        s = resp.get("status", resp.get("status_code", 0))
+    elif hasattr(resp, "status"):
+        s = resp.status
+    elif hasattr(resp, "status_code"):
+        s = resp.status_code
+    else:
+        s = int(resp)
+    return 200 <= int(s) < 300
+
+def ds_is_http_not_found(resp: Any) -> bool:
+    if isinstance(resp, dict):
+        s = resp.get("status", resp.get("status_code", 0))
+    elif hasattr(resp, "status"):
+        s = resp.status
+    elif hasattr(resp, "status_code"):
+        s = resp.status_code
+    else:
+        s = int(resp)
+    return int(s) == 404
+
+def ds_is_http_error(resp: Any) -> bool:
+    if isinstance(resp, dict):
+        s = resp.get("status", resp.get("status_code", 0))
+    elif hasattr(resp, "status"):
+        s = resp.status
+    elif hasattr(resp, "status_code"):
+        s = resp.status_code
+    else:
+        s = int(resp)
+    return int(s) >= 400
+
+def ds_url_build(base: Any, params: Dict[str, Any]) -> str:
+    b = str(base)
+    q = urllib.parse.urlencode(params)
+    joiner = "&" if "?" in b else "?"
+    return f"{b}{joiner}{q}"
+
+def ds_http_headers(resp: Any) -> Dict[str, str]:
+    if isinstance(resp, dict):
+        return resp.get("headers", {})
+    if hasattr(resp, "headers"):
+        return dict(resp.headers)
+    return {}
+
+def ds_http_status_code(resp: Any) -> int:
+    if isinstance(resp, dict):
+        return int(resp.get("status", resp.get("status_code", 0)))
+    if hasattr(resp, "status"):
+        return int(resp.status)
+    if hasattr(resp, "status_code"):
+        return int(resp.status_code)
+    return int(resp)
+
+# Cluster 13: Tabular Data & CSV Operations
+def ds_csv_load(path: Any) -> List[Dict[str, Any]]:
+    with open(str(path), "r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        return list(reader)
+
+def ds_csv_parse_text(text: Any) -> List[Dict[str, Any]]:
+    import io
+    t = str(text).replace("\\n", "\n").strip()
+    reader = csv.DictReader(io.StringIO(t))
+    return list(reader)
+
+def ds_csv_export(records: List[Dict[str, Any]], path: Any) -> None:
+    if not records:
+        with open(str(path), "w", encoding="utf-8") as f:
+            f.write("")
+        return
+    fieldnames = list(records[0].keys())
+    with open(str(path), "w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(records)
+
+def ds_csv_to_text(records: List[Dict[str, Any]]) -> str:
+    import io
+    if not records:
+        return ""
+    out = io.StringIO()
+    writer = csv.DictWriter(out, fieldnames=list(records[0].keys()))
+    writer.writeheader()
+    writer.writerows(records)
+    return out.getvalue().strip()
+
+def ds_table_columns(table: Any) -> List[str]:
+    if not table:
+        return []
+    if isinstance(table, list) and isinstance(table[0], dict):
+        return list(table[0].keys())
+    return []
+
+def ds_table_row_count(table: Any) -> int:
+    return len(table)
+
+def ds_table_get_column(table: List[Dict[str, Any]], col: Any) -> List[Any]:
+    c = str(col)
+    return [row.get(c) for row in table]
+
+def ds_table_add_column(table: List[Dict[str, Any]], col: Any, val: Any) -> None:
+    c = str(col)
+    for row in table:
+        row[c] = val
+
+def ds_table_drop_column(table: List[Dict[str, Any]], col: Any) -> None:
+    c = str(col)
+    for row in table:
+        row.pop(c, None)
+
+def ds_table_drop_columns(table: List[Dict[str, Any]], cols: List[Any]) -> None:
+    for c in cols:
+        ds_table_drop_column(table, c)
+
+def ds_table_rename_column(table: List[Dict[str, Any]], old: Any, new: Any) -> None:
+    o, n = str(old), str(new)
+    for row in table:
+        if o in row:
+            row[n] = row.pop(o)
+
+def ds_table_sort(table: List[Dict[str, Any]], col: Any, reverse: bool = False) -> None:
+    c = str(col)
+    table.sort(key=lambda r: r.get(c), reverse=reverse)
+
+def ds_table_group_by(table: List[Dict[str, Any]], col: Any) -> Dict[Any, List[Dict[str, Any]]]:
+    c = str(col)
+    res: Dict[Any, List[Dict[str, Any]]] = {}
+    for row in table:
+        k = row.get(c)
+        if k not in res:
+            res[k] = []
+        res[k].append(row)
+    return res
+
+def ds_table_inner_join(t1: List[Dict], t2: List[Dict], key: Any) -> List[Dict]:
+    k = str(key)
+    res = []
+    idx2 = {r[k]: r for r in t2 if k in r}
+    for r1 in t1:
+        if k in r1 and r1[k] in idx2:
+            merged = dict(r1)
+            merged.update(idx2[r1[k]])
+            res.append(merged)
+    return res
+
+def ds_table_left_join(t1: List[Dict], t2: List[Dict], key: Any) -> List[Dict]:
+    k = str(key)
+    res = []
+    idx2 = {r[k]: r for r in t2 if k in r}
+    for r1 in t1:
+        merged = dict(r1)
+        if k in r1 and r1[k] in idx2:
+            merged.update(idx2[r1[k]])
+        res.append(merged)
+    return res
+
+def ds_table_pivot(table: List[Dict], idx: Any, cols: Any, val: Any) -> Dict:
+    i_col, c_col, v_col = str(idx), str(cols), str(val)
+    pivot: Dict[Any, Dict[Any, Any]] = {}
+    for row in table:
+        row_key = row.get(i_col)
+        col_key = row.get(c_col)
+        v = row.get(v_col)
+        if row_key not in pivot:
+            pivot[row_key] = {}
+        pivot[row_key][col_key] = v
+    return pivot
+
+# Cluster 14: System, OS & Process Interaction
+def ds_sys_run_command(cmd: Any) -> str:
+    return subprocess.check_output(str(cmd), shell=True, text=True)
+
+def ds_sys_run_command_exit_code(cmd: Any) -> int:
+    res = subprocess.run(str(cmd), shell=True)
+    return res.returncode
+
+def ds_sys_get_env(name: Any) -> str:
+    return os.environ.get(str(name), "")
+
+def ds_sys_get_env_default(name: Any, default: Any) -> Any:
+    return os.environ.get(str(name), default)
+
+def ds_sys_set_env(name: Any, val: Any) -> None:
+    os.environ[str(name)] = str(val)
+
+def ds_sys_all_env() -> Dict[str, str]:
+    return dict(os.environ)
+
+def ds_sys_cwd() -> str:
+    return os.getcwd()
+
+def ds_sys_chdir(path: Any) -> None:
+    os.chdir(str(path))
+
+def ds_sys_os_name() -> str:
+    import platform
+    return platform.system()
+
+def ds_sys_hostname() -> str:
+    import socket
+    return socket.gethostname()
+
+def ds_sys_cpu_count() -> int:
+    return os.cpu_count() or 1
+
+def ds_sys_pid() -> int:
+    return os.getpid()
+
+def ds_sys_memory_mb() -> float:
+    try:
+        import psutil
+        return psutil.Process(os.getpid()).memory_info().rss / (1024.0 * 1024.0)
+    except Exception:
+        return 0.0
+
+def ds_sys_sleep_seconds(n: Any) -> None:
+    time.sleep(float(n))
+
+def ds_sys_sleep_ms(n: Any) -> None:
+    time.sleep(float(n) / 1000.0)
+
+def ds_sys_home_dir() -> str:
+    return os.path.expanduser("~")
+
+def ds_sys_temp_dir() -> str:
+    import tempfile
+    return tempfile.gettempdir()
+
+def ds_sys_path_separator() -> str:
+    return os.sep
+
+def ds_sys_has_env(name: Any) -> bool:
+    return str(name) in os.environ
+
+def ds_sys_exit(code: Any = 0) -> None:
+    sys.exit(int(code))
+
+# Cluster 15: Unit Conversions
+def ds_convert_miles_to_km(x: Any) -> float:
+    return float(x) * 1.609344
+
+def ds_convert_km_to_miles(x: Any) -> float:
+    return float(x) / 1.609344
+
+def ds_convert_meters_to_feet(x: Any) -> float:
+    return float(x) * 3.28084
+
+def ds_convert_feet_to_meters(x: Any) -> float:
+    return float(x) / 3.28084
+
+def ds_convert_inches_to_cm(x: Any) -> float:
+    return float(x) * 2.54
+
+def ds_convert_cm_to_inches(x: Any) -> float:
+    return float(x) / 2.54
+
+def ds_convert_f_to_c(x: Any) -> float:
+    return (float(x) - 32.0) * 5.0 / 9.0
+
+def ds_convert_c_to_f(x: Any) -> float:
+    return (float(x) * 9.0 / 5.0) + 32.0
+
+def ds_convert_c_to_k(x: Any) -> float:
+    return float(x) + 273.15
+
+def ds_convert_k_to_c(x: Any) -> float:
+    return float(x) - 273.15
+
+def ds_convert_lbs_to_kg(x: Any) -> float:
+    return float(x) * 0.45359237
+
+def ds_convert_kg_to_lbs(x: Any) -> float:
+    return float(x) / 0.45359237
+
+def ds_convert_oz_to_g(x: Any) -> float:
+    return float(x) * 28.349523125
+
+def ds_convert_g_to_oz(x: Any) -> float:
+    return float(x) / 28.349523125
+
+def ds_convert_bytes_to_kb(x: Any) -> float:
+    return float(x) / 1024.0
+
+def ds_convert_kb_to_mb(x: Any) -> float:
+    return float(x) / 1024.0
+
+def ds_convert_mb_to_gb(x: Any) -> float:
+    return float(x) / 1024.0
+
+def ds_convert_gb_to_tb(x: Any) -> float:
+    return float(x) / 1024.0
+
+def ds_convert_deg_to_rad(x: Any) -> float:
+    return math.radians(float(x))
+
+def ds_convert_rad_to_deg(x: Any) -> float:
+    return math.degrees(float(x))
+
+
+
+
+# ---------------------------------------------------------------------------
+# Batch 2: Clusters 16-20 Runtime Primitives (Paradigms 201 - 300)
+# ---------------------------------------------------------------------------
+
+# Cluster 16: Mathematical Distributions & Vector Math
+def ds_vector_dot(v1: Any, v2: Any) -> float:
+    return float(sum(float(a) * float(b) for a, b in zip(v1, v2)))
+
+def ds_vector_cross(v1: Any, v2: Any) -> List[float]:
+    x1, y1, z1 = [float(v) for v in v1[:3]]
+    x2, y2, z2 = [float(v) for v in v2[:3]]
+    return [
+        (y1 * z2 - z1 * y2),
+        (z1 * x2 - x1 * z2),
+        (x1 * y2 - y1 * x2)
+    ]
+
+def ds_vector_magnitude(v: Any) -> float:
+    return math.sqrt(sum(float(x) ** 2 for x in v))
+
+def ds_vector_normalize(v: Any) -> List[float]:
+    mag = ds_vector_magnitude(v)
+    if mag == 0:
+        return [0.0 for _ in v]
+    return [float(x) / mag for x in v]
+
+def ds_vector_add(v1: Any, v2: Any) -> List[Any]:
+    return [a + b for a, b in zip(v1, v2)]
+
+def ds_vector_sub(v1: Any, v2: Any) -> List[Any]:
+    return [a - b for a, b in zip(v1, v2)]
+
+def ds_vector_scale(v: Any, s: Any) -> List[float]:
+    factor = float(s)
+    return [float(x) * factor for x in v]
+
+def ds_dist_euclidean(p1: Any, p2: Any) -> float:
+    return math.sqrt(sum((float(a) - float(b)) ** 2 for a, b in zip(p1, p2)))
+
+def ds_dist_manhattan(p1: Any, p2: Any) -> float:
+    return float(sum(abs(float(a) - float(b)) for a, b in zip(p1, p2)))
+
+def ds_cosine_similarity(v1: Any, v2: Any) -> float:
+    mag1 = ds_vector_magnitude(v1)
+    mag2 = ds_vector_magnitude(v2)
+    if mag1 == 0 or mag2 == 0:
+        return 0.0
+    return ds_vector_dot(v1, v2) / (mag1 * mag2)
+
+def ds_vector_angle_deg(v1: Any, v2: Any) -> float:
+    sim = max(-1.0, min(1.0, ds_cosine_similarity(v1, v2)))
+    return math.degrees(math.acos(sim))
+
+def ds_vector_angle_rad(v1: Any, v2: Any) -> float:
+    sim = max(-1.0, min(1.0, ds_cosine_similarity(v1, v2)))
+    return math.acos(sim)
+
+def ds_random_float(low: Any, high: Any) -> float:
+    return random.uniform(float(low), float(high))
+
+def ds_random_int(low: Any, high: Any) -> int:
+    return random.randint(int(low), int(high))
+
+def ds_random_choice(items: Any) -> Any:
+    return random.choice(list(items))
+
+def ds_random_standard_normal() -> float:
+    return random.gauss(0.0, 1.0)
+
+def ds_random_normal(m: Any, s: Any) -> float:
+    return random.gauss(float(m), float(s))
+
+def ds_clamp(x: Any, low: Any, high: Any) -> Any:
+    val = float(x)
+    l = float(low)
+    h = float(high)
+    res = max(l, min(h, val))
+    return int(res) if isinstance(x, int) and isinstance(low, int) and isinstance(high, int) else res
+
+def ds_lerp(a: Any, b: Any, t: Any) -> float:
+    fa, fb, ft = float(a), float(b), float(t)
+    return fa + (fb - fa) * ft
+
+def ds_sigmoid(x: Any) -> float:
+    return 1.0 / (1.0 + math.exp(-float(x)))
+
+# Cluster 17: Pattern Matching, Extraction & Search
+def ds_regex_find_all(pat: Any, text: Any) -> List[str]:
+    return re.findall(str(pat), str(text))
+
+def ds_regex_first_match(pat: Any, text: Any) -> str:
+    m = re.search(str(pat), str(text))
+    return m.group(0) if m else ""
+
+def ds_regex_matches(pat: Any, text: Any) -> bool:
+    return bool(re.match(str(pat), str(text)))
+
+def ds_regex_contains(pat: Any, text: Any) -> bool:
+    return bool(re.search(str(pat), str(text)))
+
+def ds_regex_replace(pat: Any, subst: Any, text: Any) -> str:
+    return re.sub(str(pat), str(subst), str(text))
+
+def ds_extract_numbers(text: Any) -> List[Any]:
+    matches = re.findall(r"-?\d+(?:\.\d+)?", str(text))
+    return [int(x) if "." not in x else float(x) for x in matches]
+
+def ds_extract_emails(text: Any) -> List[str]:
+    return re.findall(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}", str(text))
+
+def ds_extract_urls(text: Any) -> List[str]:
+    return re.findall(r'https?://[^\s<>"\']+', str(text))
+
+def ds_extract_hashtags(text: Any) -> List[str]:
+    return re.findall(r"#[A-Za-z0-9_]+", str(text))
+
+def ds_extract_mentions(text: Any) -> List[str]:
+    return re.findall(r"@[A-Za-z0-9_]+", str(text))
+
+def ds_search_case_insensitive(text: Any, sub: Any) -> int:
+    return str(text).lower().find(str(sub).lower())
+
+def ds_index_of(text: Any, sub: Any) -> int:
+    return str(text).find(str(sub))
+
+def ds_last_index_of(text: Any, sub: Any) -> int:
+    return str(text).rfind(str(sub))
+
+def ds_regex_split(pat: Any, text: Any) -> List[str]:
+    return re.split(str(pat), str(text))
+
+def ds_count_occurrences(text: Any, pat: Any) -> int:
+    return str(text).count(str(pat))
+
+def ds_count_regex_matches(pat: Any, text: Any) -> int:
+    return len(re.findall(str(pat), str(text)))
+
+def ds_capture_group(m: Any, n: Any) -> str:
+    return m.group(int(n)) if hasattr(m, "group") else ""
+
+def ds_named_group(m: Any, name: Any) -> str:
+    return m.group(str(name)) if hasattr(m, "group") else ""
+
+def ds_strip_html(text: Any) -> str:
+    return re.sub(r"<[^>]+>", "", str(text)).strip()
+
+def ds_regex_escape(text: Any) -> str:
+    return re.escape(str(text))
+
+# Cluster 18: Sets, Logic & Combinatorics
+def ds_set_intersection(s1: Any, s2: Any) -> List[Any]:
+    return list(set(s1) & set(s2))
+
+def ds_set_union(s1: Any, s2: Any) -> List[Any]:
+    return list(set(s1) | set(s2))
+
+def ds_set_difference(s1: Any, s2: Any) -> List[Any]:
+    return list(set(s1) - set(s2))
+
+def ds_set_symmetric_difference(s1: Any, s2: Any) -> List[Any]:
+    return list(set(s1) ^ set(s2))
+
+def ds_set_is_subset(s1: Any, s2: Any) -> bool:
+    return set(s1).issubset(set(s2))
+
+def ds_set_is_proper_subset(s1: Any, s2: Any) -> bool:
+    return set(s1) < set(s2)
+
+def ds_set_is_superset(s1: Any, s2: Any) -> bool:
+    return set(s1).issuperset(set(s2))
+
+def ds_set_is_disjoint(s1: Any, s2: Any) -> bool:
+    return set(s1).isdisjoint(set(s2))
+
+def ds_cartesian_product(l1: Any, l2: Any) -> List[Any]:
+    import itertools
+    return list(itertools.product(l1, l2))
+
+def ds_all_permutations(lst: Any) -> List[Any]:
+    import itertools
+    return list(itertools.permutations(lst))
+
+def ds_all_combinations(lst: Any, k: Any) -> List[Any]:
+    import itertools
+    return list(itertools.combinations(lst, int(k)))
+
+def ds_power_set(lst: Any) -> List[Any]:
+    import itertools
+    s = list(lst)
+    return list(itertools.chain.from_iterable(itertools.combinations(s, r) for r in range(len(s)+1)))
+
+def ds_factorial(n: Any) -> int:
+    return math.factorial(int(n))
+
+def ds_combinations_count(n: Any, k: Any) -> int:
+    return math.comb(int(n), int(k))
+
+def ds_permutations_count(n: Any, k: Any) -> int:
+    return math.perm(int(n), int(k))
+
+def ds_set_add(s: Any, item: Any) -> None:
+    s.add(item)
+
+def ds_set_remove(s: Any, item: Any) -> None:
+    s.discard(item)
+
+# Cluster 19: Serialization & Data Formats
+def ds_json_parse(text: Any) -> Any:
+    return json.loads(str(text))
+
+def ds_json_stringify(obj: Any) -> str:
+    return json.dumps(obj)
+
+def ds_json_stringify_pretty(obj: Any) -> str:
+    return json.dumps(obj, indent=2)
+
+def ds_json_stringify_indent(obj: Any, n: Any) -> str:
+    return json.dumps(obj, indent=int(n))
+
+def ds_is_valid_json(text: Any) -> bool:
+    try:
+        json.loads(str(text))
+        return True
+    except Exception:
+        return False
+
+def ds_yaml_parse(text: Any) -> Any:
+    try:
+        import yaml
+        return yaml.safe_load(str(text))
+    except ImportError:
+        return ds_json_parse(text)
+
+def ds_yaml_stringify(obj: Any) -> str:
+    try:
+        import yaml
+        return yaml.safe_dump(obj)
+    except ImportError:
+        return ds_json_stringify_pretty(obj)
+
+def ds_is_valid_yaml(text: Any) -> bool:
+    try:
+        import yaml
+        yaml.safe_load(str(text))
+        return True
+    except Exception:
+        return ds_is_valid_json(text)
+
+def ds_base64_encode(text: Any) -> str:
+    import base64
+    return base64.b64encode(str(text).encode("utf-8")).decode("utf-8")
+
+def ds_base64_decode(b64: Any) -> str:
+    import base64
+    return base64.b64decode(str(b64).strip()).decode("utf-8")
+
+def ds_base64_encode_bytes(data: Any) -> str:
+    import base64
+    return base64.b64encode(bytes(data)).decode("utf-8")
+
+def ds_base64_decode_bytes(b64: Any) -> bytes:
+    import base64
+    return base64.b64decode(str(b64).strip())
+
+def ds_hex_encode(text: Any) -> str:
+    return str(text).encode("utf-8").hex()
+
+def ds_hex_decode(h: Any) -> str:
+    return bytes.fromhex(str(h).strip()).decode("utf-8")
+
+def ds_query_string_parse(qs: Any) -> Dict[str, str]:
+    q = str(qs).lstrip("?")
+    parsed = urllib.parse.parse_qs(q)
+    return {k: v[0] if len(v) == 1 else v for k, v in parsed.items()}
+
+def ds_query_string_build(params: Dict[str, Any]) -> str:
+    return urllib.parse.urlencode(params)
+
+def ds_ini_parse(text: Any) -> Dict[str, Dict[str, str]]:
+    import configparser
+    cfg = configparser.ConfigParser()
+    cfg.read_string(str(text))
+    return {s: dict(cfg.items(s)) for s in cfg.sections()}
+
+def ds_ini_stringify(obj: Dict[str, Dict[str, str]]) -> str:
+    import configparser
+    import io
+    cfg = configparser.ConfigParser()
+    for s, kvs in obj.items():
+        cfg.add_section(s)
+        for k, v in kvs.items():
+            cfg.set(s, k, str(v))
+    out = io.StringIO()
+    cfg.write(out)
+    return out.getvalue().strip()
+
+def ds_toml_stringify(obj: Any) -> str:
+    return ds_json_stringify(obj)
+
+def ds_toml_parse(text: Any) -> Any:
+    return ds_json_parse(text)
+
+# Cluster 20: Cryptography, Hashing & Security
+def ds_crypto_sha256(text: Any) -> str:
+    import hashlib
+    return hashlib.sha256(str(text).encode("utf-8")).hexdigest()
+
+def ds_crypto_sha512(text: Any) -> str:
+    import hashlib
+    return hashlib.sha512(str(text).encode("utf-8")).hexdigest()
+
+def ds_crypto_sha1(text: Any) -> str:
+    import hashlib
+    return hashlib.sha1(str(text).encode("utf-8")).hexdigest()
+
+def ds_crypto_md5(text: Any) -> str:
+    import hashlib
+    return hashlib.md5(str(text).encode("utf-8")).hexdigest()
+
+def ds_crypto_hmac_sha256(text: Any, key: Any) -> str:
+    import hmac, hashlib
+    return hmac.new(str(key).encode("utf-8"), str(text).encode("utf-8"), hashlib.sha256).hexdigest()
+
+def ds_crypto_uuid() -> str:
+    import uuid
+    return str(uuid.uuid4())
+
+def ds_crypto_uuid_v4() -> str:
+    import uuid
+    return str(uuid.uuid4())
+
+def ds_crypto_token_bytes(n: Any) -> str:
+    import secrets
+    return secrets.token_hex(int(n))
+
+def ds_crypto_token_chars(n: Any) -> str:
+    import secrets
+    return secrets.token_urlsafe(int(n))
+
+def ds_crypto_random_int(low: Any, high: Any) -> int:
+    import secrets
+    lo, hi = int(low), int(high)
+    return lo + secrets.randbelow(hi - lo + 1)
+
+def ds_crypto_constant_time_compare(h1: Any, h2: Any) -> bool:
+    import hmac
+    return hmac.compare_digest(str(h1), str(h2))
+
+def ds_crypto_hash_password(pwd: Any) -> str:
+    import hashlib
+    return hashlib.sha256(str(pwd).encode("utf-8")).hexdigest()
+
+def ds_crypto_verify_password(pwd: Any, h: Any) -> bool:
+    import hmac
+    return hmac.compare_digest(ds_crypto_hash_password(pwd), str(h))
+
+def ds_crypto_file_checksum(path: Any) -> str:
+    return ds_crypto_file_sha256(path)
+
+def ds_crypto_file_sha256(path: Any) -> str:
+    import hashlib
+    h = hashlib.sha256()
+    with open(str(path), "rb") as f:
+        while chunk := f.read(65536):
+            h.update(chunk)
+    return h.hexdigest()
+
+def ds_crypto_random_hex(n: Any) -> str:
+    import secrets
+    length = int(n)
+    return secrets.token_hex((length + 1) // 2)[:length]
+
+def ds_crypto_random_alphanumeric(n: Any) -> str:
+    import secrets, string
+    chars = string.ascii_letters + string.digits
+    return "".join(secrets.choice(chars) for _ in range(int(n)))
+
+def ds_mask_string(s: Any, n: Any, m: Any) -> str:
+    st = str(s)
+    first_n, last_m = int(n), int(m)
+    if len(st) <= first_n + last_m:
+        return st
+    return st[:first_n] + ("*" * (len(st) - first_n - last_m)) + st[-last_m:]
+
+def ds_mask_email(email: Any) -> str:
+    em = str(email)
+    if "@" not in em:
+        return ds_mask_string(em, 2, 2)
+    user, domain = em.split("@", 1)
+    return ds_mask_string(user, 2, 1) + "@" + domain
+
+def ds_mask_credit_card(card: Any) -> str:
+    c = str(card).replace("-", "").replace(" ", "")
+    return "****-****-****-" + c[-4:]
+
+
+# ===========================================================================
+# Batch 3: Clusters 21 to 25 (Paradigms 301 to 400)
+# ===========================================================================
+
+# Cluster 21: Stream Processing, Batching & Windowing
+def ds_chunk_list(lst: Any, size: Any) -> List[Any]:
+    s = max(1, int(size))
+    l = list(lst)
+    return [l[i:i + s] for i in range(0, len(l), s)]
+
+def ds_partition_chunks(lst: Any, n: Any) -> List[Any]:
+    l = list(lst)
+    n_val = max(1, int(n))
+    k, m = divmod(len(l), n_val)
+    return [l[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(n_val)]
+
+def ds_sliding_window(lst: Any, size: Any, step: Any = 1) -> List[Any]:
+    s = max(1, int(size))
+    st = max(1, int(step))
+    l = list(lst)
+    if len(l) < s:
+        return []
+    return [l[i:i + s] for i in range(0, len(l) - s + 1, st)]
+
+def ds_interleave(*lists: Any) -> List[Any]:
+    res = []
+    iters = [iter(l) for l in lists]
+    while iters:
+        new_iters = []
+        for it in iters:
+            try:
+                res.append(next(it))
+                new_iters.append(it)
+            except StopIteration:
+                pass
+        iters = new_iters
+    return res
+
+def ds_unzip_pairs(pairs: Any) -> List[List[Any]]:
+    if not pairs:
+        return [[], []]
+    return [list(t) for t in zip(*pairs)]
+
+def ds_flatten_list(nested: Any) -> List[Any]:
+    res = []
+    def _flat(item):
+        if isinstance(item, (list, tuple)):
+            for sub in item:
+                _flat(sub)
+        else:
+            res.append(item)
+    _flat(nested)
+    return res
+
+def ds_flatten_levels(nested: Any, depth: Any) -> List[Any]:
+    d = int(depth)
+    current = list(nested)
+    for _ in range(d):
+        next_lvl = []
+        has_sub = False
+        for item in current:
+            if isinstance(item, (list, tuple)):
+                next_lvl.extend(item)
+                has_sub = True
+            else:
+                next_lvl.append(item)
+        current = next_lvl
+        if not has_sub:
+            break
+    return current
+
+def ds_frequency_count(lst: Any) -> Dict[Any, int]:
+    import collections
+    return dict(collections.Counter(lst))
+
+def ds_cumulative_sum(lst: Any) -> List[Any]:
+    import itertools
+    return list(itertools.accumulate(lst))
+
+def ds_cumulative_product(lst: Any) -> List[Any]:
+    import itertools, operator
+    return list(itertools.accumulate(lst, operator.mul))
+
+def ds_adjacent_differences(lst: Any) -> List[Any]:
+    l = list(lst)
+    return [l[i + 1] - l[i] for i in range(len(l) - 1)]
+
+def ds_cycle_list(lst: Any, n: Any) -> List[Any]:
+    return list(lst) * max(0, int(n))
+
+def ds_pad_list(lst: Any, n: Any, val: Any) -> List[Any]:
+    l = list(lst)
+    target_len = int(n)
+    if len(l) >= target_len:
+        return l
+    return l + [val] * (target_len - len(l))
+
+def ds_split_list_at(lst: Any, idx: Any) -> List[List[Any]]:
+    l = list(lst)
+    i = int(idx)
+    return [l[:i], l[i:]]
+
+def ds_group_while(lst: Any, fn: Any) -> List[List[Any]]:
+    groups = []
+    curr = []
+    for x in lst:
+        if not curr or fn(curr[-1], x):
+            curr.append(x)
+        else:
+            groups.append(curr)
+            curr = [x]
+    if curr:
+        groups.append(curr)
+    return groups
+
+# Cluster 22: Advanced Date/Time Durations, Recurrence & Calendar
+def _to_dt(d: Any) -> datetime:
+    if d is None:
+        return datetime.now()
+    if isinstance(d, datetime):
+        return d
+    if isinstance(d, date):
+        return datetime.combine(d, datetime.min.time())
+    if isinstance(d, str):
+        return datetime.fromisoformat(d)
+    return datetime.now()
+
+def ds_start_of_day(d: Any = None) -> datetime:
+    dt = _to_dt(d)
+    return dt.replace(hour=0, minute=0, second=0, microsecond=0)
+
+def ds_end_of_day(d: Any = None) -> datetime:
+    dt = _to_dt(d)
+    return dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+def ds_start_of_week(d: Any = None) -> datetime:
+    dt = ds_start_of_day(d)
+    return dt - timedelta(days=dt.weekday())
+
+def ds_end_of_week(d: Any = None) -> datetime:
+    dt = ds_start_of_week(d) + timedelta(days=6)
+    return dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+def ds_start_of_month(d: Any = None) -> datetime:
+    dt = _to_dt(d)
+    return dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+def ds_end_of_month(d: Any = None) -> datetime:
+    import calendar
+    dt = _to_dt(d)
+    last_day = calendar.monthrange(dt.year, dt.month)[1]
+    return dt.replace(day=last_day, hour=23, minute=59, second=59, microsecond=999999)
+
+def ds_start_of_year(d: Any = None) -> datetime:
+    dt = _to_dt(d)
+    return dt.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+
+def ds_end_of_year(d: Any = None) -> datetime:
+    dt = _to_dt(d)
+    return dt.replace(month=12, day=31, hour=23, minute=59, second=59, microsecond=999999)
+
+def ds_days_in_month(d: Any = None) -> int:
+    import calendar
+    dt = _to_dt(d)
+    return calendar.monthrange(dt.year, dt.month)[1]
+
+def ds_is_leap_year(year: Any) -> bool:
+    import calendar
+    if isinstance(year, (datetime, date)):
+        return calendar.isleap(year.year)
+    return calendar.isleap(int(year))
+
+def ds_day_of_year(d: Any = None) -> int:
+    dt = _to_dt(d)
+    return dt.timetuple().tm_yday
+
+def ds_week_number(d: Any = None) -> int:
+    dt = _to_dt(d)
+    return dt.isocalendar()[1]
+
+def ds_quarter_of_year(d: Any = None) -> int:
+    dt = _to_dt(d)
+    return (dt.month - 1) // 3 + 1
+
+def ds_add_business_days(d: Any, n: Any) -> datetime:
+    dt = _to_dt(d)
+    days = int(n)
+    step = 1 if days >= 0 else -1
+    added = 0
+    curr = dt
+    while added < abs(days):
+        curr += timedelta(days=step)
+        if curr.weekday() < 5:
+            added += 1
+    return curr
+
+def ds_sub_business_days(d: Any, n: Any) -> datetime:
+    return ds_add_business_days(d, -int(n))
+
+def ds_business_days_between(d1: Any, d2: Any) -> int:
+    dt1 = _to_dt(d1)
+    dt2 = _to_dt(d2)
+    if dt1 > dt2:
+        dt1, dt2 = dt2, dt1
+    count = 0
+    curr = dt1 + timedelta(days=1)
+    while curr <= dt2:
+        if curr.weekday() < 5:
+            count += 1
+        curr += timedelta(days=1)
+    return count
+
+def ds_next_weekday(d: Any, day_name: str) -> datetime:
+    dt = _to_dt(d)
+    days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+    target_idx = days.index(day_name.lower().strip())
+    days_ahead = (target_idx - dt.weekday()) % 7
+    if days_ahead == 0:
+        days_ahead = 7
+    return dt + timedelta(days=days_ahead)
+
+def ds_prev_weekday(d: Any, day_name: str) -> datetime:
+    dt = _to_dt(d)
+    days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+    target_idx = days.index(day_name.lower().strip())
+    days_behind = (dt.weekday() - target_idx) % 7
+    if days_behind == 0:
+        days_behind = 7
+    return dt - timedelta(days=days_behind)
+
+def ds_elapsed_seconds(t: Any) -> float:
+    now_ts = time.time()
+    if isinstance(t, (int, float)):
+        return max(0.0, now_ts - float(t))
+    dt = _to_dt(t)
+    return max(0.0, (datetime.now() - dt).total_seconds())
+
+def ds_elapsed_human(t: Any) -> str:
+    sec = ds_elapsed_seconds(t)
+    if sec < 60:
+        return f"{int(sec)} seconds ago"
+    if sec < 3600:
+        return f"{int(sec // 60)} minutes ago"
+    if sec < 86400:
+        return f"{int(sec // 3600)} hours ago"
+    return f"{int(sec // 86400)} days ago"
+
+# Cluster 23: Human-Readable Formatting & Text Presentation
+def ds_format_number_commas(n: Any) -> str:
+    if isinstance(n, int):
+        return f"{n:,}"
+    return f"{float(n):,}"
+
+def ds_format_number_decimals(n: Any, d: Any) -> str:
+    dec = int(d)
+    return f"{float(n):.{dec}f}"
+
+def ds_format_currency_code(amt: Any, curr: str) -> str:
+    return f"{curr.upper()} {float(amt):,.2f}"
+
+def ds_format_currency_sym(amt: Any, sym: str) -> str:
+    return f"{sym}{float(amt):,.2f}"
+
+def ds_format_bytes_human(b_size: Any) -> str:
+    b = float(b_size)
+    for unit in ["B", "KB", "MB", "GB", "TB"]:
+        if b < 1024.0 or unit == "TB":
+            return f"{b:.1f} {unit}" if unit != "B" else f"{int(b)} B"
+        b /= 1024.0
+    return f"{b:.1f} PB"
+
+def ds_format_duration_human(s_val: Any) -> str:
+    s = int(s_val)
+    days, s = divmod(s, 86400)
+    hours, s = divmod(s, 3600)
+    mins, secs = divmod(s, 60)
+    parts = []
+    if days: parts.append(f"{days}d")
+    if hours: parts.append(f"{hours}h")
+    if mins: parts.append(f"{mins}m")
+    if secs or not parts: parts.append(f"{secs}s")
+    return " ".join(parts)
+
+def ds_pluralize(word: str, n: Any) -> str:
+    num = int(n)
+    w = str(word)
+    if num == 1:
+        return f"1 {w}"
+    if w.endswith("y") and not w[-2:].lower() in ("ay", "ey", "oy", "uy"):
+        return f"{num} {w[:-1]}ies"
+    if w.endswith(("s", "sh", "ch", "x", "z")):
+        return f"{num} {w}es"
+    return f"{num} {w}s"
+
+def ds_ordinal(n: Any) -> str:
+    num = int(n)
+    if 11 <= (num % 100) <= 13:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(num % 10, "th")
+    return f"{num}{suffix}"
+
+def ds_truncate_suffix(s: Any, length: Any, suffix: str = "...") -> str:
+    st = str(s)
+    lim = int(length)
+    if len(st) <= lim:
+        return st
+    return st[:lim] + suffix
+
+def ds_wrap_text(s: Any, width: Any) -> str:
+    import textwrap
+    return textwrap.fill(str(s), width=int(width))
+
+def ds_indent_text(s: Any, n: Any) -> str:
+    import textwrap
+    return textwrap.indent(str(s), " " * int(n))
+
+def ds_align_left(s: Any, width: Any) -> str:
+    return str(s).ljust(int(width))
+
+def ds_align_right(s: Any, width: Any) -> str:
+    return str(s).rjust(int(width))
+
+def ds_align_center(s: Any, width: Any) -> str:
+    return str(s).center(int(width))
+
+def ds_abbreviate_words(s: Any, n: Any) -> str:
+    words = str(s).split()
+    count = int(n)
+    if len(words) <= count:
+        return str(s)
+    return " ".join(words[:count]) + "..."
+
+def ds_word_count(s: Any) -> int:
+    return len(str(s).split())
+
+def ds_line_count(s: Any) -> int:
+    return len(str(s).splitlines())
+
+def ds_string_byte_size(s: Any) -> int:
+    return len(str(s).encode("utf-8"))
+
+def ds_oxford_comma(items: Any) -> str:
+    lst = [str(x) for x in items]
+    if not lst:
+        return ""
+    if len(lst) == 1:
+        return lst[0]
+    if len(lst) == 2:
+        return f"{lst[0]} and {lst[1]}"
+    return ", ".join(lst[:-1]) + f", and {lst[-1]}"
+
+# Cluster 24: Concurrency & Async Coordination
+import queue as _py_queue
+
+class DoomChannel:
+    def __init__(self, maxsize: int = 0):
+        self.q = _py_queue.Queue(maxsize=maxsize)
+        self.closed = False
+        self._lock = threading.Lock()
+
+    def send(self, item: Any) -> None:
+        if self.closed:
+            raise RuntimeError("Cannot send to closed channel")
+        self.q.put(item)
+
+    def receive(self, timeout: Optional[float] = None) -> Any:
+        try:
+            return self.q.get(timeout=timeout)
+        except _py_queue.Empty:
+            return None
+
+    def close(self) -> None:
+        self.closed = True
+
+    def is_closed(self) -> bool:
+        return self.closed
+
+    def is_empty(self) -> bool:
+        return self.q.empty()
+
+    def count(self) -> int:
+        return self.q.qsize()
+
+def ds_channel_create(maxsize: Any = 0) -> DoomChannel:
+    return DoomChannel(int(maxsize))
+
+def ds_channel_send(chan: Any, msg: Any) -> None:
+    chan.send(msg)
+
+def ds_channel_receive(chan: Any) -> Any:
+    return chan.receive()
+
+def ds_channel_receive_timeout(chan: Any, ms: Any) -> Any:
+    return chan.receive(timeout=float(ms) / 1000.0)
+
+def ds_channel_close(chan: Any) -> None:
+    chan.close()
+
+def ds_channel_is_closed(chan: Any) -> bool:
+    return chan.is_closed()
+
+def ds_channel_is_empty(chan: Any) -> bool:
+    return chan.is_empty()
+
+def ds_channel_count(chan: Any) -> int:
+    return chan.count()
+
+def ds_lock_create() -> threading.Lock:
+    return threading.Lock()
+
+def ds_async_spawn(fn: Any) -> DoomTask:
+    if callable(fn):
+        return ds_run_background(fn)
+    return DoomTask(lambda: fn)
+
+def ds_async_await(task: Any) -> Any:
+    if isinstance(task, DoomTask):
+        return task.result()
+    return task
+
+def ds_async_await_all(tasks: Any) -> List[Any]:
+    return [ds_async_await(t) for t in tasks]
+
+def ds_async_await_any(tasks: Any) -> Any:
+    while True:
+        for t in tasks:
+            if isinstance(t, DoomTask) and t.done():
+                return t.result()
+        time.sleep(0.005)
+
+def ds_async_race(t1: Any, t2: Any) -> Any:
+    return ds_async_await_any([t1, t2])
+
+def ds_parallel_map(fn: Any, lst: Any, workers: Any = 4) -> List[Any]:
+    import concurrent.futures
+    with concurrent.futures.ThreadPoolExecutor(max_workers=int(workers)) as ex:
+        return list(ex.map(fn, lst))
+
+def ds_debounce(fn: Any, ms: Any) -> Any:
+    last_called = [0.0]
+    delay = float(ms) / 1000.0
+    def _wrapper(*args, **kwargs):
+        now = time.time()
+        if now - last_called[0] >= delay:
+            last_called[0] = now
+            return fn(*args, **kwargs)
+        return None
+    return _wrapper
+
+def ds_throttle(fn: Any, ms: Any) -> Any:
+    return ds_debounce(fn, ms)
+
+def ds_delay_call(ms: Any, fn: Any) -> Any:
+    time.sleep(float(ms) / 1000.0)
+    return fn() if callable(fn) else fn
+
+# Cluster 25: Error Recovery & Fallback Strategies
+_CURRENT_ERROR_STATE = {"msg": "", "type": "", "trace": ""}
+
+def ds_try_fallback(primary_fn: Any, default_val: Any) -> Any:
+    try:
+        return primary_fn() if callable(primary_fn) else primary_fn
+    except Exception as e:
+        _CURRENT_ERROR_STATE["msg"] = str(e)
+        _CURRENT_ERROR_STATE["type"] = type(e).__name__
+        return default_val
+
+def ds_retry(fn: Any, max_tries: Any = 3, delay: Any = 0.0, backoff: Any = 1.0) -> Any:
+    tries = int(max_tries)
+    d = float(delay)
+    b = float(backoff)
+    last_err = None
+    for attempt in range(tries):
+        try:
+            return fn() if callable(fn) else fn
+        except Exception as e:
+            last_err = e
+            _CURRENT_ERROR_STATE["msg"] = str(e)
+            _CURRENT_ERROR_STATE["type"] = type(e).__name__
+            if attempt < tries - 1 and d > 0:
+                time.sleep(d)
+                d *= b
+    if last_err:
+        raise last_err
+
+def ds_ignore_errors(fn: Any, default_val: Any = None) -> Any:
+    try:
+        return fn() if callable(fn) else fn
+    except Exception as e:
+        _CURRENT_ERROR_STATE["msg"] = str(e)
+        _CURRENT_ERROR_STATE["type"] = type(e).__name__
+        return default_val
+
+def ds_log_warning(msg: Any) -> None:
+    import logging
+    logging.warning(str(msg))
+
+def ds_get_current_error_msg() -> str:
+    return _CURRENT_ERROR_STATE["msg"]
+
+def ds_get_current_error_type() -> str:
+    return _CURRENT_ERROR_STATE["type"]
+
+def ds_get_current_error_trace() -> str:
+    return _CURRENT_ERROR_STATE["trace"]
+
+def ds_clear_current_error() -> None:
+    _CURRENT_ERROR_STATE["msg"] = ""
+    _CURRENT_ERROR_STATE["type"] = ""
+    _CURRENT_ERROR_STATE["trace"] = ""
+
+def ds_timed_execution(fn: Any) -> Tuple[Any, float]:
+    t0 = time.time()
+    res = fn() if callable(fn) else fn
+    return res, round(time.time() - t0, 6)
+
+
+# ===========================================================================
+# Batch 4: Clusters 26 to 30 (Paradigms 401 to 500)
+# ===========================================================================
+
+# Cluster 26: Linguistic & String Distance Algorithms
+def ds_levenshtein_distance(s1: Any, s2: Any) -> int:
+    a, b = str(s1), str(s2)
+    m, n = len(a), len(b)
+    dp = [[0] * (n + 1) for _ in range(m + 1)]
+    for i in range(m + 1):
+        dp[i][0] = i
+    for j in range(n + 1):
+        dp[0][j] = j
+    for i in range(1, m + 1):
+        for j in range(1, n + 1):
+            if a[i - 1] == b[j - 1]:
+                dp[i][j] = dp[i - 1][j - 1]
+            else:
+                dp[i][j] = 1 + min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1])
+    return dp[m][n]
+
+def ds_string_similarity(s1: Any, s2: Any) -> float:
+    import difflib
+    return round(difflib.SequenceMatcher(None, str(s1), str(s2)).ratio(), 4)
+
+def ds_soundex(word: Any) -> str:
+    w = str(word).upper().strip()
+    if not w:
+        return "0000"
+    mapping = {
+        "B": "1", "F": "1", "P": "1", "V": "1",
+        "C": "2", "G": "2", "J": "2", "K": "2", "Q": "2", "S": "2", "X": "2", "Z": "2",
+        "D": "3", "T": "3",
+        "L": "4",
+        "M": "5", "N": "5",
+        "R": "6"
+    }
+    first_letter = w[0]
+    tail = w[1:]
+    res = [first_letter]
+    prev_code = mapping.get(first_letter, "")
+    for ch in tail:
+        code = mapping.get(ch, "")
+        if code and code != prev_code:
+            res.append(code)
+            prev_code = code
+        elif not code and ch not in ("H", "W"):
+            prev_code = ""
+        if len(res) == 4:
+            break
+    while len(res) < 4:
+        res.append("0")
+    return "".join(res[:4])
+
+def ds_metaphone(word: Any) -> str:
+    w = str(word).strip().upper()
+    if not w:
+        return ""
+    if w.startswith(("KN", "GN", "PN", "AE", "WR")):
+        w = w[1:]
+    elif w.startswith("X"):
+        w = "S" + w[1:]
+    elif w.startswith("WH"):
+        w = "W" + w[2:]
+    res = []
+    i = 0
+    n = len(w)
+    while i < n:
+        c = w[i]
+        nxt = w[i+1] if i + 1 < n else ""
+        if c == "C":
+            if nxt in ("E", "I", "Y"):
+                res.append("S")
+                i += 1
+            elif nxt == "H":
+                res.append("X")
+                i += 2
+                continue
+            else:
+                res.append("K")
+        elif c == "T" and nxt == "H":
+            res.append("0")
+            i += 2
+            continue
+        elif c == "P" and nxt == "H":
+            res.append("F")
+            i += 2
+            continue
+        elif c == "S" and nxt == "H":
+            res.append("X")
+            i += 2
+            continue
+        elif c in "AEIOUY":
+            if i == 0:
+                res.append(c)
+        else:
+            if not res or res[-1] != c:
+                res.append(c)
+        i += 1
+    return "".join(res)
+
+def ds_sounds_like(s1: Any, s2: Any) -> bool:
+    return ds_metaphone(s1) == ds_metaphone(s2) or ds_soundex(s1) == ds_soundex(s2)
+
+def ds_to_camel_case(s: Any) -> str:
+    parts = re.split(r"[\s_\-]+", str(s).strip())
+    if not parts:
+        return ""
+    return parts[0].lower() + "".join(p.capitalize() for p in parts[1:])
+
+def ds_to_snake_case(s: Any) -> str:
+    st = str(s).strip()
+    st = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", st)
+    st = re.sub(r"([a-z\d])([A-Z])", r"\1_\2", st)
+    return re.sub(r"[\s\-]+", "_", st).lower()
+
+def ds_to_kebab_case(s: Any) -> str:
+    return ds_to_snake_case(s).replace("_", "-")
+
+def ds_to_pascal_case(s: Any) -> str:
+    parts = re.split(r"[\s_\-]+", str(s).strip())
+    return "".join(p.capitalize() for p in parts)
+
+def ds_to_title_case(s: Any) -> str:
+    parts = re.split(r"[\s_\-]+", str(s).strip())
+    return " ".join(p.capitalize() for p in parts if p)
+
+def ds_to_sentence_case(s: Any) -> str:
+    parts = re.split(r"[\s_\-]+", str(s).strip())
+    if not parts:
+        return ""
+    words = [parts[0].capitalize()] + [p.lower() for p in parts[1:]]
+    return " ".join(w for w in words if w)
+
+def ds_to_constant_case(s: Any) -> str:
+    return ds_to_snake_case(s).upper()
+
+def ds_word_stem(w: Any) -> str:
+    st = str(w).lower().strip()
+    for suffix in ("ing", "ed", "es", "ly", "er", "est", "s"):
+        if st.endswith(suffix) and len(st) > len(suffix) + 2:
+            return st[:-len(suffix)]
+    return st
+
+def ds_jaccard_similarity(s1: Any, s2: Any) -> float:
+    if hasattr(s1, '__iter__') and not isinstance(s1, (str, bytes)):
+        set1 = set(s1)
+    else:
+        set1 = set(str(s1).lower().split())
+
+    if hasattr(s2, '__iter__') and not isinstance(s2, (str, bytes)):
+        set2 = set(s2)
+    else:
+        set2 = set(str(s2).lower().split())
+
+    if not set1 and not set2:
+        return 1.0
+    intersection = len(set1 & set2)
+    union = len(set1 | set2)
+    return round(float(intersection) / float(union), 4) if union else 0.0
+
+def ds_hamming_distance(s1: Any, s2: Any) -> int:
+    a, b = str(s1), str(s2)
+    diff = abs(len(a) - len(b))
+    for c1, c2 in zip(a, b):
+        if c1 != c2:
+            diff += 1
+    return diff
+
+def ds_closest_string(target: Any, candidates: Any) -> Optional[str]:
+    import difflib
+    matches = difflib.get_close_matches(str(target), [str(c) for c in candidates], n=1)
+    return matches[0] if matches else None
+
+def ds_top_closest_strings(target: Any, candidates: Any, n: Any = 3) -> List[str]:
+    import difflib
+    return difflib.get_close_matches(str(target), [str(c) for c in candidates], n=int(n), cutoff=0.1)
+
+def ds_remove_accents(s: Any) -> str:
+    import unicodedata
+    nfkd = unicodedata.normalize("NFKD", str(s))
+    return "".join([c for c in nfkd if not unicodedata.combining(c)])
+
+def ds_transliterate_ascii(s: Any) -> str:
+    return ds_remove_accents(s)
+
+# Cluster 27: Graph & Tree Traversal
+class DoomGraph:
+    def __init__(self, directed: bool = False):
+        self.directed = directed
+        self.nodes = set()
+        self.adj = {}
+        self.weights = {}
+
+    def add_node(self, n: Any) -> None:
+        self.nodes.add(n)
+        if n not in self.adj:
+            self.adj[n] = []
+
+    def add_edge(self, u: Any, v: Any, weight: float = 1.0) -> None:
+        self.add_node(u)
+        self.add_node(v)
+        if v not in self.adj[u]:
+            self.adj[u].append(v)
+        self.weights[(u, v)] = float(weight)
+        if not self.directed:
+            if u not in self.adj[v]:
+                self.adj[v].append(u)
+            self.weights[(v, u)] = float(weight)
+
+    def remove_edge(self, u: Any, v: Any) -> None:
+        if u in self.adj and v in self.adj[u]:
+            self.adj[u].remove(v)
+        self.weights.pop((u, v), None)
+        if not self.directed:
+            if v in self.adj and u in self.adj[v]:
+                self.adj[v].remove(u)
+            self.weights.pop((v, u), None)
+
+    def neighbors(self, n: Any) -> List[Any]:
+        return list(self.adj.get(n, []))
+
+    def shortest_path(self, start: Any, end: Any) -> List[Any]:
+        if start not in self.nodes or end not in self.nodes:
+            return []
+        if start == end:
+            return [start]
+        visited = {start}
+        parent = {}
+        q = [start]
+        while q:
+            curr = q.pop(0)
+            if curr == end:
+                break
+            for nbr in self.adj.get(curr, []):
+                if nbr not in visited:
+                    visited.add(nbr)
+                    parent[nbr] = curr
+                    q.append(nbr)
+        if end not in parent:
+            return []
+        path = [end]
+        while path[-1] != start:
+            path.append(parent[path[-1]])
+        path.reverse()
+        return path
+
+    def shortest_path_len(self, start: Any, end: Any) -> int:
+        p = self.shortest_path(start, end)
+        return max(0, len(p) - 1) if p else -1
+
+    def has_path(self, start: Any, end: Any) -> bool:
+        return len(self.shortest_path(start, end)) > 0
+
+    def connected_components(self) -> List[List[Any]]:
+        visited = set()
+        components = []
+        for n in self.nodes:
+            if n not in visited:
+                comp = []
+                q = [n]
+                visited.add(n)
+                while q:
+                    curr = q.pop(0)
+                    comp.append(curr)
+                    for nbr in self.adj.get(curr, []):
+                        if nbr not in visited:
+                            visited.add(nbr)
+                            q.append(nbr)
+                components.append(comp)
+        return components
+
+    def is_connected(self) -> bool:
+        if not self.nodes:
+            return True
+        return len(self.connected_components()) == 1
+
+    def is_acyclic(self) -> bool:
+        visited = set()
+        rec_stack = set()
+        def _dfs_cycle(node, parent):
+            visited.add(node)
+            rec_stack.add(node)
+            for nbr in self.adj.get(node, []):
+                if nbr not in visited:
+                    if _dfs_cycle(nbr, node):
+                        return True
+                elif self.directed:
+                    if nbr in rec_stack:
+                        return True
+                elif nbr != parent:
+                    return True
+            rec_stack.remove(node)
+            return False
+
+        for n in self.nodes:
+            if n not in visited:
+                if _dfs_cycle(n, None):
+                    return False
+        return True
+
+    def topological_sort(self) -> List[Any]:
+        in_degree = {n: 0 for n in self.nodes}
+        for u in self.adj:
+            for v in self.adj[u]:
+                in_degree[v] = in_degree.get(v, 0) + 1
+        q = [n for n in self.nodes if in_degree[n] == 0]
+        order = []
+        while q:
+            curr = q.pop(0)
+            order.append(curr)
+            for nbr in self.adj.get(curr, []):
+                in_degree[nbr] -= 1
+                if in_degree[nbr] == 0:
+                    q.append(nbr)
+        return order
+
+    def dfs(self, start: Any) -> List[Any]:
+        if start not in self.nodes:
+            return []
+        visited = set()
+        order = []
+        def _explore(curr):
+            visited.add(curr)
+            order.append(curr)
+            for nbr in self.adj.get(curr, []):
+                if nbr not in visited:
+                    _explore(nbr)
+        _explore(start)
+        return order
+
+    def bfs(self, start: Any) -> List[Any]:
+        if start not in self.nodes:
+            return []
+        visited = {start}
+        order = []
+        q = [start]
+        while q:
+            curr = q.pop(0)
+            order.append(curr)
+            for nbr in self.adj.get(curr, []):
+                if nbr not in visited:
+                    visited.add(nbr)
+                    q.append(nbr)
+        return order
+
+    def in_degree(self, n: Any) -> int:
+        count = 0
+        for u in self.adj:
+            if n in self.adj[u]:
+                count += 1
+        return count
+
+    def out_degree(self, n: Any) -> int:
+        return len(self.adj.get(n, []))
+
+def ds_graph_create(directed: bool = False) -> DoomGraph:
+    return DoomGraph(directed=directed)
+
+def ds_graph_add_node(g: DoomGraph, n: Any) -> None:
+    g.add_node(n)
+
+def ds_graph_add_edge(g: DoomGraph, u: Any, v: Any) -> None:
+    g.add_edge(u, v)
+
+def ds_graph_add_weighted_edge(g: DoomGraph, u: Any, v: Any, w: Any) -> None:
+    g.add_edge(u, v, weight=float(w))
+
+def ds_graph_remove_edge(g: DoomGraph, u: Any, v: Any) -> None:
+    g.remove_edge(u, v)
+
+def ds_graph_neighbors(g: DoomGraph, n: Any) -> List[Any]:
+    return g.neighbors(n)
+
+def ds_graph_shortest_path(g: DoomGraph, u: Any, v: Any) -> List[Any]:
+    return g.shortest_path(u, v)
+
+def ds_graph_shortest_path_len(g: DoomGraph, u: Any, v: Any) -> int:
+    return g.shortest_path_len(u, v)
+
+def ds_graph_has_path(g: DoomGraph, u: Any, v: Any) -> bool:
+    return g.has_path(u, v)
+
+def ds_graph_connected_components(g: DoomGraph) -> List[List[Any]]:
+    return g.connected_components()
+
+def ds_graph_is_connected(g: DoomGraph) -> bool:
+    return g.is_connected()
+
+def ds_graph_is_acyclic(g: DoomGraph) -> bool:
+    return g.is_acyclic()
+
+def ds_graph_topological_sort(g: DoomGraph) -> List[Any]:
+    return g.topological_sort()
+
+def ds_graph_dfs(g: DoomGraph, start: Any) -> List[Any]:
+    return g.dfs(start)
+
+def ds_graph_bfs(g: DoomGraph, start: Any) -> List[Any]:
+    return g.bfs(start)
+
+def ds_graph_node_count(g: DoomGraph) -> int:
+    return len(g.nodes)
+
+def ds_graph_edge_count(g: DoomGraph) -> int:
+    total = sum(len(adj) for adj in g.adj.values())
+    return total if g.directed else total // 2
+
+def ds_graph_in_degree(g: DoomGraph, n: Any) -> int:
+    return g.in_degree(n)
+
+def ds_graph_out_degree(g: DoomGraph, n: Any) -> int:
+    return g.out_degree(n)
+
+# Cluster 28: Interactive CLI & Rich Terminal Output
+def ds_cli_getpass(prompt: Any = "Password: ") -> str:
+    import getpass
+    try:
+        return getpass.getpass(str(prompt))
+    except Exception:
+        return ""
+
+def ds_cli_ask_bool(prompt: Any) -> bool:
+    try:
+        ans = input(str(prompt)).strip().lower()
+        return ans in ("y", "yes", "true", "1")
+    except Exception:
+        return False
+
+def ds_cli_ask_int(prompt: Any) -> int:
+    try:
+        return int(input(str(prompt)).strip())
+    except Exception:
+        return 0
+
+def ds_cli_ask_float(prompt: Any) -> float:
+    try:
+        return float(input(str(prompt)).strip())
+    except Exception:
+        return 0.0
+
+def ds_cli_prompt_choice(choices: Any) -> Any:
+    l = list(choices)
+    for idx, c in enumerate(l):
+        print(f"[{idx + 1}] {c}")
+    try:
+        sel = int(input("Select option: ")) - 1
+        return l[sel] if 0 <= sel < len(l) else l[0]
+    except Exception:
+        return l[0] if l else None
+
+def ds_cli_print_colored(text: Any, color: str) -> None:
+    colors = {
+        "red": "\033[91m", "green": "\033[92m", "yellow": "\033[93m",
+        "blue": "\033[94m", "magenta": "\033[95m", "cyan": "\033[96m",
+        "white": "\033[97m", "reset": "\033[0m"
+    }
+    c_code = colors.get(str(color).lower(), "\033[0m")
+    print(f"{c_code}{text}\033[0m")
+
+def ds_cli_print_bold(text: Any) -> None:
+    print(f"\033[1m{text}\033[0m")
+
+def ds_cli_print_italic(text: Any) -> None:
+    print(f"\033[3m{text}\033[0m")
+
+def ds_cli_print_underline(text: Any) -> None:
+    print(f"\033[4m{text}\033[0m")
+
+def ds_cli_print_styled(text: Any, color: str, bg: str) -> None:
+    colors = {
+        "red": "\033[91m", "green": "\033[92m", "blue": "\033[94m", "white": "\033[97m"
+    }
+    bgs = {
+        "black": "\033[40m", "red": "\033[41m", "green": "\033[42m", "blue": "\033[44m"
+    }
+    fg_code = colors.get(str(color).lower(), "")
+    bg_code = bgs.get(str(bg).lower(), "")
+    print(f"{fg_code}{bg_code}{text}\033[0m")
+
+def ds_cli_clear() -> None:
+    os.system("cls" if os.name == "nt" else "clear")
+
+def ds_cli_move_cursor(r: Any, c: Any) -> None:
+    print(f"\033[{int(r)};{int(c)}H", end="", flush=True)
+
+def ds_cli_print_banner(text: Any) -> None:
+    st = str(text)
+    border = "=" * (len(st) + 4)
+    print(border)
+    print(f"= {st} =")
+    print(border)
+
+def ds_cli_print_divider(ch: str = "-", n: Any = 40) -> None:
+    print(str(ch)[0] * int(n))
+
+def ds_cli_progress_bar(cur: Any, tot: Any, width: int = 30) -> str:
+    total = max(1, int(tot))
+    current = min(total, max(0, int(cur)))
+    pct = current / total
+    filled = int(width * pct)
+    bar = "=" * filled + "-" * (width - filled)
+    return f"[{bar}] {int(pct * 100)}%"
+
+def ds_cli_render_table(cols: Any, rows: Any) -> None:
+    c_list = [str(c) for c in cols]
+    col_widths = [len(c) for c in c_list]
+    r_list = [[str(cell) for cell in row] for row in rows]
+    for row in r_list:
+        for idx, cell in enumerate(row):
+            if idx < len(col_widths):
+                col_widths[idx] = max(col_widths[idx], len(cell))
+    header_str = " | ".join(c.ljust(w) for c, w in zip(c_list, col_widths))
+    div_str = "-+-".join("-" * w for w in col_widths)
+    print(header_str)
+    print(div_str)
+    for row in r_list:
+        print(" | ".join(cell.ljust(w) for cell, w in zip(row, col_widths)))
+
+def ds_cli_terminal_width() -> int:
+    return shutil.get_terminal_size((80, 24)).columns
+
+def ds_cli_terminal_height() -> int:
+    return shutil.get_terminal_size((80, 24)).lines
+
+def ds_cli_beep() -> None:
+    print("\a", end="", flush=True)
+
+# Cluster 29: Caching, Memoization & Resource Management
+class DoomCache:
+    def __init__(self, max_size: Optional[int] = None, ttl: Optional[float] = None):
+        self.max_size = max_size
+        self.ttl = ttl
+        self._store = {}
+        self._timestamps = {}
+        self._hits = 0
+        self._misses = 0
+
+    def get(self, k: Any) -> Any:
+        if k in self._store:
+            if self.ttl and (time.time() - self._timestamps[k] > self.ttl):
+                self.delete(k)
+                self._misses += 1
+                return None
+            self._hits += 1
+            return self._store[k]
+        self._misses += 1
+        return None
+
+    def set(self, k: Any, v: Any, ttl: Optional[float] = None) -> None:
+        if self.max_size and len(self._store) >= self.max_size and k not in self._store:
+            self.evict_oldest()
+        self._store[k] = v
+        self._timestamps[k] = time.time()
+        if ttl is not None:
+            self.ttl = float(ttl)
+
+    def has(self, k: Any) -> bool:
+        return self.get(k) is not None
+
+    def delete(self, k: Any) -> None:
+        self._store.pop(k, None)
+        self._timestamps.pop(k, None)
+
+    def clear(self) -> None:
+        self._store.clear()
+        self._timestamps.clear()
+
+    def size(self) -> int:
+        return len(self._store)
+
+    def keys(self) -> List[Any]:
+        return list(self._store.keys())
+
+    def hit_count(self) -> int:
+        return self._hits
+
+    def miss_count(self) -> int:
+        return self._misses
+
+    def hit_ratio(self) -> float:
+        total = self._hits + self._misses
+        return round(self._hits / total, 4) if total > 0 else 0.0
+
+    def invalidate_prefix(self, prefix: str) -> None:
+        pfx = str(prefix)
+        to_del = [k for k in self._store if str(k).startswith(pfx)]
+        for k in to_del:
+            self.delete(k)
+
+    def evict_oldest(self) -> None:
+        if self._timestamps:
+            oldest_k = min(self._timestamps, key=self._timestamps.get)
+            self.delete(oldest_k)
+
+    def get_or_compute(self, k: Any, fn: Any) -> Any:
+        val = self.get(k)
+        if val is None:
+            if callable(fn):
+                try:
+                    val = fn(k)
+                except TypeError:
+                    val = fn()
+            else:
+                val = fn
+            self.set(k, val)
+        return val
+
+def ds_cache_create(max_size: Any = None, ttl: Any = None) -> DoomCache:
+    m = int(max_size) if max_size is not None else None
+    t = float(ttl) if ttl is not None else None
+    return DoomCache(max_size=m, ttl=t)
+
+def ds_cache_get(c: DoomCache, k: Any) -> Any:
+    return c.get(k)
+
+def ds_cache_set(c: DoomCache, k: Any, v: Any) -> None:
+    c.set(k, v)
+
+def ds_cache_set_ttl(c: DoomCache, k: Any, v: Any, ttl: Any) -> None:
+    c.set(k, v, ttl=float(ttl))
+
+def ds_cache_has(c: DoomCache, k: Any) -> bool:
+    return c.has(k)
+
+def ds_cache_delete(c: DoomCache, k: Any) -> None:
+    c.delete(k)
+
+def ds_cache_clear(c: DoomCache) -> None:
+    c.clear()
+
+def ds_cache_size(c: DoomCache) -> int:
+    return c.size()
+
+def ds_cache_keys(c: DoomCache) -> List[Any]:
+    return c.keys()
+
+def ds_cache_hit_count(c: DoomCache) -> int:
+    return c.hit_count()
+
+def ds_cache_miss_count(c: DoomCache) -> int:
+    return c.miss_count()
+
+def ds_cache_hit_ratio(c: DoomCache) -> float:
+    return c.hit_ratio()
+
+def ds_cache_invalidate_prefix(c: DoomCache, prefix: str) -> None:
+    c.invalidate_prefix(prefix)
+
+def ds_cache_evict_oldest(c: DoomCache) -> None:
+    c.evict_oldest()
+
+def ds_cache_get_or_compute(c: DoomCache, k: Any, fn: Any) -> Any:
+    return c.get_or_compute(k, fn)
+
+def ds_memoize(fn: Any) -> Any:
+    cache = {}
+    def _memoized(*args):
+        if args not in cache:
+            cache[args] = fn(*args)
+        return cache[args]
+    return _memoized
+
+def ds_memoize_lru(fn: Any, max_size: Any = 128) -> Any:
+    import functools
+    return functools.lru_cache(maxsize=int(max_size))(fn)
+
+def ds_memoize_ttl(fn: Any, ttl: Any = 60.0) -> Any:
+    cache = {}
+    timestamps = {}
+    dur = float(ttl)
+    def _memoized(*args):
+        now = time.time()
+        if args in cache and (now - timestamps[args] < dur):
+            return cache[args]
+        res = fn(*args)
+        cache[args] = res
+        timestamps[args] = now
+        return res
+    return _memoized
+
+# Cluster 30: Data Validation & Schema Assertions
+def ds_is_valid_email(text: Any) -> bool:
+    pat = r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"
+    return bool(re.match(pat, str(text).strip()))
+
+def ds_is_valid_ipv4(text: Any) -> bool:
+    import ipaddress
+    try:
+        ipaddress.IPv4Address(str(text).strip())
+        return True
+    except Exception:
+        return False
+
+def ds_is_valid_ipv6(text: Any) -> bool:
+    import ipaddress
+    try:
+        ipaddress.IPv6Address(str(text).strip())
+        return True
+    except Exception:
+        return False
+
+def ds_is_valid_url(text: Any) -> bool:
+    import urllib.parse
+    try:
+        res = urllib.parse.urlparse(str(text).strip())
+        return bool(res.scheme and res.netloc)
+    except Exception:
+        return False
+
+def ds_is_valid_phone(text: Any) -> bool:
+    digits = re.sub(r"\D", "", str(text))
+    return 7 <= len(digits) <= 15
+
+def ds_is_valid_credit_card(text: Any) -> bool:
+    digits = [int(c) for c in str(text) if c.isdigit()]
+    if len(digits) < 13 or len(digits) > 19:
+        return False
+    checksum = 0
+    reverse_digits = digits[::-1]
+    for i, d in enumerate(reverse_digits):
+        if i % 2 == 1:
+            doubled = d * 2
+            checksum += doubled - 9 if doubled > 9 else doubled
+        else:
+            checksum += d
+    return checksum % 10 == 0
+
+def ds_is_valid_uuid(text: Any) -> bool:
+    import uuid
+    try:
+        uuid.UUID(str(text).strip())
+        return True
+    except Exception:
+        return False
+
+def ds_is_valid_date(text: Any) -> bool:
+    try:
+        date.fromisoformat(str(text).strip())
+        return True
+    except Exception:
+        return False
+
+def ds_is_numeric(text: Any) -> bool:
+    try:
+        float(str(text).strip())
+        return True
+    except Exception:
+        return False
+
+def ds_is_alphabetic(text: Any) -> bool:
+    return str(text).strip().isalpha()
+
+def ds_is_alphanumeric(text: Any) -> bool:
+    return str(text).strip().isalnum()
+
+def ds_is_lowercase(text: Any) -> bool:
+    st = str(text).strip()
+    return st.islower() and st.isalpha()
+
+def ds_is_uppercase(text: Any) -> bool:
+    st = str(text).strip()
+    return st.isupper() and st.isalpha()
+
+def ds_is_whitespace(text: Any) -> bool:
+    return str(text).isspace()
+
+def ds_validate_required_fields(r: Any, fields: Any) -> bool:
+    record = dict(r) if hasattr(r, "keys") else {}
+    for f in fields:
+        if f not in record or record[f] is None:
+            return False
+    return True
+
+def ds_validate_schema_types(r: Any, schema: Any) -> bool:
+    type_map = {
+        "string": str, "str": str, "text": str,
+        "integer": int, "int": int,
+        "float": float, "number": (int, float),
+        "boolean": bool, "bool": bool,
+        "list": list, "record": dict
+    }
+    record = dict(r) if hasattr(r, "keys") else {}
+    for field, exp_type in dict(schema).items():
+        if field not in record:
+            return False
+        val = record[field]
+        expected_py_type = type_map.get(str(exp_type).lower())
+        if expected_py_type and not isinstance(val, expected_py_type):
+            return False
+    return True
+
+def ds_cast_int(v: Any, default: Any = 0) -> int:
+    try:
+        return int(float(str(v).strip()))
+    except Exception:
+        return int(default)
+
+def ds_cast_float(v: Any, default: Any = 0.0) -> float:
+    try:
+        return float(str(v).strip())
+    except Exception:
+        return float(default)
+
+def ds_cast_bool(v: Any, default: Any = False) -> bool:
+    if isinstance(v, bool):
+        return v
+    st = str(v).strip().lower()
+    if st in ("true", "1", "yes", "t", "y"):
+        return True
+    if st in ("false", "0", "no", "f", "n"):
+        return False
+    return bool(default)
+
+def ds_cast_str(v: Any, default: Any = "") -> str:
+    return str(v) if v is not None else str(default)
+
+
 def get_runtime_exports() -> Dict[str, Any]:
     """Returns a defensive copy of the explicit, immutable runtime exports registry.
 

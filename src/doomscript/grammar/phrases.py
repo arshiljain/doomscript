@@ -101,7 +101,7 @@ STATEMENT_START_KEYWORDS = {
     "ask", "call", "import", "unpack", "trim", "replace", "split", "join",
     "capitalize", "convert", "sort", "round", "combine", "fetch", "post", "download",
     "break", "continue", "stop", "exit", "quit", "add", "remove", "insert", "push", "discard", "clear", "empty", "reverse",
-    "load", "filter", "group", "plot", "step", "compute", "test",
+    "load", "filter", "group", "plot", "step", "compute", "test", "export", "ensure", "move", "run", "rename", "drop", "url", "extract", "normalize", "generate", "base64", "hex",
     "sleep", "delay", "pause", "shuffle", "words", "lines", "keys", "values",
     "average", "mean", "median", "mode", "total", "sum", "maximum", "minimum", "variance", "standard",
     "scatter", "line", "bar", "histogram", "box",
@@ -748,7 +748,7 @@ RESERVED_OF_PROPS: Set[str] = {
     "union", "intersection", "difference", "scatter", "adler32", "crc32",
     "sha256", "md5", "line", "bar", "pie", "area", "box", "heatmap", "lenght",
     "out", "case", "title", "result", "results", "remainder", "product", "half",
-    "quarter", "third", "double", "triple", "most", "majority", "minority", "few", "several"
+    "quarter", "third", "double", "triple", "most", "majority", "minority", "few", "several", "extension", "filename", "domain", "protocol", "parameters", "headers", "code", "names", "magnitude", "distance", "similarity", "angle", "factorial"
 }
 
 
@@ -955,6 +955,817 @@ def desugar_multi_subject_predicates(masked: str) -> str:
     masked = re.sub(rf"\bnone\s+of\s+{target_pat}\s+(?:is|are)\s+odd\b", r"all(_x % 2 == 0 for _x in \1)", masked, flags=re.IGNORECASE)
     return masked
 
+
+
+def normalize_batch4_paradigms(masked: str) -> str:
+    # --- Cluster 26: Linguistic & String Distance Algorithms ---
+    # 406. slugify text <str> into <target>
+    m = re.match(r"^\s*slugify\s+text\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to ds_slugify({m.group(1).strip()})"
+
+    # 407-413. convert <str> to (camel|snake|kebab|pascal|title|sentence|constant) case into <target>
+    m = re.match(r"^\s*convert\s+(.+?)\s+to\s+(camel|snake|kebab|pascal|title|sentence|constant)\s+case\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        c_type = m.group(2).lower()
+        return f"set {m.group(3)} to ds_to_{c_type}_case({m.group(1).strip()})"
+
+    # 414. stem word <w> into <target>
+    m = re.match(r"^\s*stem\s+word\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to ds_word_stem({m.group(1).strip()})"
+
+    # 418 statement. find top <n> closest strings to <target> in <candidates> into <res>
+    m = re.match(r"^\s*find\s+top\s+(.+?)\s+closest\s+strings\s+to\s+(.+?)\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(4)} to ds_top_closest_strings({m.group(2).strip()}, {m.group(3).strip()}, {m.group(1).strip()})"
+
+    # 417 statement. find closest string to <target> in <candidates> into <res>
+    m = re.match(r"^\s*find\s+closest\s+string\s+to\s+(.+?)\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(3)} to ds_closest_string({m.group(1).strip()}, {m.group(2).strip()})"
+
+    # 419. remove accents and diacritics from <str> into <target>
+    m = re.match(r"^\s*remove\s+accents(?:\s+and\s+diacritics)?\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to ds_remove_accents({m.group(1).strip()})"
+
+    # 420. transliterate <str> to ascii into <target>
+    m = re.match(r"^\s*transliterate\s+(.+?)\s+to\s+ascii\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to ds_transliterate_ascii({m.group(1).strip()})"
+
+    # Expressions in Cluster 26
+    target_arg = r"(\[[^\]]*\]|\"[^\"]*\"|\'[^\']*\'|__STR_LITERAL_\d+__|__STR_\d+__|[A-Za-z0-9_.]+(?:\[[^\]]+\])?|\([^)]+\)|\d+(?:\.\d+)?)"
+    # 401. levenshtein distance between <s1> and <s2>
+    masked = re.sub(rf"\blevenshtein\s+distance\s+between\s+(.+?)\s+and\s+{target_arg}", r"ds_levenshtein_distance(\1, \2)", masked, flags=re.IGNORECASE)
+    # 402. similarity ratio between <s1> and <s2>
+    masked = re.sub(rf"\bsimilarity\s+ratio\s+between\s+(.+?)\s+and\s+{target_arg}", r"ds_string_similarity(\1, \2)", masked, flags=re.IGNORECASE)
+    # 403. soundex code of <word>
+    masked = re.sub(r"\bsoundex\s+code\s+of\s+([^\n,;:()]+)", r"ds_soundex(\1)", masked, flags=re.IGNORECASE)
+    # 404. metaphone code of <word>
+    masked = re.sub(r"\bmetaphone\s+code\s+of\s+([^\n,;:()]+)", r"ds_metaphone(\1)", masked, flags=re.IGNORECASE)
+    # 405. <s1> sounds like <s2>
+    masked = re.sub(r"\b([^\s,;:()]+)\s+sounds\s+like\s+([^\s,;:():]+)", r"ds_sounds_like(\1, \2)", masked, flags=re.IGNORECASE)
+    # 406 expr. slugify text <str>
+    masked = re.sub(r"\bslugify\s+text\s+([^\n,;:()]+)", r"ds_slugify(\1)", masked, flags=re.IGNORECASE)
+    # 407-413 expr. convert <str> to (camel|snake|kebab|pascal|title|sentence|constant) case
+    masked = re.sub(r"\bconvert\s+(.+?)\s+to\s+(camel|snake|kebab|pascal|title|sentence|constant)\s+case\b", r"ds_to_\2_case(\1)", masked, flags=re.IGNORECASE)
+    # 414 expr. stem word <w>
+    masked = re.sub(r"\bstem\s+word\s+([^\n,;:()]+)", r"ds_word_stem(\1)", masked, flags=re.IGNORECASE)
+    # 415. jaccard similarity between <s1> and <s2>
+    masked = re.sub(rf"\bjaccard\s+similarity\s+between\s+(.+?)\s+and\s+{target_arg}", r"ds_jaccard_similarity(\1, \2)", masked, flags=re.IGNORECASE)
+    # 416. hamming distance between <s1> and <s2>
+    masked = re.sub(rf"\bhamming\s+distance\s+between\s+(.+?)\s+and\s+{target_arg}", r"ds_hamming_distance(\1, \2)", masked, flags=re.IGNORECASE)
+    # 418 expr. find top <n> closest strings to <target> in <candidates>
+    masked = re.sub(r"\bfind\s+top\s+(.+?)\s+closest\s+strings\s+to\s+(.+?)\s+in\s+([^\n,;:()]+)", r"ds_top_closest_strings(\2, \3, \1)", masked, flags=re.IGNORECASE)
+    # 417 expr. find closest string to <target> in <candidates>
+    masked = re.sub(r"\bfind\s+closest\s+string\s+to\s+(.+?)\s+in\s+([^\n,;:()]+)", r"ds_closest_string(\1, \2)", masked, flags=re.IGNORECASE)
+    # 419 expr. remove accents from <str>
+    masked = re.sub(r"\bremove\s+accents(?:\s+and\s+diacritics)?\s+from\s+([^\n,;:()]+)", r"ds_remove_accents(\1)", masked, flags=re.IGNORECASE)
+    # 420 expr. transliterate <str> to ascii
+    masked = re.sub(r"\btransliterate\s+(.+?)\s+to\s+ascii\b", r"ds_transliterate_ascii(\1)", masked, flags=re.IGNORECASE)
+
+    # --- Cluster 27: Graph Creation, Pathfinding & Topological Analysis ---
+    # 421. create empty graph into <g>
+    m = re.match(r"^\s*create\s+empty\s+graph\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(1)} to ds_graph_create(directed=False)"
+
+    # 422. create empty directed graph into <g>
+    m = re.match(r"^\s*create\s+empty\s+directed\s+graph\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(1)} to ds_graph_create(directed=True)"
+
+    # 425. add weighted edge from <u> to <v> with weight <w> in graph <g>
+    m = re.match(r"^\s*add\s+weighted\s+edge\s+from\s+(.+?)\s+to\s+(.+?)\s+with\s+weight\s+(.+?)\s+in\s+graph\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"ds_graph_add_weighted_edge({m.group(4)}, {m.group(1).strip()}, {m.group(2).strip()}, {m.group(3).strip()})"
+
+    # 424. add edge from <u> to <v> in graph <g>
+    m = re.match(r"^\s*add\s+edge\s+from\s+(.+?)\s+to\s+(.+?)\s+in\s+graph\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"ds_graph_add_edge({m.group(3)}, {m.group(1).strip()}, {m.group(2).strip()})"
+
+    # 423. add node <n> to graph <g>
+    m = re.match(r"^\s*add\s+node\s+(.+?)\s+to\s+graph\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"ds_graph_add_node({m.group(2)}, {m.group(1).strip()})"
+
+    # 426. remove edge from <u> to <v> in graph <g>
+    m = re.match(r"^\s*remove\s+edge\s+from\s+(.+?)\s+to\s+(.+?)\s+in\s+graph\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"ds_graph_remove_edge({m.group(3)}, {m.group(1).strip()}, {m.group(2).strip()})"
+
+    # Expressions in Cluster 27
+    # 429. shortest path length from <u> to <v> in graph <g>
+    masked = re.sub(r"\bshortest\s+path\s+length\s+from\s+(.+?)\s+to\s+(.+?)\s+in\s+graph\s+([^\s,;:()]+)", r"ds_graph_shortest_path_len(\3, \1, \2)", masked, flags=re.IGNORECASE)
+    # 428. shortest path from <u> to <v> in graph <g>
+    masked = re.sub(r"\bshortest\s+path\s+from\s+(.+?)\s+to\s+(.+?)\s+in\s+graph\s+([^\s,;:()]+)", r"ds_graph_shortest_path(\3, \1, \2)", masked, flags=re.IGNORECASE)
+    # 427. neighbors of node <n> in graph <g>
+    masked = re.sub(r"\bneighbors\s+of\s+node\s+(.+?)\s+in\s+graph\s+([^\s,;:()]+)", r"ds_graph_neighbors(\2, \1)", masked, flags=re.IGNORECASE)
+    # 430. path exists from <u> to <v> in graph <g>
+    masked = re.sub(r"\bpath\s+exists\s+from\s+(.+?)\s+to\s+(.+?)\s+in\s+graph\s+([^\s,;:():]+)", r"ds_graph_has_path(\3, \1, \2)", masked, flags=re.IGNORECASE)
+    # 431. all connected components of graph <g>
+    masked = re.sub(r"\ball\s+connected\s+components\s+of\s+graph\s+([^\s,;:()]+)", r"ds_graph_connected_components(\1)", masked, flags=re.IGNORECASE)
+    # 432. is graph <g> connected / graph <g> is connected
+    masked = re.sub(r"\bis\s+graph\s+([^\s,;:()]+)\s+connected\b", r"ds_graph_is_connected(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bgraph\s+([^\s,;:()]+)\s+is\s+connected\b", r"ds_graph_is_connected(\1)", masked, flags=re.IGNORECASE)
+    # 433. is graph <g> acyclic / graph <g> is acyclic
+    masked = re.sub(r"\bis\s+graph\s+([^\s,;:()]+)\s+acyclic\b", r"ds_graph_is_acyclic(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bgraph\s+([^\s,;:()]+)\s+is\s+acyclic\b", r"ds_graph_is_acyclic(\1)", masked, flags=re.IGNORECASE)
+    # 434. topological sort of graph <g>
+    masked = re.sub(r"\btopological\s+sort\s+of\s+graph\s+([^\s,;:()]+)", r"ds_graph_topological_sort(\1)", masked, flags=re.IGNORECASE)
+    # 435. depth first search of graph <g> from <start>
+    masked = re.sub(r"\bdepth\s+first\s+search\s+of\s+graph\s+(.+?)\s+from\s+([^\s,;:()]+)", r"ds_graph_dfs(\1, \2)", masked, flags=re.IGNORECASE)
+    # 436. breadth first search of graph <g> from <start>
+    masked = re.sub(r"\bbreadth\s+first\s+search\s+of\s+graph\s+(.+?)\s+from\s+([^\s,;:()]+)", r"ds_graph_bfs(\1, \2)", masked, flags=re.IGNORECASE)
+    # 437. node count of graph <g>
+    masked = re.sub(r"\bnode\s+count\s+of\s+graph\s+([^\s,;:()]+)", r"ds_graph_node_count(\1)", masked, flags=re.IGNORECASE)
+    # 438. edge count of graph <g>
+    masked = re.sub(r"\bedge\s+count\s+of\s+graph\s+([^\s,;:()]+)", r"ds_graph_edge_count(\1)", masked, flags=re.IGNORECASE)
+    # 439. in-degree of node <n> in graph <g>
+    masked = re.sub(r"\bin-?degree\s+of\s+node\s+(.+?)\s+in\s+graph\s+([^\s,;:()]+)", r"ds_graph_in_degree(\2, \1)", masked, flags=re.IGNORECASE)
+    # 440. out-degree of node <n> in graph <g>
+    masked = re.sub(r"\bout-?degree\s+of\s+node\s+(.+?)\s+in\s+graph\s+([^\s,;:()]+)", r"ds_graph_out_degree(\2, \1)", masked, flags=re.IGNORECASE)
+
+    # --- Cluster 28: Interactive CLI, Prompts & Terminal Output ---
+    # 442. ask user password <prompt> into <target>
+    m = re.match(r"^\s*ask\s+user\s+password\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to ds_cli_getpass({m.group(1).strip()})"
+    # 443. ask user boolean <prompt> into <target>
+    m = re.match(r"^\s*ask\s+user\s+boolean\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to ds_cli_ask_bool({m.group(1).strip()})"
+    # 444. ask user integer <prompt> into <target>
+    m = re.match(r"^\s*ask\s+user\s+integer\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to ds_cli_ask_int({m.group(1).strip()})"
+    # 445. ask user number <prompt> into <target>
+    m = re.match(r"^\s*ask\s+user\s+number\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to ds_cli_ask_float({m.group(1).strip()})"
+    # 441. ask user <prompt> into <target>
+    m = re.match(r"^\s*ask\s+user\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to input({m.group(1).strip()})"
+    # 446. prompt user with choices <choices> into <target>
+    m = re.match(r"^\s*prompt\s+user\s+with\s+choices\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to ds_cli_prompt_choice({m.group(1).strip()})"
+    # 451. print styled text <text> with color <c> on background <bg>
+    m = re.match(r"^\s*print\s+styled\s+text\s+(.+?)\s+with\s+color\s+(.+?)\s+on\s+background\s+(.+?)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"ds_cli_print_styled({m.group(1).strip()}, {m.group(2).strip()}, {m.group(3).strip()})"
+    # 447. print colored <color> text <text>
+    m = re.match(r"^\s*print\s+colored\s+([A-Za-z_]\w*|\"[^\"]*\"|'[^']*')\s+text\s+(.+?)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"ds_cli_print_colored({m.group(2).strip()}, {m.group(1).strip()})"
+    # 448. print styled bold text <text>
+    m = re.match(r"^\s*print\s+styled\s+bold\s+text\s+(.+?)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"ds_cli_print_bold({m.group(1).strip()})"
+    # 449. print styled italic text <text>
+    m = re.match(r"^\s*print\s+styled\s+italic\s+text\s+(.+?)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"ds_cli_print_italic({m.group(1).strip()})"
+    # 450. print styled underline text <text>
+    m = re.match(r"^\s*print\s+styled\s+underline\s+text\s+(.+?)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"ds_cli_print_underline({m.group(1).strip()})"
+    # 452. clear terminal screen
+    m = re.match(r"^\s*clear\s+terminal(?:\s+screen)?\s*$", masked, re.IGNORECASE)
+    if m:
+        return "ds_cli_clear()"
+    # 453. move cursor to row <r>, column <c>
+    m = re.match(r"^\s*move\s+cursor\s+to\s+row\s+(.+?),\s*column\s+(.+?)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"ds_cli_move_cursor({m.group(1).strip()}, {m.group(2).strip()})"
+    # 454. print banner text <text>
+    m = re.match(r"^\s*print\s+banner\s+text\s+(.+?)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"ds_cli_print_banner({m.group(1).strip()})"
+    # 455. print divider line with character <ch> of length <n>
+    m = re.match(r"^\s*print\s+divider\s+line\s+with\s+character\s+(.+?)\s+of\s+length\s+(.+?)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"ds_cli_print_divider({m.group(1).strip()}, {m.group(2).strip()})"
+    # 456. show progress bar with current <cur>, total <tot>
+    m = re.match(r"^\s*show\s+progress\s+bar\s+with\s+current\s+(.+?),\s*total\s+(.+?)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"ds_cli_progress_bar({m.group(1).strip()}, {m.group(2).strip()})"
+    # 457. render table header <cols> and rows <rows>
+    m = re.match(r"^\s*render\s+table\s+header\s+(.+?)\s+and\s+rows\s+(.+?)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"ds_cli_render_table({m.group(1).strip()}, {m.group(2).strip()})"
+    # 460. beep alert
+    m = re.match(r"^\s*beep\s+alert\s*$", masked, re.IGNORECASE)
+    if m:
+        return "ds_cli_beep()"
+
+    # Expressions in Cluster 28
+    # 458. terminal width in columns
+    masked = re.sub(r"\bterminal\s+width\s+in\s+columns\b", "ds_cli_terminal_width()", masked, flags=re.IGNORECASE)
+    # 459. terminal height in rows
+    masked = re.sub(r"\bterminal\s+height\s+in\s+rows\b", "ds_cli_terminal_height()", masked, flags=re.IGNORECASE)
+
+    # --- Cluster 29: Caching, Memoization & Resource Management ---
+    # 462. create cache with max size <n> into <c>
+    m = re.match(r"^\s*create\s+cache\s+with\s+max\s+size\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to ds_cache_create(max_size={m.group(1).strip()})"
+    # 463. create cache with ttl <s> seconds into <c>
+    m = re.match(r"^\s*create\s+cache\s+with\s+ttl\s+(.+?)\s+seconds\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to ds_cache_create(ttl={m.group(1).strip()})"
+    # 461. create cache into <c>
+    m = re.match(r"^\s*create\s+cache\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(1)} to ds_cache_create()"
+    # 464. get from cache <c> key <k> into <target>
+    m = re.match(r"^\s*get\s+from\s+cache\s+([A-Za-z_]\w*)\s+key\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(3)} to ds_cache_get({m.group(1)}, {m.group(2).strip()})"
+    # 466. set in cache <c> key <k> to <v> with ttl <s> seconds
+    m = re.match(r"^\s*set\s+in\s+cache\s+([A-Za-z_]\w*)\s+key\s+(.+?)\s+to\s+(.+?)\s+with\s+ttl\s+(.+?)\s+seconds\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"ds_cache_set_ttl({m.group(1)}, {m.group(2).strip()}, {m.group(3).strip()}, {m.group(4).strip()})"
+    # 465. set in cache <c> key <k> to <v>
+    m = re.match(r"^\s*set\s+in\s+cache\s+([A-Za-z_]\w*)\s+key\s+(.+?)\s+to\s+(.+?)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"ds_cache_set({m.group(1)}, {m.group(2).strip()}, {m.group(3).strip()})"
+    # 468. remove key <k> from cache <c>
+    m = re.match(r"^\s*remove\s+key\s+(.+?)\s+from\s+cache\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"ds_cache_delete({m.group(2)}, {m.group(1).strip()})"
+    # 469. clear cache <c>
+    m = re.match(r"^\s*clear\s+cache\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"ds_cache_clear({m.group(1)})"
+    # 472. memoize function <fn> with max size <n>
+    m = re.match(r"^\s*memoize\s+function\s+([A-Za-z_]\w*)\s+with\s+max\s+size\s+(.+?)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(1)} to ds_memoize_lru({m.group(1)}, {m.group(2).strip()})"
+    # 473. memoize function <fn> with ttl <s> seconds
+    m = re.match(r"^\s*memoize\s+function\s+([A-Za-z_]\w*)\s+with\s+ttl\s+(.+?)\s+seconds\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(1)} to ds_memoize_ttl({m.group(1)}, {m.group(2).strip()})"
+    # 471. memoize function <fn>
+    m = re.match(r"^\s*memoize\s+function\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(1)} to ds_memoize({m.group(1)})"
+    # 479. invalidate cache keys matching <prefix> in <c>
+    m = re.match(r"^\s*invalidate\s+cache\s+keys\s+matching\s+(.+?)\s+in\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"ds_cache_invalidate_prefix({m.group(2)}, {m.group(1).strip()})"
+    # 480. evict oldest item in cache <c>
+    m = re.match(r"^\s*evict\s+oldest\s+item\s+in\s+cache\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"ds_cache_evict_oldest({m.group(1)})"
+
+    # Expressions in Cluster 29
+    # 467. key <k> in cache <c>
+    masked = re.sub(r"\bkey\s+(.+?)\s+(?:in|is\s+inside)\s+cache\s+([^\s,;:():]+)", r"ds_cache_has(\2, \1)", masked, flags=re.IGNORECASE)
+    # 470. cache size of <c>
+    masked = re.sub(r"\bcache\s+size\s+of\s+([^\s,;:()]+)", r"ds_cache_size(\1)", masked, flags=re.IGNORECASE)
+    # 474. get or compute in cache <c> key <k> with <fn>
+    masked = re.sub(r"\bget\s+or\s+(?:compute|calculate)\s+(?:in|is\s+inside)\s+cache\s+(.+?)\s+key\s+(.+?)\s+with\s+([^\s,;:()]+)", r"ds_cache_get_or_compute(\1, \2, \3)", masked, flags=re.IGNORECASE)
+    # 475. cache keys of <c>
+    masked = re.sub(r"\bcache\s+keys\s+of\s+([^\s,;:()]+)", r"ds_cache_keys(\1)", masked, flags=re.IGNORECASE)
+    # 476. cache hit count of <c>
+    masked = re.sub(r"\bcache\s+hit\s+count\s+of\s+([^\s,;:()]+)", r"ds_cache_hit_count(\1)", masked, flags=re.IGNORECASE)
+    # 477. cache miss count of <c>
+    masked = re.sub(r"\bcache\s+miss\s+count\s+of\s+([^\s,;:()]+)", r"ds_cache_miss_count(\1)", masked, flags=re.IGNORECASE)
+    # 478. cache hit ratio of <c>
+    masked = re.sub(r"\bcache\s+hit\s+ratio\s+of\s+([^\s,;:()]+)", r"ds_cache_hit_ratio(\1)", masked, flags=re.IGNORECASE)
+
+    # --- Cluster 30: Data Validation & Schema Assertions ---
+    # 495. validate record <r> has required fields <fields>
+    masked = re.sub(r"\bvalidate\s+record\s+(.+?)\s+has\s+required\s+fields\s+([^\n,;:()]+)", r"ds_validate_required_fields(\1, \2)", masked, flags=re.IGNORECASE)
+    # 496. validate record <r> against field types <schema>
+    masked = re.sub(r"\bvalidate\s+record\s+(.+?)\s+against\s+field\s+types\s+([^\n,;:()]+)", r"ds_validate_schema_types(\1, \2)", masked, flags=re.IGNORECASE)
+
+    # Predicates & Expressions in Cluster 30
+    ident_pat = r"([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|\[[^\]]+\])*|__STR_LITERAL_\d+__|\"[^\"]*\"|'[^']*')"
+    # 481-488. is valid <type>
+    valid_types = [
+        (r"email", "ds_is_valid_email"),
+        (r"ipv4", "ds_is_valid_ipv4"),
+        (r"ipv6", "ds_is_valid_ipv6"),
+        (r"url", "ds_is_valid_url"),
+        (r"phone(?:\s+number)?", "ds_is_valid_phone"),
+        (r"credit\s+card", "ds_is_valid_credit_card"),
+        (r"uuid", "ds_is_valid_uuid"),
+        (r"date", "ds_is_valid_date"),
+    ]
+    for vt_name, vt_func in valid_types:
+        masked = re.sub(rf"\b{ident_pat}\s+is\s+not\s+valid\s+{vt_name}\b", rf"(not {vt_func}(\1))", masked, flags=re.IGNORECASE)
+        masked = re.sub(rf"\b{ident_pat}\s+is\s+valid\s+{vt_name}\b", rf"{vt_func}(\1)", masked, flags=re.IGNORECASE)
+
+    # 489-494. is <type>
+    type_tests = [
+        (r"numeric", "ds_is_numeric"),
+        (r"alphabetic", "ds_is_alphabetic"),
+        (r"alphanumeric", "ds_is_alphanumeric"),
+        (r"lowercase", "ds_is_lowercase"),
+        (r"uppercase", "ds_is_uppercase"),
+        (r"whitespace", "ds_is_whitespace"),
+    ]
+    for tt_name, tt_func in type_tests:
+        masked = re.sub(rf"\b{ident_pat}\s+is\s+not\s+{tt_name}\b", rf"(not {tt_func}(\1))", masked, flags=re.IGNORECASE)
+        masked = re.sub(rf"\b{ident_pat}\s+is\s+{tt_name}\b", rf"{tt_func}(\1)", masked, flags=re.IGNORECASE)
+
+    # 497-500. cast <v> to (integer|float|boolean|string) or fallback <d>
+    masked = re.sub(r"\bcast\s+(.+?)\s+to\s+integer\s+or\s+fallback\s+([^\s,;:()]+)", r"ds_cast_int(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bcast\s+(.+?)\s+to\s+float\s+or\s+fallback\s+([^\s,;:()]+)", r"ds_cast_float(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bcast\s+(.+?)\s+to\s+boolean\s+or\s+fallback\s+([^\s,;:()]+)", r"ds_cast_bool(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bcast\s+(.+?)\s+to\s+string\s+or\s+fallback\s+([^\s,;:()]+)", r"ds_cast_str(\1, \2)", masked, flags=re.IGNORECASE)
+
+    return masked
+
+
+def normalize_batch3_paradigms(masked: str) -> str:
+    # Cluster 21: Stream Processing, Batching & Windowing
+    m = re.match(r"^\s*chunk\s+(.+?)\s+by\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(3)} to ds_chunk_list({m.group(1).strip()}, {m.group(2).strip()})"
+    m = re.match(r"^\s*partition\s+(.+?)\s+into\s+(.+?)\s+chunks\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(3)} to ds_partition_chunks({m.group(1).strip()}, {m.group(2).strip()})"
+    m = re.match(r"^\s*sliding\s+window\s+of\s+(.+?)\s+with\s+step\s+(.+?)\s+over\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(4)} to ds_sliding_window({m.group(3).strip()}, {m.group(1).strip()}, {m.group(2).strip()})"
+    m = re.match(r"^\s*sliding\s+window\s+of\s+(.+?)\s+over\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(3)} to ds_sliding_window({m.group(2).strip()}, {m.group(1).strip()}, 1)"
+    m = re.match(r"^\s*interleave\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(3)} to ds_interleave({m.group(1).strip()}, {m.group(2).strip()})"
+    m = re.match(r"^\s*zip\s+(.+?)\s+and\s+(.+?)\s+into\s+pairs\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(3)} to list(zip({m.group(1).strip()}, {m.group(2).strip()}))"
+    m = re.match(r"^\s*unzip\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s+and\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"{m.group(2)}, {m.group(3)} = ds_unzip_pairs({m.group(1).strip()})"
+    m = re.match(r"^\s*flatten\s+list\s+(.+?)\s+by\s+(.+?)\s+levels\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(3)} to ds_flatten_levels({m.group(1).strip()}, {m.group(2).strip()})"
+    m = re.match(r"^\s*flatten\s+list\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to ds_flatten_list({m.group(1).strip()})"
+    m = re.match(r"^\s*compact\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to [x for x in ({m.group(1).strip()}) if x is not None and x != '']"
+    m = re.match(r"^\s*frequency\s+count\s+of\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to ds_frequency_count({m.group(1).strip()})"
+    m = re.match(r"^\s*cumulative\s+sum\s+of\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to ds_cumulative_sum({m.group(1).strip()})"
+    m = re.match(r"^\s*cumulative\s+product\s+of\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to ds_cumulative_product({m.group(1).strip()})"
+    m = re.match(r"^\s*differences\s+between\s+adjacent\s+items\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to ds_adjacent_differences({m.group(1).strip()})"
+    m = re.match(r"^\s*cycle\s+(.+?)\s+(\d+|[A-Za-z_]\w*)\s+times\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(3)} to ds_cycle_list({m.group(1).strip()}, {m.group(2).strip()})"
+    m = re.match(r"^\s*repeat\s+(.+?)\s+(\d+|[A-Za-z_]\w*)\s+times\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(3)} to ds_pad_list([], {m.group(2).strip()}, {m.group(1).strip()})"
+    m = re.match(r"^\s*pad\s+list\s+(.+?)\s+to\s+length\s+(\d+|[A-Za-z_]\w*)\s+with\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(4)} to ds_pad_list({m.group(1).strip()}, {m.group(2).strip()}, {m.group(3).strip()})"
+    m = re.match(r"^\s*split\s+list\s+(.+?)\s+at\s+index\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s+and\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"{m.group(3)}, {m.group(4)} = ds_split_list_at({m.group(1).strip()}, {m.group(2).strip()})"
+
+    # Cluster 22: Advanced Date/Time Durations, Recurrence & Calendar
+    masked = re.sub(r"\bstart\s+of\s+current\s+day\b", "ds_start_of_day()", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bend\s+of\s+current\s+day\b", "ds_end_of_day()", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bstart\s+of\s+current\s+week\b", "ds_start_of_week()", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bend\s+of\s+current\s+week\b", "ds_end_of_week()", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bstart\s+of\s+current\s+month\b", "ds_start_of_month()", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bend\s+of\s+current\s+month\b", "ds_end_of_month()", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bstart\s+of\s+current\s+year\b", "ds_start_of_year()", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bend\s+of\s+current\s+year\b", "ds_end_of_year()", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bdays\s+in\s+month\s+of\s+([A-Za-z_]\w*|\"[^\"]*\"|'[^']*')\b", r"ds_days_in_month(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"([A-Za-z_]\w*|\d+)\s+is\s+leap\s+year\b", r"ds_is_leap_year(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bday\s+of\s+year\s+of\s+([A-Za-z_]\w*|\"[^\"]*\"|'[^']*')\b", r"ds_day_of_year(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bweek\s+number\s+of\s+([A-Za-z_]\w*|\"[^\"]*\"|'[^']*')\b", r"ds_week_number(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bquarter\s+of\s+([A-Za-z_]\w*|\"[^\"]*\"|'[^']*')\b", r"ds_quarter_of_year(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\badd\s+(\d+|[A-Za-z_]\w*)\s+business\s+days\s+to\s+([A-Za-z_]\w*|\"[^\"]*\"|'[^']*')\b", r"ds_add_business_days(\2, \1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bsubtract\s+(\d+|[A-Za-z_]\w*)\s+business\s+days\s+from\s+([A-Za-z_]\w*|\"[^\"]*\"|'[^']*')\b", r"ds_sub_business_days(\2, \1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bbusiness\s+days\s+between\s+([^\s]+)\s+and\s+([^\n;()]+)", r"ds_business_days_between(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bnext\s+occurrence\s+of\s+weekday\s+([A-Za-z_]\w*|\"[^\"]*\"|'[^']*')\s+after\s+([A-Za-z_]\w*|\"[^\"]*\"|'[^']*')\b", r"ds_next_weekday(\2, \1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bprevious\s+occurrence\s+of\s+weekday\s+([A-Za-z_]\w*|\"[^\"]*\"|'[^']*')\s+before\s+([A-Za-z_]\w*|\"[^\"]*\"|'[^']*')\b", r"ds_prev_weekday(\2, \1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\btime\s+elapsed\s+since\s+([^\s]+)\s+in\s+seconds\b", r"ds_elapsed_seconds(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\btime\s+elapsed\s+since\s+([^\s]+)\s+in\s+human\s+words\b", r"ds_elapsed_human(\1)", masked, flags=re.IGNORECASE)
+
+    # Cluster 23: Human-Readable Formatting & Text Presentation
+    masked = re.sub(r"\bformat\s+number\s+([^,\n;]+?)\s+with\s+commas\b", r"ds_format_number_commas(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bformat\s+number\s+([^,\n;]+?)\s+with\s+(\d+)\s+decimal\s+places\b", r"ds_format_number_decimals(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bformat\s+currency\s+([^,\n;]+?)\s+with\s+currency\s+([^,\n;]+)", r"ds_format_currency_code(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bformat\s+currency\s+([^,\n;]+?)\s+with\s+symbol\s+([^,\n;]+)", r"ds_format_currency_sym(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bformat\s+bytes\s+([^,\n;]+?)\s+as\s+human\s+readable\b", r"ds_format_bytes_human(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bformat\s+seconds\s+([^,\n;]+?)\s+as\s+duration\s+string\b", r"ds_format_duration_human(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bpluralize\s+([^,\n;]+?)\s+with\s+count\s+([^,\n;]+)", r"ds_pluralize(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bordinal\s+representation\s+of\s+([^,\n;]+)", r"ds_ordinal(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bwrap\s+(.+?)\s+at\s+(\d+)\s+columns\b", r"ds_wrap_text(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bindent\s+text\s+(.+?)\s+by\s+(\d+)\s+spaces\b", r"ds_indent_text(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\balign\s+(.+?)\s+left\s+in\s+(\d+)\s+spaces\b", r"ds_align_left(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\balign\s+(.+?)\s+right\s+in\s+(\d+)\s+spaces\b", r"ds_align_right(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\balign\s+(.+?)\s+center\s+in\s+(\d+)\s+spaces\b", r"ds_align_center(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\babbreviate\s+text\s+(.+?)\s+to\s+(\d+)\s+words\b", r"ds_abbreviate_words(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bformat\s+list\s+(.+?)\s+as\s+oxford\s+comma\s+string\b", r"ds_oxford_comma(\1)", masked, flags=re.IGNORECASE)
+
+    # Cluster 24: Concurrency & Async Coordination
+    m = re.match(r"^\s*create\s+channel\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(1)} to ds_channel_create()"
+    m = re.match(r"^\s*send\s+(.+?)\s+to\s+channel\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"ds_channel_send({m.group(2).strip()}, {m.group(1).strip()})"
+    m = re.match(r"^\s*receive\s+message\s+from\s+channel\s+([A-Za-z_]\w*)\s+with\s+timeout\s+(.+?)\s+ms\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(3)} to ds_channel_receive_timeout({m.group(1).strip()}, {m.group(2).strip()})"
+    m = re.match(r"^\s*receive\s+message\s+from\s+channel\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to ds_channel_receive({m.group(1).strip()})"
+    m = re.match(r"^\s*close\s+channel\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"ds_channel_close({m.group(1).strip()})"
+    masked = re.sub(r"([A-Za-z_]\w*)\s+is\s+closed\b", r"ds_channel_is_closed(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bchannel\s+message\s+count\s+of\s+([A-Za-z_]\w*)\b", r"ds_channel_count(\1)", masked, flags=re.IGNORECASE)
+    m = re.match(r"^\s*create\s+mutex\s+lock\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(1)} to ds_lock_create()"
+    m = re.match(r"^\s*run\s+parallel\s+map\s+(.+?)\s+over\s+(.+?)\s+with\s+(\d+|[A-Za-z_]\w*)\s+workers\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(4)} to ds_parallel_map({m.group(1).strip()}, {m.group(2).strip()}, {m.group(3).strip()})"
+    m = re.match(r"^\s*wait\s+for\s+background\s+task\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to ds_async_await({m.group(1).strip()})"
+    m = re.match(r"^\s*race\s+tasks\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(3)} to ds_async_race({m.group(1).strip()}, {m.group(2).strip()})"
+
+    # Cluster 25: Error Recovery & Fallback Strategies
+    m = re.match(r"^\s*raise\s+custom\s+error\s+(.+?)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"verify that False otherwise {m.group(1).strip()}"
+    m = re.match(r"^\s*raise\s+validation\s+error\s+(.+?)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"verify that False otherwise {m.group(1).strip()}"
+    masked = re.sub(r"\bcurrent\s+error\s+message\b", "ds_get_current_error_msg()", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bcurrent\s+error\s+type\b", "ds_get_current_error_type()", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bcurrent\s+error\s+stack\s+trace\b", "ds_get_current_error_trace()", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bclear\s+current\s+error\b", "ds_clear_current_error()", masked, flags=re.IGNORECASE)
+    m = re.match(r"^\s*assert\s+(.+?)\s+else\s+raise\s+(.+?)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"verify that {m.group(1).strip()} otherwise {m.group(2).strip()}"
+    m = re.match(r"^\s*assert\s+(.+?)\s+else\s+log\s+(.+?)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set _ds_log_tmp to ds_ternary({m.group(1).strip()}, None, ds_log_warning({m.group(2).strip()}))"
+    masked = re.sub(r"\bignore\s+errors\s+and\s+evaluate\s+(.+?)\s+with\s+fallback\s+([^\n;()]+)", r"ds_ignore_errors(lambda: \1, \2)", masked, flags=re.IGNORECASE)
+
+    return masked
+
+
+def normalize_batch2_paradigms(masked: str) -> str:
+    # Cluster 16: Mathematical Distributions & Vector Math
+    masked = re.sub(r"\bdot\s+(?:math_)?product\s+of\s+(.+?)\s+and\s+(\[[^\]]*\]|[A-Za-z_]\w*(?:\[[^\]]+\])?|\([^)]+\)|\d+(?:\.\d+)?)", r"ds_vector_dot(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bcross\s+(?:math_)?product\s+of\s+(.+?)\s+and\s+(\[[^\]]*\]|[A-Za-z_]\w*(?:\[[^\]]+\])?|\([^)]+\)|\d+(?:\.\d+)?)", r"ds_vector_cross(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bvector\s+magnitude\s+of\s+(\[[^\]]*\]|[A-Za-z_]\w*(?:\[[^\]]+\])?|\([^)]+\)|\d+(?:\.\d+)?)", r"ds_vector_magnitude(\1)", masked, flags=re.IGNORECASE)
+    m = re.match(r"^\s*normalize\s+vector\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to ds_vector_normalize({m.group(1).strip()})"
+    m = re.match(r"^\s*vector\s+add\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(3)} to ds_vector_add({m.group(1).strip()}, {m.group(2).strip()})"
+    m = re.match(r"^\s*vector\s+subtract\s+(.+?)\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(3)} to ds_vector_sub({m.group(2).strip()}, {m.group(1).strip()})"
+    m = re.match(r"^\s*vector\s+scale\s+(.+?)\s+by\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(3)} to ds_vector_scale({m.group(1).strip()}, {m.group(2).strip()})"
+    masked = re.sub(r"\beuclidean\s+distance\s+between\s+(.+?)\s+and\s+(\[[^\]]*\]|[A-Za-z_]\w*(?:\[[^\]]+\])?|\([^)]+\)|\d+(?:\.\d+)?)", r"ds_dist_euclidean(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bmanhattan\s+distance\s+between\s+(.+?)\s+and\s+(\[[^\]]*\]|[A-Za-z_]\w*(?:\[[^\]]+\])?|\([^)]+\)|\d+(?:\.\d+)?)", r"ds_dist_manhattan(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bcosine\s+similarity\s+between\s+(.+?)\s+and\s+(\[[^\]]*\]|[A-Za-z_]\w*(?:\[[^\]]+\])?|\([^)]+\)|\d+(?:\.\d+)?)", r"ds_cosine_similarity(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bangle\s+between\s+vectors\s+(.+?)\s+and\s+(.+?)\s+in\s+degrees\b", r"ds_vector_angle_deg(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bangle\s+between\s+vectors\s+(.+?)\s+and\s+(.+?)\s+in\s+radians\b", r"ds_vector_angle_rad(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\brandom\s+float\s+between\s+([^,\n;]+?)\s+and\s+([^\n,;()]+)", r"ds_random_float(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\brandom\s+integer\s+between\s+([^,\n;]+?)\s+and\s+([^\n,;()]+)", r"ds_random_int(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\brandom\s+choice\s+from\s+(\[[^\]]*\]|[A-Za-z_]\w*(?:\[[^\]]+\])?|\([^)]+\))", r"ds_random_choice(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bclamp\s+(.+?)\s+between\s+(.+?)\s+and\s+([^\n,;()]+)", r"ds_clamp(\1, \2, \3)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\blinear\s+interpolate\s+from\s+(.+?)\s+to\s+(.+?)\s+with\s+fraction\s+([^\n,;()]+)", r"ds_lerp(\1, \2, \3)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bsigmoid\s+of\s+([^\n,;()]+)", r"ds_sigmoid(\1)", masked, flags=re.IGNORECASE)
+
+    # Cluster 17: Pattern Matching, Extraction & Search
+    m = re.match(r"^\s*extract\s+all\s+numbers\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to ds_extract_numbers({m.group(1).strip()})"
+    m = re.match(r"^\s*extract\s+all\s+emails\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to ds_extract_emails({m.group(1).strip()})"
+    m = re.match(r"^\s*extract\s+all\s+urls\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to ds_extract_urls({m.group(1).strip()})"
+    m = re.match(r"^\s*extract\s+all\s+hashtags\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to ds_extract_hashtags({m.group(1).strip()})"
+    m = re.match(r"^\s*extract\s+all\s+mentions\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to ds_extract_mentions({m.group(1).strip()})"
+    m = re.match(r"^\s*find\s+all\s+matches\s+of\s+(.+?)\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(3)} to ds_regex_find_all({m.group(1).strip()}, {m.group(2).strip()})"
+    m = re.match(r"^\s*first\s+match\s+of\s+(.+?)\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(3)} to ds_regex_first_match({m.group(1).strip()}, {m.group(2).strip()})"
+    masked = re.sub(r"([A-Za-z_]\w*|__STR_LITERAL_\d+__|__STR_\d+__)\s+matches\s+regex\s+([A-Za-z_]\w*|__STR_LITERAL_\d+__|__STR_\d+__)", r"ds_regex_matches(\2, \1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"([A-Za-z_]\w*|__STR_LITERAL_\d+__|__STR_\d+__)\s+contains\s+regex\s+([A-Za-z_]\w*|__STR_LITERAL_\d+__|__STR_\d+__)", r"ds_regex_contains(\2, \1)", masked, flags=re.IGNORECASE)
+    m = re.match(r"^\s*replace\s+all\s+regex\s+(.+?)\s+with\s+(.+?)\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(4)} to ds_regex_replace({m.group(1).strip()}, {m.group(2).strip()}, {m.group(3).strip()})"
+    masked = re.sub(r"\bsearch\s+([^,\n;]+?)\s+for\s+([^,\n;]+?)\s+ignoring\s+case\b", r"ds_search_case_insensitive(\1, \2)", masked, flags=re.IGNORECASE)
+    m = re.match(r"^\s*index\s+of\s+(.+?)\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(3)} to ds_index_of({m.group(2).strip()}, {m.group(1).strip()})"
+    m = re.match(r"^\s*last\s+index\s+of\s+(.+?)\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(3)} to ds_last_index_of({m.group(2).strip()}, {m.group(1).strip()})"
+    masked = re.sub(r"\bcount\s+occurrences\s+of\s+([^,\n;]+?)\s+in\s+([^\n,;()]+)", r"ds_count_occurrences(\2, \1)", masked, flags=re.IGNORECASE)
+    m = re.match(r"^\s*strip\s+html\s+tags\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to ds_strip_html({m.group(1).strip()})"
+    m = re.match(r"^\s*escape\s+regex\s+pattern\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to ds_regex_escape({m.group(1).strip()})"
+
+    # Cluster 18: Sets, Logic & Combinatorics
+    masked = re.sub(r"\bset\s+intersection\s+of\s+([^,\n;]+?)\s+and\s+([^\n,;()]+)", r"ds_set_intersection(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bset\s+union\s+of\s+([^,\n;]+?)\s+and\s+([^\n,;()]+)", r"ds_set_union(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bset\s+difference\s+of\s+([^,\n;]+?)\s+and\s+([^\n,;()]+)", r"ds_set_difference(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bsymmetric\s+difference\s+of\s+([^,\n;]+?)\s+and\s+([^\n,;()]+)", r"ds_set_symmetric_difference(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"([A-Za-z_]\w*|\[[^\]]+\])\s+is\s+subset\s+of\s+([A-Za-z_]\w*|\[[^\]]+\])", r"ds_set_is_subset(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"([A-Za-z_]\w*|\[[^\]]+\])\s+is\s+disjoint\s+from\s+([A-Za-z_]\w*|\[[^\]]+\])", r"ds_set_is_disjoint(\1, \2)", masked, flags=re.IGNORECASE)
+    m = re.match(r"^\s*cartesian\s+product\s+of\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(3)} to ds_cartesian_product({m.group(1).strip()}, {m.group(2).strip()})"
+    m = re.match(r"^\s*all\s+permutations\s+of\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to ds_all_permutations({m.group(1).strip()})"
+    m = re.match(r"^\s*all\s+combinations\s+of\s+(.+?)\s+of\s+size\s+(\d+|[A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(3)} to ds_all_combinations({m.group(1).strip()}, {m.group(2).strip()})"
+    masked = re.sub(r"\bfactorial\s+of\s+([^\n,;()]+)", r"ds_factorial(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bcombinations\s+count\s+of\s+([^,\n;]+?)\s+choose\s+([^\n,;()]+)", r"ds_combinations_count(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bpermutations\s+count\s+of\s+([^,\n;]+?)\s+take\s+([^\n,;()]+)", r"ds_permutations_count(\1, \2)", masked, flags=re.IGNORECASE)
+    m = re.match(r"^\s*convert\s+(.+?)\s+to\s+set\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to set({m.group(1).strip()})"
+    m = re.match(r"^\s*convert\s+(.+?)\s+to\s+list\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to list({m.group(1).strip()})"
+    m = re.match(r"^\s*add\s+(.+?)\s+to\s+set\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"ds_set_add({m.group(2).strip()}, {m.group(1).strip()})"
+    m = re.match(r"^\s*remove\s+(.+?)\s+from\s+set\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"ds_set_remove({m.group(2).strip()}, {m.group(1).strip()})"
+
+    # Cluster 19: Serialization & Data Formats
+    m = re.match(r"^\s*convert\s+(.+?)\s+to\s+json\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to ds_json_stringify({m.group(1).strip()})"
+    m = re.match(r"^\s*parse\s+json\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to ds_json_parse({m.group(1).strip()})"
+    masked = re.sub(r"([A-Za-z_]\w*|__STR_LITERAL_\d+__|__STR_\d+__)\s+is\s+valid\s+json\b", r"ds_is_valid_json(\1)", masked, flags=re.IGNORECASE)
+    m = re.match(r"^\s*base64\s+encode\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to ds_base64_encode({m.group(1).strip()})"
+    m = re.match(r"^\s*base64\s+decode\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to ds_base64_decode({m.group(1).strip()})"
+    m = re.match(r"^\s*hex\s+encode\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to ds_hex_encode({m.group(1).strip()})"
+    m = re.match(r"^\s*hex\s+decode\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to ds_hex_decode({m.group(1).strip()})"
+    m = re.match(r"^\s*parse\s+query\s+string\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to ds_query_string_parse({m.group(1).strip()})"
+    m = re.match(r"^\s*build\s+query\s+string\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to ds_query_string_build({m.group(1).strip()})"
+
+    # Cluster 20: Cryptography, Hashing & Security
+    masked = re.sub(r"\bsha256\s+hash\s+of\s+([^\n,;()]+)", r"ds_crypto_sha256(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bsha512\s+hash\s+of\s+([^\n,;()]+)", r"ds_crypto_sha512(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bmd5\s+hash\s+of\s+([^\n,;()]+)", r"ds_crypto_md5(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bhmac\s+sha256\s+of\s+([^,\n;]+?)\s+with\s+key\s+([^\n,;()]+)", r"ds_crypto_hmac_sha256(\1, \2)", masked, flags=re.IGNORECASE)
+    m = re.match(r"^\s*generate\s+uuid\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(1)} to ds_crypto_uuid()"
+    m = re.match(r"^\s*generate\s+secure\s+token\s+of\s+(\d+|[A-Za-z_]\w*)\s+bytes\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m:
+        return f"set {m.group(2)} to ds_crypto_token_bytes({m.group(1).strip()})"
+    masked = re.sub(r"\bconstant\s+time\s+compare\s+([^,\n;]+?)\s+with\s+([^\n,;()]+)", r"ds_crypto_constant_time_compare(\1, \2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bgenerate\s+random\s+hex\s+string\s+of\s+length\s+(\d+|[A-Za-z_]\w*)\b", r"ds_crypto_random_hex(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bmask\s+string\s+([^,\n;]+?)\s+keeping\s+first\s+(\d+)\s+and\s+last\s+(\d+)\s+characters\b", r"ds_mask_string(\1, \2, \3)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bmask\s+email\s+([^\n,;()]+)", r"ds_mask_email(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bmask\s+credit\s+card\s+([^\n,;()]+)", r"ds_mask_credit_card(\1)", masked, flags=re.IGNORECASE)
+
+    return masked
+
+
+def normalize_batch1_paradigms(masked: str) -> str:
+    # Cluster 11: File System & File I/O
+    m_w = re.match(r"^\s*write\s+(.+?)\s+to\s+file\s+(.+?)\s*$", masked, re.IGNORECASE)
+    if m_w:
+        return f"ds_file_write_text({m_w.group(2).strip()}, {m_w.group(1).strip()})"
+    m_a = re.match(r"^\s*append\s+(.+?)\s+to\s+file\s+(.+?)\s*$", masked, re.IGNORECASE)
+    if m_a:
+        return f"ds_file_append_text({m_a.group(2).strip()}, {m_a.group(1).strip()})"
+    m_rl = re.match(r"^\s*read\s+lines\s+of\s+file\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m_rl:
+        return f"set {m_rl.group(2)} to ds_file_read_lines({m_rl.group(1).strip()})"
+    m_rt = re.match(r"^\s*read\s+entire\s+file\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m_rt:
+        return f"set {m_rt.group(2)} to ds_file_read_text({m_rt.group(1).strip()})"
+    m_cp = re.match(r"^\s*copy\s+file\s+(.+?)\s+to\s+(.+?)\s*$", masked, re.IGNORECASE)
+    if m_cp:
+        return f"ds_file_copy({m_cp.group(1).strip()}, {m_cp.group(2).strip()})"
+    m_mv = re.match(r"^\s*move\s+file\s+(.+?)\s+to\s+(.+?)\s*$", masked, re.IGNORECASE)
+    if m_mv:
+        return f"ds_file_move({m_mv.group(1).strip()}, {m_mv.group(2).strip()})"
+    m_df = re.match(r"^\s*delete\s+file\s+(.+?)\s*$", masked, re.IGNORECASE)
+    if m_df:
+        return f"ds_file_delete({m_df.group(1).strip()})"
+    m_dd = re.match(r"^\s*delete\s+folder\s+(.+?)\s*$", masked, re.IGNORECASE)
+    if m_dd:
+        return f"ds_folder_delete({m_dd.group(1).strip()})"
+    m_ef = re.match(r"^\s*ensure\s+folder\s+(.+?)\s+exists\s*$", masked, re.IGNORECASE)
+    if m_ef:
+        return f"ds_folder_ensure({m_ef.group(1).strip()})"
+    m_lm = re.match(r"^\s*list\s+all\s+files\s+in\s+folder\s+(.+?)\s+matching\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m_lm:
+        return f"set {m_lm.group(3)} to ds_folder_list_matching({m_lm.group(1).strip()}, {m_lm.group(2).strip()})"
+    m_lf = re.match(r"^\s*list\s+all\s+files\s+in\s+folder\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m_lf:
+        return f"set {m_lf.group(2)} to ds_folder_list_files({m_lf.group(1).strip()})"
+    m_ls = re.match(r"^\s*list\s+all\s+subfolders\s+of\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m_ls:
+        return f"set {m_ls.group(2)} to ds_folder_list_subfolders({m_ls.group(1).strip()})"
+    masked = re.sub(r"\bfile\s+size\s+of\s+([^\n,;()]+?)\s+in\s+bytes\b", r"ds_file_size_bytes(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bfile\s+size\s+of\s+([^\n,;()]+?)\s+in\s+kilobytes\b", r"ds_file_size_kb(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bfile\s+size\s+of\s+([^\n,;()]+?)\s+in\s+megabytes\b", r"ds_file_size_mb(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bfile\s+extension\s+of\s+([^\n,;()]+)", r"ds_file_extension(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bfilename\s+of\s+([^\n,;()]+)", r"ds_filename(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bparent\s+folder\s+of\s+([^\n,;()]+)", r"ds_parent_folder(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bfile\s+([^\n,;()]+?)\s+exists\b", r"ds_file_exists(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bfolder\s+([^\n,;()]+?)\s+exists\b", r"ds_folder_exists(\1)", masked, flags=re.IGNORECASE)
+
+    # Cluster 12: Network, Web & HTTP
+    m_ue = re.match(r"^\s*url\s+encode\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m_ue:
+        return f"set {m_ue.group(2)} to ds_url_encode({m_ue.group(1).strip()})"
+    m_ud = re.match(r"^\s*url\s+decode\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m_ud:
+        return f"set {m_ud.group(2)} to ds_url_decode({m_ud.group(1).strip()})"
+    m_up = re.match(r"^\s*parse\s+url\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m_up:
+        return f"set {m_up.group(2)} to ds_url_parse({m_up.group(1).strip()})"
+    m_ub = re.match(r"^\s*build\s+url\s+(.+?)\s+with\s+query\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m_ub:
+        return f"set {m_ub.group(3)} to ds_url_build({m_ub.group(1).strip()}, {m_ub.group(2).strip()})"
+    masked = re.sub(r"\burl\s+domain\s+of\s+([^\n,;()]+)", r"ds_url_domain(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\burl\s+path\s+of\s+([^\n,;()]+)", r"ds_url_path(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\burl\s+query\s+parameters\s+of\s+([^\n,;()]+)", r"ds_url_query_params(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\burl\s+protocol\s+of\s+([^\n,;()]+)", r"ds_url_protocol(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bhttp\s+status\s+of\s+([A-Za-z_]\w*)\s+is\s+(?:200|ok)\b", r"ds_is_http_ok(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bhttp\s+status\s+of\s+([A-Za-z_]\w*)\s+is\s+(?:404|not\s+found)\b", r"ds_is_http_not_found(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bhttp\s+status\s+of\s+([A-Za-z_]\w*)\s+is\s+error\b", r"ds_is_http_error(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bhttp\s+headers\s+of\s+([A-Za-z_]\w*)\b", r"ds_http_headers(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bhttp\s+status\s+code\s+of\s+([A-Za-z_]\w*)\b", r"ds_http_status_code(\1)", masked, flags=re.IGNORECASE)
+
+    # Cluster 13: Tabular Data & CSV Operations
+    m_clt = re.match(r"^\s*load\s+csv\s+text\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m_clt:
+        return f"set {m_clt.group(2)} to ds_csv_parse_text({m_clt.group(1).strip()})"
+    m_clf = re.match(r"^\s*load\s+csv\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m_clf:
+        return f"set {m_clf.group(2)} to ds_csv_load({m_clf.group(1).strip()})"
+    m_exp = re.match(r"^\s*export\s+(.+?)\s+to\s+csv\s+(.+?)\s*$", masked, re.IGNORECASE)
+    if m_exp:
+        return f"ds_csv_export({m_exp.group(1).strip()}, {m_exp.group(2).strip()})"
+    m_cct = re.match(r"^\s*convert\s+(.+?)\s+to\s+csv\s+text\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m_cct:
+        return f"set {m_cct.group(2)} to ds_csv_to_text({m_cct.group(1).strip()})"
+    m_col = re.match(r"^\s*column\s+(.+?)\s+of\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m_col:
+        return f"set {m_col.group(3)} to ds_table_get_column({m_col.group(2).strip()}, {m_col.group(1).strip()})"
+    m_rc = re.match(r"^\s*rename\s+column\s+(.+?)\s+to\s+(.+?)\s+in\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m_rc:
+        return f"ds_table_rename_column({m_rc.group(3).strip()}, {m_rc.group(1).strip()}, {m_rc.group(2).strip()})"
+    m_dc = re.match(r"^\s*drop\s+column\s+(.+?)\s+from\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m_dc:
+        return f"ds_table_drop_column({m_dc.group(2).strip()}, {m_dc.group(1).strip()})"
+    m_sta = re.match(r"^\s*sort\s+table\s+([A-Za-z_]\w*)\s+by\s+(.+?)\s+ascending\s*$", masked, re.IGNORECASE)
+    if m_sta:
+        return f"ds_table_sort({m_sta.group(1).strip()}, {m_sta.group(2).strip()}, reverse=False)"
+    m_std = re.match(r"^\s*sort\s+table\s+([A-Za-z_]\w*)\s+by\s+(.+?)\s+descending\s*$", masked, re.IGNORECASE)
+    if m_std:
+        return f"ds_table_sort({m_std.group(1).strip()}, {m_std.group(2).strip()}, reverse=True)"
+    m_gt = re.match(r"^\s*group\s+table\s+([A-Za-z_]\w*)\s+by\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m_gt:
+        return f"set {m_gt.group(3)} to ds_table_group_by({m_gt.group(1).strip()}, {m_gt.group(2).strip()})"
+    m_fr = re.match(r"^\s*first\s+(\d+)\s+rows\s+of\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m_fr:
+        return f"set {m_fr.group(3)} to ({m_fr.group(2)})[:{m_fr.group(1)}]"
+    m_lr = re.match(r"^\s*last\s+(\d+)\s+rows\s+of\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m_lr:
+        return f"set {m_lr.group(3)} to ({m_lr.group(2)})[-{m_lr.group(1)}:]"
+    masked = re.sub(r"\bcolumn\s+names\s+of\s+([A-Za-z_]\w*)\b", r"ds_table_columns(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\brow\s+count\s+of\s+([A-Za-z_]\w*)\b", r"ds_table_row_count(\1)", masked, flags=re.IGNORECASE)
+
+    # Cluster 14: System, OS & Process Interaction
+    masked = re.sub(r"\bcurrent\s+working\s+directory\b", r"ds_sys_cwd()", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\boperating\s+system\s+name\b", r"ds_sys_os_name()", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bmachine\s+hostname\b", r"ds_sys_hostname()", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bcpu\s+core\s+count\b", r"ds_sys_cpu_count()", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bcurrent\s+process\s+id\b", r"ds_sys_pid()", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\buser\s+home\s+directory\b", r"ds_sys_home_dir()", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\btemporary\s+directory\b", r"ds_sys_temp_dir()", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bpath\s+separator\b", r"ds_sys_path_separator()", masked, flags=re.IGNORECASE)
+    m_se = re.match(r"^\s*set\s+environment\s+variable\s+(.+?)\s+to\s+(.+?)\s*$", masked, re.IGNORECASE)
+    if m_se:
+        return f"ds_sys_set_env({m_se.group(1).strip()}, {m_se.group(2).strip()})"
+    m_ged = re.match(r"^\s*get\s+environment\s+variable\s+(.+?)\s+with\s+default\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m_ged:
+        return f"set {m_ged.group(3)} to ds_sys_get_env_default({m_ged.group(1).strip()}, {m_ged.group(2).strip()})"
+    m_ge = re.match(r"^\s*get\s+environment\s+variable\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m_ge:
+        return f"set {m_ge.group(2)} to ds_sys_get_env({m_ge.group(1).strip()})"
+    masked = re.sub(r"\benvironment\s+variable\s+([^\n,;()]+?)\s+exists\b", r"ds_sys_has_env(\1)", masked, flags=re.IGNORECASE)
+    m_rcc = re.match(r"^\s*run\s+command\s+(.+?)\s+capturing\s+exit\s+code\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m_rcc:
+        return f"set {m_rcc.group(2)} to ds_sys_run_command_exit_code({m_rcc.group(1).strip()})"
+    m_rcm = re.match(r"^\s*run\s+command\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if m_rcm:
+        return f"set {m_rcm.group(2)} to ds_sys_run_command({m_rcm.group(1).strip()})"
+    m_sls = re.match(r"^\s*sleep\s+for\s+(.+?)\s+seconds?\s*$", masked, re.IGNORECASE)
+    if m_sls:
+        return f"ds_sys_sleep_seconds({m_sls.group(1).strip()})"
+    m_slm = re.match(r"^\s*sleep\s+for\s+(.+?)\s+(?:milliseconds?|ms)\s*$", masked, re.IGNORECASE)
+    if m_slm:
+        return f"ds_sys_sleep_ms({m_slm.group(1).strip()})"
+
+    # Cluster 15: Unit Conversions
+    CONV_MAP = {
+        ("miles", "kilometers"): "ds_convert_miles_to_km",
+        ("kilometers", "miles"): "ds_convert_km_to_miles",
+        ("meters", "feet"): "ds_convert_meters_to_feet",
+        ("feet", "meters"): "ds_convert_feet_to_meters",
+        ("inches", "centimeters"): "ds_convert_inches_to_cm",
+        ("centimeters", "inches"): "ds_convert_cm_to_inches",
+        ("fahrenheit", "celsius"): "ds_convert_f_to_c",
+        ("celsius", "fahrenheit"): "ds_convert_c_to_f",
+        ("celsius", "kelvin"): "ds_convert_c_to_k",
+        ("kelvin", "celsius"): "ds_convert_k_to_c",
+        ("pounds", "kilograms"): "ds_convert_lbs_to_kg",
+        ("kilograms", "pounds"): "ds_convert_kg_to_lbs",
+        ("ounces", "grams"): "ds_convert_oz_to_g",
+        ("grams", "ounces"): "ds_convert_g_to_oz",
+        ("bytes", "kilobytes"): "ds_convert_bytes_to_kb",
+        ("kilobytes", "megabytes"): "ds_convert_kb_to_mb",
+        ("megabytes", "gigabytes"): "ds_convert_mb_to_gb",
+        ("gigabytes", "terabytes"): "ds_convert_gb_to_tb",
+        ("degrees", "radians"): "ds_convert_deg_to_rad",
+        ("radians", "degrees"): "ds_convert_rad_to_deg",
+    }
+    def _repl_conv(cm):
+        val = cm.group(1).strip()
+        u1 = cm.group(2).lower()
+        u2 = cm.group(3).lower()
+        fn = CONV_MAP.get((u1, u2))
+        if fn:
+            return f"{fn}({val})"
+        return cm.group(0)
+
+    masked = re.sub(
+        r"\bconvert\s+([0-9.]+|[A-Za-z_]\w*|\([^)]+\))\s+(miles|kilometers|meters|feet|inches|centimeters|fahrenheit|celsius|kelvin|pounds|kilograms|ounces|grams|bytes|kilobytes|megabytes|gigabytes|degrees|radians)\s+to\s+(miles|kilometers|meters|feet|inches|centimeters|fahrenheit|celsius|kelvin|pounds|kilograms|ounces|grams|bytes|kilobytes|megabytes|gigabytes|degrees|radians)\b",
+        _repl_conv,
+        masked,
+        flags=re.IGNORECASE
+    )
+    return masked
+
+
 def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> str:
     """Normalizes a single statement (without comments or leading indent)."""
     text = stmt.strip()
@@ -1003,6 +1814,10 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         masked = f"set {soft_kw_assign_m.group(1)} to {soft_kw_assign_m.group(2)}"
 
     # Multiples and divisible predicates
+    masked = normalize_batch1_paradigms(masked)
+    masked = normalize_batch2_paradigms(masked)
+    masked = normalize_batch3_paradigms(masked)
+    masked = normalize_batch4_paradigms(masked)
     masked = re.sub(r"\bis\s+(?:a\s+multiple\s+of|divisible\s+by)\s+([A-Za-z_]\w*|\d+(?:\.\d+)?)\b", r"% (\1) == 0", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*increase\s+([A-Za-z_]\w*)\s+by\s+(\d+(?:\.\d+)?)\s*%\s*$", r"set \1 to (\1 * (1 + (\2 / 100.0)))", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*decrease\s+([A-Za-z_]\w*)\s+by\s+(\d+(?:\.\d+)?)\s*%\s*$", r"set \1 to (\1 * (1 - (\2 / 100.0)))", masked, flags=re.IGNORECASE)
@@ -3291,7 +4106,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"\b(?:the\s+)?sum\s+of\s+all\s+(\[[^\]]*\]|[A-Za-z_]\w+)", r"sum of \1", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bthe\s+sum\s+of\s+(\[[^\]]*\]|[A-Za-z_]\w+)(?!\s+in\b)", r"sum of \1", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\btotal\s+of\s+(\[[^\]]*\]|[A-Za-z_]\w*)(?!\s+in\b)", r"sum of \1", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\bproduct\s+of\s+(\[[^\]]*\]|[A-Za-z_]\w+)", r"math_product(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"(?<!cross\s)(?<!dot\s)\bproduct\s+of\s+(\[[^\]]*\]|[A-Za-z_]\w+)", r"math_product(\1)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bmaximum\s+of\s+(\[[^\]]*\]|[A-Za-z_]\w*)", r"highest in \1", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bminimum\s+of\s+(\[[^\]]*\]|[A-Za-z_]\w*)", r"lowest in \1", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bmedian\s+of\s+(\[[^\]]*\]|[A-Za-z_]\w*)\b(?!\s+into\b)", r"math_median(\1)", masked, flags=re.IGNORECASE)
@@ -4365,6 +5180,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     )
     if say_safe_m:
         masked = f"say ds_safe_access(lambda: {say_safe_m.group(1).strip()}, {say_safe_m.group(2).strip()})"
+
 
     # Restore strings
     normalized = unmask_strings(masked, strings)
@@ -5642,7 +6458,7 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
         if not re.search(r"^\s*group\s+.+?\s+by\s+.+?\s+and\s+(?:average|mean|sum)\b", masked_code, re.IGNORECASE):
             # Rule 3: '... and <imperative_verb> ...' (all statement verbs)
             masked_code = re.sub(
-                r"(?<!\band\sthen)(?<!\bgo\sahead)\s+and\s+([A-Za-z_]\w*)",
+                r"(?<!\band\sthen)(?<!\bgo\sahead)(?<!\bignore\serrors)\s+and\s+([A-Za-z_]\w*)",
                 lambda m: f" and then {m.group(1)}" if m.group(1).lower() in STATEMENT_START_KEYWORDS and m.group(1).lower() not in ("then", "of", "in", "to", "as", "with", "by", "from") else m.group(0),
                 masked_code,
                 flags=re.IGNORECASE,

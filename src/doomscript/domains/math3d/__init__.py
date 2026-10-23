@@ -78,8 +78,16 @@ def math3d_dot_product(v1: Vec3, v2: Vec3) -> float:
     return v1.dot(v2)
 
 
-def math3d_normalize_vec(v: Vec3) -> Vec3:
-    return v.normalize()
+import math
+
+
+def math3d_normalize_vec(v: Any) -> Any:
+    if hasattr(v, "normalize"):
+        return v.normalize()
+    norm = math.sqrt(sum(float(x)**2 for x in v))
+    if norm == 0:
+        return [0.0] * len(v)
+    return [float(x) / norm for x in v]
 
 
 def math3d_look_at(eye: Vec3, target: Vec3, up: Vec3) -> Mat4:

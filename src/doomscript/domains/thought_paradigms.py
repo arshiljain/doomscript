@@ -648,9 +648,11 @@ def ds_sphere_intersects_sphere(c1: List[float], r1: float, c2: List[float], r2:
     dist = ds_euclidean_distance(c1, c2)
     return dist <= (r1 + r2)
 
-def ds_lerp(v1: List[float], v2: List[float], t: float) -> List[float]:
-    """Paradigm 171: Linear Interpolation (LERP)."""
-    return [round(a + (b - a) * t, 4) for a, b in zip(v1, v2)]
+def ds_lerp(v1: Any, v2: Any, t: float) -> Any:
+    """Paradigm 171 & 219: Linear Interpolation (LERP) supporting both scalars and vectors."""
+    if isinstance(v1, (list, tuple)) and isinstance(v2, (list, tuple)):
+        return [round(a + (b - a) * t, 4) for a, b in zip(v1, v2)]
+    return round(float(v1) + (float(v2) - float(v1)) * float(t), 4)
 
 def ds_manhattan_distance(p1: List[float], p2: List[float]) -> float:
     """Paradigm 176: L1 Manhattan Distance Metric."""
