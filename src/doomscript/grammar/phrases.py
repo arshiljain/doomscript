@@ -4939,12 +4939,6 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
             emit(f"{indent}# target leetcode", line_idx)
             continue
 
-        # Conversational control flow: unless, do nothing, stop loop, skip to next, repeat until, given that
-        unless_m = re.match(r"^unless\s+(.+?):$", code.strip(), re.IGNORECASE)
-        if unless_m:
-            emit(f"{indent}if not ({unless_m.group(1)}):", line_idx)
-            continue
-
         if re.match(r"^do\s+nothing$", code.strip(), re.IGNORECASE):
             emit(f"{indent}set _ to None", line_idx)
             continue
@@ -4957,14 +4951,12 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
             emit(f"{indent}skip", line_idx)
             continue
 
-        repeat_until_m = re.match(r"^repeat\s+until\s+(.+?):$", code.strip(), re.IGNORECASE)
-        if repeat_until_m:
-            emit(f"{indent}while not ({repeat_until_m.group(1)}):", line_idx)
-            continue
-
         given_m = re.match(r"^(?:given|provided)\s+that\s+(.+?):$", code.strip(), re.IGNORECASE)
         if given_m:
-            emit(f"{indent}if {given_m.group(1)}:", line_idx)
+            norm_cond = normalize_statement_text(f"if {given_m.group(1).strip()}", scope, line_idx)
+            if not norm_cond.endswith(":"):
+                norm_cond += ":"
+            emit(f"{indent}{norm_cond}", line_idx)
             continue
 
         # Database transaction: transaction [db]:
@@ -5544,7 +5536,7 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
         if unless_then_m:
             cond = unless_then_m.group(1).strip()
             then_stmt = unless_then_m.group(2).strip()
-            norm_cond = normalize_statement_text(f"if not ({cond})", scope, line_idx)
+            norm_cond = normalize_statement_text(f"unless {cond}", scope, line_idx)
             norm_then = normalize_statement_text(then_stmt, scope, line_idx)
             if not norm_cond.endswith(":"):
                 norm_cond += ":"
