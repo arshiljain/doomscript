@@ -415,6 +415,12 @@ def ide():
 
 
 @app.command()
+def idle():
+    """Launch DoomScript Studio (IDLE) - Professional Desktop IDE."""
+    ide()
+
+
+@app.command()
 def lsp():
     """Start the DoomScript Language Server (LSP) over stdio for IDE integration."""
     from doomscript.lsp.server import start_lsp_server
