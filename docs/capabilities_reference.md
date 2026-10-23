@@ -84,38 +84,47 @@ Total Active Registered Domains: **81**
 ### 2.1 Domain: `acoustics`
 - **Primary Name:** `acoustics`
 - **Aliases:** `sound_engineering`, `psychoacoustics`, `reverberation`
-- **Description:** Physical acoustics & architectural audio: SPL decibels, Sabine and Eyring RT60, Doppler shift, distance decay, and transmission loss
+- **Description:** Deepened Acoustics domain: Sound Pressure Level, Sabine/Eyring RT60, Doppler shift, A-weighting, transmission loss, and room acoustics
 - **Registered Verbs & Patterns:**
-  - `calculate` — Pattern: `calculate spl pressure {p:expr} into {target:ident}`: Sound pressure level (dB)
+  - `calculate` — Pattern: `calculate spl pressure {p:expr} into {target:ident}`: Sound pressure level (dB SPL)
   - `calculate` — Pattern: `calculate sabine rt60 volume {v:expr} absorption {a:expr} into {target:ident}`: Sabine reverberation time
-  - `calculate` — Pattern: `calculate eyring rt60 volume {v:expr} area {s:expr} absorption {a:expr} into {target:ident}`: Eyring reverberation time
-  - `calculate` — Pattern: `calculate doppler shift freq {f:expr} source_v {vs:expr} into {target:ident}`: Doppler shifted frequency
-  - `calculate` — Pattern: `calculate sound decay spl {spl:expr} r1 {r1:expr} r2 {r2:expr} into {target:ident}`: Distance SPL attenuation
-  - `calculate` — Pattern: `calculate sound transmission loss mass {m:expr} freq {f:expr} into {target:ident}`: Sound transmission loss
-- **Exported Functions/Symbols (127):** `ACOUSTICS_DOMAIN`, `AcousticsASTExporter`, `AcousticsDomain`, `AcousticsDomainParser`, `AcousticsRuntime`, `DomainContract`, `DomainRuntime`, `VerbSpec`, `acoustics_characteristic_impedance`, `acoustics_doppler_shift`, `acoustics_eyring_rt60`, `acoustics_inverse_square_decay`, `acoustics_sabine_rt60`, `acoustics_sound_transmission_loss`, `acoustics_spl_db`...
+  - `calculate` — Pattern: `calculate eyring rt60 volume {v:expr} area {s:expr} absorption {alpha:expr} into {target:ident}`: Eyring reverberation time
+  - `calculate` — Pattern: `calculate doppler shift freq {f:expr} source_v {vs:expr} into {target:ident}`: Doppler frequency shift
+  - `calculate` — Pattern: `calculate sound decay spl {spl:expr} r1 {r1:expr} r2 {r2:expr} into {target:ident}`: Inverse square sound drop
+  - `calculate` — Pattern: `calculate sound transmission loss mass {m:expr} freq {f:expr} into {target:ident}`: Sound transmission loss (mass law)
+  - `calculate` — Pattern: `calculate a weighting freq {f:expr} into {target:ident}`: IEC A-weighting filter
+  - `calculate` — Pattern: `calculate schroeder frequency volume {v:expr} rt60 {rt:expr} into {target:ident}`: Schroeder cutoff frequency
+- **Exported Functions/Symbols (125):** `AcousticsRuntime`, `DomainRuntime`, `P_REF`, `acoustics_a_weighting`, `acoustics_characteristic_impedance`, `acoustics_doppler_shift`, `acoustics_eyring_rt60`, `acoustics_inverse_square_decay`, `acoustics_phon_to_sone`, `acoustics_room_modes`, `acoustics_sabine_rt60`, `acoustics_schroeder_frequency`, `acoustics_sound_transmission_loss`, `acoustics_spl_db`, `ds_adsr_envelope`...
 
 ### 2.2 Domain: `actuarial`
 - **Primary Name:** `actuarial`
 - **Aliases:** `actuary`, `insurance_math`, `mortality`
-- **Description:** Actuarial science: Gompertz and Makeham mortality laws, annuity present value, term life premium, loss reserves, and Chain Ladder development
+- **Description:** Deepened Actuarial domain: Gompertz/Makeham mortality, life annuities, term insurance premiums, Chain Ladder loss reserving, and ruin theory
 - **Registered Verbs & Patterns:**
-  - `calculate` — Pattern: `calculate gompertz mortality age {a:expr} base {b:expr} factor {c:expr} into {target:ident}`: Gompertz mortality
-  - `calculate` — Pattern: `calculate makeham mortality age {a:expr} accident {acc:expr} base {b:expr} factor {c:expr} into {target:ident}`: Gompertz-Makeham mortality
+  - `calculate` — Pattern: `calculate gompertz mortality age {age:expr} base {b:expr} factor {c:expr} into {target:ident}`: Gompertz mortality hazard rate
+  - `calculate` — Pattern: `calculate makeham mortality age {age:expr} accident {a:expr} base {b:expr} factor {c:expr} into {target:ident}`: Gompertz-Makeham mortality hazard rate
   - `calculate` — Pattern: `calculate annuity present value payment {p:expr} rate {r:expr} years {n:expr} into {target:ident}`: Annuity present value
   - `calculate` — Pattern: `calculate term insurance premium benefit {b:expr} mortality {q:expr} rate {r:expr} term {n:expr} into {target:ident}`: Term insurance net single premium
-  - `calculate` — Pattern: `calculate loss reserve claims {c:expr} severity {s:expr} rate {r:expr} into {target:ident}`: Loss reserve
-  - `calculate` — Pattern: `calculate chain ladder losses {l:expr} ratio {r:expr} into {target:ident}`: Chain ladder ultimate loss projection
-- **Exported Functions/Symbols (126):** `ACTUARIAL_DOMAIN`, `ActuarialASTExporter`, `ActuarialDomain`, `ActuarialDomainParser`, `ActuarialRuntime`, `DomainContract`, `DomainRuntime`, `VerbSpec`, `actuarial_annuity_present_value`, `actuarial_chain_ladder_projection`, `actuarial_gompertz_mortality_rate`, `actuarial_loss_reserve`, `actuarial_makeham_mortality_rate`, `actuarial_term_insurance_premium`, `ds_adsr_envelope`...
+  - `calculate` — Pattern: `calculate loss reserve claims {c:expr} severity {s:expr} rate {r:expr} into {target:ident}`: Discounted loss reserve
+  - `calculate` — Pattern: `calculate chain ladder losses {l:expr} ratio {f:expr} into {target:ident}`: Chain ladder ultimate loss projection
+  - `calculate` — Pattern: `calculate life expectancy age {age:expr} into {target:ident}`: Curtate life expectancy
+  - `calculate` — Pattern: `calculate cramer lundberg ruin surplus {u:expr} premium {c:expr} frequency {lam:expr} mean_claim {mu:expr} into {target:ident}`: Cramér-Lundberg ruin probability
+- **Exported Functions/Symbols (122):** `ActuarialRuntime`, `DomainRuntime`, `actuarial_annuity_present_value`, `actuarial_chain_ladder_projection`, `actuarial_chain_ladder_triangle`, `actuarial_cramer_lundberg_ruin`, `actuarial_curtate_life_expectancy`, `actuarial_gompertz_mortality_rate`, `actuarial_loss_reserve`, `actuarial_makeham_mortality_rate`, `actuarial_term_insurance_premium`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`...
 
 ### 2.3 Domain: `aerospace`
 - **Primary Name:** `aerospace`
 - **Aliases:** `orbital_mechanics`, `rocketry`, `astronautics`
-- **Description:** Aerospace & flight dynamics: Lift/drag, Mach number, Breguet range, orbital velocity, and Hohmann transfers
+- **Description:** Deepened Aerospace domain: Aerodynamic lift/drag, Mach numbers, Breguet range, orbital velocities, Hohmann transfers, Kepler orbits, and rocket propulsion
 - **Registered Verbs & Patterns:**
-  - `calculate` — Pattern: `calculate lift and drag for density {rho:expr} velocity {v:expr} area {a:expr} cl {cl:expr} cd {cd:expr} into {target:ident}`: Lift and drag
-  - `calculate` — Pattern: `calculate orbital velocity for altitude {alt:expr} into {target:ident}`: Orbital velocity
-  - `calculate` — Pattern: `calculate hohmann transfer r1 {r1:expr} r2 {r2:expr} into {target:ident}`: Hohmann transfer
-- **Exported Functions/Symbols (126):** `AEROSPACE_DOMAIN`, `AerospaceASTExporter`, `AerospaceDomain`, `AerospaceDomainParser`, `AerospaceRuntime`, `DomainContract`, `DomainRuntime`, `VerbSpec`, `aero_breguet_range`, `aero_lift_drag`, `aero_mach_number`, `aerospace_hohmann_transfer`, `aerospace_kepler_orbit`, `aerospace_orbital_velocity`, `ds_adsr_envelope`...
+  - `calculate` — Pattern: `calculate lift drag density {rho:expr} velocity {v:expr} wing {s:expr} cl {cl:expr} cd {cd:expr} into {target:ident}`: Lift and drag forces
+  - `calculate` — Pattern: `calculate mach number velocity {v:expr} temp {t:expr} into {target:ident}`: Mach flight speed
+  - `calculate` — Pattern: `calculate breguet range ld {ld:expr} velocity {v:expr} sfc {sfc:expr} w0 {w0:expr} w1 {w1:expr} into {target:ident}`: Breguet aircraft range
+  - `calculate` — Pattern: `calculate orbital velocity altitude {alt:expr} mass {m:expr} radius {r:expr} into {target:ident}`: Circular orbit velocity
+  - `calculate` — Pattern: `calculate hohmann transfer r1 {r1:expr} r2 {r2:expr} into {target:ident}`: Hohmann transfer orbit delta-v
+  - `calculate` — Pattern: `calculate kepler orbit periapsis {rp:expr} apoapsis {ra:expr} into {target:ident}`: Keplerian orbital parameters
+  - `calculate` — Pattern: `calculate rocket delta v isp {isp:expr} m0 {m0:expr} mf {mf:expr} into {target:ident}`: Tsiolkovsky rocket equation
+  - `calculate` — Pattern: `calculate normal shock mach {m1:expr} into {target:ident}`: Normal shock wave properties
+- **Exported Functions/Symbols (124):** `AerospaceRuntime`, `DomainRuntime`, `G0_STANDARD`, `G_CONST`, `aero_breguet_range`, `aero_lift_drag`, `aero_lift_drag_forces`, `aero_mach_number`, `aerospace_hohmann_transfer`, `aerospace_kepler_orbit`, `aerospace_normal_shock`, `aerospace_orbital_velocity`, `aerospace_tsiolkovsky_rocket`, `ds_adsr_envelope`, `ds_agent_confidence`...
 
 ### 2.4 Domain: `agent`
 - **Primary Name:** `agent`
@@ -134,14 +143,20 @@ Total Active Registered Domains: **81**
 ### 2.5 Domain: `agronomy`
 - **Primary Name:** `agronomy`
 - **Aliases:** `agri`, `crop_science`, `soil_science`
-- **Description:** Agronomy and soil science: crop evapotranspiration, growing degree days, fertilizer rates, cation exchange capacity, and soil porosity
+- **Description:** Soil physics, crop water modeling, irrigation, fertility, and soil conservation.
 - **Registered Verbs & Patterns:**
-  - `calculate` — Pattern: `calculate crop water requirement et0 {et0:expr} kc {kc:expr} into {target:ident}`: Crop water requirement
-  - `calculate` — Pattern: `calculate growing degree days tmax {tmax:expr} tmin {tmin:expr} tbase {tbase:expr} into {target:ident}`: Growing degree days
-  - `calculate` — Pattern: `calculate fertilizer rate nutrient {n:expr} percent {p:expr} into {target:ident}`: Fertilizer application rate
-  - `calculate` — Pattern: `calculate cation exchange ca {ca:expr} mg {mg:expr} k {k:expr} na {na:expr} into {target:ident}`: Cation exchange capacity
-  - `calculate` — Pattern: `calculate soil porosity bulk {pb:expr} into {target:ident}`: Soil bulk porosity
-- **Exported Functions/Symbols (125):** `AGRONOMY_DOMAIN`, `AgronomyASTExporter`, `AgronomyDomain`, `AgronomyDomainParser`, `AgronomyRuntime`, `DomainContract`, `DomainRuntime`, `VerbSpec`, `agronomy_cation_exchange_capacity`, `agronomy_crop_water_requirement`, `agronomy_fertilizer_rate`, `agronomy_growing_degree_days`, `agronomy_soil_porosity`, `ds_adsr_envelope`, `ds_agent_confidence`...
+  - `calculate` — Pattern: `calculate crop water requirement et0 {et0:expr} kc {kc:expr} into {target:ident}`: Calculates crop water requirement ETc
+  - `calculate` — Pattern: `calculate growing degree days tmax {tmax:expr} tmin {tmin:expr} into {target:ident}`: Calculates Growing Degree Days GDD
+  - `calculate` — Pattern: `calculate fertilizer rate nutrient {n:expr} percent {p:expr} into {target:ident}`: Calculates bulk fertilizer application rate
+  - `calculate` — Pattern: `calculate cation exchange ca {ca:expr} mg {mg:expr} k {k:expr} na {na:expr} into {target:ident}`: Calculates CEC and base saturation
+  - `calculate` — Pattern: `calculate soil porosity bulk {pb:expr} into {target:ident}`: Calculates soil total porosity fraction
+  - `calculate` — Pattern: `calculate usle erosion r {r:expr} k {k:expr} ls {ls:expr} c {c:expr} p {p:expr} into {target:ident}`: Calculates annual USLE soil erosion loss
+  - `calculate` — Pattern: `calculate available water capacity fc {fc:expr} pwp {pwp:expr} depth {d:expr} into {target:ident}`: Calculates plant available water capacity
+  - `calculate` — Pattern: `calculate nitrogen balance om {om:expr} demand {dem:expr} into {target:ident}`: Estimates soil N mineralization and fertilizer deficit
+  - `calculate` — Pattern: `calculate irrigation schedule deficit {def:expr} efficiency {eff:expr} rate {r:expr} into {target:ident}`: Calculates gross irrigation depth and runtime
+  - `calculate` — Pattern: `calculate leaf area index foliage {f:expr} ground {g:expr} into {target:ident}`: Calculates Leaf Area Index and light interception
+  - `calculate` — Pattern: `calculate sar na {na:expr} ca {ca:expr} mg {mg:expr} into {target:ident}`: Calculates Sodium Adsorption Ratio SAR
+- **Exported Functions/Symbols (124):** `AgronomyRuntime`, `DomainRuntime`, `agronomy_available_water_capacity`, `agronomy_cation_exchange_capacity`, `agronomy_crop_water_requirement`, `agronomy_fertilizer_rate`, `agronomy_growing_degree_days`, `agronomy_irrigation_depth_schedule`, `agronomy_leaf_area_index`, `agronomy_nitrogen_mineralization_balance`, `agronomy_sodium_adsorption_ratio`, `agronomy_soil_porosity`, `agronomy_universal_soil_loss_equation`, `ds_adsr_envelope`, `ds_agent_confidence`...
 
 ### 2.6 Domain: `astronomy`
 - **Primary Name:** `astronomy`
@@ -155,15 +170,16 @@ Total Active Registered Domains: **81**
 ### 2.7 Domain: `astrophysics`
 - **Primary Name:** `astrophysics`
 - **Aliases:** `stellar_physics`, `cosmology`, `black_holes`
-- **Description:** Theoretical astrophysics & cosmology: Schwarzschild radius, Stefan-Boltzmann luminosity, Eddington limit, Hubble recession, Jeans mass, and Friedmann critical density
+- **Description:** Deepened Astrophysics domain: Schwarzschild event horizons, Stefan-Boltzmann luminosity, Eddington limits, Jeans collapse, Hubble expansion, and Hawking radiation
 - **Registered Verbs & Patterns:**
-  - `calculate` — Pattern: `calculate schwarzschild radius mass {m:expr} into {target:ident}`: Event horizon radius
-  - `calculate` — Pattern: `calculate stellar luminosity radius {r:expr} temp {t:expr} into {target:ident}`: Stefan-Boltzmann luminosity
-  - `calculate` — Pattern: `calculate eddington luminosity mass {m:expr} into {target:ident}`: Eddington luminosity limit
-  - `calculate` — Pattern: `calculate hubble velocity distance {d:expr} into {target:ident}`: Hubble cosmic velocity
-  - `calculate` — Pattern: `calculate jeans mass temp {t:expr} density {n:expr} into {target:ident}`: Jeans collapse mass
-  - `calculate` — Pattern: `calculate critical density h0 {h0:expr} into {target:ident}`: Friedmann critical universe density
-- **Exported Functions/Symbols (126):** `ASTROPHYSICS_DOMAIN`, `AstrophysicsASTExporter`, `AstrophysicsDomain`, `AstrophysicsDomainParser`, `AstrophysicsRuntime`, `DomainContract`, `DomainRuntime`, `VerbSpec`, `astro_eddington_luminosity`, `astro_friedmann_critical_density`, `astro_hubble_velocity`, `astro_jeans_mass`, `astro_schwarzschild_radius`, `astro_stefan_boltzmann_luminosity`, `ds_adsr_envelope`...
+  - `calculate` — Pattern: `calculate schwarzschild radius mass {m:expr} into {target:ident}`: Gravitational event horizon radius
+  - `calculate` — Pattern: `calculate stellar luminosity radius {r:expr} temp {t:expr} into {target:ident}`: Stefan-Boltzmann stellar luminosity
+  - `calculate` — Pattern: `calculate eddington luminosity mass {m:expr} into {target:ident}`: Eddington radiation accretion limit
+  - `calculate` — Pattern: `calculate hubble velocity distance {d:expr} into {target:ident}`: Hubble cosmic expansion velocity
+  - `calculate` — Pattern: `calculate jeans mass temp {t:expr} density {n:expr} into {target:ident}`: Jeans gravitational collapse mass
+  - `calculate` — Pattern: `calculate critical density h0 {h0:expr} into {target:ident}`: Friedmann cosmological critical density
+  - `calculate` — Pattern: `calculate hawking radiation mass {m:expr} into {target:ident}`: Hawking radiation temperature and lifetime
+- **Exported Functions/Symbols (129):** `AstrophysicsRuntime`, `DomainRuntime`, `G_CONST`, `H_BAR`, `K_BOLTZMANN`, `SIGMA_SB`, `SOLAR_LUMINOSITY_W`, `SOLAR_MASS_KG`, `SPEED_OF_LIGHT`, `astro_eddington_luminosity`, `astro_einstein_radius`, `astro_friedmann_critical_density`, `astro_hawking_radiation`, `astro_hubble_velocity`, `astro_jeans_mass`...
 
 ### 2.8 Domain: `audio`
 - **Primary Name:** `audio`
@@ -193,15 +209,21 @@ Total Active Registered Domains: **81**
 ### 2.10 Domain: `aviation`
 - **Primary Name:** `aviation`
 - **Aliases:** `flight`, `aero`, `avionics`
-- **Description:** Aeronautics and flight physics: pressure & density altitude, crosswind components, turn radius, banked stall speed, and climb gradient
+- **Description:** Flight mechanics, aerodynamics, navigation, performance, and weight and balance.
 - **Registered Verbs & Patterns:**
-  - `calculate` — Pattern: `calculate pressure altitude altimeter {alt:expr} elevation {elev:expr} into {target:ident}`: Pressure altitude
-  - `calculate` — Pattern: `calculate density altitude pressure_alt {pa:expr} oat {oat:expr} into {target:ident}`: Density altitude
-  - `calculate` — Pattern: `calculate wind components wind_speed {ws:expr} wind_dir {wd:expr} runway {rw:expr} into {target:ident}`: Crosswind and headwind components
-  - `calculate` — Pattern: `calculate turn radius tas {tas:expr} bank {bank:expr} into {target:ident}`: Turn radius
-  - `calculate` — Pattern: `calculate banked stall speed vs0 {vs:expr} bank {b:expr} into {target:ident}`: Stall speed in bank turn
-  - `calculate` — Pattern: `calculate climb gradient roc {roc:expr} tas {tas:expr} into {target:ident}`: Aircraft climb gradient percentage
-- **Exported Functions/Symbols (126):** `AVIATION_DOMAIN`, `AviationASTExporter`, `AviationDomain`, `AviationDomainParser`, `AviationRuntime`, `DomainContract`, `DomainRuntime`, `VerbSpec`, `aviation_banked_stall_speed`, `aviation_climb_gradient`, `aviation_density_altitude`, `aviation_pressure_altitude`, `aviation_turn_radius`, `aviation_wind_components`, `ds_adsr_envelope`...
+  - `calculate` — Pattern: `calculate pressure altitude altimeter {alt:expr} elevation {elev:expr} into {target:ident}`: Computes pressure altitude PA in feet
+  - `calculate` — Pattern: `calculate density altitude pressure_alt {pa:expr} oat {oat:expr} into {target:ident}`: Computes density altitude DA in feet
+  - `calculate` — Pattern: `calculate wind components wind_speed {ws:expr} wind_dir {wd:expr} runway {rwy:expr} into {target:ident}`: Computes crosswind and headwind components in knots
+  - `calculate` — Pattern: `calculate turn radius tas {tas:expr} bank {bank:expr} into {target:ident}`: Computes coordinated level turn radius in feet
+  - `calculate` — Pattern: `calculate banked stall speed vs0 {vs0:expr} bank {bank:expr} into {target:ident}`: Computes accelerated stall speed in a bank turn
+  - `calculate` — Pattern: `calculate climb gradient roc {roc:expr} tas {tas:expr} into {target:ident}`: Computes aircraft climb gradient percentage
+  - `calculate` — Pattern: `calculate true airspeed cas {cas:expr} pressure_alt {pa:expr} oat {oat:expr} into {target:ident}`: Computes TAS and Mach number from CAS
+  - `calculate` — Pattern: `calculate glide performance ratio {gr:expr} altitude {alt:expr} into {target:ident}`: Computes unpowered glide range in nautical miles
+  - `calculate` — Pattern: `calculate holding pattern drift wind_speed {ws:expr} wind_dir {wd:expr} course {crs:expr} tas {tas:expr} into {target:ident}`: Computes wind correction angles and outbound holding timer
+  - `calculate` — Pattern: `calculate weight and balance empty_weight {ew:expr} empty_arm {ea:expr} stations {st:expr} into {target:ident}`: Computes gross takeoff weight and CG position
+  - `calculate` — Pattern: `calculate critical mach sweep {sweep:expr} thickness {tc:expr} into {target:ident}`: Computes critical Mach and drag divergence Mach number
+  - `calculate` — Pattern: `calculate standard rate turn tas {tas:expr} into {target:ident}`: Computes bank angle and load factor for standard rate 3 deg/sec turn
+- **Exported Functions/Symbols (125):** `AviationRuntime`, `DomainRuntime`, `aviation_banked_stall_speed`, `aviation_climb_gradient`, `aviation_critical_mach_drag_divergence`, `aviation_density_altitude`, `aviation_glide_performance`, `aviation_holding_pattern_drift`, `aviation_pressure_altitude`, `aviation_standard_rate_turn`, `aviation_tas_from_cas`, `aviation_turn_radius`, `aviation_weight_and_balance`, `aviation_wind_components`, `ds_adsr_envelope`...
 
 ### 2.11 Domain: `bio`
 - **Primary Name:** `bio`
@@ -219,38 +241,47 @@ Total Active Registered Domains: **81**
 ### 2.12 Domain: `biomechanics`
 - **Primary Name:** `biomechanics`
 - **Aliases:** `biomech`, `kinesiology`, `human_motion`
-- **Description:** Biomechanics and kinesiology: joint moment, multi-segment center of mass, GRF impulse, muscle tendon force, Hill's force-velocity, and limb moment of inertia
+- **Description:** Musculoskeletal modeling, kinesiology, inverse dynamics, and human movement kinetics.
 - **Registered Verbs & Patterns:**
-  - `calculate` — Pattern: `calculate joint moment force {f:expr} arm {r:expr} angle {a:expr} into {target:ident}`: Joint moment/torque
-  - `calculate` — Pattern: `calculate center of mass masses {m:expr} positions {p:expr} into {target:ident}`: Center of mass
-  - `calculate` — Pattern: `calculate grf impulse forces {f:expr} dt {dt:expr} into {target:ident}`: GRF impulse
-  - `calculate` — Pattern: `calculate muscle tendon force muscle {fm:expr} pennation {a:expr} into {target:ident}`: Muscle tendon force
-  - `calculate` — Pattern: `calculate hill muscle force velocity {v:expr} f0 {f0:expr} param_a {a:expr} param_b {b:expr} into {target:ident}`: Hill's muscle force-velocity
-  - `calculate` — Pattern: `calculate segment inertia mass {m:expr} radius {r:expr} into {target:ident}`: Segment moment of inertia
-- **Exported Functions/Symbols (126):** `BIOMECHANICS_DOMAIN`, `BiomechanicsASTExporter`, `BiomechanicsDomain`, `BiomechanicsDomainParser`, `BiomechanicsRuntime`, `DomainContract`, `DomainRuntime`, `VerbSpec`, `biomech_center_of_mass`, `biomech_grf_impulse`, `biomech_hills_muscle_force_velocity`, `biomech_joint_moment`, `biomech_muscle_tendon_force`, `biomech_segment_moment_of_inertia_cylinder`, `ds_adsr_envelope`...
+  - `calculate` — Pattern: `calculate joint moment force {f:expr} arm {r:expr} into {target:ident}`: Calculates joint torque/moment in N*m
+  - `calculate` — Pattern: `calculate center of mass masses {m:expr} positions {x:expr} into {target:ident}`: Calculates 1D center of mass
+  - `calculate` — Pattern: `calculate grf impulse forces {f:expr} dt {dt:expr} into {target:ident}`: Calculates ground reaction force linear impulse
+  - `calculate` — Pattern: `calculate muscle tendon force muscle {f:expr} pennation {a:expr} into {target:ident}`: Calculates force transmitted along tendon
+  - `calculate` — Pattern: `calculate hill muscle force velocity {v:expr} f0 {f0:expr} param_a {a:expr} param_b {b:expr} into {target:ident}`: Calculates muscle force from Hill model
+  - `calculate` — Pattern: `calculate segment inertia mass {m:expr} radius {r:expr} into {target:ident}`: Calculates limb segment moment of inertia
+  - `calculate` — Pattern: `calculate joint power moment {m:expr} velocity {w:expr} into {target:ident}`: Calculates joint power and mechanical work
+  - `calculate` — Pattern: `calculate loading rate forces {f:expr} rate {sr:expr} weight {bw:expr} into {target:ident}`: Calculates average and instantaneous vertical loading rates
+  - `calculate` — Pattern: `calculate pennation thickness {t:expr} length {l:expr} into {target:ident}`: Calculates muscle architectural pennation angle
+  - `calculate` — Pattern: `calculate joint contact moment {m:expr} arm {r:expr} reaction {rx:expr} into {target:ident}`: Calculates compressive joint contact force
+  - `calculate` — Pattern: `calculate gait froude velocity {v:expr} leg {l:expr} into {target:ident}`: Calculates Alexander gait Froude number
+- **Exported Functions/Symbols (125):** `BiomechanicsRuntime`, `DomainRuntime`, `biomech_center_of_mass`, `biomech_gait_froude_number`, `biomech_grf_impulse`, `biomech_hills_muscle_force_velocity`, `biomech_inverse_dynamics_2d_segment`, `biomech_joint_contact_force`, `biomech_joint_moment`, `biomech_muscle_mechanical_work_power`, `biomech_muscle_tendon_force`, `biomech_pennate_muscle_aponeurosis`, `biomech_segment_moment_of_inertia_cylinder`, `biomech_vertical_loading_rate`, `ds_adsr_envelope`...
 
 ### 2.13 Domain: `cache`
 - **Primary Name:** `cache`
-- **Aliases:** `caching`, `lru`, `ttl`
-- **Description:** Advanced caching: LRU, LFU, Bloom filters, and consistent hashing rings
+- **Aliases:** `caching`, `lru`, `ttl`, `arc`
+- **Description:** Advanced caching: LRU, LFU, ARC, 2Q, Clock, Bloom filters, consistent hashing, and XFetch
 - **Registered Verbs & Patterns:**
   - `create` — Pattern: `create lru cache with capacity {cap:expr} into {target:ident}`: Create LRU cache
   - `create` — Pattern: `create lfu cache with capacity {cap:expr} into {target:ident}`: Create LFU cache
+  - `create` — Pattern: `create arc cache with capacity {cap:expr} into {target:ident}`: Create ARC cache
   - `create` — Pattern: `create hash ring with replicas {rep:expr} into {target:ident}`: Consistent hash ring
-- **Exported Functions/Symbols (135):** `BloomFilter`, `CACHE_DOMAIN`, `CacheASTExporter`, `CacheDomain`, `CacheDomainParser`, `CacheRuntime`, `ConsistentHashRing`, `DomainContract`, `DomainRuntime`, `LFUCache`, `LRUCache`, `VerbSpec`, `cache_bloom_add`, `cache_bloom_check`, `cache_create_bloom`...
+  - `store` — Pattern: `store in cache {cache:expr} key {key:expr} value {val:expr}`: Store cache value
+  - `fetch` — Pattern: `fetch from cache {cache:expr} key {key:expr} into {target:ident}`: Fetch cache value
+- **Exported Functions/Symbols (139):** `ARCCache`, `BloomFilter`, `CacheRuntime`, `ClockCache`, `ConsistentHashRing`, `DomainRuntime`, `LFUCache`, `LRUCache`, `SegmentedLRUCache`, `TTLCache`, `TwoQueueCache`, `cache_bloom_add`, `cache_bloom_check`, `cache_create_2q`, `cache_create_arc`...
 
 ### 2.14 Domain: `cartography`
 - **Primary Name:** `cartography`
 - **Aliases:** `carto`, `map_projection`, `geodesy`
-- **Description:** Cartography and map projections: Haversine distance, initial bearing, Mercator projection, UTM zones, ground distance, and Tissot distortion
+- **Description:** Deepened Cartography domain: Haversine distance, initial bearing, Mercator projection, UTM zones, map scales, WGS84 geodesy, and Rhumb lines
 - **Registered Verbs & Patterns:**
-  - `calculate` — Pattern: `calculate haversine distance lat1 {la1:expr} lon1 {lo1:expr} lat2 {la2:expr} lon2 {lo2:expr} into {target:ident}`: Haversine distance
-  - `calculate` — Pattern: `calculate initial bearing lat1 {la1:expr} lon1 {lo1:expr} lat2 {la2:expr} lon2 {lo2:expr} into {target:ident}`: Initial bearing
-  - `calculate` — Pattern: `calculate mercator projection lat {la:expr} lon {lo:expr} into {target:ident}`: Mercator projection
-  - `calculate` — Pattern: `calculate utm zone lon {lo:expr} into {target:ident}`: UTM zone
-  - `calculate` — Pattern: `calculate ground distance map_cm {cm:expr} scale {ratio:expr} into {target:ident}`: Ground distance
-  - `calculate` — Pattern: `calculate mercator distortion lat {lat:expr} into {target:ident}`: Mercator scale distortion
-- **Exported Functions/Symbols (126):** `CARTOGRAPHY_DOMAIN`, `CartographyASTExporter`, `CartographyDomain`, `CartographyDomainParser`, `CartographyRuntime`, `DomainContract`, `DomainRuntime`, `VerbSpec`, `carto_ground_distance`, `carto_haversine_distance`, `carto_initial_bearing`, `carto_mercator_projection`, `carto_tissot_indicatrix_distortion`, `carto_utm_zone`, `ds_adsr_envelope`...
+  - `calculate` — Pattern: `calculate haversine distance lat1 {lat1:expr} lon1 {lon1:expr} lat2 {lat2:expr} lon2 {lon2:expr} into {target:ident}`: Haversine great circle distance
+  - `calculate` — Pattern: `calculate initial bearing lat1 {lat1:expr} lon1 {lon1:expr} lat2 {lat2:expr} lon2 {lon2:expr} into {target:ident}`: Initial spherical azimuth
+  - `calculate` — Pattern: `calculate mercator projection lat {lat:expr} lon {lon:expr} into {target:ident}`: Mercator forward projection
+  - `calculate` — Pattern: `calculate utm zone lon {lon:expr} into {target:ident}`: Universal Transverse Mercator zone
+  - `calculate` — Pattern: `calculate ground distance map_cm {cm:expr} scale {scale:expr} into {target:ident}`: Map scale to ground distance
+  - `calculate` — Pattern: `calculate mercator distortion lat {lat:expr} into {target:ident}`: Tissot indicatrix Mercator distortion
+  - `calculate` — Pattern: `calculate wgs84 ecef lat {lat:expr} lon {lon:expr} height {h:expr} into {target:ident}`: WGS84 geodetic to ECEF 3D Cartesian
+- **Exported Functions/Symbols (125):** `CartographyRuntime`, `DomainRuntime`, `EARTH_RADIUS_KM`, `WGS84_A`, `WGS84_E2`, `WGS84_F`, `carto_ground_distance`, `carto_haversine_distance`, `carto_initial_bearing`, `carto_mercator_projection`, `carto_rhumb_line_distance`, `carto_tissot_indicatrix_distortion`, `carto_utm_zone`, `carto_wgs84_to_ecef`, `ds_adsr_envelope`...
 
 ### 2.15 Domain: `chain`
 - **Primary Name:** `chain`
@@ -277,15 +308,16 @@ Total Active Registered Domains: **81**
 ### 2.17 Domain: `chronometry`
 - **Primary Name:** `chronometry`
 - **Aliases:** `chrono`, `horology`, `sidereal_time`
-- **Description:** Precision timekeeping and astronomical chronology: Julian Day, GMST, Equation of Time, Special & General Relativistic dilation, and Solar declination
+- **Description:** Deepened Chronometry domain: Julian Day Numbers, GMST, Equation of Time, Special & General Relativity, GPS clock drift, and solar ephemeris
 - **Registered Verbs & Patterns:**
   - `calculate` — Pattern: `calculate julian day year {y:expr} month {m:expr} day {d:expr} into {target:ident}`: Julian Day Number
   - `calculate` — Pattern: `calculate gmst jdn {jdn:expr} into {target:ident}`: Greenwich Mean Sidereal Time
   - `calculate` — Pattern: `calculate equation of time day {d:expr} into {target:ident}`: Equation of Time
-  - `calculate` — Pattern: `calculate time dilation proper {t0:expr} velocity {v:expr} into {target:ident}`: Relativistic time dilation
-  - `calculate` — Pattern: `calculate gravitational dilation proper {t0:expr} mass {m:expr} radius {r:expr} into {target:ident}`: Gravitational time dilation
+  - `calculate` — Pattern: `calculate time dilation proper {t0:expr} velocity {v:expr} into {target:ident}`: Special relativistic time dilation
+  - `calculate` — Pattern: `calculate gravitational dilation proper {t0:expr} mass {m:expr} radius {r:expr} into {target:ident}`: General relativistic gravitational time dilation
   - `calculate` — Pattern: `calculate solar declination day {d:expr} into {target:ident}`: Solar declination angle
-- **Exported Functions/Symbols (126):** `CHRONOMETRY_DOMAIN`, `ChronometryASTExporter`, `ChronometryDomain`, `ChronometryDomainParser`, `ChronometryRuntime`, `DomainContract`, `DomainRuntime`, `VerbSpec`, `chrono_equation_of_time`, `chrono_gravitational_time_dilation`, `chrono_greenwich_mean_sidereal_time`, `chrono_julian_day_number`, `chrono_relativistic_time_dilation`, `chrono_solar_declination`, `ds_adsr_envelope`...
+  - `calculate` — Pattern: `calculate gps drift altitude {alt:expr} velocity {v:expr} into {target:ident}`: GPS relativistic net clock drift
+- **Exported Functions/Symbols (123):** `ChronometryRuntime`, `DomainRuntime`, `G_CONST`, `SPEED_OF_LIGHT`, `chrono_equation_of_time`, `chrono_gps_relativistic_drift`, `chrono_gravitational_time_dilation`, `chrono_greenwich_mean_sidereal_time`, `chrono_julian_day_number`, `chrono_relativistic_time_dilation`, `chrono_solar_declination`, `chrono_sunrise_sunset_hours`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`...
 
 ### 2.18 Domain: `circuit`
 - **Primary Name:** `circuit`
@@ -301,13 +333,14 @@ Total Active Registered Domains: **81**
 ### 2.19 Domain: `climate`
 - **Primary Name:** `climate`
 - **Aliases:** `meteorology`, `weather`, `atmosphere`
-- **Description:** Meteorology & climate: Dew point, heat index, wind chill, VPD, and radiative forcing
+- **Description:** Meteorology & climate: Dew point, heat index, wind chill, VPD, radiative forcing, EBM, and geostrophic wind
 - **Registered Verbs & Patterns:**
   - `calculate` — Pattern: `calculate dew point for temperature {t:expr} humidity {h:expr} into {target:ident}`: Dew point
   - `calculate` — Pattern: `calculate wind chill for temperature {t:expr} wind {w:expr} into {target:ident}`: Wind chill
   - `calculate` — Pattern: `calculate vpd for temperature {t:expr} humidity {h:expr} into {target:ident}`: VPD
   - `calculate` — Pattern: `calculate radiative forcing for co2 {ppm:expr} into {target:ident}`: Radiative forcing
-- **Exported Functions/Symbols (127):** `CLIMATE_DOMAIN`, `ClimateASTExporter`, `ClimateDomain`, `ClimateDomainParser`, `ClimateRuntime`, `DomainContract`, `DomainRuntime`, `VerbSpec`, `climate_barometric_altitude`, `climate_co2_equivalent`, `climate_dew_point`, `climate_heat_index`, `climate_radiative_forcing`, `climate_vapor_pressure_deficit`, `climate_wind_chill`...
+  - `calculate` — Pattern: `calculate barometric pressure for altitude {alt:expr} into {target:ident}`: Barometric pressure
+- **Exported Functions/Symbols (122):** `ClimateRuntime`, `DomainRuntime`, `climate_barometric_altitude`, `climate_co2_equivalent`, `climate_dew_point`, `climate_energy_balance_step`, `climate_geostrophic_wind`, `climate_heat_index`, `climate_radiative_forcing`, `climate_vapor_pressure_deficit`, `climate_wind_chill`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`...
 
 ### 2.20 Domain: `cloud`
 - **Primary Name:** `cloud`
@@ -324,15 +357,16 @@ Total Active Registered Domains: **81**
 ### 2.21 Domain: `combustion`
 - **Primary Name:** `combustion`
 - **Aliases:** `flame`, `thermal_combustion`, `reaction_kinetics`
-- **Description:** Combustion engineering: equivalence ratio, Arrhenius kinetics, heat release, adiabatic flame temperature, Le Chatelier flammability limits, and Zeldovich thermal NOx
+- **Description:** Deepened Combustion domain: Equivalence ratio, Arrhenius reaction kinetics, heat release, adiabatic flame temperature, Le Chatelier flammability limits, and NOx scaling
 - **Registered Verbs & Patterns:**
-  - `calculate` — Pattern: `calculate equivalence ratio fuel {f:expr} air {a:expr} stoich {s:expr} into {target:ident}`: Equivalence ratio
-  - `calculate` — Pattern: `calculate arrhenius rate preexp {a:expr} ea {ea:expr} temp {t:expr} into {target:ident}`: Arrhenius rate
-  - `calculate` — Pattern: `calculate heat release rate flow {m:expr} lhv {lhv:expr} eff {eff:expr} into {target:ident}`: Heat release rate
-  - `calculate` — Pattern: `calculate adiabatic flame temp t0 {t0:expr} lhv {lhv:expr} cp {cp:expr} afr {afr:expr} into {target:ident}`: Adiabatic flame temperature
-  - `calculate` — Pattern: `calculate mixture flammability fractions {y:expr} limits {lfl:expr} into {target:ident}`: Le Chatelier mixture flammability limit
-  - `calculate` — Pattern: `calculate thermal nox temp {t:expr} oxygen {o2:expr} into {target:ident}`: Zeldovich thermal NOx scaling
-- **Exported Functions/Symbols (126):** `COMBUSTION_DOMAIN`, `CombustionASTExporter`, `CombustionDomain`, `CombustionDomainParser`, `CombustionRuntime`, `DomainContract`, `DomainRuntime`, `VerbSpec`, `combust_adiabatic_flame_temp`, `combust_arrhenius_rate`, `combust_equivalence_ratio`, `combust_heat_release_rate`, `combust_le_chatelier_flammability_limit`, `combust_zeldovich_nox_scaling`, `ds_adsr_envelope`...
+  - `calculate` — Pattern: `calculate equivalence ratio fuel {f:expr} air {a:expr} stoich {stoich:expr} into {target:ident}`: Fuel-air equivalence ratio
+  - `calculate` — Pattern: `calculate arrhenius rate preexp {a:expr} ea {ea:expr} temp {t:expr} into {target:ident}`: Arrhenius reaction rate constant
+  - `calculate` — Pattern: `calculate heat release rate flow {m:expr} lhv {lhv:expr} eff {eff:expr} into {target:ident}`: Thermal heat release rate (MW)
+  - `calculate` — Pattern: `calculate adiabatic flame temp t0 {t0:expr} lhv {lhv:expr} cp {cp:expr} afr {afr:expr} into {target:ident}`: Adiabatic flame temperature (K)
+  - `calculate` — Pattern: `calculate mixture flammability fractions {y:expr} limits {limits:expr} into {target:ident}`: Le Chatelier mixture flammability limit
+  - `calculate` — Pattern: `calculate thermal nox temp {t:expr} oxygen {xo2:expr} into {target:ident}`: Thermal Zeldovich NOx forward rate index
+  - `calculate` — Pattern: `calculate wobbe index hhv {hhv:expr} gravity {sg:expr} into {target:ident}`: Wobbe index for fuel gas interchangeability
+- **Exported Functions/Symbols (121):** `CombustionRuntime`, `DomainRuntime`, `combust_adiabatic_flame_temp`, `combust_arrhenius_rate`, `combust_damkohler_number`, `combust_equivalence_ratio`, `combust_heat_release_rate`, `combust_le_chatelier_flammability_limit`, `combust_wobbe_index`, `combust_zeldovich_nox_scaling`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`...
 
 ### 2.22 Domain: `compiler`
 - **Primary Name:** `compiler`
@@ -359,34 +393,43 @@ Total Active Registered Domains: **81**
 ### 2.24 Domain: `control`
 - **Primary Name:** `control`
 - **Aliases:** `control_systems`, `feedback`, `pid`
-- **Description:** Feedback control: State-space, Kalman filter, PID tuning, sensor fusion, and Routh-Hurwitz stability
+- **Description:** Feedback control, state-space systems, PID tuning, Kalman filtering, frequency response, and stability analysis.
 - **Registered Verbs & Patterns:**
-  - `step` — Pattern: `step state space a {a:expr} b {b:expr} state {x:expr} input {u:expr} into {target:ident}`: State-space step
-  - `step` — Pattern: `step kalman filter prior {x:expr} cov {p:expr} measurement {z:expr} noise {r:expr} into {target:ident}`: Kalman step
-  - `check` — Pattern: `check stability for polynomial {coeffs:expr} into {target:ident}`: Routh-Hurwitz stability
-- **Exported Functions/Symbols (125):** `CONTROL_DOMAIN`, `ControlASTExporter`, `ControlDomain`, `ControlDomainParser`, `ControlRuntime`, `DomainContract`, `DomainRuntime`, `VerbSpec`, `control_complementary_filter`, `control_kalman_1d_step`, `control_pid_step`, `control_routh_hurwitz_stable`, `control_state_space_step`, `ds_adsr_envelope`, `ds_agent_confidence`...
+  - `step` — Pattern: `step state space a {a:expr} b {b:expr} state {x:expr} input {u:expr} into {target:ident}`: Calculates next discrete state space update
+  - `step` — Pattern: `step kalman filter prior {x:expr} cov {p:expr} measurement {z:expr} noise {r:expr} into {target:ident}`: Calculates single step 1D Kalman filter estimate
+  - `calculate` — Pattern: `calculate pid step for error {e:expr} dt {dt:expr} integral {i:expr} prev_err {pe:expr} kp {kp:expr} ki {ki:expr} kd {kd:expr} into {target:ident}`: Calculates PID output and updated integrator
+  - `fuse` — Pattern: `fuse gyro {g:expr} accel {a:expr} prev {p:expr} into {target:ident}`: Complementary sensor fusion filter
+  - `check` — Pattern: `check stability for polynomial {coeffs:expr} into {target:ident}`: Routh-Hurwitz polynomial stability check
+  - `calculate` — Pattern: `calculate bode response omega_n {wn:expr} zeta {z:expr} frequencies {w:expr} into {target:ident}`: Calculates second-order Bode magnitude and phase
+  - `discretize` — Pattern: `discretize pole {s:expr} sampling {t:expr} into {target:ident}`: Tustin bilinear continuous-to-discrete pole mapping
+  - `calculate` — Pattern: `calculate lqr cost q {q:expr} r {r:expr} states {x:expr} inputs {u:expr} into {target:ident}`: Evaluates quadratic LQR cost trajectory
+  - `evaluate` — Pattern: `evaluate step response times {t:expr} values {v:expr} target {tgt:expr} into {target:ident}`: Calculates rise time, overshoot, and settling time
+  - `tune` — Pattern: `tune ziegler nichols ku {ku:expr} tu {tu:expr} into {target:ident}`: Calculates Ziegler-Nichols PID tuning gains
+- **Exported Functions/Symbols (123):** `ControlRuntime`, `DomainRuntime`, `control_bode_second_order`, `control_complementary_filter`, `control_kalman_1d_step`, `control_lqr_cost_evaluation`, `control_pid_step`, `control_routh_hurwitz_stable`, `control_state_space_step`, `control_step_response_metrics`, `control_tustin_bilinear_transform`, `control_ziegler_nichols_tuning`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`...
 
 ### 2.25 Domain: `crypto_zk`
 - **Primary Name:** `crypto_zk`
 - **Aliases:** `zkp`, `zero_knowledge`, `schnorr`, `pedersen`
-- **Description:** Zero-Knowledge Proofs & Cryptography: Shamir secret sharing, Pedersen, Merkle trees, Schnorr ZK
+- **Description:** Zero-Knowledge Proofs & Cryptography: Shamir secret sharing, Pedersen, Merkle trees, Schnorr ZK, and Elliptic Curves
 - **Registered Verbs & Patterns:**
   - `split` — Pattern: `split secret {sec:expr} into {n:expr} shares with threshold {t:expr} into {target:ident}`: Shamir split
   - `build` — Pattern: `build merkle tree for leaves {leaves:expr} into {target:ident}`: Merkle tree
   - `generate` — Pattern: `generate schnorr zk proof for secret {s:expr} into {target:ident}`: Schnorr proof
-- **Exported Functions/Symbols (128):** `CRYPTO_ZK_DOMAIN`, `CryptoZKDomain`, `CryptoZKRuntime`, `Crypto_zkASTExporter`, `Crypto_zkDomainParser`, `DomainContract`, `DomainRuntime`, `VerbSpec`, `crypto_diffie_hellman`, `crypto_merkle_tree`, `crypto_merkle_verify`, `crypto_pedersen_commit`, `crypto_schnorr_prove`, `crypto_schnorr_verify_proof`, `crypto_shamir_reconstruct`...
+  - `reconstruct` — Pattern: `reconstruct secret from shares {shares:expr} into {target:ident}`: Shamir reconstruct
+- **Exported Functions/Symbols (124):** `CryptoZKRuntime`, `DomainRuntime`, `EllipticCurve`, `PRIME`, `crypto_diffie_hellman`, `crypto_merkle_tree`, `crypto_merkle_verify`, `crypto_pedersen_commit`, `crypto_schnorr_prove`, `crypto_schnorr_verify_proof`, `crypto_shamir_reconstruct`, `crypto_shamir_split`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`...
 
 ### 2.26 Domain: `crystallography`
 - **Primary Name:** `crystallography`
 - **Aliases:** `crystal`, `xray_diffraction`, `lattice`
-- **Description:** Crystallography: Bragg diffraction, interplanar spacing, atomic packing factors, theoretical density, and Scherrer crystallite size
+- **Description:** Deepened Crystallography domain: Bragg diffraction, cubic/hexagonal lattice interplanar spacing, atomic packing factor, unit cell density, Scherrer size, and selection rules
 - **Registered Verbs & Patterns:**
-  - `calculate` — Pattern: `calculate bragg angle wavelength {w:expr} spacing {d:expr} order {n:expr} into {target:ident}`: Bragg diffraction angle
-  - `calculate` — Pattern: `calculate interplanar spacing lattice {a:expr} h {h:expr} k {k:expr} l {l:expr} into {target:ident}`: Interplanar spacing
-  - `calculate` — Pattern: `calculate atomic packing factor system {s:expr} into {target:ident}`: Atomic packing factor
-  - `calculate` — Pattern: `calculate crystal density atoms {n:expr} weight {a:expr} volume {v:expr} into {target:ident}`: Crystal theoretical density
-  - `calculate` — Pattern: `calculate crystallite size wavelength {w:expr} fwhm {f:expr} theta {t:expr} into {target:ident}`: Scherrer crystallite domain size
-- **Exported Functions/Symbols (125):** `CRYSTALLOGRAPHY_DOMAIN`, `CrystallographyASTExporter`, `CrystallographyDomain`, `CrystallographyDomainParser`, `CrystallographyRuntime`, `DomainContract`, `DomainRuntime`, `VerbSpec`, `crystal_atomic_packing_factor`, `crystal_bragg_angle`, `crystal_cubic_interplanar_spacing`, `crystal_density`, `crystal_scherrer_crystallite_size`, `ds_adsr_envelope`, `ds_agent_confidence`...
+  - `calculate` — Pattern: `calculate bragg angle wavelength {lam:expr} spacing {d:expr} order {n:expr} into {target:ident}`: Bragg diffraction angle
+  - `calculate` — Pattern: `calculate interplanar spacing lattice {a:expr} h {h:expr} k {k:expr} l {l:expr} into {target:ident}`: Cubic interplanar spacing
+  - `calculate` — Pattern: `calculate atomic packing factor system {sys:expr} into {target:ident}`: Atomic packing factor APF
+  - `calculate` — Pattern: `calculate crystal density atoms {n:expr} weight {a:expr} volume {vc:expr} into {target:ident}`: Theoretical crystal density
+  - `calculate` — Pattern: `calculate crystallite size wavelength {lam:expr} fwhm {beta:expr} theta {theta:expr} into {target:ident}`: Scherrer crystallite domain size
+  - `check` — Pattern: `check reflection allowed lattice {lat:expr} h {h:expr} k {k:expr} l {l:expr} into {target:ident}`: Systematic extinction selection rules
+- **Exported Functions/Symbols (121):** `AVOGADRO_CONSTANT`, `CrystallographyRuntime`, `DomainRuntime`, `crystal_atomic_packing_factor`, `crystal_bragg_angle`, `crystal_cubic_interplanar_spacing`, `crystal_density`, `crystal_hexagonal_interplanar_spacing`, `crystal_scherrer_crystallite_size`, `crystal_systematic_extinction_allowed`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`...
 
 ### 2.27 Domain: `data`
 - **Primary Name:** `data`
@@ -440,47 +483,60 @@ Total Active Registered Domains: **81**
 ### 2.30 Domain: `ecology`
 - **Primary Name:** `ecology`
 - **Aliases:** `biodiversity`, `population_dynamics`, `ecosystems`
-- **Description:** Ecology & population dynamics: Shannon/Simpson biodiversity, Pielou evenness, Lotka-Volterra, and mark-recapture
+- **Description:** Deepened Ecology domain: Shannon/Simpson biodiversity, island biogeography, Lotka-Volterra dynamics, mark-recapture, and metapopulation models
 - **Registered Verbs & Patterns:**
-  - `calculate` — Pattern: `calculate shannon diversity for abundances {counts:expr} into {target:ident}`: Shannon index
-  - `calculate` — Pattern: `calculate pielou evenness for abundances {counts:expr} into {target:ident}`: Pielou evenness
-  - `estimate` — Pattern: `estimate population marked {n1:expr} captured {n2:expr} recaptured {m2:expr} into {target:ident}`: Lincoln-Petersen estimate
-- **Exported Functions/Symbols (127):** `DomainContract`, `DomainRuntime`, `ECOLOGY_DOMAIN`, `EcologyASTExporter`, `EcologyDomain`, `EcologyDomainParser`, `EcologyRuntime`, `VerbSpec`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`...
+  - `calculate` — Pattern: `calculate shannon diversity abundances {abundances:expr} into {target:ident}`: Shannon-Wiener diversity index
+  - `calculate` — Pattern: `calculate simpson diversity abundances {abundances:expr} into {target:ident}`: Gini-Simpson diversity index
+  - `calculate` — Pattern: `calculate pielou evenness abundances {abundances:expr} into {target:ident}`: Pielou species evenness
+  - `calculate` — Pattern: `calculate island biogeography area {a:expr} constant {c:expr} exponent {z:expr} into {target:ident}`: MacArthur-Wilson species-area law
+  - `step` — Pattern: `step lotka volterra prey {x:expr} pred {y:expr} alpha {a:expr} beta {b:expr} gamma {g:expr} delta {d:expr} dt {dt:expr} into {target:ident}`: Lotka-Volterra predator-prey step
+  - `calculate` — Pattern: `calculate logistic growth n0 {n0:expr} rate {r:expr} capacity {k:expr} time {t:expr} into {target:ident}`: Logistic population growth
+  - `estimate` — Pattern: `estimate population mark recapture n1 {n1:expr} n2 {n2:expr} m2 {m2:expr} into {target:ident}`: Chapman mark-recapture estimation
+- **Exported Functions/Symbols (122):** `DomainRuntime`, `EcologyRuntime`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`, `ds_amortize_loan`, `ds_audio_filter_lowpass`, `ds_audit_safety`, `ds_balance_equation`, `ds_batch_stream`, `ds_beta_coefficient`...
 
 ### 2.31 Domain: `electromagnetics`
 - **Primary Name:** `electromagnetics`
 - **Aliases:** `em`, `emag`, `maxwell`
-- **Description:** Electromagnetics: Biot-Savart law, conductor skin depth, Poynting vector, coaxial impedance, plane wave attenuation, and Faraday induced EMF
+- **Description:** Deepened Electromagnetics domain: Maxwell equations, Biot-Savart, skin depth, Poynting vector, coax impedance, plane waves, and RF transmission
 - **Registered Verbs & Patterns:**
-  - `calculate` — Pattern: `calculate magnetic field wire current {i:expr} distance {r:expr} into {target:ident}`: Biot-Savart magnetic field
-  - `calculate` — Pattern: `calculate skin depth freq {f:expr} conductivity {s:expr} perm {ur:expr} into {target:ident}`: Conductor skin depth
-  - `calculate` — Pattern: `calculate poynting vector efield {e:expr} hfield {h:expr} into {target:ident}`: Poynting power flux
-  - `calculate` — Pattern: `calculate coax impedance inner {a:expr} outer {b:expr} eps {er:expr} into {target:ident}`: Coaxial line impedance
-  - `calculate` — Pattern: `calculate wave attenuation freq {f:expr} conductivity {s:expr} eps {er:expr} perm {ur:expr} into {target:ident}`: Plane wave attenuation
-  - `calculate` — Pattern: `calculate faraday emf turns {n:expr} flux {dphi:expr} time {dt:expr} into {target:ident}`: Faraday induced EMF
-- **Exported Functions/Symbols (126):** `DomainContract`, `DomainRuntime`, `ELECTROMAGNETICS_DOMAIN`, `ElectromagneticsASTExporter`, `ElectromagneticsDomain`, `ElectromagneticsDomainParser`, `ElectromagneticsRuntime`, `VerbSpec`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`...
+  - `calculate` — Pattern: `calculate magnetic field wire current {i:expr} distance {r:expr} into {target:ident}`: Biot-Savart straight wire magnetic field
+  - `calculate` — Pattern: `calculate skin depth freq {f:expr} conductivity {sigma:expr} perm {ur:expr} into {target:ident}`: Electromagnetic conductor skin depth
+  - `calculate` — Pattern: `calculate poynting vector efield {e:expr} hfield {h:expr} into {target:ident}`: Poynting power flux vector magnitude
+  - `calculate` — Pattern: `calculate coax impedance inner {a:expr} outer {b:expr} eps {eps:expr} into {target:ident}`: Coaxial cable characteristic impedance
+  - `calculate` — Pattern: `calculate wave attenuation freq {f:expr} conductivity {sigma:expr} eps {eps:expr} perm {ur:expr} into {target:ident}`: Lossy dielectric plane wave attenuation
+  - `calculate` — Pattern: `calculate faraday emf turns {n:expr} flux {flux:expr} time {dt:expr} into {target:ident}`: Faraday induced electromotive force
+  - `calculate` — Pattern: `calculate vswr zl {zl:expr} z0 {z0:expr} into {target:ident}`: RF transmission line VSWR and reflection
+- **Exported Functions/Symbols (125):** `DomainRuntime`, `EPS_0`, `ElectromagneticsRuntime`, `MU_0`, `SPEED_OF_LIGHT`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`, `ds_amortize_loan`, `ds_audio_filter_lowpass`, `ds_audit_safety`...
 
 ### 2.32 Domain: `epidemiology`
 - **Primary Name:** `epidemiology`
 - **Aliases:** `disease_spread`, `outbreak`, `sir_model`
-- **Description:** Epidemiological modeling: R0, herd immunity, SIR/SEIR compartmental models, and CFR analysis
+- **Description:** Compartmental epidemic modeling, reproduction numbers, herd immunity, and outbreak analytics.
 - **Registered Verbs & Patterns:**
-  - `calculate` — Pattern: `calculate reproduction number r0 for beta {b:expr} gamma {g:expr} into {target:ident}`: R0 calculation
-  - `step` — Pattern: `step sir model s {s:expr} i {i:expr} r {r:expr} beta {b:expr} gamma {g:expr} into {target:ident}`: SIR step
-  - `step` — Pattern: `step seir model s {s:expr} e {e:expr} i {i:expr} r {r:expr} beta {b:expr} sigma {sig:expr} gamma {g:expr} into {target:ident}`: SEIR step
-- **Exported Functions/Symbols (125):** `DomainContract`, `DomainRuntime`, `EPIDEMIOLOGY_DOMAIN`, `EpidemiologyASTExporter`, `EpidemiologyDomain`, `EpidemiologyDomainParser`, `EpidemiologyRuntime`, `VerbSpec`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`...
+  - `calculate` — Pattern: `calculate reproduction number r0 for beta {b:expr} gamma {g:expr} into {target:ident}`: Calculates Basic Reproduction Number R0
+  - `calculate` — Pattern: `calculate herd immunity threshold for r0 {r0:expr} into {target:ident}`: Calculates Herd Immunity Threshold percentage
+  - `step` — Pattern: `step sir model s {s:expr} i {i:expr} r {r:expr} beta {b:expr} gamma {g:expr} into {target:ident}`: Single step of SIR compartmental model
+  - `step` — Pattern: `step seir model s {s:expr} e {e:expr} i {i:expr} r {r:expr} beta {b:expr} sigma {sig:expr} gamma {g:expr} into {target:ident}`: Single step of SEIR model with latency
+  - `calculate` — Pattern: `calculate cfr for cases {c:expr} deaths {d:expr} into {target:ident}`: Calculates Case Fatality Rate percentage
+  - `calculate` — Pattern: `calculate effective rt r0 {r0:expr} susceptible {s:expr} into {target:ident}`: Calculates time-varying effective reproduction number Rt
+  - `calculate` — Pattern: `calculate final epidemic size r0 {r0:expr} into {target:ident}`: Solves final epidemic attack rate relation
+  - `calculate` — Pattern: `calculate vaccination threshold r0 {r0:expr} efficacy {e:expr} into {target:ident}`: Calculates required population vaccination coverage
+  - `calculate` — Pattern: `calculate epidemic doubling time r0 {r0:expr} generation {tg:expr} into {target:ident}`: Calculates epidemic exponential doubling time
+  - `calculate` — Pattern: `calculate outbreak odds ratio exp_cases {a:expr} exp_healthy {b:expr} unexp_cases {c:expr} unexp_healthy {d:expr} into {target:ident}`: Calculates Relative Risk and Odds Ratio in 2x2 table
+  - `calculate` — Pattern: `calculate secondary attack rate cases {sc:expr} contacts {k:expr} into {target:ident}`: Calculates Secondary Attack Rate SAR
+- **Exported Functions/Symbols (124):** `DomainRuntime`, `EpidemiologyRuntime`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`, `ds_amortize_loan`, `ds_audio_filter_lowpass`, `ds_audit_safety`, `ds_balance_equation`, `ds_batch_stream`, `ds_beta_coefficient`...
 
 ### 2.33 Domain: `ergonomics`
 - **Primary Name:** `ergonomics`
 - **Aliases:** `ergo`, `human_factors`, `workplace_safety`
-- **Description:** Ergonomics and human factors: NIOSH lifting equation, RULA assessment, metabolic expenditure, REBA scoring, and Moore-Garg Strain Index
+- **Description:** Ergonomics and human factors: NIOSH lifting equation, RULA/REBA postural scoring, spinal L5/S1 compression, and anthropometrics
 - **Registered Verbs & Patterns:**
   - `calculate` — Pattern: `calculate niosh lifting limit load {lc:expr} horiz {h:expr} vert {v:expr} dist {d:expr} angle {a:expr} freq {f:expr} coupling {c:expr} into {target:ident}`: NIOSH lifting limit
   - `calculate` — Pattern: `calculate rula score upper {u:expr} lower {l:expr} wrist {w:expr} neck {n:expr} trunk {t:expr} load {load:expr} into {target:ident}`: RULA posture score
   - `calculate` — Pattern: `calculate metabolic expenditure weight {w:expr} met {m:expr} minutes {t:expr} into {target:ident}`: Metabolic expenditure
   - `calculate` — Pattern: `calculate reba score trunk {t:expr} neck {n:expr} legs {l:expr} uarm {ua:expr} larm {la:expr} wrist {w:expr} into {target:ident}`: REBA entire body score
   - `calculate` — Pattern: `calculate strain index intensity {im:expr} duration {dm:expr} efforts {em:expr} posture {pm:expr} into {target:ident}`: Moore-Garg Strain Index
-- **Exported Functions/Symbols (125):** `DomainContract`, `DomainRuntime`, `ERGONOMICS_DOMAIN`, `ErgonomicsASTExporter`, `ErgonomicsDomain`, `ErgonomicsDomainParser`, `ErgonomicsRuntime`, `VerbSpec`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`...
+- **Exported Functions/Symbols (120):** `DomainRuntime`, `ErgonomicsRuntime`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`, `ds_amortize_loan`, `ds_audio_filter_lowpass`, `ds_audit_safety`, `ds_balance_equation`, `ds_batch_stream`, `ds_beta_coefficient`...
 
 ### 2.34 Domain: `finance`
 - **Primary Name:** `finance`
@@ -498,12 +554,13 @@ Total Active Registered Domains: **81**
 ### 2.35 Domain: `forensics`
 - **Primary Name:** `forensics`
 - **Aliases:** `digital_forensics`, `dfir`, `artifact_analysis`
-- **Description:** Digital forensics & malware triage: Magic byte identification, Shannon entropy, Base64 deobfuscation, and DGA detection
+- **Description:** Digital forensics & malware triage: Magic byte identification, Shannon entropy, Base64 deobfuscation, DGA detection, and timestomping
 - **Registered Verbs & Patterns:**
   - `identify` — Pattern: `identify file type by magic bytes {header:expr} into {target:ident}`: Magic bytes
   - `calculate` — Pattern: `calculate shannon entropy for data {data:expr} into {target:ident}`: Entropy
   - `check` — Pattern: `check dga domain {d:expr} into {target:ident}`: DGA detection
-- **Exported Functions/Symbols (125):** `DomainContract`, `DomainRuntime`, `FORENSICS_DOMAIN`, `ForensicsASTExporter`, `ForensicsDomain`, `ForensicsDomainParser`, `ForensicsRuntime`, `VerbSpec`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`...
+  - `deobfuscate` — Pattern: `deobfuscate nested base64 {data:expr} into {target:ident}`: Base64 deobfuscation
+- **Exported Functions/Symbols (120):** `DomainRuntime`, `ForensicsRuntime`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`, `ds_amortize_loan`, `ds_audio_filter_lowpass`, `ds_audit_safety`, `ds_balance_equation`, `ds_batch_stream`, `ds_beta_coefficient`...
 
 ### 2.36 Domain: `game`
 - **Primary Name:** `game`
@@ -520,22 +577,29 @@ Total Active Registered Domains: **81**
 ### 2.37 Domain: `genai`
 - **Primary Name:** `genai`
 - **Aliases:** `generative_ai`, `llm`, `embeddings`
-- **Description:** GenAI, LLMs & RAG: Vector search, chunking, BM25, RRF, prompt safety, ROUGE/BLEU
+- **Description:** GenAI, LLMs & RAG: Vector search, chunking, BM25, RRF, prompt safety, ROUGE/BLEU, Attention, RoPE, BPE
 - **Registered Verbs & Patterns:**
   - `calculate` — Pattern: `calculate cosine similarity between {v1:expr} and {v2:expr} into {target:ident}`: Cosine similarity
   - `fuse` — Pattern: `fuse rankings for lists {lists:expr} into {target:ident}`: RRF rank fusion
   - `check` — Pattern: `check prompt injection for text {text:expr} into {target:ident}`: Prompt injection detection
-- **Exported Functions/Symbols (131):** `DomainContract`, `DomainRuntime`, `GENAI_DOMAIN`, `GenAIDomain`, `GenAIRuntime`, `GenaiASTExporter`, `GenaiDomainParser`, `VerbSpec`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`...
+  - `redact` — Pattern: `redact pii in text {text:expr} into {target:ident}`: PII redaction
+  - `calculate` — Pattern: `calculate kv memory for layers {l:expr} heads {h:expr} dim {d:expr} seq {seq:expr} into {target:ident}`: KV cache memory calculation
+  - `sample` — Pattern: `sample logits {logits:expr} with temperature {temp:expr} into {target:ident}`: Logits sampling
+  - `retrieve` — Pattern: `retrieve top {k:expr} chunks from {chunks:expr} for query {query:expr} into {target:ident}`: Vector retrieval
+  - `train` — Pattern: `train bpe for corpus {corpus:expr} merges {n:expr} into {target:ident}`: BPE training
+- **Exported Functions/Symbols (146):** `DomainRuntime`, `GenAIRuntime`, `GenAISemanticCache`, `PagedKVCacheManager`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`, `ds_amortize_loan`, `ds_audio_filter_lowpass`, `ds_audit_safety`, `ds_balance_equation`...
 
 ### 2.38 Domain: `genomics`
 - **Primary Name:** `genomics`
 - **Aliases:** `dna`, `rna`, `genomic_analysis`
-- **Description:** Genomics & bioinformatics: Local/global alignment, CpG islands, melting temp, VCF parsing, and k-mers
+- **Description:** Genomics & bioinformatics: Local/global alignment, CpG islands, melting temp, VCF parsing, BWT, and Hardy-Weinberg
 - **Registered Verbs & Patterns:**
   - `calculate` — Pattern: `calculate gc content for sequence {seq:expr} into {target:ident}`: GC content
   - `align` — Pattern: `align sequences local {s1:expr} and {s2:expr} into {target:ident}`: Local alignment
+  - `align` — Pattern: `align sequences global {s1:expr} and {s2:expr} into {target:ident}`: Global alignment
   - `calculate` — Pattern: `calculate melting temp for sequence {seq:expr} into {target:ident}`: Melting temperature
-- **Exported Functions/Symbols (130):** `DomainContract`, `DomainRuntime`, `GENOMICS_DOMAIN`, `GenomicsASTExporter`, `GenomicsDomain`, `GenomicsDomainParser`, `GenomicsRuntime`, `VerbSpec`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`...
+  - `calculate` — Pattern: `calculate hardy weinberg for AA {AA:expr} Aa {Aa:expr} aa {aa:expr} into {target:ident}`: Hardy-Weinberg equilibrium test
+- **Exported Functions/Symbols (131):** `DomainRuntime`, `GENETIC_CODE`, `GenomicsRuntime`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`, `ds_amortize_loan`, `ds_audio_filter_lowpass`, `ds_audit_safety`, `ds_balance_equation`, `ds_batch_stream`...
 
 ### 2.39 Domain: `geo`
 - **Primary Name:** `geo`
@@ -554,12 +618,16 @@ Total Active Registered Domains: **81**
 ### 2.40 Domain: `geophysics`
 - **Primary Name:** `geophysics`
 - **Aliases:** `seismology`, `earth_physics`, `geodynamics`
-- **Description:** Geophysical analytics: Wadati epicentral distance, Richter/Moment magnitude, Snell refraction, Bouguer anomaly, and resistivity
+- **Description:** Deepened Geophysics domain: Epicentral distance, Richter/Moment magnitude, seismic refraction, Bouguer anomaly, geomagnetic dipole, and apparent resistivity
 - **Registered Verbs & Patterns:**
-  - `calculate` — Pattern: `calculate epicentral distance for p arrival {tp:expr} s arrival {ts:expr} into {target:ident}`: Epicentral distance
-  - `calculate` — Pattern: `calculate moment magnitude area {a:expr} slip {s:expr} into {target:ident}`: Moment magnitude
-  - `calculate` — Pattern: `calculate apparent resistivity spacing {a:expr} resistance {r:expr} into {target:ident}`: Apparent resistivity
-- **Exported Functions/Symbols (127):** `DomainContract`, `DomainRuntime`, `GEOPHYSICS_DOMAIN`, `GeophysicsASTExporter`, `GeophysicsDomain`, `GeophysicsDomainParser`, `GeophysicsRuntime`, `VerbSpec`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`...
+  - `calculate` — Pattern: `calculate epicentral distance for p arrival {tp:expr} s arrival {ts:expr} into {target:ident}`: Wadati epicentral distance
+  - `calculate` — Pattern: `calculate richter magnitude amplitude {a:expr} distance {d:expr} into {target:ident}`: Richter magnitude ML
+  - `calculate` — Pattern: `calculate moment magnitude area {a:expr} slip {s:expr} into {target:ident}`: Moment magnitude Mw
+  - `calculate` — Pattern: `calculate seismic refraction angle {inc:expr} v1 {v1:expr} v2 {v2:expr} into {target:ident}`: Seismic Snell refraction
+  - `calculate` — Pattern: `calculate bouguer anomaly obs {obs:expr} theo {theo:expr} elevation {h:expr} density {rho:expr} into {target:ident}`: Simple Bouguer anomaly
+  - `calculate` — Pattern: `calculate apparent resistivity spacing {a:expr} resistance {r:expr} into {target:ident}`: Wenner apparent resistivity
+  - `calculate` — Pattern: `calculate geothermal heat flow conductivity {k:expr} gradient {g:expr} into {target:ident}`: Terrestrial geothermal heat flow
+- **Exported Functions/Symbols (123):** `DomainRuntime`, `GeophysicsRuntime`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`, `ds_amortize_loan`, `ds_audio_filter_lowpass`, `ds_audit_safety`, `ds_balance_equation`, `ds_batch_stream`, `ds_beta_coefficient`...
 
 ### 2.41 Domain: `graph`
 - **Primary Name:** `graph`
@@ -588,11 +656,17 @@ Total Active Registered Domains: **81**
 ### 2.43 Domain: `hydrology`
 - **Primary Name:** `hydrology`
 - **Aliases:** `water`, `fluid_mechanics`, `open_channel`
-- **Description:** Hydrology & hydraulic engineering: Manning flow, Darcy-Weisbach head loss, hydraulic jumps, and Theis drawdown
+- **Description:** Deepened Hydrology domain: Manning open channel, Darcy-Weisbach head loss, hydraulic jumps, Theis aquifer drawdown, SCS curve numbers, and Muskingum flood routing
 - **Registered Verbs & Patterns:**
-  - `calculate` — Pattern: `calculate manning flow for roughness {n:expr} area {a:expr} radius {r:expr} slope {s:expr} into {target:ident}`: Manning flow
-  - `calculate` — Pattern: `calculate hydraulic jump for depth {y:expr} velocity {v:expr} into {target:ident}`: Hydraulic jump
-- **Exported Functions/Symbols (126):** `DomainContract`, `DomainRuntime`, `HYDROLOGY_DOMAIN`, `HydrologyASTExporter`, `HydrologyDomain`, `HydrologyDomainParser`, `HydrologyRuntime`, `VerbSpec`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`...
+  - `calculate` — Pattern: `calculate manning flow for roughness {n:expr} area {a:expr} radius {r:expr} slope {s:expr} into {target:ident}`: Manning flow rate
+  - `calculate` — Pattern: `calculate peak runoff c {c:expr} intensity {i:expr} area {a:expr} into {target:ident}`: Rational peak runoff
+  - `calculate` — Pattern: `calculate darcy weisbach head loss friction {f:expr} length {l:expr} diameter {d:expr} velocity {v:expr} into {target:ident}`: Darcy-Weisbach friction head loss
+  - `calculate` — Pattern: `calculate reynolds number velocity {v:expr} diameter {d:expr} into {target:ident}`: Reynolds number
+  - `calculate` — Pattern: `calculate hydraulic jump for depth {y:expr} velocity {v:expr} into {target:ident}`: Open channel hydraulic jump
+  - `calculate` — Pattern: `calculate theis drawdown discharge {q:expr} transmissivity {t:expr} storativity {s:expr} radius {r:expr} time {time:expr} into {target:ident}`: Theis well drawdown
+  - `calculate` — Pattern: `calculate scs runoff curve cn {cn:expr} precipitation {p:expr} into {target:ident}`: SCS runoff curve number
+  - `calculate` — Pattern: `calculate evapotranspiration rn {rn:expr} temp {t:expr} wind {w:expr} humidity {rh:expr} into {target:ident}`: FAO Penman-Monteith evapotranspiration
+- **Exported Functions/Symbols (122):** `DomainRuntime`, `HydrologyRuntime`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`, `ds_amortize_loan`, `ds_audio_filter_lowpass`, `ds_audit_safety`, `ds_balance_equation`, `ds_batch_stream`, `ds_beta_coefficient`...
 
 ### 2.44 Domain: `image`
 - **Primary Name:** `image`
@@ -611,31 +685,44 @@ Total Active Registered Domains: **81**
 ### 2.45 Domain: `linguistics`
 - **Primary Name:** `linguistics`
 - **Aliases:** `nlp_metrics`, `text_linguistics`, `readability`
-- **Description:** Computational linguistics: Levenshtein, Jaro-Winkler, Soundex, Flesch, Gunning Fog, and TTR
+- **Description:** Computational linguistics: Levenshtein, Jaro-Winkler, Soundex, Metaphone, Flesch, Gunning Fog, TTR, Porter stemmer, and CYK
 - **Registered Verbs & Patterns:**
   - `calculate` — Pattern: `calculate edit distance for word1 {w1:expr} word2 {w2:expr} into {target:ident}`: Edit distance
   - `calculate` — Pattern: `calculate jaro winkler for word1 {w1:expr} word2 {w2:expr} into {target:ident}`: Jaro-Winkler
   - `calculate` — Pattern: `calculate gunning fog for text {text:expr} into {target:ident}`: Gunning Fog
-- **Exported Functions/Symbols (127):** `DomainContract`, `DomainRuntime`, `LINGUISTICS_DOMAIN`, `LinguisticsASTExporter`, `LinguisticsDomain`, `LinguisticsDomainParser`, `LinguisticsRuntime`, `VerbSpec`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`...
+  - `calculate` — Pattern: `calculate soundex for word {w:expr} into {target:ident}`: Soundex phonetic hash
+  - `stem` — Pattern: `stem word {w:expr} into {target:ident}`: Porter stemming
+- **Exported Functions/Symbols (127):** `DomainRuntime`, `LinguisticsRuntime`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`, `ds_amortize_loan`, `ds_audio_filter_lowpass`, `ds_audit_safety`, `ds_balance_equation`, `ds_batch_stream`, `ds_beta_coefficient`...
 
 ### 2.46 Domain: `logistics`
 - **Primary Name:** `logistics`
 - **Aliases:** `supply_chain`, `inventory`, `warehouse`
-- **Description:** Supply chain & logistics: EOQ, ROP, safety stock, Newsvendor model, bullwhip effect, and TSP solver
+- **Description:** Supply chain & logistics: EOQ, ROP, safety stock, Newsvendor model, bullwhip effect, TSP, COG, and ABC analysis
 - **Registered Verbs & Patterns:**
   - `calculate` — Pattern: `calculate economic order quantity for demand {d:expr} order cost {s:expr} holding cost {h:expr} into {target:ident}`: EOQ formula
   - `calculate` — Pattern: `calculate reorder point for lead time {lt:expr} daily demand {d:expr} into {target:ident}`: Reorder point
   - `solve` — Pattern: `solve tsp nearest neighbor for matrix {m:expr} into {target:ident}`: TSP solver
-- **Exported Functions/Symbols (126):** `DomainContract`, `DomainRuntime`, `LOGISTICS_DOMAIN`, `LogisticsASTExporter`, `LogisticsDomain`, `LogisticsDomainParser`, `LogisticsRuntime`, `VerbSpec`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`...
+  - `calculate` — Pattern: `calculate safety stock for z {z:expr} std {std:expr} lead time {lt:expr} into {target:ident}`: Safety stock
+  - `calculate` — Pattern: `calculate bullwhip effect for orders {o:expr} demand {d:expr} into {target:ident}`: Bullwhip effect
+- **Exported Functions/Symbols (122):** `DomainRuntime`, `LogisticsRuntime`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`, `ds_amortize_loan`, `ds_audio_filter_lowpass`, `ds_audit_safety`, `ds_balance_equation`, `ds_batch_stream`, `ds_beta_coefficient`...
 
 ### 2.47 Domain: `materials`
 - **Primary Name:** `materials`
 - **Aliases:** `mechanics_of_materials`, `solid_mechanics`, `stress_strain`
-- **Description:** Materials science & mechanics: Stress-strain, Mohr's circle, thermal expansion, fracture mechanics, and composites
+- **Description:** Materials science & solid mechanics: Stress-strain, Mohr's circle, fracture mechanics, composites, yield criteria, and hardness.
 - **Registered Verbs & Patterns:**
-  - `calculate` — Pattern: `calculate engineering stress and strain for force {f:expr} area {a:expr} delta {dl:expr} initial length {l0:expr} into {target:ident}`: Stress-strain
-  - `calculate` — Pattern: `calculate stress intensity for stress {s:expr} crack {a:expr} into {target:ident}`: Stress intensity
-- **Exported Functions/Symbols (125):** `DomainContract`, `DomainRuntime`, `MATERIALS_DOMAIN`, `MaterialsASTExporter`, `MaterialsDomain`, `MaterialsDomainParser`, `MaterialsRuntime`, `VerbSpec`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`...
+  - `calculate` — Pattern: `calculate engineering stress and strain for force {f:expr} area {a:expr} delta {dl:expr} initial length {l0:expr} into {target:ident}`: Calculates stress, strain, and Young's modulus
+  - `calculate` — Pattern: `calculate mohrs circle principal stresses for sigma x {sx:expr} sigma y {sy:expr} tau {txy:expr} into {target:ident}`: Calculates Mohr's circle principal stresses
+  - `calculate` — Pattern: `calculate thermal expansion for length {l:expr} coeff {alpha:expr} delta temp {dt:expr} into {target:ident}`: Calculates linear thermal expansion
+  - `calculate` — Pattern: `calculate stress intensity for stress {s:expr} crack {a:expr} into {target:ident}`: Calculates Mode I stress intensity factor K_I
+  - `calculate` — Pattern: `calculate composite modulus fiber {ef:expr} matrix {em:expr} fraction {vf:expr} into {target:ident}`: Calculates Voigt and Reuss composite modulus
+  - `evaluate` — Pattern: `evaluate yield criteria s1 {s1:expr} s2 {s2:expr} s3 {s3:expr} sy {sy:expr} into {target:ident}`: Evaluates Tresca and von Mises yield criteria
+  - `calculate` — Pattern: `calculate ramberg osgood stress {s:expr} modulus {e:expr} alpha {a:expr} sigma0 {s0:expr} n {n:expr} into {target:ident}`: Calculates Ramberg-Osgood nonlinear elastoplastic strain
+  - `calculate` — Pattern: `calculate johnson cook strain {ep:expr} rate {edot:expr} temp {t:expr} a {a:expr} b {b:expr} n {n:expr} c {c:expr} m {m:expr} into {target:ident}`: Calculates dynamic viscoplastic flow stress
+  - `calculate` — Pattern: `calculate dbtt temps {t:expr} energies {e:expr} into {target:ident}`: Fits Charpy transition temperature
+  - `calculate` — Pattern: `calculate halpin tsai fiber {ef:expr} matrix {em:expr} fraction {vf:expr} aspect {ar:expr} into {target:ident}`: Calculates Halpin-Tsai short fiber modulus
+  - `convert` — Pattern: `convert hardness hb {hb:expr} into {target:ident}`: Converts Brinell hardness to HV, HRC, and UTS
+- **Exported Functions/Symbols (124):** `DomainRuntime`, `MaterialsRuntime`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`, `ds_amortize_loan`, `ds_audio_filter_lowpass`, `ds_audit_safety`, `ds_balance_equation`, `ds_batch_stream`, `ds_beta_coefficient`...
 
 ### 2.48 Domain: `math3d`
 - **Primary Name:** `math3d`
@@ -655,15 +742,15 @@ Total Active Registered Domains: **81**
 ### 2.49 Domain: `metallurgy`
 - **Primary Name:** `metallurgy`
 - **Aliases:** `metal`, `alloys`, `materials_science`
-- **Description:** Physical metallurgy: Hall-Petch strength, Hollomon strain hardening, lever rule, Scheil solidification, JMAK recrystallization, and Arrhenius diffusion
+- **Description:** Deepened Metallurgy domain: Hall-Petch strength, Hollomon strain hardening, Lever rule, Scheil solidification, JMAK recrystallization, and martensitic transformations
 - **Registered Verbs & Patterns:**
-  - `calculate` — Pattern: `calculate hall petch strength friction {s0:expr} locking {ky:expr} grain {d:expr} into {target:ident}`: Hall-Petch strength
-  - `calculate` — Pattern: `calculate hollomon true stress k {k:expr} strain {eps:expr} n {n:expr} into {target:ident}`: Hollomon true stress
-  - `calculate` — Pattern: `calculate lever rule overall {c0:expr} alpha {ca:expr} beta {cb:expr} into {target:ident}`: Lever rule phase weights
-  - `calculate` — Pattern: `calculate scheil composition initial {c0:expr} partition {k:expr} solid {fs:expr} into {target:ident}`: Scheil solidification
-  - `calculate` — Pattern: `calculate jmak recrystallization time {t:expr} k {k:expr} exponent {n:expr} into {target:ident}`: JMAK recrystallization fraction
-  - `calculate` — Pattern: `calculate metal diffusion d0 {d0:expr} energy {q:expr} temp {t:expr} into {target:ident}`: Arrhenius atomic diffusion
-- **Exported Functions/Symbols (126):** `DomainContract`, `DomainRuntime`, `METALLURGY_DOMAIN`, `MetallurgyASTExporter`, `MetallurgyDomain`, `MetallurgyDomainParser`, `MetallurgyRuntime`, `VerbSpec`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`...
+  - `calculate` — Pattern: `calculate hall petch strength friction {s0:expr} locking {ky:expr} grain {d:expr} into {target:ident}`: Hall-Petch grain boundary strengthening
+  - `calculate` — Pattern: `calculate hollomon true stress k {k:expr} strain {eps:expr} n {n:expr} into {target:ident}`: Hollomon strain hardening law
+  - `calculate` — Pattern: `calculate lever rule overall {c0:expr} alpha {ca:expr} beta {cb:expr} into {target:ident}`: Binary lever rule phase fractions
+  - `calculate` — Pattern: `calculate scheil composition initial {c0:expr} partition {k:expr} solid {fs:expr} into {target:ident}`: Scheil non-equilibrium solidification
+  - `calculate` — Pattern: `calculate jmak recrystallization time {t:expr} k {k:expr} exponent {n:expr} into {target:ident}`: JMAK recrystallization kinetics
+  - `calculate` — Pattern: `calculate arrhenius diffusion d0 {d0:expr} q {q:expr} temp {t:expr} into {target:ident}`: Arrhenius atomic diffusion coefficient
+- **Exported Functions/Symbols (122):** `DomainRuntime`, `MetallurgyRuntime`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`, `ds_amortize_loan`, `ds_audio_filter_lowpass`, `ds_audit_safety`, `ds_balance_equation`, `ds_batch_stream`, `ds_beta_coefficient`...
 
 ### 2.50 Domain: `metrics`
 - **Primary Name:** `metrics`
@@ -678,11 +765,21 @@ Total Active Registered Domains: **81**
 ### 2.51 Domain: `microecon`
 - **Primary Name:** `microecon`
 - **Aliases:** `microeconomics`, `supply_demand`, `welfare_economics`
-- **Description:** Microeconomics: Price elasticity, welfare surplus, deadweight loss, Gini coefficient, Cournot duopoly, and HHI
+- **Description:** Microeconomics: Price elasticity, welfare surplus, deadweight loss, Gini coefficient, Cournot & Bertrand duopolies, Cobb-Douglas optimization, and game theory
 - **Registered Verbs & Patterns:**
-  - `calculate` — Pattern: `calculate price elasticity for q1 {q1:expr} q2 {q2:expr} p1 {p1:expr} p2 {p2:expr} into {target:ident}`: Price elasticity
-  - `calculate` — Pattern: `calculate cournot duopoly demand intercept {a:expr} slope {b:expr} marginal cost {c:expr} into {target:ident}`: Cournot duopoly
-- **Exported Functions/Symbols (126):** `DomainContract`, `DomainRuntime`, `MICROECON_DOMAIN`, `MicroeconASTExporter`, `MicroeconDomain`, `MicroeconDomainParser`, `MicroeconRuntime`, `VerbSpec`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`...
+  - `calculate` — Pattern: `calculate price elasticity for q1 {q1:expr} q2 {q2:expr} p1 {p1:expr} p2 {p2:expr} into {target:ident}`: Price elasticity of demand
+  - `calculate` — Pattern: `calculate surplus for p_max {p_max:expr} p_min {p_min:expr} price {p:expr} quantity {q:expr} into {target:ident}`: Consumer and producer surplus
+  - `calculate` — Pattern: `calculate deadweight loss for tax {tax:expr} quantity reduction {dq:expr} into {target:ident}`: Harberger deadweight loss triangle
+  - `calculate` — Pattern: `calculate gini coefficient for incomes {inc:expr} into {target:ident}`: Gini inequality coefficient
+  - `calculate` — Pattern: `calculate cournot duopoly demand intercept {a:expr} slope {b:expr} marginal cost {c:expr} into {target:ident}`: Cournot duopoly equilibrium
+  - `calculate` — Pattern: `calculate hhi for shares {shares:expr} into {target:ident}`: Herfindahl-Hirschman market concentration index
+  - `calculate` — Pattern: `calculate cobb douglas optimal income {inc:expr} px {px:expr} py {py:expr} alpha {a:expr} beta {b:expr} into {target:ident}`: Utility-maximizing consumption bundle
+  - `calculate` — Pattern: `calculate bertrand duopoly demand intercept {a:expr} slope {b:expr} mc1 {c1:expr} mc2 {c2:expr} into {target:ident}`: Bertrand price competition equilibrium
+  - `calculate` — Pattern: `calculate monopoly optimum demand intercept {a:expr} slope {b:expr} marginal cost {mc:expr} into {target:ident}`: Monopoly profit-maximizing price and quantity
+  - `calculate` — Pattern: `calculate cross elasticity q1 {q1:expr} q2 {q2:expr} p1 {p1:expr} p2 {p2:expr} into {target:ident}`: Cross-price elasticity of demand
+  - `find` — Pattern: `find nash equilibrium row {row:expr} col {col:expr} into {target:ident}`: Pure strategy Nash equilibria in 2x2 game
+  - `calculate` — Pattern: `calculate income elasticity q1 {q1:expr} q2 {q2:expr} inc1 {i1:expr} inc2 {i2:expr} into {target:ident}`: Income elasticity of demand
+- **Exported Functions/Symbols (125):** `DomainRuntime`, `MicroeconRuntime`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`, `ds_amortize_loan`, `ds_audio_filter_lowpass`, `ds_audit_safety`, `ds_balance_equation`, `ds_batch_stream`, `ds_beta_coefficient`...
 
 ### 2.52 Domain: `ml`
 - **Primary Name:** `ml`
@@ -735,28 +832,40 @@ Total Active Registered Domains: **81**
 ### 2.56 Domain: `nuclear`
 - **Primary Name:** `nuclear`
 - **Aliases:** `radioactive`, `atomic`, `radiation_physics`
-- **Description:** Nuclear physics & engineering: radioactive decay, decay constant, reaction Q-value, radiation shielding, Four-Factor Formula, and Half-Value Layer
+- **Description:** Radioactive decay, reactor kinetics, radiation protection, and nuclear reactions.
 - **Registered Verbs & Patterns:**
-  - `calculate` — Pattern: `calculate radioactive decay initial {a0:expr} halflife {hl:expr} time {t:expr} into {target:ident}`: Radioactive decay
-  - `calculate` — Pattern: `calculate decay constant halflife {hl:expr} into {target:ident}`: Decay constant
-  - `calculate` — Pattern: `calculate nuclear q value mass_in {mi:expr} mass_out {mf:expr} into {target:ident}`: Reaction Q-value
-  - `calculate` — Pattern: `calculate radiation shielding initial {i0:expr} attenuation {mu:expr} thickness {x:expr} into {target:ident}`: Radiation shielding attenuation
-  - `calculate` — Pattern: `calculate four factor eta {eta:expr} epsilon {eps:expr} p {p:expr} f {f:expr} into {target:ident}`: Four-factor formula
-  - `calculate` — Pattern: `calculate half value layer attenuation {mu:expr} into {target:ident}`: Half-Value Layer
-- **Exported Functions/Symbols (126):** `DomainContract`, `DomainRuntime`, `NUCLEAR_DOMAIN`, `NuclearASTExporter`, `NuclearDomain`, `NuclearDomainParser`, `NuclearRuntime`, `VerbSpec`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`...
+  - `calculate` — Pattern: `calculate radioactive decay initial {a0:expr} halflife {hl:expr} time {t:expr} into {target:ident}`: Calculates remaining radioactive activity
+  - `calculate` — Pattern: `calculate decay constant halflife {hl:expr} into {target:ident}`: Calculates decay constant lambda
+  - `calculate` — Pattern: `calculate nuclear q value mass_in {mi:expr} mass_out {mf:expr} into {target:ident}`: Calculates nuclear reaction Q-value in MeV
+  - `calculate` — Pattern: `calculate radiation shielding initial {i0:expr} attenuation {mu:expr} thickness {x:expr} into {target:ident}`: Calculates transmitted radiation through shielding
+  - `calculate` — Pattern: `calculate four factor eta {eta:expr} epsilon {eps:expr} p {p:expr} f {f:expr} into {target:ident}`: Calculates Fermi four-factor k_inf
+  - `calculate` — Pattern: `calculate half value layer attenuation {mu:expr} into {target:ident}`: Calculates radiation Half-Value Layer in cm
+  - `calculate` — Pattern: `calculate critical slab d {d:expr} sigma_a {sa:expr} nu_sigma_f {nsf:expr} into {target:ident}`: Calculates critical slab reactor thickness
+  - `calculate` — Pattern: `calculate inhour period prompt {l:expr} beta {b:expr} lambda {lam:expr} rho {rho:expr} into {target:ident}`: Calculates reactor period using the inhour relation
+  - `calculate` — Pattern: `calculate secular equilibrium t_parent {t1:expr} t_daughter {t2:expr} activity {a1:expr} time {t:expr} into {target:ident}`: Calculates Bateman parent-daughter decay activities
+  - `calculate` — Pattern: `calculate binding energy protons {z:expr} neutrons {n:expr} into {target:ident}`: Calculates Bethe-Weizsacker SEMF binding energy
+  - `calculate` — Pattern: `calculate gamma dose activity {a:expr} energy {e:expr} distance {r:expr} into {target:ident}`: Calculates gamma dose rate in air and tissue
+  - `calculate` — Pattern: `calculate neutron flux power {p:expr} volume {v:expr} into {target:ident}`: Estimates reactor thermal neutron flux
+- **Exported Functions/Symbols (125):** `DomainRuntime`, `NuclearRuntime`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`, `ds_amortize_loan`, `ds_audio_filter_lowpass`, `ds_audit_safety`, `ds_balance_equation`, `ds_batch_stream`, `ds_beta_coefficient`...
 
 ### 2.57 Domain: `oceanography`
 - **Primary Name:** `oceanography`
 - **Aliases:** `marine_science`, `ocean_dynamics`, `ocean_waves`
-- **Description:** Ocean physics & dynamics: seawater equation of state density, Coriolis parameter, surface gravity waves, Mackenzie sound speed, and wind stress
+- **Description:** Physical oceanography, seawater thermodynamics, fluid dynamics, and wave kinematics.
 - **Registered Verbs & Patterns:**
-  - `calculate` — Pattern: `calculate seawater density temp {t:expr} salinity {s:expr} into {target:ident}`: UNESCO seawater density
-  - `calculate` — Pattern: `calculate coriolis parameter lat {lat:expr} into {target:ident}`: Coriolis frequency parameter
-  - `calculate` — Pattern: `calculate ocean wave speed wavelength {l:expr} depth {d:expr} into {target:ident}`: Gravity wave phase velocity
-  - `calculate` — Pattern: `calculate depth pressure depth {d:expr} into {target:ident}`: Hydrostatic pressure
-  - `calculate` — Pattern: `calculate seawater sound speed temp {t:expr} salinity {s:expr} depth {d:expr} into {target:ident}`: Mackenzie underwater sound speed
-  - `calculate` — Pattern: `calculate wind stress speed {u:expr} into {target:ident}`: Wind shear stress on ocean surface
-- **Exported Functions/Symbols (126):** `DomainContract`, `DomainRuntime`, `OCEANOGRAPHY_DOMAIN`, `OceanographyASTExporter`, `OceanographyDomain`, `OceanographyDomainParser`, `OceanographyRuntime`, `VerbSpec`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`...
+  - `calculate` — Pattern: `calculate seawater density temp {t:expr} salinity {s:expr} into {target:ident}`: Computes UNESCO equation of state seawater density
+  - `calculate` — Pattern: `calculate coriolis parameter lat {lat:expr} into {target:ident}`: Computes planetary Coriolis frequency parameter f
+  - `calculate` — Pattern: `calculate ocean wave speed wavelength {lam:expr} depth {d:expr} into {target:ident}`: Computes surface gravity wave phase velocity
+  - `calculate` — Pattern: `calculate depth pressure depth {d:expr} into {target:ident}`: Computes hydrostatic gauge pressure at depth
+  - `calculate` — Pattern: `calculate seawater sound speed temp {t:expr} salinity {s:expr} depth {d:expr} into {target:ident}`: Computes speed of sound using Mackenzie formula
+  - `calculate` — Pattern: `calculate wind stress speed {u10:expr} into {target:ident}`: Computes surface wind shear stress
+  - `calculate` — Pattern: `calculate ekman depth wind {u10:expr} lat {lat:expr} into {target:ident}`: Computes Ekman boundary layer depth and surface drift
+  - `calculate` — Pattern: `calculate buoyancy frequency density {rho:expr} depth {z:expr} into {target:ident}`: Computes Brunt-Vaisala stratification frequency N^2
+  - `calculate` — Pattern: `calculate sverdrup transport curl {c:expr} lat {lat:expr} into {target:ident}`: Computes wind-driven Sverdrup volume transport
+  - `analyze` — Pattern: `analyze sound channel temp {t:expr} salinity {s:expr} depths {z:expr} into {target:ident}`: Finds SOFAR channel axis depth and acoustic ducting profile
+  - `classify` — Pattern: `classify water mass temp {t:expr} salinity {s:expr} into {target:ident}`: Analyzes T-S diagram potential density and classifies water mass
+  - `calculate` — Pattern: `calculate tidal form factor m2 {m2:expr} s2 {s2:expr} k1 {k1:expr} o1 {o1:expr} into {target:ident}`: Computes Courtier tidal form factor and regime
+- **Exported Functions/Symbols (127):** `DomainRuntime`, `OMEGA_EARTH`, `OceanographyRuntime`, `R_EARTH`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`, `ds_amortize_loan`, `ds_audio_filter_lowpass`, `ds_audit_safety`, `ds_balance_equation`...
 
 ### 2.58 Domain: `office`
 - **Primary Name:** `office`
@@ -784,41 +893,46 @@ Total Active Registered Domains: **81**
 ### 2.60 Domain: `optics`
 - **Primary Name:** `optics`
 - **Aliases:** `ray_optics`, `wave_optics`, `photonics`
-- **Description:** Geometrical & wave optics: Snell's law, thin lenses, Fresnel reflection, Rayleigh resolution limit, Brewster angle, and fiber NA
+- **Description:** Geometrical & wave optics: Snell's law, thin lenses, Fresnel reflection, Rayleigh resolution, ABCD matrices, Gaussian beams, and fiber NA
 - **Registered Verbs & Patterns:**
-  - `calculate` — Pattern: `calculate thin lens focal {f:expr} distance {do:expr} into {target:ident}`: Thin lens image distance & magnification
+  - `calculate` — Pattern: `calculate thin lens focal {f:expr} distance {do:expr} into {target:ident}`: Thin lens image distance
   - `calculate` — Pattern: `calculate snell refraction n1 {n1:expr} n2 {n2:expr} angle {theta:expr} into {target:ident}`: Snell refraction angle
   - `calculate` — Pattern: `calculate fresnel reflectance n1 {n1:expr} n2 {n2:expr} into {target:ident}`: Fresnel normal reflection
   - `calculate` — Pattern: `calculate rayleigh resolution wavelength {lam:expr} na {na:expr} into {target:ident}`: Rayleigh optical resolution limit
   - `calculate` — Pattern: `calculate brewster angle n1 {n1:expr} n2 {n2:expr} into {target:ident}`: Brewster polarizing angle
   - `calculate` — Pattern: `calculate fiber aperture core {n1:expr} clad {n2:expr} into {target:ident}`: Fiber numerical aperture
-- **Exported Functions/Symbols (127):** `DomainContract`, `DomainRuntime`, `OPTICS_DOMAIN`, `OpticsASTExporter`, `OpticsDomain`, `OpticsDomainParser`, `OpticsRuntime`, `VerbSpec`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`...
+  - `calculate` — Pattern: `calculate gaussian beam wavelength {lam:expr} waist {w0:expr} distance {z:expr} into {target:ident}`: Gaussian beam propagation
+- **Exported Functions/Symbols (127):** `DomainRuntime`, `OpticsRuntime`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`, `ds_amortize_loan`, `ds_audio_filter_lowpass`, `ds_audit_safety`, `ds_balance_equation`, `ds_batch_stream`, `ds_beta_coefficient`...
 
 ### 2.61 Domain: `petroleum`
 - **Primary Name:** `petroleum`
 - **Aliases:** `petro`, `oilgas`, `reservoir`
-- **Description:** Petroleum and reservoir engineering: Darcy flow, Archie saturation, API gravity, GOR, Standing bubble point, and Sutton gas properties
+- **Description:** Petroleum & reservoir engineering: Darcy radial flow, Archie water saturation, API gravity, GOR, Standing bubble point, Arps decline, Vogel IPR, and gas Z-factor
 - **Registered Verbs & Patterns:**
-  - `calculate` — Pattern: `calculate darcy radial flow perm {k:expr} pay {h:expr} pres {pr:expr} pwell {pw:expr} visc {mu:expr} re {re:expr} rw {rw:expr} skin {s:expr} into {target:ident}`: Darcy radial flow rate
+  - `calculate` — Pattern: `calculate darcy radial flow perm {k:expr} pay {h:expr} pres {pr:expr} pwell {pw:expr} visc {mu:expr} re {re:expr} rw {rw:expr} skin {s:expr} into {target:ident}`: Darcy radial flow
   - `calculate` — Pattern: `calculate archie water saturation phi {phi:expr} rt {rt:expr} rw {rw:expr} into {target:ident}`: Archie water saturation
-  - `convert` — Pattern: `convert specific gravity {sg:expr} to api into {target:ident}`: Specific gravity to API
-  - `calculate` — Pattern: `calculate gas oil ratio gas {g:expr} oil {o:expr} into {target:ident}`: Gas-Oil Ratio
-  - `calculate` — Pattern: `calculate bubble point gor {gor:expr} gas_grav {gg:expr} api {api:expr} temp {t:expr} into {target:ident}`: Standing bubble point pressure
-  - `calculate` — Pattern: `calculate pseudocritical gas grav {gg:expr} into {target:ident}`: Sutton pseudocritical gas properties
-- **Exported Functions/Symbols (126):** `DomainContract`, `DomainRuntime`, `PETROLEUM_DOMAIN`, `PetroleumASTExporter`, `PetroleumDomain`, `PetroleumDomainParser`, `PetroleumRuntime`, `VerbSpec`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`...
+  - `convert` — Pattern: `convert specific gravity {sg:expr} to api into {target:ident}`: Specific gravity to API conversion
+  - `calculate` — Pattern: `calculate gas oil ratio gas {g:expr} oil {o:expr} into {target:ident}`: Gas oil ratio
+  - `calculate` — Pattern: `calculate bubble point gor {gor:expr} gas_grav {gg:expr} api {api:expr} temp {t:expr} into {target:ident}`: Standing bubble point
+  - `calculate` — Pattern: `calculate pseudocritical gas grav {sg:expr} into {target:ident}`: Sutton pseudocritical gas
+  - `forecast` — Pattern: `forecast arps decline rate {qi:expr} nominal {d:expr} time {t:expr} b_factor {b:expr} into {target:ident}`: Arps production decline
+  - `calculate` — Pattern: `calculate vogel ipr qmax {qm:expr} pres {pr:expr} pwf {pwf:expr} into {target:ident}`: Vogel inflow performance
+  - `calculate` — Pattern: `calculate gas z factor ppr {ppr:expr} tpr {tpr:expr} into {target:ident}`: Gas Z factor
+- **Exported Functions/Symbols (123):** `DomainRuntime`, `PetroleumRuntime`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`, `ds_amortize_loan`, `ds_audio_filter_lowpass`, `ds_audit_safety`, `ds_balance_equation`, `ds_batch_stream`, `ds_beta_coefficient`...
 
 ### 2.62 Domain: `pharmacology`
 - **Primary Name:** `pharmacology`
 - **Aliases:** `pharm`, `pharmacokinetics`, `pk_pd`
-- **Description:** Pharmacology and PK/PD: elimination kinetics, steady state, volume of distribution, Hill dose-response, Michaelis-Menten clearance, and loading dose
+- **Description:** Deepened Pharmacology domain: Elimination rates, steady-state plasma concentrations, volume of distribution, Hill dose-response, Michaelis-Menten kinetics, and Cockcroft-Gault CrCl
 - **Registered Verbs & Patterns:**
-  - `calculate` — Pattern: `calculate elimination rate halflife {hl:expr} into {target:ident}`: Elimination rate constant
-  - `calculate` — Pattern: `calculate steady state conc dose {d:expr} bioavailability {f:expr} clearance {cl:expr} interval {tau:expr} into {target:ident}`: Steady state plasma concentration
-  - `calculate` — Pattern: `calculate volume distribution dose {d:expr} c0 {c0:expr} into {target:ident}`: Volume of distribution
-  - `calculate` — Pattern: `calculate hill response conc {c:expr} emax {emax:expr} ec50 {ec50:expr} hill {n:expr} into {target:ident}`: Hill dose-response
-  - `calculate` — Pattern: `calculate saturable elimination vmax {vm:expr} km {km:expr} conc {c:expr} into {target:ident}`: Michaelis-Menten elimination rate
-  - `calculate` — Pattern: `calculate loading dose vd {vd:expr} target {ct:expr} bio {f:expr} into {target:ident}`: Target loading dose
-- **Exported Functions/Symbols (126):** `DomainContract`, `DomainRuntime`, `PHARMACOLOGY_DOMAIN`, `PharmacologyASTExporter`, `PharmacologyDomain`, `PharmacologyDomainParser`, `PharmacologyRuntime`, `VerbSpec`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`...
+  - `calculate` — Pattern: `calculate elimination rate halflife {t:expr} into {target:ident}`: Elimination rate constant ke
+  - `calculate` — Pattern: `calculate steady state conc dose {d:expr} bioavailability {f:expr} clearance {cl:expr} interval {tau:expr} into {target:ident}`: Average steady state concentration Css
+  - `calculate` — Pattern: `calculate volume distribution dose {d:expr} c0 {c0:expr} into {target:ident}`: Apparent volume of distribution Vd
+  - `calculate` — Pattern: `calculate hill response conc {c:expr} emax {emax:expr} ec50 {ec50:expr} hill {n:expr} into {target:ident}`: Hill pharmacodynamic sigmoid response
+  - `calculate` — Pattern: `calculate saturable elimination vmax {vmax:expr} km {km:expr} conc {c:expr} into {target:ident}`: Michaelis-Menten elimination rate
+  - `calculate` — Pattern: `calculate loading dose vd {vd:expr} target {target_c:expr} bio {f:expr} into {target:ident}`: Target loading dose
+  - `calculate` — Pattern: `calculate creatinine clearance age {age:expr} weight {wt:expr} scr {scr:expr} into {target:ident}`: Cockcroft-Gault creatinine clearance
+- **Exported Functions/Symbols (122):** `DomainRuntime`, `PharmacologyRuntime`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`, `ds_amortize_loan`, `ds_audio_filter_lowpass`, `ds_audit_safety`, `ds_balance_equation`, `ds_batch_stream`, `ds_beta_coefficient`...
 
 ### 2.63 Domain: `physics`
 - **Primary Name:** `physics`
@@ -847,12 +961,14 @@ Total Active Registered Domains: **81**
 ### 2.65 Domain: `queue`
 - **Primary Name:** `queue`
 - **Aliases:** `queues`, `priority_queue`, `fifo`
-- **Description:** Queueing & messaging: FIFO, priority queues, ring buffers, token buckets, and DLQs
+- **Description:** Queueing & messaging: FIFO, priority queues, ring buffers, token buckets, DLQs, WFQ, and Erlang-C
 - **Registered Verbs & Patterns:**
   - `create` — Pattern: `create message queue with capacity {cap:expr} into {target:ident}`: FIFO queue
   - `create` — Pattern: `create priority queue into {target:ident}`: Priority queue
   - `create` — Pattern: `create ring buffer with size {sz:expr} into {target:ident}`: Ring buffer
-- **Exported Functions/Symbols (133):** `DeadLetterQueue`, `DomainContract`, `DomainRuntime`, `MessageQueue`, `PriorityMessageQueue`, `QUEUE_DOMAIN`, `QueueASTExporter`, `QueueDomain`, `QueueDomainParser`, `QueueRuntime`, `RingBuffer`, `TokenBucket`, `VerbSpec`, `ds_adsr_envelope`, `ds_agent_confidence`...
+  - `publish` — Pattern: `publish message {msg:expr} to {q:ident}`: Publish message
+  - `consume` — Pattern: `consume from queue {q:expr} into {target:ident}`: Consume message
+- **Exported Functions/Symbols (133):** `DeadLetterQueue`, `DeficitRoundRobin`, `DomainRuntime`, `MessageQueue`, `PriorityMessageQueue`, `QueueRuntime`, `RingBuffer`, `TokenBucket`, `WeightedFairQueue`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`...
 
 ### 2.66 Domain: `research`
 - **Primary Name:** `research`
@@ -868,12 +984,13 @@ Total Active Registered Domains: **81**
 ### 2.67 Domain: `risk`
 - **Primary Name:** `risk`
 - **Aliases:** `var`, `portfolio_risk`, `risk_analytics`
-- **Description:** Quantitative financial risk: VaR, CVaR, Maximum Drawdown, Sharpe/Sortino/Calmar ratios, and portfolio volatility
+- **Description:** Quantitative financial risk: VaR, CVaR, Max Drawdown, Sharpe/Sortino/Calmar ratios, Altman Z, and Merton default
 - **Registered Verbs & Patterns:**
   - `calculate` — Pattern: `calculate historical var for returns {ret:expr} confidence {conf:expr} into {target:ident}`: VaR
   - `calculate` — Pattern: `calculate max drawdown for prices {prices:expr} into {target:ident}`: Max Drawdown
   - `calculate` — Pattern: `calculate portfolio volatility weights {w:expr} covariance {cov:expr} into {target:ident}`: Portfolio Volatility
-- **Exported Functions/Symbols (127):** `DomainContract`, `DomainRuntime`, `RISK_DOMAIN`, `RiskASTExporter`, `RiskDomain`, `RiskDomainParser`, `RiskRuntime`, `VerbSpec`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`...
+  - `calculate` — Pattern: `calculate sharpe ratio for returns {ret:expr} risk free {rf:expr} into {target:ident}`: Sharpe ratio
+- **Exported Functions/Symbols (123):** `DomainRuntime`, `RiskRuntime`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`, `ds_amortize_loan`, `ds_audio_filter_lowpass`, `ds_audit_safety`, `ds_balance_equation`, `ds_batch_stream`, `ds_beta_coefficient`...
 
 ### 2.68 Domain: `robotics`
 - **Primary Name:** `robotics`
@@ -928,11 +1045,12 @@ Total Active Registered Domains: **81**
 ### 2.72 Domain: `social`
 - **Primary Name:** `social`
 - **Aliases:** `network_analysis`, `graph_centrality`, `sna`
-- **Description:** Social network analysis: Degree, Closeness, Betweenness centrality, PageRank, and clustering
+- **Description:** Social network analysis: Degree, Closeness, Betweenness centrality, PageRank, HITS, and clustering
 - **Registered Verbs & Patterns:**
   - `calculate` — Pattern: `calculate degree centrality for graph {g:expr} into {target:ident}`: Degree centrality
   - `calculate` — Pattern: `calculate pagerank for graph {g:expr} into {target:ident}`: PageRank algorithm
-- **Exported Functions/Symbols (126):** `DomainContract`, `DomainRuntime`, `SOCIAL_DOMAIN`, `SocialASTExporter`, `SocialDomain`, `SocialDomainParser`, `SocialRuntime`, `VerbSpec`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`...
+  - `calculate` — Pattern: `calculate hits for graph {g:expr} into {target:ident}`: HITS algorithm
+- **Exported Functions/Symbols (124):** `DomainRuntime`, `SocialRuntime`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`, `ds_amortize_loan`, `ds_audio_filter_lowpass`, `ds_audit_safety`, `ds_balance_equation`, `ds_batch_stream`, `ds_beta_coefficient`...
 
 ### 2.73 Domain: `spatial_audio`
 - **Primary Name:** `spatial_audio`
@@ -947,15 +1065,15 @@ Total Active Registered Domains: **81**
 ### 2.74 Domain: `structural`
 - **Primary Name:** `structural`
 - **Aliases:** `civil_structures`, `structural_analysis`, `beams`
-- **Description:** Structural engineering: beam bending moment, elastic deflection, Euler buckling, section modulus, Mohr's circle principal stresses, and slenderness ratio
+- **Description:** Deepened Structural Engineering domain: Beam bending moments, elastic deflections, Euler column buckling, section modulus, Mohr principal stresses, and slenderness
 - **Registered Verbs & Patterns:**
-  - `calculate` — Pattern: `calculate beam max moment load {w:expr} span {l:expr} into {target:ident}`: Beam maximum bending moment
-  - `calculate` — Pattern: `calculate beam max deflection load {w:expr} span {l:expr} modulus {e:expr} inertia {i:expr} into {target:ident}`: Beam elastic deflection
-  - `calculate` — Pattern: `calculate column buckling load modulus {e:expr} inertia {i:expr} length {l:expr} factor {k:expr} into {target:ident}`: Euler column buckling load
-  - `calculate` — Pattern: `calculate section modulus width {b:expr} height {h:expr} into {target:ident}`: Elastic section modulus
+  - `calculate` — Pattern: `calculate beam max moment load {w:expr} span {l:expr} into {target:ident}`: Simply supported beam max moment
+  - `calculate` — Pattern: `calculate beam max deflection load {w:expr} span {l:expr} modulus {e:expr} inertia {i:expr} into {target:ident}`: Simply supported beam max deflection
+  - `calculate` — Pattern: `calculate column buckling load modulus {e:expr} inertia {i:expr} length {l:expr} factor {k:expr} into {target:ident}`: Euler critical buckling load
+  - `calculate` — Pattern: `calculate section modulus width {b:expr} height {h:expr} into {target:ident}`: Rectangular section modulus
   - `calculate` — Pattern: `calculate mohr principal stresses sx {sx:expr} sy {sy:expr} txy {txy:expr} into {target:ident}`: Mohr circle principal stresses
   - `calculate` — Pattern: `calculate slenderness ratio length {l:expr} radius {r:expr} into {target:ident}`: Column slenderness ratio
-- **Exported Functions/Symbols (126):** `DomainContract`, `DomainRuntime`, `STRUCTURAL_DOMAIN`, `StructuralASTExporter`, `StructuralDomain`, `StructuralDomainParser`, `StructuralRuntime`, `VerbSpec`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`...
+- **Exported Functions/Symbols (121):** `DomainRuntime`, `StructuralRuntime`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`, `ds_amortize_loan`, `ds_audio_filter_lowpass`, `ds_audit_safety`, `ds_balance_equation`, `ds_batch_stream`, `ds_beta_coefficient`...
 
 ### 2.75 Domain: `symbolic`
 - **Primary Name:** `symbolic`
@@ -970,12 +1088,13 @@ Total Active Registered Domains: **81**
 ### 2.76 Domain: `synthetic_bio`
 - **Primary Name:** `synthetic_bio`
 - **Aliases:** `synbio`, `genetic_circuits`, `bio_engineering`
-- **Description:** Synthetic biology: Hill kinetics, Gardner toggle switch, Repressilator, Michaelis-Menten, and Gibson assembly
+- **Description:** Synthetic biology: Hill kinetics, Gardner toggle switch, Repressilator, Michaelis-Menten, Gibson assembly, and CRISPR design
 - **Registered Verbs & Patterns:**
   - `calculate` — Pattern: `calculate hill activation for conc {x:expr} k {k:expr} n {n:expr} into {target:ident}`: Hill activation
   - `calculate` — Pattern: `calculate enzyme rate substrate {s:expr} vmax {v:expr} km {km:expr} into {target:ident}`: Michaelis-Menten rate
   - `check` — Pattern: `check gibson overlap frag1 {f1:expr} frag2 {f2:expr} into {target:ident}`: Gibson overlap
-- **Exported Functions/Symbols (127):** `DomainContract`, `DomainRuntime`, `SYNTHETIC_BIO_DOMAIN`, `SyntheticBioASTExporter`, `SyntheticBioDomain`, `SyntheticBioRuntime`, `Synthetic_bioDomainParser`, `VerbSpec`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`...
+  - `design` — Pattern: `design gibson overlap frag1 {f1:expr} frag2 {f2:expr} into {target:ident}`: Gibson overlap design
+- **Exported Functions/Symbols (124):** `DomainRuntime`, `SyntheticBioRuntime`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`, `ds_amortize_loan`, `ds_audio_filter_lowpass`, `ds_audit_safety`, `ds_balance_equation`, `ds_batch_stream`, `ds_beta_coefficient`...
 
 ### 2.77 Domain: `telecom`
 - **Primary Name:** `telecom`
@@ -990,14 +1109,14 @@ Total Active Registered Domains: **81**
 ### 2.78 Domain: `thermodynamics`
 - **Primary Name:** `thermodynamics`
 - **Aliases:** `heat_transfer`, `thermal_physics`, `thermo`
-- **Description:** Thermodynamics & heat cycles: Carnot efficiency, entropy change, polytropic processes, Rankine cycle, and Joule-Thomson expansion
+- **Description:** Thermodynamics & heat cycles: Carnot, Rankine, Brayton, Otto cycles, entropy change, polytropic processes, and Joule-Thomson
 - **Registered Verbs & Patterns:**
   - `calculate` — Pattern: `calculate carnot efficiency hot {th:expr} cold {tc:expr} into {target:ident}`: Carnot efficiency
   - `calculate` — Pattern: `calculate entropy change mass {m:expr} specific heat {c:expr} t1 {t1:expr} t2 {t2:expr} into {target:ident}`: Entropy change
   - `step` — Pattern: `step polytropic p1 {p1:expr} v1 {v1:expr} v2 {v2:expr} index {n:expr} into {target:ident}`: Polytropic gas expansion
   - `calculate` — Pattern: `calculate rankine cycle boiler {h2:expr} turbine {h3:expr} condenser {h4:expr} pump {h1:expr} into {target:ident}`: Rankine cycle efficiency
   - `calculate` — Pattern: `calculate joule thomson drop pressure {dp:expr} coefficient {mu:expr} into {target:ident}`: Joule-Thomson temperature change
-- **Exported Functions/Symbols (126):** `DomainContract`, `DomainRuntime`, `THERMODYNAMICS_DOMAIN`, `ThermodynamicsASTExporter`, `ThermodynamicsDomain`, `ThermodynamicsDomainParser`, `ThermodynamicsRuntime`, `VerbSpec`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`...
+- **Exported Functions/Symbols (122):** `DomainRuntime`, `ThermodynamicsRuntime`, `ds_adsr_envelope`, `ds_agent_confidence`, `ds_agent_declare`, `ds_agent_handoff`, `ds_agent_recall_similar`, `ds_agent_reflect`, `ds_align_sequences_nw`, `ds_amortize_loan`, `ds_audio_filter_lowpass`, `ds_audit_safety`, `ds_balance_equation`, `ds_batch_stream`, `ds_beta_coefficient`...
 
 ### 2.79 Domain: `time_series`
 - **Primary Name:** `time_series`

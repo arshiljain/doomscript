@@ -1,6 +1,11 @@
-"""Combustion Domain Runtime: Equivalence ratio, Arrhenius kinetics, heat release rate, adiabatic flame temp, Le Chatelier limits, and Zeldovich NOx."""
+"""Combustion Domain Runtime: Equivalence ratios, Arrhenius chemical kinetics, heat release, adiabatic flame temperature, flammability limits, and NOx scaling."""
 import math
-from typing import List, Dict, Any
+from typing import Dict, Any, List, Optional, Tuple
+from doomscript.domains.base import DomainRuntime
+
+# ============================================================================
+# 1. PRESERVED EXISTING EQUATIONS
+# ============================================================================
 
 def combust_equivalence_ratio(fuel_mass: float, air_mass: float, stoich_fuel_air_ratio: float) -> float:
     """Calculates fuel-air equivalence ratio phi = (fuel / air) / stoich_ratio."""
@@ -58,6 +63,58 @@ def combust_zeldovich_nox_scaling(temp_k: float, oxygen_mole_fraction: float) ->
     xo2 = float(oxygen_mole_fraction)
     if t <= 0.0 or xo2 <= 0.0:
         return 0.0
-    # Activation energy for N2 + O -> NO + N is ~318 kJ/mol
     rate_index = math.sqrt(xo2) * math.exp(-38400.0 / t)
     return float(f"{rate_index:.6e}")
+
+# ============================================================================
+# 2. DEEPENED TURBULENT COMBUSTION & FUEL GAS METRICS
+# ============================================================================
+
+def combust_damkohler_number(flow_timescale_s: float, reaction_timescale_s: float) -> Dict[str, Any]:
+    """Calculates Damköhler number Da = tau_flow / tau_chem and identifies combustion regime."""
+    t_flow = float(flow_timescale_s)
+    t_chem = float(reaction_timescale_s)
+    if t_chem <= 0:
+        return {"damkohler_number": float("inf"), "regime": "fast chemistry (flamelet)"}
+    da = t_flow / t_chem
+    if da > 10.0:
+        regime = "laminar flamelet regime (fast chemistry)"
+    elif da >= 1.0:
+        regime = "thin reaction zones"
+    else:
+        regime = "well-stirred reactor (distributed reaction)"
+    return {
+        "damkohler_number": round(da, 3),
+        "regime": regime
+    }
+
+def combust_wobbe_index(higher_heating_value_mj_m3: float, specific_gravity: float) -> float:
+    """Calculates Wobbe Index Iw = HHV / sqrt(SG) for fuel gas interchangeability."""
+    hhv = float(higher_heating_value_mj_m3)
+    sg = float(specific_gravity)
+    if sg <= 0:
+        return 0.0
+    iw = hhv / math.sqrt(sg)
+    return round(iw, 2)
+
+class CombustionRuntime(DomainRuntime):
+    """Runtime engine for Combustion domain calculations."""
+    def execute_ir(self, ir: Any, env: Dict[str, Any]) -> Any:
+        return None
+
+    def equivalence_ratio(self, f: float, a: float, stoich: float) -> float:
+        return combust_equivalence_ratio(f, a, stoich)
+    def arrhenius(self, a: float, ea: float, t: float, r: float = 8.314) -> float:
+        return combust_arrhenius_rate(a, ea, t, r)
+    def heat_release(self, m: float, lhv: float, eff: float = 1.0) -> float:
+        return combust_heat_release_rate(m, lhv, eff)
+    def adiabatic_temp(self, t0: float, lhv: float, cp: float, afr: float) -> float:
+        return combust_adiabatic_flame_temp(t0, lhv, cp, afr)
+    def flammability(self, y: List[float], limits: List[float]) -> float:
+        return combust_le_chatelier_flammability_limit(y, limits)
+    def nox(self, t: float, xo2: float) -> float:
+        return combust_zeldovich_nox_scaling(t, xo2)
+    def damkohler(self, tf: float, tc: float) -> Dict[str, Any]:
+        return combust_damkohler_number(tf, tc)
+    def wobbe(self, hhv: float, sg: float) -> float:
+        return combust_wobbe_index(hhv, sg)

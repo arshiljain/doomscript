@@ -1,3 +1,4 @@
+"""Forensics Domain Natural Language Parser."""
 import re
 from typing import Optional
 from doomscript.domains.base import DomainParser
@@ -5,25 +6,32 @@ from doomscript.domains.base import DomainParser
 class ForensicsDomainParser(DomainParser):
     def parse_line(self, line: str) -> Optional[str]:
         s = line.strip()
+
+        # identify file type by magic bytes <header> into <target>
         m_magic = re.match(r"^identify\s+file\s+type\s+by\s+magic\s+bytes\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
         if m_magic:
             return f"set {m_magic.group(2)} to forensics_magic_bytes({m_magic.group(1)})"
 
+        # calculate shannon entropy for data <data> into <target>
         m_ent = re.match(r"^calculate\s+shannon\s+entropy\s+for\s+data\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
         if m_ent:
             return f"set {m_ent.group(2)} to forensics_shannon_entropy({m_ent.group(1)})"
 
+        # deobfuscate nested base64 <data> into <target>
         m_b64 = re.match(r"^deobfuscate\s+nested\s+base64\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
         if m_b64:
             return f"set {m_b64.group(2)} to forensics_deobfuscate_base64({m_b64.group(1)})"
 
+        # check dga domain <d> into <target>
         m_dga = re.match(r"^check\s+dga\s+domain\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
         if m_dga:
             return f"set {m_dga.group(2)} to forensics_dga_score({m_dga.group(1)})"
 
-        m_sled = re.match(r"^check\s+nop\s+sled\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
-        if m_sled:
-            return f"set {m_sled.group(2)} to forensics_detect_shellcode_nop_sled({m_sled.group(1)})"
+        # check nop sled for data <data> into <target>
+        m_nop = re.match(r"^check\s+nop\s+sled\s+for\s+data\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", s, re.IGNORECASE)
+        if m_nop:
+            return f"set {m_nop.group(2)} to forensics_detect_shellcode_nop_sled({m_nop.group(1)})"
+
         return None
 
     def parse_inspect(self, line: str, line_no: int = 0) -> Optional[str]:

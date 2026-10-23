@@ -262,6 +262,19 @@ class DidYouMeanAdvisor:
         return None
 
     @classmethod
+    def _is_valid_syntax(cls, line: str) -> bool:
+        try:
+            from doomscript.grammar.phrases import normalize
+            from doomscript.compiler.engine import get_parser
+            norm = normalize(line.strip())
+            if not norm.endswith("\n"):
+                norm += "\n"
+            get_parser().parse(norm)
+            return True
+        except Exception:
+            return False
+
+    @classmethod
     def find_suggestion(
         cls,
         line: str,
