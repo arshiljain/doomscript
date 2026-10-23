@@ -11,26 +11,35 @@ import pytest
 
 def test_wheel_contains_grammar_and_executes_in_clean_venv():
     repo_root = Path(__file__).parent.parent
-    dist_dir = repo_root / "dist"
-    wheels = sorted(list(dist_dir.glob("*.whl")), key=lambda p: p.stat().st_mtime, reverse=True)
-    if not wheels:
-        dist_dir.mkdir(parents=True, exist_ok=True)
-        # Attempt to build wheel automatically on fresh clones
-        try:
-            subprocess.run(
-                [sys.executable, "-m", "pip", "wheel", "--no-deps", "-w", str(dist_dir), str(repo_root)],
-                capture_output=True,
-                check=False,
-            )
-        except Exception:
-            pass
-        wheels = sorted(list(dist_dir.glob("*.whl")), key=lambda p: p.stat().st_mtime, reverse=True)
-
-    if not wheels:
-        pytest.skip("No wheel found in dist/ and unable to build wheel automatically in current environment.")
-    wheel_path = wheels[0]
-
     with tempfile.TemporaryDirectory() as tmp_dir:
+        dist_dir = Path(tmp_dir) / "dist"
+        dist_dir.mkdir(parents=True, exist_ok=True)
+        # Build fresh wheel for current environment
+        build_res = subprocess.run(
+            [sys.executable, "-m", "pip", "wheel", "--no-deps", "-w", str(dist_dir), str(repo_root)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        wheels = sorted(list(dist_dir.glob("*.whl")), key=lambda p: p.stat().st_mtime, reverse=True)
+        if not wheels:
+            import shutil
+            uv_bin = shutil.which("uv")
+            if uv_bin:
+                subprocess.run(
+                    [uv_bin, "build", "--wheel", "--out-dir", str(dist_dir)],
+                    cwd=str(repo_root),
+                    capture_output=True,
+                    check=False,
+                )
+                wheels = sorted(list(dist_dir.glob("*.whl")), key=lambda p: p.stat().st_mtime, reverse=True)
+        if not wheels:
+            repo_dist = repo_root / "dist"
+            wheels = sorted(list(repo_dist.glob("*.whl")), key=lambda p: p.stat().st_mtime, reverse=True)
+        if not wheels:
+            pytest.skip(f"Unable to build wheel automatically: {build_res.stderr}")
+        wheel_path = wheels[0]
+
         env_dir = Path(tmp_dir) / "test_venv"
         # 1. Create clean isolated virtualenv
         venv.create(env_dir, with_pip=True)

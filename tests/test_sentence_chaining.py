@@ -11,9 +11,10 @@ from doomscript.compiler.engine import execute
 def test_chaining_into_and_verb(tmp_path):
     test_file = tmp_path / "data.csv"
     test_file.write_text("alpha,beta,gamma", encoding="utf-8")
+    test_file_posix = str(test_file).replace("\\", "/")
 
     source = f"""
-read file "{str(test_file).replace('\\', '/')}" into raw and split raw by "," into lines
+read file "{test_file_posix}" into raw and split raw by "," into lines
 """
     env = execute(source)
     assert env["lines"] == ["alpha", "beta", "gamma"]

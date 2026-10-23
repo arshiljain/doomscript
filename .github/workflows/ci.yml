@@ -29,7 +29,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -e ".[viz]"
-        pip install pytest
+        pip install pytest wheel pandas
 
     - name: Test CLI entry points
       run: |
@@ -37,6 +37,8 @@ jobs:
         doom check examples/todo_app.doom
 
     - name: Run Pytest test suite (Core)
+      env:
+        MPLBACKEND: Agg
       run: |
         python -m pytest -v
 
@@ -66,12 +68,16 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -e ".[viz]"
-        pip install pytest
+        pip install pytest wheel
 
     - name: Run Visualization Test Suite
+      env:
+        MPLBACKEND: Agg
       run: |
         python -m pytest -v tests/viz/
 
     - name: Run Visualization Capability Benchmark
+      env:
+        MPLBACKEND: Agg
       run: |
         python run_viz_capability.py

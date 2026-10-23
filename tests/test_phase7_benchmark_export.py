@@ -68,6 +68,9 @@ def test_capability_benchmarks_exist():
 
 def test_capability_runner_executes_all():
     """Run capability test runner script and verify 100% pass rate."""
+    repo_root = str(Path(__file__).resolve().parent.parent)
+    if repo_root not in sys.path:
+        sys.path.insert(0, repo_root)
     import run_capability
     results = run_capability.run_all_benchmarks()
     assert results["total"] == 40

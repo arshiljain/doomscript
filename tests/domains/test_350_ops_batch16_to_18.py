@@ -13,6 +13,7 @@ from doomscript.compiler.engine import execute
 
 def test_batch_16_cloud_domain_operations():
     tmp_dir = tempfile.mkdtemp(prefix="doom_cloud_test_")
+    tmp_posix = tmp_dir.replace("\\", "/")
     try:
         script = f"""
 use cloud
@@ -77,7 +78,7 @@ diff bucket b1 with bucket b2 into bucket_diff
 say "Only in first:", count of bucket_diff["only_in_first"]
 
 # 15. Export manifest
-manifest_path = "{tmp_dir.replace('\\', '/')}/manifest.json"
+manifest_path = "{tmp_posix}/manifest.json"
 export bucket manifest for b1 to manifest_path into exported_manifest
 
 # 16. Archive stale files
@@ -106,6 +107,7 @@ say "Deleted keys count:", deleted_count
 
 def test_batch_17_office_domain_operations():
     tmp_dir = tempfile.mkdtemp(prefix="doom_office_test_")
+    tmp_posix = tmp_dir.replace("\\", "/")
     try:
         # Create a sample CSV file for delimiter detection and header reading
         csv_file = os.path.join(tmp_dir, "sample.csv").replace("\\", "/")
@@ -157,7 +159,7 @@ sort sheet "Sheet1" in sheet by column 1 descending into sorted_rows
 filter sheet "Sheet1" in sheet where column 2 matches 5 into filtered_rows
 
 # 9. Export sheet to JSON
-export_json_path = "{tmp_dir.replace('\\', '/')}/sheet.json"
+export_json_path = "{tmp_posix}/sheet.json"
 export sheet "Sheet1" in sheet to json export_json_path
 
 # 10. Import JSON into new sheet

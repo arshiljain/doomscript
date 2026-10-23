@@ -193,10 +193,12 @@ George,paid,540,North
 """, encoding="utf-8")
 
     clean_csv = tmp_path / "clean_audit.csv"
+    raw_csv_posix = str(raw_csv).replace("\\", "/")
+    clean_csv_posix = str(clean_csv).replace("\\", "/")
 
     doom_code = f"""
 # 1. Read messy transactions
-read csv file "{str(raw_csv).replace('\\\\', '/')}" into orders
+read csv file "{raw_csv_posix}" into orders
 
 # 2. Filter valid paid transactions over $50
 orders where status is "paid" into valid_orders
@@ -206,7 +208,7 @@ valid_orders where amount is over 50 into high_value
 sort high_value by amount descending
 
 # 4. Save clean audit report
-write csv high_value into file "{str(clean_csv).replace('\\\\', '/')}"
+write csv high_value into file "{clean_csv_posix}"
 
 # 5. Summary metrics
 set total_cleaned to count of high_value

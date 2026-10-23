@@ -234,6 +234,8 @@ class LetsPlotRenderer:
 
 def plot_table(table, x_col, y_col, kind="line", title=None):
     """Create a plot from a table/DataFrame and return the matplotlib Figure."""
+    import matplotlib
+    matplotlib.use('Agg')
     import matplotlib.pyplot as plt
     fig, ax = plt.subplots()
     if kind == "line":

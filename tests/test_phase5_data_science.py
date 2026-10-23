@@ -6,7 +6,7 @@ Verifies high-level data science verbs and raw pandas interop.
 import os
 import tempfile
 import pytest
-import pandas as pd
+pd = pytest.importorskip("pandas")
 from doomscript.compiler.engine import execute
 
 

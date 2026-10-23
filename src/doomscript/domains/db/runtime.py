@@ -2,6 +2,14 @@
 
 import contextlib
 import sqlite3
+import sys
+
+
+def _sqlite3_connect(path: str) -> sqlite3.Connection:
+    """Connect to SQLite with autocommit semantics across Python 3.10-3.14+."""
+    if sys.version_info >= (3, 12):
+        return sqlite3.connect(path, autocommit=True)
+    return sqlite3.connect(path, isolation_level=None)
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from doomscript.domains.base import DomainRuntime, DomainIR
 from doomscript.domains.db.spec import QuerySpec, WhereClause
@@ -14,7 +22,7 @@ class DBRuntime(DomainRuntime):
 
     def __init__(self, db_path: str = ":memory:"):
         self.db_path = db_path
-        self._conn = sqlite3.connect(db_path, autocommit=True)
+        self._conn = _sqlite3_connect(db_path)
         self._conn.row_factory = sqlite3.Row
 
     @contextlib.contextmanager
@@ -184,7 +192,7 @@ def db_transaction():
 def db_connect(path: Any) -> sqlite3.Connection:
     """Connect to SQLite database and register as active connection."""
     dest_path = str(path).strip("'\"")
-    conn = sqlite3.connect(dest_path, autocommit=True)
+    conn = _sqlite3_connect(dest_path)
     conn.row_factory = sqlite3.Row
     get_db_runtime()._conn = conn
     return conn
