@@ -13,6 +13,7 @@ def test_cluster11_file_system_and_file_io(tmp_path):
     test_file = str(tmp_path / "sample.txt").replace("\\", "/")
     test_copy = str(tmp_path / "sample_copy.txt").replace("\\", "/")
     test_subfolder = str(tmp_path / "sub").replace("\\", "/")
+    test_folder = str(tmp_path).replace("\\", "/")
 
     code = f"""
 # 103: write <content> to file <path>
@@ -64,7 +65,7 @@ pdir = parent folder of "{test_file}"
 assert len(pdir) > 0
 
 # 112: list all files in folder <path> into <target>
-list all files in folder "{str(tmp_path).replace('\\\\', '/')}" into file_list
+list all files in folder "{test_folder}" into file_list
 assert "sample.txt" in file_list
 
 # 115: file size of <path> in bytes
