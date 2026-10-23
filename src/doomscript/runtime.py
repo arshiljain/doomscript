@@ -1311,6 +1311,108 @@ def ds_coalesce(val, default):
     return default if val is None else val
 
 
+def ds_chunk(collection, n):
+    """Splits a collection into chunks of size n."""
+    items = list(collection)
+    if n <= 0:
+        return [items]
+    return [items[i:i + n] for i in range(0, len(items), n)]
+
+
+def ds_zip(col1, col2):
+    """Zips two collections into a list of pairs/tuples."""
+    return [list(pair) for pair in zip(col1, col2)]
+
+
+def ds_interleave(col1, col2):
+    """Interleaves elements from two collections."""
+    res = []
+    it1, it2 = iter(col1), iter(col2)
+    while True:
+        done = True
+        try:
+            res.append(next(it1))
+            done = False
+        except StopIteration:
+            pass
+        try:
+            res.append(next(it2))
+            done = False
+        except StopIteration:
+            pass
+        if done:
+            break
+    return res
+
+
+def ds_merge_records(rec1, rec2):
+    """Merges two records/dictionaries into a new dictionary."""
+    d = dict(rec1)
+    d.update(rec2)
+    return d
+
+
+def ds_invert_record(rec):
+    """Inverts keys and values in a dictionary."""
+    return {v: k for k, v in rec.items()}
+
+
+def ds_slugify(text):
+    """Converts a text string to a URL-friendly slug."""
+    s = str(text).lower().strip()
+    s = re.sub(r"[^\w\s-]", "", s)
+    return re.sub(r"[-\s]+", "-", s)
+
+
+def ds_truncate(text, n):
+    """Truncates a text string to length n."""
+    s = str(text)
+    return s[:n] if len(s) > n else s
+
+
+def ds_collapse_whitespace(text):
+    """Collapses multiple consecutive whitespace characters into a single space."""
+    return re.sub(r"\s+", " ", str(text)).strip()
+
+
+def ds_date_today():
+    """Returns today's date formatted as YYYY-MM-DD."""
+    from datetime import date
+    return date.today().isoformat()
+
+
+def ds_date_yesterday():
+    """Returns yesterday's date formatted as YYYY-MM-DD."""
+    from datetime import date, timedelta
+    return (date.today() - timedelta(days=1)).isoformat()
+
+
+def ds_date_tomorrow():
+    """Returns tomorrow's date formatted as YYYY-MM-DD."""
+    from datetime import date, timedelta
+    return (date.today() + timedelta(days=1)).isoformat()
+
+
+def ds_days_between(d1, d2):
+    """Returns the absolute number of days between two ISO date strings."""
+    from datetime import date
+    dt1 = date.fromisoformat(str(d1)[:10])
+    dt2 = date.fromisoformat(str(d2)[:10])
+    return abs((dt2 - dt1).days)
+
+
+def ds_is_weekend(d):
+    """Returns True if date string d falls on Saturday or Sunday."""
+    from datetime import date
+    dt = date.fromisoformat(str(d)[:10])
+    return dt.weekday() >= 5
+
+
+def ds_is_weekday(d):
+    """Returns True if date string d falls on Monday through Friday."""
+    return not ds_is_weekend(d)
+
+
 class DoomTask:
     def __init__(self, future=None):
         self._future = future

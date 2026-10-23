@@ -989,6 +989,89 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = desugar_multi_group(masked)
     masked = re.sub(r"\bsquare\s+root\s+of\b", "sqrt of", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bsquare\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?|\d+(?:\.\d+)?|\([^)]+\))", r"((\1) ** 2)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bcube\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?|\d+(?:\.\d+)?|\([^)]+\))", r"((\1) ** 3)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(?:absolute\s+value|abs)\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?|\d+(?:\.\d+)?|\([^)]+\))\b", r"abs(\1)", masked, flags=re.IGNORECASE)
+
+    # Disambiguate soft keywords starting assignments:
+    # group = "admin", order = 1, table = [1, 2], matrix = ..., model = ...
+    soft_kw_assign_m = re.match(
+        r"^\s*(group|order|table|matrix|model|text|message|error|status|key|value|column|row|field)\s*=\s*(.+)$",
+        masked,
+        re.IGNORECASE
+    )
+    if soft_kw_assign_m:
+        masked = f"set {soft_kw_assign_m.group(1)} to {soft_kw_assign_m.group(2)}"
+
+    # Multiples and divisible predicates
+    masked = re.sub(r"\bis\s+(?:a\s+multiple\s+of|divisible\s+by)\s+([A-Za-z_]\w*|\d+(?:\.\d+)?)\b", r"% (\1) == 0", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*increase\s+([A-Za-z_]\w*)\s+by\s+(\d+(?:\.\d+)?)\s*%\s*$", r"set \1 to (\1 * (1 + (\2 / 100.0)))", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*decrease\s+([A-Za-z_]\w*)\s+by\s+(\d+(?:\.\d+)?)\s*%\s*$", r"set \1 to (\1 * (1 - (\2 / 100.0)))", masked, flags=re.IGNORECASE)
+
+    # String transforms: slugify, truncate, collapse whitespace, capitalize, titlecase
+    slug_m = re.match(r"^\s*slugify\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if slug_m:
+        masked = f"set {slug_m.group(2)} to ds_slugify({slug_m.group(1).strip()})"
+    trunc_m = re.match(r"^\s*truncate\s+(.+?)\s+(?:to|at)\s+(\d+)\s*(?:chars?|characters?)?\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if trunc_m:
+        masked = f"set {trunc_m.group(3)} to ds_truncate({trunc_m.group(1).strip()}, {trunc_m.group(2)})"
+    col_ws_m = re.match(r"^\s*collapse\s+whitespace\s+in\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if col_ws_m:
+        masked = f"set {col_ws_m.group(2)} to ds_collapse_whitespace({col_ws_m.group(1).strip()})"
+    cap_m = re.match(r"^\s*capitalize\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if cap_m:
+        masked = f"set {cap_m.group(2)} to ({cap_m.group(1).strip()}).capitalize()"
+    title_m = re.match(r"^\s*(?:titlecase|title\s+case)\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if title_m:
+        masked = f"set {title_m.group(2)} to ({title_m.group(1).strip()}).title()"
+    masked = re.sub(r"\b(?:word\s+count\s+of|words\s+in)\s+([A-Za-z_]\w*|__STR_LITERAL_\d+__|__STR_\d+__)\b", r"len((\1).split())", masked, flags=re.IGNORECASE)
+
+    # Collection Slicing & Restructuring: take first/last, drop first/last, chunk, zip, interleave
+    take_first_m = re.match(r"^\s*take\s+(?:the\s+)?first\s+(\d+)\s*(?:items?\s+)?from\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if take_first_m:
+        masked = f"set {take_first_m.group(3)} to ds_take({take_first_m.group(2).strip()}, {take_first_m.group(1)})"
+    take_last_m = re.match(r"^\s*take\s+(?:the\s+)?last\s+(\d+)\s*(?:items?\s+)?from\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if take_last_m:
+        masked = f"set {take_last_m.group(3)} to ds_take_last({take_last_m.group(2).strip()}, {take_last_m.group(1)})"
+    drop_first_m = re.match(r"^\s*drop\s+(?:the\s+)?first\s+(\d+)\s*(?:items?\s+)?from\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if drop_first_m:
+        masked = f"set {drop_first_m.group(3)} to ds_drop({drop_first_m.group(2).strip()}, {drop_first_m.group(1)})"
+    drop_last_m = re.match(r"^\s*drop\s+(?:the\s+)?last\s+(\d+)\s*(?:items?\s+)?from\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if drop_last_m:
+        masked = f"set {drop_last_m.group(3)} to ds_drop_last({drop_last_m.group(2).strip()}, {drop_last_m.group(1)})"
+    chunk_m = re.match(r"^\s*chunk\s+(.+?)\s+into\s+(?:groups\s+of\s+)?(\d+)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if chunk_m:
+        masked = f"set {chunk_m.group(3)} to ds_chunk({chunk_m.group(1).strip()}, {chunk_m.group(2)})"
+    zip_m = re.match(r"^\s*zip\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if zip_m:
+        masked = f"set {zip_m.group(3)} to ds_zip({zip_m.group(1).strip()}, {zip_m.group(2).strip()})"
+    interleave_m = re.match(r"^\s*interleave\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if interleave_m:
+        masked = f"set {interleave_m.group(3)} to ds_interleave({interleave_m.group(1).strip()}, {interleave_m.group(2).strip()})"
+
+    # Dictionary & Record operations: merge, invert, has key/field, remove key/field
+    merge_rec_m = re.match(r"^\s*merge\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if merge_rec_m:
+        masked = f"set {merge_rec_m.group(3)} to ds_merge_records({merge_rec_m.group(1).strip()}, {merge_rec_m.group(2).strip()})"
+    invert_rec_m = re.match(r"^\s*invert\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if invert_rec_m:
+        masked = f"set {invert_rec_m.group(2)} to ds_invert_record({invert_rec_m.group(1).strip()})"
+    has_key_m = re.match(r"^\s*if\s+([A-Za-z_]\w*)\s+has\s+(?:key|field)\s+(.+?):?$", masked, re.IGNORECASE)
+    if has_key_m:
+        masked = f"if {has_key_m.group(2).strip()} in {has_key_m.group(1)}:"
+    rem_key_m = re.match(r"^\s*remove\s+(?:key|field)\s+(.+?)\s+from\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if rem_key_m:
+        masked = f"({rem_key_m.group(2)}).pop({rem_key_m.group(1).strip()}, None)"
+
+    # Date, Time & Temporal Operations: today into, yesterday into, tomorrow into, days between
+    date_direct_m = re.match(r"^\s*(today|yesterday|tomorrow)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if date_direct_m:
+        func = f"ds_date_{date_direct_m.group(1).lower()}()"
+        masked = f"set {date_direct_m.group(2)} to {func}"
+    days_between_m = re.match(r"^\s*days\s+between\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if days_between_m:
+        masked = f"set {days_between_m.group(3)} to ds_days_between({days_between_m.group(1).strip()}, {days_between_m.group(2).strip()})"
+    else:
+        masked = re.sub(r"\bdays\s+between\s+(.+?)\s+and\s+([A-Za-z_]\w*|__STR_LITERAL_\d+__|__STR_\d+__)\b", r"ds_days_between(\1, \2)", masked, flags=re.IGNORECASE)
     masked = desugar_field_access(masked)
 
     # Units of measurement normalization (numbers with units, conversions, currency)
@@ -1098,14 +1181,24 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         flags=re.IGNORECASE
     )
 
-    # Filter statements starting with 'filter': filter <coll> where <cond> into <target>
-    masked = re.sub(r"^\s*filter\s+(.+?\s+where\s+.+?\s+into\s+[A-Za-z_]\w*)$", r"\1", masked, flags=re.IGNORECASE)
-
-    # Compositional: Inline expression filter: filter <list> where <var> is ...
-    filter_expr_m = re.search(r"\bfilter\s+(\[[^\]]+\]|[A-Za-z_]\w*)\s+where\s+([A-Za-z_]\w*)\s+(is\s+[A-Za-z_]\w*|==.+?|!=.+?|>.*|<.*|>=.*|<=.*)", masked, re.IGNORECASE)
-    if filter_expr_m:
-        f_coll, f_var, f_pred = filter_expr_m.group(1), filter_expr_m.group(2), filter_expr_m.group(3)
-        masked = masked.replace(filter_expr_m.group(0), f"[{f_var} for {f_var} in {f_coll} if {f_var} {f_pred}]")
+    # Standalone filter statement: filter <coll> where <cond> [into <target>]
+    # If into is omitted, defaults to in-place pipeline filter: filter users where age > 20 -> users where age > 20 into users
+    in_place_filter_m = re.match(r"^\s*filter\s+([A-Za-z_]\w*)\s+where\s+(.+)$", masked, re.IGNORECASE)
+    if in_place_filter_m:
+        f_tgt = in_place_filter_m.group(1)
+        f_rest = in_place_filter_m.group(2)
+        if not re.search(r"\binto\s+[A-Za-z_]\w*$", f_rest, re.IGNORECASE):
+            masked = f"{f_tgt} where {f_rest} into {f_tgt}"
+        else:
+            m_into = re.match(r"^(.+?)\s+into\s+([A-Za-z_]\w*)$", f_rest, re.IGNORECASE)
+            if m_into:
+                masked = f"{f_tgt} where {m_into.group(1)} into {m_into.group(2)}"
+    else:
+        # Compositional: Inline expression filter on RHS: x = filter <list> where <var> is ...
+        filter_expr_m = re.search(r"\bfilter\s+(\[[^\]]+\]|[A-Za-z_]\w*)\s+where\s+([A-Za-z_]\w*)\s+(is\s+[A-Za-z_]\w*|==.+?|!=.+?|>.*|<.*|>=.*|<=.*)", masked, re.IGNORECASE)
+        if filter_expr_m:
+            f_coll, f_var, f_pred = filter_expr_m.group(1), filter_expr_m.group(2), filter_expr_m.group(3)
+            masked = masked.replace(filter_expr_m.group(0), f"[{f_var} for {f_var} in {f_coll} if {f_var} {f_pred}]")
 
 
     # Normalize 'attempt' to 'try'
@@ -1412,6 +1505,21 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
                 return f"ds_quant_match({var_name}, '{p}')"
             return f"({var_name} == {p})"
 
+    # Implicit plural quantifiers: if any order has amount > 1000:
+    implicit_quant_m = re.match(r"^\s*if\s+(any|every|no)\s+([A-Za-z_]\w*)\s+(is|has)\s+(.+?):?$", masked, re.IGNORECASE)
+    if implicit_quant_m and implicit_quant_m.group(2).lower() not in ("one", "body", "thing", "longer", "matter", "problem", "fails"):
+        q_word = implicit_quant_m.group(1).lower()
+        q_noun = implicit_quant_m.group(2)
+        q_mode = implicit_quant_m.group(3).lower()
+        q_pred = implicit_quant_m.group(4).strip()
+        if q_noun.endswith("y") and not q_noun.endswith(("ay", "ey", "oy", "uy")):
+            q_plural = q_noun[:-1] + "ies"
+        elif q_noun.endswith(("s", "sh", "ch", "x", "z")):
+            q_plural = q_noun + "es"
+        else:
+            q_plural = q_noun + "s"
+        masked = f"if {q_word} {q_noun} in {q_plural} {q_mode} {q_pred}:"
+
     all_are_m = re.match(r"^\s*if\s+all\s+(?:of\s+)?(?:items\s+in\s+)?(.+?)\s+(?:are|have)\s+(.+?):?$", masked, re.IGNORECASE)
     if all_are_m:
         coll = all_are_m.group(1).strip()
@@ -1461,6 +1569,34 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         pred = none_of_m.group(2).strip()
         pred_code = _parse_quant_predicate("x", "is", pred)
         masked = f"if ds_none({coll}, lambda x: {pred_code}):"
+
+    # Proportional quantifiers: majority / at least / at most / exactly
+    maj_m = re.match(r"^\s*if\s+(?:majority|more\s+than\s+half)\s+of\s+([A-Za-z_]\w*)\s+(?:are|is|have|has)\s+(.+?):?$", masked, re.IGNORECASE)
+    if maj_m:
+        m_coll = maj_m.group(1)
+        m_pred = _parse_quant_predicate("x", "is", maj_m.group(2).strip())
+        masked = f"if count of [x for each x in {m_coll} where {m_pred}] > (count of {m_coll} / 2):"
+
+    at_least_m = re.match(r"^\s*if\s+at\s+least\s+(\d+)\s+(?:items?\s+in\s+)?([A-Za-z_]\w*)\s+(?:are|is|have|has)\s+(.+?):?$", masked, re.IGNORECASE)
+    if at_least_m:
+        al_n = at_least_m.group(1)
+        al_coll = at_least_m.group(2)
+        al_pred = _parse_quant_predicate("x", "is", at_least_m.group(3).strip())
+        masked = f"if count of [x for each x in {al_coll} where {al_pred}] >= {al_n}:"
+
+    at_most_m = re.match(r"^\s*if\s+at\s+most\s+(\d+)\s+(?:items?\s+in\s+)?([A-Za-z_]\w*)\s+(?:are|is|have|has)\s+(.+?):?$", masked, re.IGNORECASE)
+    if at_most_m:
+        am_n = at_most_m.group(1)
+        am_coll = at_most_m.group(2)
+        am_pred = _parse_quant_predicate("x", "is", at_most_m.group(3).strip())
+        masked = f"if count of [x for each x in {am_coll} where {am_pred}] <= {am_n}:"
+
+    exact_m = re.match(r"^\s*if\s+exactly\s+(\d+)\s+(?:items?\s+in\s+)?([A-Za-z_]\w*)\s+(?:are|is|have|has)\s+(.+?):?$", masked, re.IGNORECASE)
+    if exact_m:
+        ex_n = exact_m.group(1)
+        ex_coll = exact_m.group(2)
+        ex_pred = _parse_quant_predicate("x", "is", exact_m.group(3).strip())
+        masked = f"if count of [x for each x in {ex_coll} where {ex_pred}] == {ex_n}:"
 
     # Pillar C: Thought Queries & Intuitive Filtering
 
@@ -2626,6 +2762,17 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     # Function definition with 'on': 'to tax on price' -> 'to tax with price'
     masked = re.sub(r"^\s*to\s+([A-Za-z_]\w*)\s+on\s+([A-Za-z_]\w*)\b", r"to \1 with \2", masked, flags=re.IGNORECASE)
 
+    # In-place pipeline filter: filter <target> where <cond> (defaults into <target>)
+    in_place_filter_m = re.match(r"^\s*filter\s+([A-Za-z_]\w*)\s+where\s+(.+)$", masked, re.IGNORECASE)
+    if in_place_filter_m:
+        f_tgt = in_place_filter_m.group(1)
+        f_rest = in_place_filter_m.group(2)
+        if not re.search(r"\binto\s+[A-Za-z_]\w*$", f_rest, re.IGNORECASE):
+            masked = f"filter {f_tgt} where {f_rest} into {f_tgt}"
+
+    # In-place deduplication: deduplicate <var> / unique <var>
+    masked = re.sub(r"^\s*(?:deduplicate|unique)\s+([A-Za-z_]\w*)$", r"unique \1 into \1", masked, flags=re.IGNORECASE)
+
     # Filter statements with assignment, set, or leading 'filter'
     masked = re.sub(r"^\s*filter\s+(.+?\s+where\s+.+)$", r"\1", masked, flags=re.IGNORECASE)
     filter_into_m = re.match(r"^\s*(?:set\s+)?([A-Za-z_]\w*)\s*(?:=|to)\s+(?![\[\(])(.+?)\s+where\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
@@ -2728,7 +2875,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         target_v = inc_pct_m.group(1).strip()
         raw_pct = inc_pct_m.group(2) or inc_pct_m.group(3)
         pct_num = float(raw_pct) / 100.0
-        masked = f"set {target_v} to {target_v} * {1.0 + pct_num}"
+        masked = f"set {target_v} to round({target_v} * {1.0 + pct_num}, 10)"
 
     dec_pct_m = re.match(
         r"^\s*decrease\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+by\s+(?:(\d+(?:\.\d+)?)\s*(?:%|percent)|\((\d+(?:\.\d+)?)\s*/\s*100(?:\.0)?\))\s*$",
@@ -2739,7 +2886,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         target_v = dec_pct_m.group(1).strip()
         raw_pct = dec_pct_m.group(2) or dec_pct_m.group(3)
         pct_num = float(raw_pct) / 100.0
-        masked = f"set {target_v} to {target_v} * {1.0 - pct_num}"
+        masked = f"set {target_v} to round({target_v} * {1.0 - pct_num}, 10)"
 
     # Frontier 3: Composable participle expressions (support calls, identifiers, indexing, parenthesized exprs)
     masked = re.sub(
@@ -4790,6 +4937,34 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
 
         if re.match(r"^target\s+leetcode$", code.strip(), re.IGNORECASE):
             emit(f"{indent}# target leetcode", line_idx)
+            continue
+
+        # Conversational control flow: unless, do nothing, stop loop, skip to next, repeat until, given that
+        unless_m = re.match(r"^unless\s+(.+?):$", code.strip(), re.IGNORECASE)
+        if unless_m:
+            emit(f"{indent}if not ({unless_m.group(1)}):", line_idx)
+            continue
+
+        if re.match(r"^do\s+nothing$", code.strip(), re.IGNORECASE):
+            emit(f"{indent}pass", line_idx)
+            continue
+
+        if re.match(r"^stop\s+(?:loop|execution)$", code.strip(), re.IGNORECASE):
+            emit(f"{indent}break", line_idx)
+            continue
+
+        if re.match(r"^skip\s+(?:to\s+next|this\s+item)$", code.strip(), re.IGNORECASE):
+            emit(f"{indent}continue", line_idx)
+            continue
+
+        repeat_until_m = re.match(r"^repeat\s+until\s+(.+?):$", code.strip(), re.IGNORECASE)
+        if repeat_until_m:
+            emit(f"{indent}while not ({repeat_until_m.group(1)}):", line_idx)
+            continue
+
+        given_m = re.match(r"^(?:given|provided)\s+that\s+(.+?):$", code.strip(), re.IGNORECASE)
+        if given_m:
+            emit(f"{indent}if {given_m.group(1)}:", line_idx)
             continue
 
         # Database transaction: transaction [db]:
