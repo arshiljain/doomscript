@@ -402,11 +402,21 @@ class PriorityQueueWrapper:
 def priority_queue_create() -> PriorityQueueWrapper:
     return PriorityQueueWrapper()
 
-def priority_queue_enqueue(pq: PriorityQueueWrapper, item: Any, priority: int = 10):
-    pq.enqueue(int(priority), item)
+def priority_queue_enqueue(pq: Any, item: Any, priority: int = 10):
+    if hasattr(pq, "enqueue"):
+        pq.enqueue(int(priority), item)
+    elif hasattr(pq, "publish"):
+        pq.publish(item, priority=int(priority))
+    else:
+        raise DoomTypeError(f"Object {pq} does not support enqueue")
 
-def priority_queue_dequeue(pq: PriorityQueueWrapper) -> Any:
-    return pq.dequeue()
+def priority_queue_dequeue(pq: Any) -> Any:
+    if hasattr(pq, "dequeue"):
+        return pq.dequeue()
+    elif hasattr(pq, "consume"):
+        return pq.consume()
+    else:
+        raise DoomTypeError(f"Object {pq} does not support dequeue")
 
 class CircuitBreaker:
     """Phase 62: Resilient circuit breaker."""

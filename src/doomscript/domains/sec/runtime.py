@@ -279,8 +279,8 @@ def sec_jwt_decode(token: Any) -> Dict[str, Any]:
         return {"error": f"JWT decode failed: {str(e)}"}
 
 
-def sec_jwt_verify(token: Any, secret: Any) -> bool:
-    """Verify HMAC-SHA256 signature of a JWT token."""
+def sec_jwt_verify(token: Any, secret: Any):
+    """Verify HMAC-SHA256 signature of a JWT token and return decoded payload if valid, else False."""
     t = str(token).strip()
     parts = t.split(".")
     if len(parts) != 3:
@@ -290,7 +290,14 @@ def sec_jwt_verify(token: Any, secret: Any) -> bool:
         hmac.new(str(secret).encode("utf-8"), msg, hashlib.sha256).digest()
     ).decode("utf-8").rstrip("=")
     given_sig = parts[2].rstrip("=")
-    return hmac.compare_digest(expected_sig, given_sig)
+    if not hmac.compare_digest(expected_sig, given_sig):
+        return False
+    try:
+        pad = len(parts[1]) % 4
+        p_b64 = parts[1] + ("=" * (4 - pad) if pad else "")
+        return json.loads(base64.urlsafe_b64decode(p_b64).decode("utf-8"))
+    except Exception:
+        return True
 
 
 def sec_hexdump(data: Any, max_bytes: int = 64) -> str:

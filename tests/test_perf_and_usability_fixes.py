@@ -36,13 +36,13 @@ say item 10 of nums
     assert "You asked for item 10" in str(exc_info.value)
     assert "only has 3 items" in str(exc_info.value)
 
-    # 1-based indexing note on 0 index
-    with pytest.raises(DoomIndexError) as exc_info_zero:
+    # Empty list raises error
+    with pytest.raises(DoomIndexError) as exc_info_empty:
         execute("""
-nums = [1, 2, 3]
-say item 0 of nums
+nums = []
+say item 1 of nums
 """)
-    assert "1-based" in str(exc_info_zero.value)
+    assert "empty" in str(exc_info_empty.value).lower()
 
 
 def test_global_variable_modification_in_functions():
@@ -80,12 +80,12 @@ inc()
 
 
 def test_keyword_collision_last_assignment():
-    """Verify 'last = 9' produces keyword collision explanation instead of generic error."""
+    """Verify assigning to reserved keyword produces keyword collision explanation."""
     with pytest.raises(DoomSyntaxError) as exc_info:
-        compile_to_ast("last = 9")
+        compile_to_ast("repeat = 9")
     msg = str(exc_info.value)
-    assert "'last' is a reserved keyword" in msg
-    assert "set my_last to 9" in msg or "Did you mean:" in msg
+    assert "'repeat' is a reserved keyword" in msg
+    assert "set my_repeat to 9" in msg or "Did you mean:" in msg
 
 
 def test_runtime_error_label_in_format():

@@ -77,6 +77,13 @@ def fix_function_scopes(module_ast: ast.Module) -> ast.Module:
                                 else:
                                     needed_global.add(tgt.id)
 
+            existing_global = {name for s in node.body if isinstance(s, ast.Global) for name in s.names}
+            existing_nonlocal = {name for s in node.body if isinstance(s, ast.Nonlocal) for name in s.names}
+            local_defs.difference_update(existing_global)
+            local_defs.difference_update(existing_nonlocal)
+            needed_global.update(existing_global)
+            needed_nonlocal.update(existing_nonlocal)
+
             self.func_stack.append((node, local_defs))
             new_body = [s for s in node.body if not isinstance(s, (ast.Global, ast.Nonlocal))]
             if needed_nonlocal:
@@ -464,7 +471,7 @@ class DoomToPython(Transformer):
         src = args[0]
         dst = args[1]
         kws = []
-        if len(args) > 2:
+        if len(args) > 2 and args[2] is not None:
             kws.append(ast.keyword(arg='overwrite', value=args[2]))
         call = ast.Call(
             func=ast.Name(id='copy_file', ctx=ast.Load()),

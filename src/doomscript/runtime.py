@@ -772,8 +772,13 @@ def spawn_thread(target_fn, *args):
 
 def wait_for_thread(thread_obj):
     """Wait for a thread or task to finish."""
-    if hasattr(thread_obj, "join"):
-        thread_obj.join()
+    if hasattr(thread_obj, "wait") and callable(thread_obj.wait):
+        return thread_obj.wait()
+    if hasattr(thread_obj, "result") and callable(thread_obj.result):
+        return thread_obj.result()
+    if hasattr(thread_obj, "join") and callable(thread_obj.join):
+        return thread_obj.join()
+    return thread_obj
 
 
 # Built-in English Micro Web Server
@@ -1294,20 +1299,23 @@ class DoomTask:
     def __init__(self, future=None):
         self._future = future
         self.is_done = False
-        self.result = None
+        self.result_val = None
         self.error = None
 
     def wait(self, timeout=None):
         if self._future:
             try:
-                self.result = self._future.result(timeout=timeout)
+                self.result_val = self._future.result(timeout=timeout)
                 self.is_done = True
-                return self.result
+                return self.result_val
             except Exception as e:
                 self.error = e
                 self.is_done = True
                 raise e
-        return self.result
+        return self.result_val
+
+    def result(self, timeout=None):
+        return self.wait(timeout=timeout)
 
 
 def ds_run_background(action_fn):
@@ -2619,8 +2627,15 @@ def wait_all_background_tasks(tasks, timeout=None):
     """Waits for multiple background tasks and returns a list of results."""
     results = []
     for t in tasks:
-        if hasattr(t, "result"):
+        if hasattr(t, "wait") and callable(t.wait):
+            results.append(t.wait(timeout=timeout))
+        elif hasattr(t, "result") and callable(t.result):
             results.append(t.result(timeout=timeout))
+        elif hasattr(t, "join") and callable(t.join):
+            t.join(timeout=timeout)
+            results.append(None)
+        elif hasattr(t, "result"):
+            results.append(t.result)
         else:
             results.append(t)
     return results
@@ -5587,7 +5602,14 @@ def get_runtime_exports() -> Dict[str, Any]:
 
 
 # Deliberate, immutable internal mapping of supported runtime exports
-_CORE_RUNTIME_EXPORTS: types.MappingProxyType = types.MappingProxyType({
-    k: globals()[k] for k in ALL_RUNTIME_EXPORT_NAMES if k in globals()
-})
+from doomscript.domains import thought_paradigms as _thought_paradigms
+for _name in dir(_thought_paradigms):
+    if _name.startswith("ds_"):
+        globals()[_name] = getattr(_thought_paradigms, _name)
+
+_core_dict = {k: globals()[k] for k in ALL_RUNTIME_EXPORT_NAMES if k in globals()}
+for _name in dir(_thought_paradigms):
+    if _name.startswith('ds_'):
+        _core_dict[_name] = getattr(_thought_paradigms, _name)
+_CORE_RUNTIME_EXPORTS: types.MappingProxyType = types.MappingProxyType(_core_dict)
 

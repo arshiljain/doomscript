@@ -98,7 +98,10 @@ class DomainRegistry:
         if existing is not None:
             yield existing
             return
-        new_state = CompilationState()
+        new_state = CompilationState(
+            active_domains=list(self._default_state.active_domains),
+            specs=dict(self._default_state.specs)
+        )
         token = _COMPILATION_STATE.set(new_state)
         try:
             yield new_state
@@ -402,37 +405,40 @@ class DomainRegistry:
                 except Exception:
                     pass
 
-        # 3. Check unambiguous inactive domains (Zero-Import auto-routing)
+        # 3. Check unambiguous inactive domains (Zero-Import auto-routing for non-scoped domains)
+        EXPLICIT_SCOPED_DOMAINS = {"sim", "ml"}
         if len(tokens) > 1:
             w2 = f"{tokens[0].lower()} {tokens[1].lower()}"
             candidates = self._verb_index.get(w2, [])
             if len(candidates) == 1:
                 dom = candidates[0]
-                try:
-                    res = dom.parser.parse_inspect(line, line_no)
-                    if res is None:
-                        res = dom.parser.parse_operation(line, line_no)
-                    if res is not None:
-                        self.activate(dom.name)
-                        self._last_parsed = (line, line_no, dom, res)
-                        return res
-                except Exception:
-                    pass
+                if dom.name.lower() not in EXPLICIT_SCOPED_DOMAINS:
+                    try:
+                        res = dom.parser.parse_inspect(line, line_no)
+                        if res is None:
+                            res = dom.parser.parse_operation(line, line_no)
+                        if res is not None:
+                            self.activate(dom.name)
+                            self._last_parsed = (line, line_no, dom, res)
+                            return res
+                    except Exception:
+                        pass
         w1 = tokens[0].lower()
         if w1 not in CORE_VERBS and w1 not in _NON_DOMAIN_STARTS:
             candidates = self._verb_index.get(w1, [])
             if len(candidates) == 1:
                 dom = candidates[0]
-                try:
-                    res = dom.parser.parse_inspect(line, line_no)
-                    if res is None:
-                        res = dom.parser.parse_operation(line, line_no)
-                    if res is not None:
-                        self.activate(dom.name)
-                        self._last_parsed = (line, line_no, dom, res)
-                        return res
-                except Exception:
-                    pass
+                if dom.name.lower() not in EXPLICIT_SCOPED_DOMAINS:
+                    try:
+                        res = dom.parser.parse_inspect(line, line_no)
+                        if res is None:
+                            res = dom.parser.parse_operation(line, line_no)
+                        if res is not None:
+                            self.activate(dom.name)
+                            self._last_parsed = (line, line_no, dom, res)
+                            return res
+                    except Exception:
+                        pass
 
         # 4. Check thought paradigms across all registered domains (Zero-Import auto-routing)
         try:

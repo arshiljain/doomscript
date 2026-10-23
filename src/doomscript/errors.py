@@ -376,7 +376,7 @@ def translate_lark_error(err: Exception, source_line: str) -> Tuple[str, Optiona
         if tok_val == "=":
             return (
                 "Unexpected '=' here. In DoomScript, you can write 'set x to ...' or 'x is ...'.",
-                "set x to 10"
+                None
             )
         if tok_val == ":":
             return (

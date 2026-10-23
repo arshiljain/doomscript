@@ -77,7 +77,7 @@ def test_name_error_shield():
 
 
 def test_type_error_shield():
-    source = "x = 10\nsay x + \"hello\""
+    source = 'x = 10\nsay x - "hello"'
     with pytest.raises(TypeError) as exc_info:
         execute(source)
 

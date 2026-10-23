@@ -296,7 +296,15 @@ class Quantity:
     def __getitem__(self, key: str) -> Any:
         return getattr(self, key)
 
+    def __float__(self) -> float:
+        return float(self.value)
+
+    def __int__(self) -> int:
+        return int(self.value)
+
     def __add__(self, other: Any) -> "Quantity":
+        if isinstance(other, (int, float)):
+            return Quantity(self.value + float(other), self.unit, self.dimension)
         if isinstance(other, Quantity):
             if other.dimension != self.dimension:
                 raise DoomTypeError(
@@ -312,6 +320,8 @@ class Quantity:
         return self.__add__(other)
 
     def __sub__(self, other: Any) -> "Quantity":
+        if isinstance(other, (int, float)):
+            return Quantity(self.value - float(other), self.unit, self.dimension)
         if isinstance(other, Quantity):
             if other.dimension != self.dimension:
                 raise DoomTypeError(
@@ -320,6 +330,11 @@ class Quantity:
             converted = other.to(self.unit)
             return Quantity(self.value - converted.value, self.unit, self.dimension)
         raise DoomTypeError(f"Cannot subtract {other} from Quantity {self}. Both operands must have compatible units.")
+
+    def __rsub__(self, other: Any) -> "Quantity":
+        if isinstance(other, (int, float)):
+            return Quantity(float(other) - self.value, self.unit, self.dimension)
+        raise DoomTypeError(f"Cannot subtract Quantity {self} from {other}.")
 
     def __mul__(self, other: Any) -> Union["Quantity", float]:
         if isinstance(other, (int, float)):
@@ -416,6 +431,8 @@ class Quantity:
         return Quantity(abs(self.value), self.unit, self.dimension)
 
     def __eq__(self, other: Any) -> bool:
+        if isinstance(other, (int, float)):
+            return math.isclose(self.value, float(other), rel_tol=1e-7, abs_tol=1e-9)
         if not isinstance(other, Quantity):
             return False
         if self.dimension != other.dimension:
@@ -423,6 +440,8 @@ class Quantity:
         return math.isclose(self.value, other.to(self.unit).value, rel_tol=1e-7, abs_tol=1e-9)
 
     def __lt__(self, other: Any) -> bool:
+        if isinstance(other, (int, float)):
+            return self.value < float(other)
         if not isinstance(other, Quantity) or self.dimension != other.dimension:
             raise DoomTypeError(f"Cannot compare {self} with {other}.")
         return self.value < other.to(self.unit).value
@@ -431,6 +450,8 @@ class Quantity:
         return self < other or self == other
 
     def __gt__(self, other: Any) -> bool:
+        if isinstance(other, (int, float)):
+            return self.value > float(other)
         if not isinstance(other, Quantity) or self.dimension != other.dimension:
             raise DoomTypeError(f"Cannot compare {self} with {other}.")
         return self.value > other.to(self.unit).value

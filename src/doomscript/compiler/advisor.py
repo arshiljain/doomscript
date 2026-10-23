@@ -299,6 +299,16 @@ class DidYouMeanAdvisor:
         if token_sug:
             if cls._is_valid_syntax(token_sug):
                 return token_sug
+            m_set_eq = re.match(r"^\s*set\s+([A-Za-z_]\w*)\s*=\s*(.+)$", token_sug, re.IGNORECASE)
+            if m_set_eq and cls._is_valid_syntax(f"set {m_set_eq.group(1)} to {m_set_eq.group(2)}"):
+                return f"set {m_set_eq.group(1)} to {m_set_eq.group(2)}"
+            return token_sug
+
+        m_set = re.match(r"^\s*set\s+([A-Za-z_]\w*)\s*=\s*(.+)$", s, re.IGNORECASE)
+        if m_set:
+            cand = f"set {m_set.group(1)} to {m_set.group(2)}"
+            if cls._is_valid_syntax(cand):
+                return cand
 
         # 2. Domain signature matching
         line_words = cls._extract_words(s)

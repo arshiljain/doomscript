@@ -41,10 +41,17 @@ class PriorityMessageQueue:
         self.counter += 1
         heapq.heappush(self.heap, (-float(priority), self.counter, msg))
 
+    def enqueue(self, priority: int, item: Any) -> None:
+        self.counter += 1
+        heapq.heappush(self.heap, (float(priority), self.counter, item))
+
     def consume(self) -> Optional[Any]:
         if self.heap:
             return heapq.heappop(self.heap)[2]
         return None
+
+    def dequeue(self) -> Optional[Any]:
+        return self.consume()
 
     def size(self) -> int:
         return len(self.heap)
