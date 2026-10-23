@@ -4946,15 +4946,15 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
             continue
 
         if re.match(r"^do\s+nothing$", code.strip(), re.IGNORECASE):
-            emit(f"{indent}pass", line_idx)
+            emit(f"{indent}set _ to None", line_idx)
             continue
 
-        if re.match(r"^stop\s+(?:loop|execution)$", code.strip(), re.IGNORECASE):
-            emit(f"{indent}break", line_idx)
+        if re.match(r"^(?:stop(?:\s+(?:loop|execution))?|break(?:\s+out\s+of\s+loop)?)$", code.strip(), re.IGNORECASE):
+            emit(f"{indent}stop", line_idx)
             continue
 
-        if re.match(r"^skip\s+(?:to\s+next|this\s+item)$", code.strip(), re.IGNORECASE):
-            emit(f"{indent}continue", line_idx)
+        if re.match(r"^skip(?:\s+(?:to\s+next|this\s+item))?$", code.strip(), re.IGNORECASE):
+            emit(f"{indent}skip", line_idx)
             continue
 
         repeat_until_m = re.match(r"^repeat\s+until\s+(.+?):$", code.strip(), re.IGNORECASE)
