@@ -158,5 +158,29 @@ tell my_account to withdraw 40
     assert env["my_account"].balance == 60
 
 
+def test_story_entity_direct_assignment_and_add():
+    source = """
+a User has name
+an Order has item, price
+
+u1 = a User with name "Alice"
+u2 = new User with name "Bob"
+orders = []
+add an Order with item "Laptop", price 1200 to orders
+add new Order with item "Book", price 20 to orders
+
+assert u1.name == "Alice"
+assert u2.name == "Bob"
+assert len(orders) == 2
+assert orders[0].item == "Laptop"
+assert orders[1].price == 20
+"""
+    env = execute(source)
+    assert env["u1"].name == "Alice"
+    assert env["u2"].name == "Bob"
+    assert len(env["orders"]) == 2
+
+
+
 
 

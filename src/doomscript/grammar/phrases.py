@@ -3268,16 +3268,87 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         target = orm_save_m.group(3)
         kwargs = []
         if vals_str:
-            val_pairs = [v.strip() for v in re.split(r",\s*", vals_str)]
+            val_pairs = _split_respecting_delimiters(vals_str.strip(), ",")
             for vp in val_pairs:
-                m_vp = re.match(r"^([A-Za-z_]\w*)[:\s]+(.+)$", vp)
+                m_vp = re.match(r"^([A-Za-z_]\w*)[:\s=]+(.+)$", vp)
                 if m_vp:
                     kwargs.append(f'{m_vp.group(1)}={m_vp.group(2).strip()}')
         kwargs_str = f', {", ".join(kwargs)}' if kwargs else ""
         if masked.lower().startswith("save new"):
             masked = f'set {target} to orm_save("{ename}"{kwargs_str})'
         else:
-            masked = f'set {target} to make_entity("{ename}"{kwargs_str})' 
+            masked = f'set {target} to make_entity("{ename}"{kwargs_str})'
+
+    # Target-first entity construction:
+    # c1 = a Customer with name "Alice", email "a@a.com"
+    # c2 = new Customer with name "Bob", balance 150.0
+    # c3 = Customer with name "Charlie", balance 200
+    # set c1 to a Customer with name "Alice"
+    # c1 is a Customer with name "Alice"
+    # c4 = a Person
+    # c5 = new Customer
+    ent_assign_m = re.match(
+        r"^(?:set\s+)?(?!if\b|while\b|for\b|assert\b|return\b|verify\b|print\b|say\b|tell\b|case\b|when\b|match\b)([A-Za-z_]\w*)\s*(?:=|to|\bis\b)\s+(?:(?:(?:a|an|new)\s+([A-Z]\w*)(?:\s+with\s+(.+))?)|(?:([A-Z]\w*)\s+with\s+(.+)))$",
+        masked,
+        re.IGNORECASE
+    )
+    if ent_assign_m:
+        target = ent_assign_m.group(1).strip()
+        ename = (ent_assign_m.group(2) or ent_assign_m.group(4)).strip()
+        vals_str = ent_assign_m.group(3) or ent_assign_m.group(5)
+        kwargs = []
+        if vals_str:
+            val_pairs = _split_respecting_delimiters(vals_str.strip(), ",")
+            for vp in val_pairs:
+                m_vp = re.match(r"^([A-Za-z_]\w*)[:\s=]+(.+)$", vp)
+                if m_vp:
+                    kwargs.append(f'{m_vp.group(1)}={m_vp.group(2).strip()}')
+        kwargs_str = f', {", ".join(kwargs)}' if kwargs else ""
+        masked = f'set {target} to make_entity("{ename}"{kwargs_str})'
+
+    # Add entity directly to a collection:
+    # add a Customer with name "Dave", balance 50 to customers
+    # add Customer with name "Dave", balance 50 to customers
+    ent_add_m = re.match(
+        r"^\s*add\s+(?:(?:(?:a|an|new)\s+([A-Z]\w*)(?:\s+with\s+(.+?))?)|(?:([A-Z]\w*)\s+with\s+(.+?)))\s+to\s+([A-Za-z_]\w*)$",
+        masked,
+        re.IGNORECASE
+    )
+    if ent_add_m:
+        ename = (ent_add_m.group(1) or ent_add_m.group(3)).strip()
+        vals_str = ent_add_m.group(2) or ent_add_m.group(4)
+        target = ent_add_m.group(5).strip()
+        kwargs = []
+        if vals_str:
+            val_pairs = _split_respecting_delimiters(vals_str.strip(), ",")
+            for vp in val_pairs:
+                m_vp = re.match(r"^([A-Za-z_]\w*)[:\s=]+(.+)$", vp)
+                if m_vp:
+                    kwargs.append(f'{m_vp.group(1)}={m_vp.group(2).strip()}')
+        kwargs_str = f', {", ".join(kwargs)}' if kwargs else ""
+        masked = f'add make_entity("{ename}"{kwargs_str}) to {target}'
+
+    # Return entity:
+    # return a Customer with name "Dave", balance 50
+    # return Customer with name "Eve"
+    # return a Customer
+    ent_ret_m = re.match(
+        r"^\s*return\s+(?:(?:(?:a|an|new)\s+([A-Z]\w*)(?:\s+with\s+(.+))?)|(?:([A-Z]\w*)\s+with\s+(.+)))$",
+        masked,
+        re.IGNORECASE
+    )
+    if ent_ret_m:
+        ename = (ent_ret_m.group(1) or ent_ret_m.group(3)).strip()
+        vals_str = ent_ret_m.group(2) or ent_ret_m.group(4)
+        kwargs = []
+        if vals_str:
+            val_pairs = _split_respecting_delimiters(vals_str.strip(), ",")
+            for vp in val_pairs:
+                m_vp = re.match(r"^([A-Za-z_]\w*)[:\s=]+(.+)$", vp)
+                if m_vp:
+                    kwargs.append(f'{m_vp.group(1)}={m_vp.group(2).strip()}')
+        kwargs_str = f', {", ".join(kwargs)}' if kwargs else ""
+        masked = f'return make_entity("{ename}"{kwargs_str})' 
 
     orm_find_all_m = re.match(r"^find\s+all\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
     if orm_find_all_m:

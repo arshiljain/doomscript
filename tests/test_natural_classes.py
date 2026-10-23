@@ -144,3 +144,58 @@ say result
     execute(code)
     captured = capsys.readouterr()
     assert captured.out.strip() == "42"
+
+
+def test_natural_entity_assignment_and_construction():
+    code = """
+a Customer has name, email, balance = 100.0
+
+# 1. c1 = a Customer with ...
+c1 = a Customer with name "Alice", email "a@a.com"
+assert c1's name == "Alice"
+assert c1's balance == 100.0
+
+# 2. c2 = new Customer with ...
+c2 = new Customer with name "Bob", balance 150.0
+assert c2's name == "Bob"
+assert c2's balance == 150.0
+
+# 3. c3 = Customer with ...
+c3 = Customer with name "Charlie", balance 250.0
+assert c3's balance == 250.0
+
+# 4. set c4 to a Customer with ...
+set c4 to a Customer with name "Dave"
+assert c4's name == "Dave"
+assert c4's balance == 100.0
+
+# 5. c5 is a Customer with ...
+c5 is a Customer with name "Eve"
+assert c5's name == "Eve"
+
+# 6. c6 = a Customer (empty / schema defaults)
+c6 = a Customer
+assert c6's balance == 100.0
+
+# 7. add a Customer with ... to collection
+customers = []
+add a Customer with name "Frank", balance 50 to customers
+add new Customer with name "Grace", balance 75 to customers
+add a Customer to customers
+assert len(customers) == 3
+assert customers[0]'s name == "Frank"
+assert customers[1]'s balance == 75
+assert customers[2]'s balance == 100.0
+
+# 8. return entity from function
+to build_vip with n:
+    return a Customer with name n, balance 5000.0
+
+vip = build_vip("Heidi")
+assert vip's name == "Heidi"
+assert vip's balance == 5000.0
+"""
+    env = execute(code)
+    assert env["vip"].name == "Heidi"
+    assert len(env["customers"]) == 3
+
