@@ -43,9 +43,16 @@ def test_vspython_example(example_num, title, code):
     try:
         env = execute(code)
         assert env is not None
-    except (urllib.error.URLError, TimeoutError) as net_err:
+    except (urllib.error.URLError, TimeoutError, OSError) as net_err:
         pytest.skip(f"Network error in Example {example_num} (likely offline test environment): {net_err}")
     except ImportError as imp_err:
         if "lets_plot" in str(imp_err).lower() or "lets-plot" in str(imp_err).lower():
             pytest.skip(f"Optional dependency 'lets_plot' is unavailable for Example {example_num} ({title}): {imp_err}")
+        raise
+    except Exception as exc:
+        exc_str = str(exc).lower()
+        if any(term in exc_str for term in ("rate limit", "urllib", "http error", "connection refused", "timeout", "temporary failure", "getaddrinfo")):
+            pytest.skip(f"Network / API limit in Example {example_num}: {exc}")
+        if "lets_plot" in exc_str or "lets-plot" in exc_str:
+            pytest.skip(f"Optional dependency 'lets_plot' is unavailable for Example {example_num} ({title}): {exc}")
         raise

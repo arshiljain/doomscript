@@ -18,7 +18,7 @@ class DoomError(Exception):
         suggestion: Optional[str] = None,
         file_path: Optional[str] = None,
     ):
-        super().__init__(message)
+        Exception.__init__(self, message)
         self.message = message
         self.line = line
         self.column = column
@@ -201,16 +201,28 @@ def wrap_runtime_exception(
 
     if doom_cls is None:
         exc_type = type(exc)
-        doom_cls = type(f"Doom{exc_type.__name__}", (DoomError, exc_type), {})
+        try:
+            doom_cls = type(f"Doom{exc_type.__name__}", (DoomError, exc_type), {})
+        except TypeError:
+            doom_cls = DoomRuntimeError
 
-    new_err = doom_cls(
-        msg,
-        line=line,
-        column=column,
-        source_line=source_line,
-        file_path=file_path,
-    )
-    for attr in ("name", "filename", "errno", "strerror"):
+    try:
+        new_err = doom_cls(
+            msg,
+            line=line,
+            column=column,
+            source_line=source_line,
+            file_path=file_path,
+        )
+    except Exception:
+        new_err = DoomRuntimeError(
+            msg,
+            line=line,
+            column=column,
+            source_line=source_line,
+            file_path=file_path,
+        )
+    for attr in ("name", "filename", "errno", "strerror", "code", "msg", "reason", "headers", "fp", "file"):
         val = getattr(exc, attr, None)
         if val is not None:
             try:
