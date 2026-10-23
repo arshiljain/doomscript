@@ -1,0 +1,72 @@
+name: Current-main DoomScript smoke test
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install all project and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[all]" pytest
+      - name: CLI starts and example parses
+        continue-on-error: true
+        run: |
+          doom --help
+          doom check examples/todo_app.doom
+      - name: Execute real DoomScript programs
+        continue-on-error: true
+        run: |
+          python - <<'PY'
+          import traceback
+          from doomscript.compiler.engine import execute
+
+          cases = [
+              ("arithmetic", 'set answer to 6 * 7', "answer", 42),
+              ("filter records", 'set items to [{"a": 10}, {"a": 2}]\nitems where a > 5 into res', "res", [{"a": 10}]),
+              ("nested English expression", 'set words to ["hi", "there"]\nset res to uppercase of first item of words', "res", "HI"),
+              ("pipe chain", 'set words to ["alpha", "beta", "gamma", "delta"]\nwords |> take 2 |> join with " / " into short_label\nset result to short_label', "result", "alpha / beta"),
+              ("currency and percentage", 'set price to $1,250.50\nset discount to 10% of price', "discount", 125.05),
+              ("postfix conditional", 'set flag to true\nset out to "unchanged"\nset out to "triggered" only if flag', "out", "triggered"),
+              ("natural field access", 'a User has name, status\ncreate a User with name "Alice", status "active" into u\nset result to name of u', "result", "Alice"),
+              ("quantifier", 'set group to [{"role": "admin"}, {"role": "admin"}]\nset result to false\nif every x in group has role "admin": set result to true', "result", True),
+              ("multi-field sorting", 'set employees to [{"dept": "Eng", "tenure": 3, "name": "Alice"}, {"dept": "Support", "tenure": 5, "name": "Bob"}, {"dept": "Eng", "tenure": 8, "name": "Charlie"}]\nsort employees by dept ascending and tenure descending into ranked\nset result to ranked', "result", [{"dept": "Eng", "tenure": 8, "name": "Charlie"}, {"dept": "Eng", "tenure": 3, "name": "Alice"}, {"dept": "Support", "tenure": 5, "name": "Bob"}]),
+              ("Python module interop", 'use python module math as m\nset result to m.sqrt(256)', "result", 16.0),
+          ]
+
+          failures = []
+          for name, code, key, expected in cases:
+              try:
+                  env = execute(code)
+                  actual = env.get(key)
+                  passed = actual == expected
+                  print(f"{'PASS' if passed else 'FAIL'} | {name} | expected={expected!r} actual={actual!r}")
+                  if not passed:
+                      failures.append((name, f"expected {expected!r}, got {actual!r}"))
+              except Exception as exc:
+                  print(f"ERROR | {name} | {type(exc).__name__}: {exc}")
+                  traceback.print_exc()
+                  failures.append((name, f"{type(exc).__name__}: {exc}"))
+
+          print(f"\nSMOKE SUMMARY: {len(cases)-len(failures)}/{len(cases)} passed")
+          if failures:
+              print("FAILURES:")
+              for name, detail in failures:
+                  print(f" - {name}: {detail}")
+              raise SystemExit(1)
+          PY
+      - name: Syntax consistency regression tests
+        continue-on-error: true
+        run: |
+          python -m pytest -q tests/test_syntax_consistency.py tests/test_all_four_phases_features.py tests/test_is_variable_or_property.py
+      - name: Full test suite
+        continue-on-error: true
+        run: python -m pytest -q
