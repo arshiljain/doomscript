@@ -29,7 +29,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -e ".[viz]"
-        pip install pytest wheel pandas
+        pip install pytest wheel pandas matplotlib
 
     - name: Test CLI entry points
       run: |

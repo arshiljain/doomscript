@@ -142,6 +142,7 @@ say final_report["dept"].iloc[0]
 
 
 def test_plot_verb():
+    pytest.importorskip("matplotlib")
     with tempfile.TemporaryDirectory() as tmpdir:
         csv_path = os.path.join(tmpdir, "timeseries.csv").replace("\\", "/")
         df = pd.DataFrame({
