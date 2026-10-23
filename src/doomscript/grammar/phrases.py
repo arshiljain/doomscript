@@ -7,7 +7,7 @@ Adding a synonym here requires NO grammar edits.
 import difflib
 import re
 re._MAXCACHE = 16384
-from typing import Optional, List, Tuple, Dict, Any
+from typing import Optional, List, Tuple, Dict, Any, Set
 from doomscript.exceptions import DoomScopeError, DoomSyntaxError
 from doomscript.core.entity import stem_verb
 
