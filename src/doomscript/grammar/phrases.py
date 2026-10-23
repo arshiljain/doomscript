@@ -770,6 +770,11 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
             (r"\bis\s+not\s+equal\s+to\b", "!="),
             (r"\bis\s+not\b", "!="),
             (r"\bisn't\b", "!="),
+            (r"\bis\s+even\b", "% 2 == 0"),
+            (r"\bis\s+odd\b", "% 2 != 0"),
+            (r"\bis\s+positive\b", "> 0"),
+            (r"\bis\s+negative\b", "< 0"),
+            (r"\bis\s+zero\b", "== 0"),
             (r"\bis\b", "=="),
         ]
         for pat, rep in replacements:
@@ -1426,25 +1431,25 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
 
     # In-place string mutators (trim, capitalize, uppercase, lowercase)
     masked = re.sub(
-        r"^\s*trim\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
+        r"^\s*trim\s+((?!__STR_)[A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
         r"set \1 to trim of \1",
         masked,
         flags=re.IGNORECASE
     )
     masked = re.sub(
-        r"^\s*capitalize\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
+        r"^\s*capitalize\s+((?!__STR_)[A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
         r"set \1 to capitalize of \1",
         masked,
         flags=re.IGNORECASE
     )
     masked = re.sub(
-        r"^\s*(?:convert\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s+to\s+uppercase|uppercase\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?))\s*$",
+        r"^\s*(?:convert\s+((?!__STR_)[A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s+to\s+uppercase|uppercase\s+((?!__STR_)[A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?))\s*$",
         lambda m: f"set {m.group(1) or m.group(2)} to uppercase of {m.group(1) or m.group(2)}",
         masked,
         flags=re.IGNORECASE
     )
     masked = re.sub(
-        r"^\s*(?:convert\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s+to\s+lowercase|lowercase\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?))\s*$",
+        r"^\s*(?:convert\s+((?!__STR_)[A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s+to\s+lowercase|lowercase\s+((?!__STR_)[A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?))\s*$",
         lambda m: f"set {m.group(1) or m.group(2)} to lowercase of {m.group(1) or m.group(2)}",
         masked,
         flags=re.IGNORECASE
