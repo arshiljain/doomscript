@@ -1,0 +1,8 @@
+# A small general-purpose programming task.
+to fibonacci with n:
+    if n <= 1:
+        give back n
+    give back fibonacci(n - 1) + fibonacci(n - 2)
+
+set result to fibonacci(10)
+say "Fibonacci(10):", result
