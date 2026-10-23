@@ -523,6 +523,12 @@ DoomScript's parser and AST compilation engine support natural, fluent English t
   set book_author to author of book
   ```
 
+### 5. Universal Syntax Consistency & Natural Compositionality
+- **Statement vs. Expression Parity**: Any data verb works both as an action and as an expression (`split text by "," into words` vs `set words to text split by ","`).
+- **Complete Preposition & Synonym Coverage**: Natural variations (`add` / `append` / `push`; `remove` / `delete` / `discard`; `increase` / `increment`; `has` / `contains`) resolve to identical canonical operations.
+- **Nested Expression Composition**: Seamlessly chain natural operations (`uppercase of first item of words`, `trim of uppercase of text`).
+- **Quantifier Implied Equality**: Express predicates concisely (`if every user in team has role "admin":`).
+
 ### 4. Background Concurrency & Pure-English OOP
 - **Asynchronous Background Execution**: Run long-running tasks in worker threads without blocking:
   ```doom

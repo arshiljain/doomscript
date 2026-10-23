@@ -3216,3 +3216,36 @@ The resulting executable bundles the Python AST runtime into a single, self-cont
   <b>DoomScript: The English-First Programming Language.</b><br>
   Designed with precision for human minds.
 </p>
+
+
+---
+
+## Universal Syntax Consistency & Natural Compositionality
+
+DoomScript provides complete parity across statement and expression forms, eliminating grammar asymmetry:
+
+### 1. Statement vs. Expression Duality
+Every data operation can be executed as a statement with a target or as an inline expression:
+- `split "a,b" by "," into res` <==> `set res to split "a,b" by ","` <==> `set res to "a,b" split by ","`
+- `join words with "-" into res` <==> `set res to join words with "-"` <==> `set res to words joined with "-"`
+- `sort items into res` <==> `set res to sorted items` <==> `set res to items sorted by field`
+- `unique items into res` <==> `set res to unique items` <==> `set res to unique items of items`
+- `take 3 from items into res` <==> `set res to take 3 from items` <==> `set res to first 3 items of items`
+- `drop 1 from items into res` <==> `set res to drop 1 from items` <==> `set res to last (count - 1) items of items`
+- `filter items where score > 50 into res` <==> `items where score > 50 into res` <==> `set res to items where score > 50`
+
+### 2. Preposition & Synonym Equivalence
+- **Mutations**: `add / append / push`; `remove / delete / discard`; `clear / empty`.
+- **Modifications**: `increase / increment`; `decrease / decrement / subtract from`.
+- **Literals**: `an empty list` / `a new list` (`[]`); `an empty dictionary` / `a new dictionary` / `an empty record` / `a new record` (`{}`).
+- **Membership**: `is in`, `contains`, `has`, `is not in`, `does not contain`.
+- **Powers & Roots**: `x squared`, `square of x` (`x ** 2`); `sqrt of x`, `square root of x` (`math.sqrt(x)`).
+- **Field Aggregates**: `sum of price in / of / from items`.
+
+### 3. Nested Expression Composition
+- Arbitrary casing chaining: `uppercase of first item of words`, `lowercase of last item of words`, `trim of uppercase of text`.
+- Aggregations over projections: `sum of price of items`, `count of unique items of words`.
+
+### 4. Quantifier Enhancements
+- Implied equality on attribute values: `if every user in users has role "admin":`
+- Plural collection agreement: `if all of orders have paid:`

@@ -74,6 +74,8 @@ DoomScript permits multiple natural English phrasings for the same intent, but e
 
 ---
 
+- [64. How do I use Universal Syntax Consistency (Statement-Expression Duality, Synonyms, and Nesting)?](#64-how-do-i-use-universal-syntax-consistency-statement-expression-duality-synonyms-and-nesting)
+
 ## 1. How do I print and format text?
 Use `say`, `print`, `show`, or `display`. You can pass multiple comma-separated items or use curly-brace `{var}` interpolation.
 ```doomscript
@@ -1257,4 +1259,104 @@ say m.sqrt(256)     # 16.0
 # If 'active' is not a variable: 'x is active' checks entity property status.
 # If an identifier could be ambiguous, the compiler outputs a non-fatal warning:
 # "warning: 'status' is also a variable in scope. To compare values, use 'is {status}'."
+```
+
+
+## 64. How do I use Universal Syntax Consistency (Statement-Expression Duality, Synonyms, and Nesting)?
+
+DoomScript adheres to a strict universal consistency design: any operation that can be performed as an imperative statement can also be evaluated inline as an expression, and common natural English phrasings/synonyms map transparently to identical semantics.
+
+### 1. Statement vs. Expression Duality
+Every data transformation works equivalently as a destination statement (`... into <target>`) or an inline expression assignment (`set <target> to ...`):
+
+| Operation | Statement Form | Inline Expression Form | Suffix / Participle Form |
+| :--- | :--- | :--- | :--- |
+| **Split** | `split text by "," into words` | `set words to split text by ","` | `set words to text split by ","` |
+| **Join** | `join words with ", " into text` | `set text to join words with ", "` | `set text to words joined with ", "` |
+| **Sort** | `sort items by score into ranked` | `set ranked to sorted items by score` | `set ranked to items sorted by score` |
+| **Unique** | `unique items into distinct_vals` | `set distinct_vals to unique items` | `set distinct_vals to unique items of items` |
+| **Take** | `take 5 from items into top5` | `set top5 to take 5 from items` | `set top5 to first 5 items of items` |
+| **Drop** | `drop 2 from items into rest` | `set rest to drop 2 from items` | `set rest to last (count - 2) items of items` |
+| **Filter** | `filter items where score > 90 into honors`<br>`items where score > 90 into honors` | `set honors to items where score > 90` | `keep only items where score > 90 into honors` |
+
+### 2. Preposition & Synonym Equivalence
+Natural English permits varied verbs and prepositions without grammatical rejection:
+
+- **List Mutations**:
+  ```doom
+  add item to inventory
+  append item to inventory
+  push item into inventory
+  
+  remove item from inventory
+  delete item from inventory
+  discard item from inventory
+  ```
+
+- **Numeric Modifications**:
+  ```doom
+  increase count by 1
+  increment count by 1
+  
+  decrease count by 1
+  decrement count by 1
+  subtract 1 from count
+  ```
+
+- **Collection Literals**:
+  ```doom
+  set empty_list to an empty list       # Evaluates to []
+  set fresh_list to a new list          # Evaluates to []
+  set empty_dict to an empty dictionary # Evaluates to Record() / {}
+  set fresh_dict to a new dictionary    # Evaluates to Record() / {}
+  set empty_rec  to an empty record     # Evaluates to Record() / {}
+  ```
+
+- **Membership Checks**:
+  ```doom
+  if 5 is in numbers: ...
+  if numbers contains 5: ...
+  if numbers has 5: ...
+  if 99 is not in numbers: ...
+  if numbers does not contain 99: ...
+  ```
+
+- **Math & Powers**:
+  ```doom
+  set a to x squared
+  set b to square of x            # Evaluates to x ** 2
+  set c to sqrt of x
+  set d to square root of x       # Evaluates to math.sqrt(x)
+  ```
+
+- **Field Aggregation Prepositions**:
+  ```doom
+  set total_price to sum of price in items
+  set total_price to sum of price of items
+  set total_price to sum of price from items
+  ```
+
+### 3. Arbitrary Compositionality & Nested Transformations
+Expressions compose cleanly inside parentheses or higher-order transformations:
+```doom
+# Composing casing with item selectors:
+set label to uppercase of first item of words
+set tag   to lowercase of last item of words
+set clean to trim of uppercase of raw_title
+
+# Composing aggregations with transformations:
+set unique_count to count of unique items of words
+set joined_preview to first 3 items of words joined with " -> "
+```
+
+### 4. Quantifiers & Plural Agreement
+Universal and existential quantifiers support implied equality on values and plural subject agreement:
+```doom
+# Implied equality on attribute values:
+if every user in users has role "admin":
+    say "All administrators verified"
+
+# Plural agreement with 'have':
+if all of orders have paid:
+    say "Batch ready for fulfillment"
 ```

@@ -638,7 +638,7 @@ RESERVED_OF_PROPS: Set[str] = {
     "median", "variance", "stdev", "min", "max", "highest", "lowest",
     "keys", "values", "items", "item", "element", "member", "all", "any",
     "none", "each", "both", "either", "neither", "one", "many",
-    "type", "percent", "square_root", "sqrt",
+    "type", "percent", "square_root", "sqrt", "square", "root",
     "absolute", "abs", "reverse", "reversed", "unique", "take", "drop",
     "head", "tail", "uppercase", "lowercase", "trim", "strip", "pairs",
     "list", "dictionary", "set", "tuple", "number", "text", "boolean"
@@ -816,6 +816,12 @@ def desugar_field_access(text: str) -> str:
         target = m.group(2)
         if prop.lower() in RESERVED_OF_PROPS:
             return m.group(0)
+        start = m.start()
+        prefix = text[:start].rstrip()
+        if re.search(r"\b(?:sum|total|average|avg|mean|median|variance|stdev|highest|lowest|max|min|count)\s+of$", prefix, re.I):
+            return m.group(0)
+        if re.search(r"\bsquare$", prefix, re.I):
+            return m.group(0)
         return f"{target}.{prop}"
     pat = r"(?<!\bfirst\s)(?<!\blast\s)(?<!\bitem\s)(?<!\bitems\s)\b([A-Za-z_]\w*)\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|\[[^\]]+\])*)\b"
     return re.sub(pat, repl, text, flags=re.IGNORECASE)
@@ -873,6 +879,8 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = desugar_background(masked)
     masked = desugar_multi_sort(masked)
     masked = desugar_multi_group(masked)
+    masked = re.sub(r"\bsquare\s+root\s+of\b", "sqrt of", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bsquare\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?|\d+(?:\.\d+)?|\([^)]+\))", r"((\1) ** 2)", masked, flags=re.IGNORECASE)
     masked = desugar_field_access(masked)
 
     # Units of measurement normalization (numbers with units, conversions, currency)
@@ -936,6 +944,9 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     # Compositional: Inline expression sort: sort <list> descending/ascending
     masked = re.sub(r"\bsort\s+(\[[^\]]+\]|[A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s+descending\b", r"sorted_list(\1, reverse=True)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bsort\s+(\[[^\]]+\]|[A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*)?)\s+ascending\b", r"sorted_list(\1, reverse=False)", masked, flags=re.IGNORECASE)
+
+    # Filter statements starting with 'filter': filter <coll> where <cond> into <target>
+    masked = re.sub(r"^\s*filter\s+(.+?\s+where\s+.+?\s+into\s+[A-Za-z_]\w*)$", r"\1", masked, flags=re.IGNORECASE)
 
     # Compositional: Inline expression filter: filter <list> where <var> is ...
     filter_expr_m = re.search(r"\bfilter\s+(\[[^\]]+\]|[A-Za-z_]\w*)\s+where\s+([A-Za-z_]\w*)\s+(is\s+[A-Za-z_]\w*|==.+?|!=.+?|>.*|<.*|>=.*|<=.*)", masked, re.IGNORECASE)
@@ -1208,6 +1219,9 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
             m_cmp = re.match(r"^([A-Za-z_]\w*)\s+(?:equal\s+to|equals|is|==)\s+(.+)$", p, re.IGNORECASE)
             if m_cmp:
                 return f"ds_attr({var_name}, '{m_cmp.group(1)}') == {m_cmp.group(2).strip()}"
+            m_implied = re.match(r"^([A-Za-z_]\w*)\s+([\"'].*[\"']|-?\d+(?:\.\d+)?|__STR_LITERAL_\d+__|True|False)$", p, re.IGNORECASE)
+            if m_implied:
+                return f"ds_attr({var_name}, '{m_implied.group(1)}') == {m_implied.group(2).strip()}"
             m_gt = re.match(r"^([A-Za-z_]\w*)\s+(?:is\s+)?(?:over|greater\s+than|>)\s+(.+)$", p, re.IGNORECASE)
             if m_gt:
                 return f"ds_attr({var_name}, '{m_gt.group(1)}') > {m_gt.group(2).strip()}"
@@ -1245,11 +1259,12 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
                 return f"ds_quant_match({var_name}, '{p}')"
             return f"({var_name} == {p})"
 
-    all_are_m = re.match(r"^\s*if\s+all\s+(?:items\s+in\s+)?(.+?)\s+(?:are|have)\s+(.+?):?$", masked, re.IGNORECASE)
+    all_are_m = re.match(r"^\s*if\s+all\s+(?:of\s+)?(?:items\s+in\s+)?(.+?)\s+(?:are|have)\s+(.+?):?$", masked, re.IGNORECASE)
     if all_are_m:
         coll = all_are_m.group(1).strip()
         pred = all_are_m.group(2).strip()
-        pred_code = _parse_quant_predicate("x", "is", pred)
+        mode = "has" if re.search(r"\bhave\b", all_are_m.group(0), re.IGNORECASE) else "is"
+        pred_code = _parse_quant_predicate("x", mode, pred)
         masked = f"if ds_every({coll}, lambda x: {pred_code}):"
 
     every_in_m = re.match(r"^\s*if\s+every\s+([A-Za-z_]\w*)\s+in\s+(.+?)\s+(is|has)\s+(.+?):?$", masked, re.IGNORECASE)
@@ -1481,7 +1496,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         def _repl_is_prop(m):
             subj = m.group(1).strip()
             adj = m.group(2).strip()
-            if adj.lower() in _RESERVED_ADJ:
+            if adj.startswith("__STR_LITERAL_") or adj.lower() in _RESERVED_ADJ:
                 return m.group(0)
             if scope.is_var_in_scope(adj):
                 return f"ds_is_compare({subj}, {adj}, '{adj}')"
@@ -1490,7 +1505,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         def _repl_is_not_prop(m):
             subj = m.group(1).strip()
             adj = m.group(2).strip()
-            if adj.lower() in _RESERVED_ADJ:
+            if adj.startswith("__STR_LITERAL_") or adj.lower() in _RESERVED_ADJ:
                 return m.group(0)
             if scope.is_var_in_scope(adj):
                 return f"ds_is_not_compare({subj}, {adj}, '{adj}')"
@@ -1760,7 +1775,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
 
     # Expression sort: sorted <var> -> sorted of <var>
     masked = re.sub(
-        r"\bsorted\s+(?!of\b)(?!by\b)([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)(?!\s*[\(=])\b",
+        r"\bsorted\s+(?!of\b)(?!by\b)([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)(?!\s+(?:by|of)\b)(?!\s*[\(=])\b",
         r"sorted of \1",
         masked,
         flags=re.IGNORECASE
@@ -2455,18 +2470,19 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"\binsert\s+(.+?)\s+at\s+(?:index|position)\s+(.+?)\s+in\b", r"insert \1 at \2 in", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bunique\s+items\s+in\b", "unique items of", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\b(?:an\s+empty\s+list|a\s+new\s+list)\b", "[]", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\b(?:an\s+empty\s+record|a\s+new\s+record|empty\s+record)\b", "Record()", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(?:an?\s+empty\s+(?:record|dictionary|dict|map)|a\s+new\s+(?:record|dictionary|dict|map)|empty\s+(?:record|dictionary|dict|map))\b", "Record()", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\b(?:a\s+list\s+of|list\s+of)\s+([^;\n]+?)(?=\s+with\b|\s+at\b|\s+into\b|;\s*|\n|$)", r"[\1]", masked, flags=re.IGNORECASE)
 
     # Function definition with 'on': 'to tax on price' -> 'to tax with price'
     masked = re.sub(r"^\s*to\s+([A-Za-z_]\w*)\s+on\s+([A-Za-z_]\w*)\b", r"to \1 with \2", masked, flags=re.IGNORECASE)
 
-    # Filter statements with assignment or into
-    filter_into_m = re.match(r"^\s*([A-Za-z_]\w*)\s*=\s*(.+?)\s+where\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    # Filter statements with assignment, set, or leading 'filter'
+    masked = re.sub(r"^\s*filter\s+(.+?\s+where\s+.+)$", r"\1", masked, flags=re.IGNORECASE)
+    filter_into_m = re.match(r"^\s*(?:set\s+)?([A-Za-z_]\w*)\s*(?:=|to)\s+(.+?)\s+where\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
     if filter_into_m:
         masked = f"{filter_into_m.group(2)} where {filter_into_m.group(3)} into {filter_into_m.group(4)}"
     else:
-        filter_assign_m = re.match(r"^\s*([A-Za-z_]\w*)\s*=\s*(.+?)\s+where\s+(.+?)$", masked, re.IGNORECASE)
+        filter_assign_m = re.match(r"^\s*(?:set\s+)?([A-Za-z_]\w*)\s*(?:=|to)\s+(.+?)\s+where\s+(.+?)$", masked, re.IGNORECASE)
         if filter_assign_m:
             masked = f"{filter_assign_m.group(2)} where {filter_assign_m.group(3)} into {filter_assign_m.group(1)}"
 
@@ -2478,10 +2494,10 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"\b(?:the\s+)?result\s+of\s+([A-Za-z_]\w*)\s+with\s+(.+?)(?=\s+and\s+then|\s+into\b|\s+otherwise\b|\s*$)", r"\1(\2)", masked, flags=re.IGNORECASE)
 
     # Field aggregates
-    masked = re.sub(r"\b(?:total|sum)\s+(?:of\s+)?([A-Za-z_]\w*)\s+in\s+([A-Za-z_]\w*)", r'agg_field("sum", "\1", \2)', masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\b(?:average|mean)\s+(?:of\s+)?([A-Za-z_]\w*)\s+in\s+([A-Za-z_]\w*)", r'agg_field("avg", "\1", \2)', masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\b(?:highest|maximum|largest)\s+(?:of\s+)?([A-Za-z_]\w*)\s+in\s+([A-Za-z_]\w*)", r'agg_field("max", "\1", \2)', masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\b(?:lowest|minimum|smallest)\s+(?:of\s+)?([A-Za-z_]\w*)\s+in\s+([A-Za-z_]\w*)", r'agg_field("min", "\1", \2)', masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(?:total|sum)\s+(?:of\s+)?([A-Za-z_]\w*)\s+(?:in|of|from)\s+([A-Za-z_]\w*)", r'agg_field("sum", "\1", \2)', masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(?:average|mean)\s+(?:of\s+)?([A-Za-z_]\w*)\s+(?:in|of|from)\s+([A-Za-z_]\w*)", r'agg_field("avg", "\1", \2)', masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(?:highest|maximum|largest)\s+(?:of\s+)?([A-Za-z_]\w*)\s+(?:in|of|from)\s+([A-Za-z_]\w*)", r'agg_field("max", "\1", \2)', masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(?:lowest|minimum|smallest)\s+(?:of\s+)?([A-Za-z_]\w*)\s+(?:in|of|from)\s+([A-Za-z_]\w*)", r'agg_field("min", "\1", \2)', masked, flags=re.IGNORECASE)
 
     # List operations (statement forms)
     masked = re.sub(
@@ -2575,8 +2591,14 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
 
     # Frontier 3: Composable participle expressions (support calls, identifiers, indexing, parenthesized exprs)
     masked = re.sub(
-        r"((?:[A-Za-z_]\w*(?:\([^)]*\)|\[[^\]]+\]|'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*)+|\([^)]+\)|[A-Za-z_]\w*))\s+joined\s+with\s+(.+?)(?=[,\)\n;]|$)",
+        r"((?:[A-Za-z_]\w*(?:\([^)]*\)|\[[^\]]+\]|'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*)+|\([^)]+\)|[A-Za-z_]\w*|__STR_LITERAL_\d+__))\s+joined\s+with\s+(.+?)(?=[,\)\n;]|$)",
         r"ds_join(\1, \2)",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"((?:[A-Za-z_]\w*(?:\([^)]*\)|\[[^\]]+\]|'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*)+|\([^)]+\)|[A-Za-z_]\w*|__STR_LITERAL_\d+__))\s+split\s+by\s+(.+?)(?=[,\)\n;]|$)",
+        r"str_split(\1, \2)",
         masked,
         flags=re.IGNORECASE
     )
@@ -2593,15 +2615,46 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         flags=re.IGNORECASE
     )
     masked = re.sub(
+        r"\bsorted\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s+by\s+([A-Za-z_]\w*)(?:\s+(descending|ascending))?\b",
+        _sort_by_repl,
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"\bunique\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\b(?!\s+(?:into|where|to|in|of)\b)",
+        r"unique of \1",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"(?<!^)\btake\s+(\d+|[A-Za-z_]\w*)\s+(?:items\s+)?from\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\b",
+        r"ds_take(\2, \1)",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
+        r"(?<!^)\bdrop\s+(\d+|[A-Za-z_]\w*)\s+(?:items\s+)?from\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\b",
+        r"ds_drop(\2, \1)",
+        masked,
+        flags=re.IGNORECASE
+    )
+    masked = re.sub(
         r"\b(?!(?:to|in|into|of|from|as|with|set|let|put|the|a|an)\b)([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s+sorted\b(?!\s+(?:by|of)\b)",
         r"sorted(\1)",
         masked,
         flags=re.IGNORECASE
     )
     masked = re.sub(r"\b([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s+trimmed\b", r"ds_trim(\1)", masked, flags=re.IGNORECASE)
-    # Nominal case: uppercase of X / lowercase of X
-    masked = re.sub(r"\b(?:the\s+)?uppercase\s+of\s+([^\s,;:\)]+)", r"ds_uppercase(\1)", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\b(?:the\s+)?lowercase\s+of\s+([^\s,;:\)]+)", r"ds_lowercase(\1)", masked, flags=re.IGNORECASE)
+    
+    # Nested and composable casing: uppercase of X / lowercase of X / trim of X
+    first_last_of = r"(?:first|last)\s+(?:item\s+)?of\s+[A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?"
+    casing_sub_expr = rf"(?:{first_last_of}|__STR_LITERAL_\d+__|[A-Za-z_]\w*(?:\([^)]*\)|\[[^\]]+\]|\.[A-Za-z_]\w*)+|\([^)]+\)|(?!(?:uppercase|lowercase|trim)\b)[A-Za-z_]\w*)"
+    casing_pat = rf"\b(?:the\s+)?(uppercase|lowercase|trim)\s+of\s+({casing_sub_expr})(?=\s*(?:[,\)\n;]|#|$))"
+    for _ in range(4):
+        new_masked = re.sub(casing_pat, lambda m: f"ds_{m.group(1).lower()}({m.group(2)})", masked, flags=re.IGNORECASE)
+        if new_masked == masked:
+            break
+        masked = new_masked
 
     # Participle case: X uppercase / X lowercase (excluding keywords & verbs)
     masked = re.sub(r"\b(?!(?:to|in|into|of|from|as|with|say|show|print|display|set|let|put|the|a|an|ds_\w+)\b)([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s+uppercase\b", r"ds_uppercase(\1)", masked, flags=re.IGNORECASE)
@@ -2618,6 +2671,25 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(
         r"\[\s*(\d+|[A-Za-z_]\w*|__STR_\d+__)\s+to\s+(\d+|[A-Za-z_]\w*|__STR_\d+__)\s*\]",
         r"ds_range(\1, \2)",
+        masked,
+        flags=re.IGNORECASE
+    )
+
+    # Membership: collection has item -> collection contains item
+    def _repl_has_membership(m):
+        subj = m.group(1).strip()
+        val = m.group(2).strip()
+        if val.lower() in ("many", "one"):
+            return m.group(0)
+        start = m.start()
+        prefix = masked[:start].rstrip()
+        if re.search(r"\b(?:a|an)\s+[A-Za-z_]\w*$", prefix, re.I):
+            return m.group(0)
+        return f"{subj} contains {val}"
+
+    masked = re.sub(
+        r"\b([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s+has\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?|\d+(?:\.\d+)?|__STR_LITERAL_\d+__)\b",
+        _repl_has_membership,
         masked,
         flags=re.IGNORECASE
     )
@@ -2709,7 +2781,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     # List Mutators in English
     masked = re.sub(r"^\s*append\s+(.+?)\s+to\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s*$", r"add \1 to \2", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*push\s+(.+?)\s+(?:to|into)\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s*$", r"add \1 to \2", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"^\s*discard\s+(.+?)\s+from\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s*$", r"remove \1 from \2", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*(?:discard|delete)\s+(.+?)\s+from\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s*$", r"remove \1 from \2", masked, flags=re.IGNORECASE)
     masked = re.sub(r"^\s*(?:pop\s+(?:from\s+)?|remove\s+last\s+(?:item\s+)?from\s+)([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\s*$", r"pop(\1)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"(?<!def\s)(?<!to\s)\bpop\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?)\b", r"pop(\1)", masked, flags=re.IGNORECASE)
 
