@@ -225,6 +225,16 @@ def ds_format_percentage(val, decimals=1):
 
 def ds_is_property(target, prop_name: str) -> bool:
     """Check if target has a truthy property/flag/method matching prop_name or is_<prop_name>."""
+    if prop_name == "weekend":
+        try:
+            return is_weekend(target)
+        except Exception:
+            pass
+    if prop_name == "weekday":
+        try:
+            return not is_weekend(target)
+        except Exception:
+            pass
     if isinstance(target, dict):
         if prop_name in target:
             return bool(target[prop_name])
@@ -5706,6 +5716,94 @@ def ds_iter_pairs(d):
     if hasattr(d, "items") and callable(getattr(d, "items")):
         return list(d.items())
     return d
+
+
+
+def math_mode(items: Any) -> Any:
+    """Computes the mode (most frequent value) of a collection."""
+    if not items:
+        return None
+    from collections import Counter
+    counts = Counter(items)
+    return counts.most_common(1)[0][0]
+
+
+def ds_sentence_count(text: Any) -> int:
+    """Counts sentences in text using punctuation delimiters."""
+    if not text:
+        return 0
+    import re
+    sentences = [s for s in re.split(r'[.!?]+(?:\s+|$)', str(text).strip()) if s]
+    return len(sentences)
+
+
+def ds_pad(val: Any, pad_char: str = " ", total_length: int = 0) -> str:
+    """Pads string to total_length with pad_char."""
+    s = str(val)
+    fill = str(pad_char) if pad_char else " "
+    needed = int(total_length) - len(s)
+    if needed <= 0:
+        return s
+    return (fill * needed)[:needed] + s
+
+
+def ds_rename_key(rec: Any, old_key: Any, new_key: Any) -> Any:
+    """Renames old_key to new_key in a dictionary or Record."""
+    if isinstance(rec, dict):
+        if old_key in rec:
+            rec[new_key] = rec.pop(old_key)
+    elif hasattr(rec, str(old_key)):
+        val = getattr(rec, str(old_key))
+        delattr(rec, str(old_key))
+        setattr(rec, str(new_key), val)
+    return rec
+
+
+def ds_pick_fields(rec: Any, fields: list) -> Record:
+    """Picks only specified fields from a record or dictionary."""
+    out = {}
+    for f in fields:
+        if isinstance(rec, dict) and f in rec:
+            out[f] = rec[f]
+        elif hasattr(rec, str(f)):
+            out[f] = getattr(rec, str(f))
+    return Record(out)
+
+
+def ds_hours_between(t1: Any, t2: Any) -> float:
+    """Computes absolute hours between two date or timestamp strings/objects."""
+    from datetime import datetime, date
+    def _parse(val):
+        if isinstance(val, datetime):
+            return val
+        if isinstance(val, date):
+            return datetime.combine(val, datetime.min.time())
+        s = str(val).strip()
+        if "T" in s:
+            return datetime.fromisoformat(s)
+        if " " in s:
+            return datetime.strptime(s, "%Y-%m-%d %H:%M:%S")
+        return datetime.strptime(s[:10], "%Y-%m-%d")
+
+    d1 = _parse(t1)
+    d2 = _parse(t2)
+    return abs((d2 - d1).total_seconds()) / 3600.0
+
+
+def ds_format_date(d: Any, fmt: str) -> str:
+    """Formats date or timestamp using strftime pattern."""
+    from datetime import datetime, date
+    if isinstance(d, (datetime, date)):
+        return d.strftime(fmt)
+    s = str(d).strip()
+    try:
+        dt = datetime.fromisoformat(s)
+    except Exception:
+        try:
+            dt = datetime.strptime(s, "%Y-%m-%d %H:%M:%S")
+        except Exception:
+            dt = datetime.strptime(s[:10], "%Y-%m-%d")
+    return dt.strftime(fmt)
 
 
 def get_runtime_exports() -> Dict[str, Any]:

@@ -103,7 +103,7 @@ STATEMENT_START_KEYWORDS = {
     "break", "continue", "stop", "exit", "quit", "add", "remove", "insert", "push", "discard", "clear", "empty", "reverse",
     "load", "filter", "group", "plot", "step", "compute", "test",
     "sleep", "delay", "pause", "shuffle", "words", "lines", "keys", "values",
-    "average", "mean", "median", "total", "sum", "maximum", "minimum", "variance", "standard",
+    "average", "mean", "median", "mode", "total", "sum", "maximum", "minimum", "variance", "standard",
     "scatter", "line", "bar", "histogram", "box",
     "train", "predict", "evaluate", "accuracy", "score",
     "distance", "point", "polygon", "maximize", "minimize", "optimize", "benchmark", "trace", "pop",
@@ -735,7 +735,7 @@ def normalize_units(text: str) -> str:
 
 RESERVED_OF_PROPS: Set[str] = {
     "first", "last", "count", "length", "size", "sum", "total", "average", "avg", "mean",
-    "median", "variance", "stdev", "std_dev", "min", "max", "minimum", "maximum", "highest", "lowest",
+    "median", "mode", "variance", "stdev", "std_dev", "min", "max", "minimum", "maximum", "highest", "lowest",
     "keys", "values", "items", "item", "element", "member", "all", "any",
     "none", "each", "both", "either", "neither", "one", "many",
     "type", "percent", "square_root", "sqrt", "square", "root",
@@ -926,7 +926,7 @@ def desugar_field_access(text: str) -> str:
         prefix = text[:start].rstrip()
         if not prefix and re.search(r"\binto\s+[A-Za-z_]\w*\s*$", text[start:]):
             return m.group(0)
-        if re.search(r"\b(?:sum|total|average|avg|mean|median|variance|stdev|highest|lowest|max|min|count|size|length|chart|plot)\s+of$", prefix, re.I):
+        if re.search(r"\b(?:sum|total|average|avg|mean|median|mode|variance|stdev|highest|lowest|max|min|count|size|length|chart|plot)\s+of$", prefix, re.I):
             return m.group(0)
         if re.search(r"\bsquare$", prefix, re.I):
             return m.group(0)
@@ -1024,6 +1024,12 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     if title_m:
         masked = f"set {title_m.group(2)} to ({title_m.group(1).strip()}).title()"
     masked = re.sub(r"\b(?:word\s+count\s+of|words\s+in)\s+([A-Za-z_]\w*|__STR_LITERAL_\d+__|__STR_\d+__)\b", r"len((\1).split())", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(?:character\s+count\s+of|chars\s+in)\s+([A-Za-z_]\w*|__STR_LITERAL_\d+__|__STR_\d+__)\b", r"len(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bsentence\s+count\s+of\s+([A-Za-z_]\w*|__STR_LITERAL_\d+__|__STR_\d+__)\b", r"ds_sentence_count(\1)", masked, flags=re.IGNORECASE)
+    pad_m = re.match(r"^\s*pad\s+(.+?)\s+with\s+(.+?)\s+to\s+(\d+|[A-Za-z_]\w*)\s*(?:characters?|chars?)?\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if pad_m:
+        masked = f"set {pad_m.group(4).strip()} to ds_pad({pad_m.group(1).strip()}, {pad_m.group(2).strip()}, {pad_m.group(3).strip()})"
+
 
     # Collection Slicing & Restructuring: take first/last, drop first/last, chunk, zip, interleave
     take_first_m = re.match(r"^\s*take\s+(?:the\s+)?first\s+(\d+)\s*(?:items?\s+)?from\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
@@ -1061,6 +1067,13 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     rem_key_m = re.match(r"^\s*remove\s+(?:key|field)\s+(.+?)\s+from\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
     if rem_key_m:
         masked = f"({rem_key_m.group(2)}).pop({rem_key_m.group(1).strip()}, None)"
+    ren_key_m = re.match(r"^\s*rename\s+key\s+(.+?)\s+to\s+(.+?)\s+in\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s*$", masked, re.IGNORECASE)
+    if ren_key_m:
+        masked = f"ds_rename_key({ren_key_m.group(3).strip()}, {ren_key_m.group(1).strip()}, {ren_key_m.group(2).strip()})"
+    pick_m = re.match(r"^\s*pick\s+fields\s+(.+?)\s+from\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", masked, re.IGNORECASE)
+    if pick_m:
+        masked = f"set {pick_m.group(3).strip()} to ds_pick_fields({pick_m.group(2).strip()}, {pick_m.group(1).strip()})"
+
 
     # Date, Time & Temporal Operations: today into, yesterday into, tomorrow into, days between
     date_direct_m = re.match(r"^\s*(today|yesterday|tomorrow)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
@@ -1072,6 +1085,18 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         masked = f"set {days_between_m.group(3)} to ds_days_between({days_between_m.group(1).strip()}, {days_between_m.group(2).strip()})"
     else:
         masked = re.sub(r"\bdays\s+between\s+(.+?)\s+and\s+([A-Za-z_]\w*|__STR_LITERAL_\d+__|__STR_\d+__)\b", r"ds_days_between(\1, \2)", masked, flags=re.IGNORECASE)
+    hours_between_m = re.match(r"^\s*hours\s+between\s+(.+?)\s+and\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if hours_between_m:
+        masked = f"set {hours_between_m.group(3)} to ds_hours_between({hours_between_m.group(1).strip()}, {hours_between_m.group(2).strip()})"
+    else:
+        masked = re.sub(r"\bhours\s+between\s+(.+?)\s+and\s+([A-Za-z_]\w*|__STR_LITERAL_\d+__|__STR_\d+__)\b", r"ds_hours_between(\1, \2)", masked, flags=re.IGNORECASE)
+
+    format_date_m = re.match(r"^\s*format\s+date\s+(.+?)\s+as\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", masked, re.IGNORECASE)
+    if format_date_m:
+        masked = f"set {format_date_m.group(3)} to ds_format_date({format_date_m.group(1).strip()}, {format_date_m.group(2).strip()})"
+    else:
+        masked = re.sub(r"\bformat\s+date\s+(.+?)\s+as\s+([A-Za-z_]\w*|__STR_LITERAL_\d+__|__STR_\d+__)\b", r"ds_format_date(\1, \2)", masked, flags=re.IGNORECASE)
+
     masked = desugar_field_access(masked)
 
     # Units of measurement normalization (numbers with units, conversions, currency)
@@ -1200,6 +1225,11 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
             f_coll, f_var, f_pred = filter_expr_m.group(1), filter_expr_m.group(2), filter_expr_m.group(3)
             masked = masked.replace(filter_expr_m.group(0), f"[{f_var} for {f_var} in {f_coll} if {f_var} {f_pred}]")
 
+
+    # Control flow directives: in case of error, whenever, exit function
+    masked = re.sub(r"^\s*(?:in\s+case\s+of\s+error|on\s+error)\s*:\s*$", "if it fails:", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*whenever\s+(.+?)\s*:\s*$", r"while \1:", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*exit\s+function\s*$", "return", masked, flags=re.IGNORECASE)
 
     # Normalize 'attempt' to 'try'
     if re.match(r"^attempt\b", masked, re.IGNORECASE):
@@ -1700,6 +1730,14 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         flags=re.IGNORECASE
     )
 
+    # Relative tolerance predicate: if <x> is within <p>% of <y>
+    masked = re.sub(
+        r"\b([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s+is\s+within\s+(\d+(?:\.\d+)?)\s*%\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?|\d+(?:\.\d+)?)(?=\s*(?::|\bthen\b|\band\b|\bor\b|$))",
+        r"abs((\1) - (\3)) <= ((\3) * (\2) / 100.0)",
+        masked,
+        flags=re.IGNORECASE
+    )
+
     # 2. Natural Proportions & Percentages
     _EXPR_TERM = r"(\([^\)]+\)|[A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)*|\d+(?:\.\d+)?)"
     masked = re.sub(
@@ -1994,9 +2032,16 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         flags=re.IGNORECASE
     )
 
-    # In-place string mutators (trim, capitalize, uppercase, lowercase)
+    # Prose numeric predicates & tolerances
+    masked = re.sub(r"\b([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s+is\s+within\s+(\d+(?:\.\d+)?)\s*%\s+of\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?|__STR_LITERAL_\d+__|\d+(?:\.\d+)?)(?=\s*(?::|\bthen\b|\band\b|\bor\b|$))", r"abs((\1) - (\3)) <= ((\3) * (\2) / 100)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s+is\s+(?:roughly|approximately)\s+([A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?|\d+(?:\.\d+)?)(?=\s*(?::|\bthen\b|\band\b|\bor\b|$))", r"abs((\1) - (\2)) <= max(0.01 * abs(\2), 1e-6)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bis\s+non-?negative\b", ">= 0", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bis\s+non-?positive\b", "<= 0", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bis\s+strictly\s+positive\b", "> 0", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bis\s+strictly\s+negative\b", "< 0", masked, flags=re.IGNORECASE)
+    # In-place string mutators (trim, strip, capitalize, uppercase, lowercase)
     masked = re.sub(
-        r"^\s*trim\s+((?!__STR_)[A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
+        r"^\s*(?:trim|strip)\s+((?!__STR_)[A-Za-z_]\w*(?:'s\s+[A-Za-z_]\w*|\.[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
         r"set \1 to trim of \1",
         masked,
         flags=re.IGNORECASE
@@ -2129,7 +2174,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         flags=re.IGNORECASE
     )
     masked = re.sub(
-        r"^\s*trim\s+(.+?)\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
+        r"^\s*(?:trim|strip)\s+(.+?)\s+into\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s*$",
         r"set \2 to trim \1",
         masked,
         flags=re.IGNORECASE
@@ -2591,7 +2636,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
 
     # Ergonomic Statistics & Math Statements
     stat_stmt_m = re.match(
-        r"^\s*(?:calculate\s+|compute\s+)?(average|mean|median|total|sum|maximum|highest|minimum|lowest|variance|standard\s+deviation|std_dev|stdev|count|length|summary)\s+(?:of|in)\s+(?!.+?\s+in\s+bytes\b)(.+?)\s+into\s+([A-Za-z_]\w*)$",
+        r"^\s*(?:calculate\s+|compute\s+)?(average|mean|median|mode|total|sum|maximum|highest|minimum|lowest|variance|standard\s+deviation|std_dev|stdev|count|length|summary)\s+(?:of|in)\s+(?!.+?\s+in\s+bytes\b)(.+?)\s+into\s+([A-Za-z_]\w*)$",
         masked,
         re.IGNORECASE
     )
@@ -2771,7 +2816,8 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
             masked = f"filter {f_tgt} where {f_rest} into {f_tgt}"
 
     # In-place deduplication: deduplicate <var> / unique <var>
-    masked = re.sub(r"^\s*(?:deduplicate|unique)\s+([A-Za-z_]\w*)$", r"unique \1 into \1", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*(?:deduplicate|unique)\s+([A-Za-z_]\w*)$", r"set \1 to unique items of \1", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*(?:deduplicate|unique)\s+(.+?)\s+into\s+([A-Za-z_]\w*)$", r"set \2 to unique items of \1", masked, flags=re.IGNORECASE)
 
     # Filter statements with assignment, set, or leading 'filter'
     masked = re.sub(r"^\s*filter\s+(.+?\s+where\s+.+)$", r"\1", masked, flags=re.IGNORECASE)
@@ -3249,6 +3295,7 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
     masked = re.sub(r"\bmaximum\s+of\s+(\[[^\]]*\]|[A-Za-z_]\w*)", r"highest in \1", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bminimum\s+of\s+(\[[^\]]*\]|[A-Za-z_]\w*)", r"lowest in \1", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bmedian\s+of\s+(\[[^\]]*\]|[A-Za-z_]\w*)\b(?!\s+into\b)", r"math_median(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bmode\s+of\s+(\[[^\]]*\]|[A-Za-z_]\w*)\b(?!\s+into\b)", r"math_mode(\1)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\b(?:the\s+)?(?:standard\s+deviation|std_dev|stdev)\s+of\s+(\[[^\]]*\]|[A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?|\([^)]+\))\b(?!\s+into\b)", r"std_dev(\1)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\b(?:the\s+)?variance\s+of\s+(\[[^\]]*\]|[A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*)?|\([^)]+\))\b(?!\s+into\b)", r"variance(\1)", masked, flags=re.IGNORECASE)
 
