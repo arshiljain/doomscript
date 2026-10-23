@@ -36,13 +36,21 @@ Under the hood, DoomScript is **not** a slow interpreter or an ambiguous LLM-bas
    - [3.14 Story-Driven Relational Entities (Declarative classes, `begins with`, order-independent relations, event hooks)](#314-story-driven-relational-entities)
    - [3.15 Empathetic Error Diagnostics & Guardrails (Runtime vs Syntax labels, keyword collision guidance, `--theatrical`)](#315-empathetic-error-diagnostics--guardrails)
    - [3.16 Sub-5ms Compilation Engine (Lark LALR cache, high-capacity regex caching)](#316-sub-5ms-compilation-engine)
+   - [3.17 Fluent Pipe Chaining (`|>`) & Left-to-Right Flows](#317-fluent-pipe-chaining)
+   - [3.18 Article Tolerance & Preposition Flexibility (`the`, `a`, `an`, `by`, `with`)](#318-article-tolerance--preposition-flexibility)
+   - [3.19 Units, Currencies & Magnitude Scale Arithmetic (`$1,250.50`, `500k`, `2.5 million`, `15%`)](#319-units-currencies--magnitude-scale-arithmetic)
+   - [3.20 Postfix Conditionals (`unless`, `only if`)](#320-postfix-conditionals)
+   - [3.21 Multi-Field Sorting & Multi-Key Group Aggregations](#321-multi-field-sorting--multi-key-group-aggregations)
+   - [3.22 Natural Field Access with `of` (`name of user`)](#322-natural-field-access-with-of)
+   - [3.23 Asynchronous Background Tasks (`run in background`, `wait for task`)](#323-asynchronous-background-tasks)
+   - [3.24 Scope-Aware Comparisons & Python Interoperability (`is` vs property, `use python module`)](#324-scope-aware-comparisons--python-interoperability)
 4. [Standard Built-in Capabilities](#4-standard-built-in-capabilities)
    - [File I/O & Document Processing](#file-io--document-processing)
    - [CSV & Tabular Intelligence](#csv--tabular-intelligence)
    - [JSON Serialization & Configuration](#json-serialization--configuration)
    - [System, Subprocess & Environment Primitives](#system-subprocess--environment-primitives)
    - [Sound Synthesis & 2D Immediate Canvas](#sound-synthesis--2d-immediate-canvas)
-5. [The 41 Specialized Domain Packs (`use <domain>`)](#5-the-41-specialized-domain-packs)
+5. [The 80 Specialized Computational Domain Packs (`use <domain>`)](#5-the-41-specialized-domain-packs)
    - [1. DSA & Algorithms (`use dsa`)](#1-dsa--algorithms-use-dsa)
    - [2. Data Engineering & Pipelines (`use data`)](#2-data-engineering--pipelines-use-data)
    - [3. Machine Learning & Predictive Modeling (`use ml`)](#3-machine-learning--predictive-modeling-use-ml)
@@ -693,6 +701,182 @@ DoomScript is engineered for instantaneous feedback:
 
 ---
 
+---
+
+### 3.17 Fluent Pipe Chaining (`|>`)
+
+DoomScript introduces the pipe operator `|>` to allow data transformations to flow left-to-right without nesting functions inside each other or littering code with temporary single-use variables:
+
+```doom
+set words to ["alpha", "beta", "gamma", "delta"]
+
+# Expression statement with pipe chaining
+words |> take 2 |> join with " / " into short_label
+say short_label   # "alpha / beta"
+
+# Inline assignment with pipe chaining
+set nums to [10, 20, 30, 40, 50]
+set top_three to nums |> drop 1 |> take 3 |> sorted descending
+say top_three     # [40, 30, 20]
+
+# Text cleaning pipeline
+lines |> trim |> lowercase |> unique into cleaned_lines
+```
+
+---
+
+### 3.18 Article Tolerance & Preposition Flexibility
+
+DoomScript is forgiving of natural English variation. Spoken and written English frequently includes articles (`the`, `a`, `an`) and accepts interchangeable prepositions:
+
+```doom
+# Optional articles before variables and queries
+set the total to 500
+the subtotal is 250
+add 50 to the total
+set total_items to the count of the items
+
+for each item in the items:
+    say the item
+
+if the status is "active":
+    say the total
+
+# Preposition flexibility across collection primitives
+take 2 from words into first_two          # Equivalent to 'take 2 items of words'
+drop 1 from words into remaining_words    # Equivalent to 'drop 1 items of words'
+join first_two by " + " into joined       # Accepts both 'by' and 'with'
+split "one,two,three" with "," into parts # Accepts both 'with' and 'by'
+```
+
+---
+
+### 3.19 Units, Currencies & Magnitude Scale Arithmetic
+
+Financial, analytical, and operational models frequently feature currency notations, abbreviated magnitude suffixes, and percentage ratios. DoomScript supports them natively:
+
+```doom
+# Currency literals with comma delimiters
+set unit_price to $1,250.50
+set euro_cost to €99.99
+set gbp_fee to £45.00
+
+# Magnitude scale suffixes
+set valuation to 2.5 million       # 2,500,000.0
+set monthly_active_users to 500k   # 500,000
+set national_debt to 10 billion    # 10,000,000,000.0
+
+# Percentage literals and calculations
+set sales_tax_rate to 15%          # 0.15
+set subtotal to unit_price * 10
+set discount to 10% of subtotal    # 1,250.50
+```
+
+---
+
+### 3.20 Postfix Conditionals (`unless`, `only if`)
+
+For quick guards, alerts, and clean branch reductions, DoomScript allows English postfix modifiers:
+
+```doom
+# Statement guards without indent blocks
+say "Warning: balance is zero" unless balance > 0
+send_sms_alert() only if alert_enabled
+give back false unless is_authorized
+```
+
+---
+
+### 3.21 Multi-Field Sorting & Multi-Key Group Aggregations
+
+Real-world datasets require multi-level sorting and multi-dimensional grouping:
+
+```doom
+set employees to [
+    {"dept": "Eng", "tenure": 3, "name": "Alice"},
+    {"dept": "Support", "tenure": 5, "name": "Bob"},
+    {"dept": "Eng", "tenure": 8, "name": "Charlie"},
+    {"dept": "Support", "tenure": 2, "name": "David"}
+]
+
+# Multi-field sort with mixed ascending and descending keys
+sort employees by dept ascending and tenure descending into ranked
+
+# Multi-key grouping with aggregations (sum, total, avg, max, min, count)
+group sales by region and quarter calculating total revenue into quarterly_summary
+group tickets by category, priority calculating average response_time into triage_metrics
+```
+
+---
+
+### 3.22 Natural Field Access with `of`
+
+Accessing entity attributes or record keys can be expressed in natural possessive or prepositional English:
+
+```doom
+a User has name, status, age
+
+create a User with name "Alice", status "active", age 30 into u
+
+# Prepositional field access: <field> of <entity>
+set n to name of u
+set s to status of u
+
+# Possessive access: <entity>'s <field>
+say u's name
+say u's age
+```
+
+---
+
+### 3.23 Asynchronous Background Tasks
+
+Execute long-running computations, I/O requests, or data crunching concurrently without complex threading boilerplates:
+
+```doom
+to generate_quarterly_report with data:
+    # Heavy computation...
+    give back clean_report
+
+# Spawn background worker thread
+run in background generate_quarterly_report(raw_data) into background_job
+
+# Continue executing other statements in main thread
+say "Background task spawned. Continuing operations..."
+
+# Wait for task completion and retrieve result
+wait for background_job into final_result
+
+# Or wait for multiple concurrent tasks
+wait for all tasks in [job_a, job_b, job_c] into all_results
+```
+
+---
+
+### 3.24 Scope-Aware Comparisons & Python Interoperability
+
+DoomScript avoids Python identity traps while remaining 100% interoperable with the Python ecosystem:
+
+#### 1. Scope-Aware `is` Comparison & Ambiguity Warnings
+When comparing variables, DoomScript distinguishes between variable equality and entity property testing based on lexical scope:
+- If `status` is a variable currently in scope: `if current_state is status` compiles to value equality (`==`).
+- If `active` is not a declared variable in scope: `if current_state is active` compiles to entity property query (`ds_is_property(current_state, "active")`).
+- If an identifier could be ambiguous, the compiler emits a friendly non-fatal diagnostic warning so your intent is never silently misdirected.
+
+#### 2. Native Python Module Imports
+Bring in any standard library or third-party PyPI module cleanly:
+```doom
+use python module math as m
+use python module os
+from python module json use loads, dumps
+
+say m.sqrt(256)           # 16.0
+say os.getcwd()
+```
+
+
+---
+
 ## 4. Standard Built-in Capabilities
 
 ### File I/O & Document Processing
@@ -798,9 +982,9 @@ refresh screen
 
 ---
 
-## 5. The 41 Specialized Domain Packs (`use <domain>`)
+## 5. The 80 Specialized Computational Domain Packs (`use <domain>`)
 
-DoomScript features 41 built-in, zero-dependency domain libraries. Activate any domain using `use <domain>` at the top of your script. Domain keywords are dynamically scoped to keep the base language lightweight and eliminate name collisions.
+DoomScript features 80 built-in, zero-dependency domain libraries. Activate any domain using `use <domain>` at the top of your script. Domain keywords are dynamically scoped to keep the base language lightweight and eliminate name collisions.
 
 ### 1. DSA & Algorithms (`use dsa`)
 Advanced self-balancing trees, string automata, caches, and algorithmic primitives:
@@ -2175,6 +2359,401 @@ say "Reverberation Processed: ", len(reverbed), " samples"
 ---
 
 ---
+
+---
+
+
+### 41. Generative AI & Large Language Models (`use genai`)
+Specialized primitives for prompt engineering, tokenization budgeting, few-shot templating, and vector embeddings:
+```doom
+use genai
+
+# Prompt construction with variables
+template = prompt_template("Answer as a domain expert in {domain}: {query}")
+prompt = render_prompt(template, {"domain": "astrobiology", "query": "Is life possible on Europa?"})
+
+# Token estimation and sliding context window
+token_count = genai_estimate_tokens(prompt)
+say "Estimated tokens:", token_count
+```
+
+### 42. High-Performance Caching & Eviction (`use cache`)
+In-memory caching architectures with LRU, LFU, TTL expiration, and bloom filter probabilistic membership:
+```doom
+use cache
+
+create cache with capacity 1000, policy "lru" into session_cache
+cache_put(session_cache, "user_102", {"name": "Alice", "role": "admin"}, ttl_seconds=300)
+user_data = cache_get(session_cache, "user_102")
+```
+
+### 43. Deep Genomics & Comparative Sequencing (`use genomics`)
+DNA/RNA sequence analysis, k-mer frequency counting, GC content skew, CpG island detection, and Needleman-Wunsch global alignment:
+```doom
+use genomics
+
+seq1 = "ATGCGATCGATCGATCG"
+seq2 = "ATGCGATCGTTCGATCG"
+alignment = align_global_needleman_wunsch(seq1, seq2, match_score=1, mismatch_penalty=-1, gap_penalty=-2)
+say "Optimal Sequence Alignment Score:", alignment["score"]
+```
+
+### 44. Computational Linguistics & Phonetics (`use linguistics`)
+N-gram language models, Levenshtein edit distance, Soundex phonetic hashing, and BLEU metric evaluation:
+```doom
+use linguistics
+
+dist = levenshtein_distance("algorithm", "altruism")
+soundex_hash = soundex("Smith")
+say "Levenshtein Edit Distance:", dist
+say "Phonetic Soundex:", soundex_hash
+```
+
+### 45. Asynchronous Task Queues & Priority Schedulers (`use queue`)
+Task queues supporting FIFO, priority scheduling, dead-letter redrive, and exponential backoff retry policies:
+```doom
+use queue
+
+create task_queue with max_retries 3 into work_queue
+enqueue_task(work_queue, {"action": "sync_inventory", "item_id": 401}, priority=10)
+task = dequeue_task(work_queue)
+say "Processing Task:", task["action"]
+```
+
+### 46. Social Graph Network Intelligence (`use social`)
+Social network topology, degree distribution, PageRank authority scoring, betweenness centrality, and community clustering:
+```doom
+use social
+
+create social_graph into net
+add_friendship(net, "Alice", "Bob")
+add_friendship(net, "Bob", "Charlie")
+ranks = calculate_pagerank(net, damping=0.85)
+say "Alice PageRank Authority:", ranks["Alice"]
+```
+
+### 47. Synthetic Biology & Genetic Design (`use synthetic_bio`)
+Codon bias optimization, transcription Gibbs free energy, PCR primer melting temperature, and Gibson assembly overhang design:
+```doom
+use synthetic_bio
+
+dna_seq = "ATGCGTACGTTAGCTAGCTAG"
+tm = calculate_primer_tm(dna_seq, na_conc_mm=50.0)
+say "Primer Melting Temperature (Tm):", tm, "deg C"
+```
+
+### 48. Zero-Knowledge Cryptography & Verifiable Proofs (`use crypto_zk`)
+Pedersen commitments, Merkle tree inclusion proofs, Schnorr zero-knowledge identification, and homomorphic commitments:
+```doom
+use crypto_zk
+
+secret_val = 42
+commitment = pedersen_commit(secret_val, blinding_factor=1337)
+is_valid = pedersen_verify(commitment, secret_val, blinding_factor=1337)
+say "Pedersen Commitment Valid:", is_valid
+```
+
+### 49. Financial Risk & Credit Scoring (`use risk`)
+Value-at-Risk (Parametric and Historical VaR), Conditional Value-at-Risk (CVaR), Altman Z-score insolvency prediction, and Merton default probability:
+```doom
+use risk
+
+returns = [-0.02, 0.01, -0.015, 0.03, -0.04, 0.005]
+var_95 = calculate_parametric_var(returns, confidence=0.95)
+z_score = calculate_altman_z_score(working_cap=500k, retained_earnings=300k, ebit=200k, market_equity=1.5 million, total_liabilities=800k, sales=2.0 million, total_assets=2.5 million)
+say "95% Portfolio VaR:", var_95
+say "Altman Z-Score:", z_score
+```
+
+### 50. Ergonomics & Biomechanical Strain Assessment (`use ergonomics`)
+REBA/RULA rapid whole-body postural risk assessment, NIOSH lifting equation Recommended Weight Limit (RWL), and composite strain index:
+```doom
+use ergonomics
+
+rwl = niosh_lifting_equation(horizontal_cm=30, vertical_cm=75, distance_cm=50, angle_deg=0, frequency_per_min=2, coupling="good")
+say "NIOSH Recommended Weight Limit (RWL):", rwl, "kg"
+```
+
+### 51. Geometric & Physical Optics (`use optics`)
+Snell's law refraction, Lensmaker's equation focal length, numerical aperture, and thin-lens magnification ray tracing:
+```doom
+use optics
+
+focal_length = lensmakers_equation(r1=100.0, r2=-100.0, refractive_index=1.5)
+crit_angle = snell_critical_angle(n1=1.5, n2=1.0)
+say "Lens Focal Length:", focal_length, "mm"
+say "Critical Angle for TIR:", crit_angle, "degrees"
+```
+
+### 52. Digital Forensics & File Carving (`use forensics`)
+File header magic byte signature identification, Shannon byte entropy analysis, timeline event parsing, and suspicious section detection:
+```doom
+use forensics
+
+entropy = calculate_shannon_entropy(raw_bytes)
+say "Shannon Byte Entropy:", entropy
+if entropy > 7.5:
+    say "Warning: Encrypted or packed executable section detected."
+```
+
+### 53. Supply Chain Logistics & Vehicle Routing (`use logistics`)
+Economic Order Quantity (EOQ), reorder point with safety stock, Clark-Wright savings heuristic, and transportation linear programming:
+```doom
+use logistics
+
+eoq = calculate_eoq(annual_demand=12000, order_cost=50, holding_cost_per_unit=2.5)
+safety_stock = calculate_safety_stock(lead_time_days=14, daily_demand_std=15.0, z_service_level=1.65)
+say "Economic Order Quantity (EOQ):", eoq, "units"
+say "Required Safety Stock:", safety_stock, "units"
+```
+
+### 54. Climate Science & Radiative Forcing (`use climate`)
+CO2 radiative forcing, global equilibrium climate sensitivity, Stefan-Boltzmann terrestrial radiation balance, and sea level thermal expansion:
+```doom
+use climate
+
+forcing = calculate_co2_radiative_forcing(c_current=420.0, c_baseline=280.0)
+say "CO2 Radiative Forcing:", forcing, "W/m^2"
+```
+
+### 55. Engineering Thermodynamics & Power Cycles (`use thermodynamics`)
+Ideal gas law, Carnot thermal efficiency, Rankine steam cycles, Otto engine cycles, entropy change, and polytropic expansions:
+```doom
+use thermodynamics
+
+efficiency = calculate_carnot_efficiency(th_kelvin=600.0, tc_kelvin=300.0)
+say "Carnot Thermal Limit Efficiency:", efficiency * 100, "%"
+```
+
+### 56. Petroleum & Reservoir Engineering (`use petroleum`)
+Darcy's law linear porous media flow, oil formation volume factor ($B_o$), gas-oil ratio, and reservoir recovery factor material balance:
+```doom
+use petroleum
+
+flow_rate = calculate_darcy_flow(permeability_md=150.0, area_sqft=500.0, delta_p_psi=1000.0, viscosity_cp=2.5, length_ft=2000.0)
+say "Darcy Porous Reservoir Flow Rate:", flow_rate, "bbl/day"
+```
+
+### 57. Hydrology & Watershed Modeling (`use hydrology`)
+Manning's open channel flow equation, rational method runoff discharge, unit hydrograph convolution, and Darcy groundwater flow:
+```doom
+use hydrology
+
+runoff = rational_method_runoff(runoff_coeff=0.65, rainfall_intensity_in_hr=2.4, watershed_area_acres=150.0)
+say "Peak Watershed Discharge Q:", runoff, "cfs"
+```
+
+### 58. Physical Acoustics & Wave Propagation (`use acoustics`)
+Inverse-square law acoustic attenuation, decibel sound pressure level (SPL), Doppler frequency shift, and Sabine reverberation time:
+```doom
+use acoustics
+
+rt60 = sabine_reverberation_time(room_volume_m3=1200.0, total_absorption_sabins=180.0)
+say "Sabine Room Reverberation Time RT60:", rt60, "seconds"
+```
+
+### 59. Actuarial Science & Life Contingencies (`use actuarial`)
+Life table cohort mortality survival probability, whole life annuity present value, net level insurance premium, and disability incidence:
+```doom
+use actuarial
+
+present_value = calculate_annuity_due_pv(annual_payout=10000, discount_rate=0.05, periods=20)
+say "Annuity Actuarial Present Value:", present_value
+```
+
+### 60. Geophysics & Subsurface Exploration (`use geophysics`)
+Seismic P-wave and S-wave acoustic velocity, Bouguer gravity anomaly, magnetic inclination, and Archie's law formation resistivity:
+```doom
+use geophysics
+
+vp = calculate_p_wave_velocity(bulk_modulus_gpa=38.0, shear_modulus_gpa=24.0, density_kg_m3=2650.0)
+say "Seismic P-Wave Propagation Velocity:", vp, "m/s"
+```
+
+### 61. Physical Metallurgy & Phase Transformation (`use metallurgy`)
+Hall-Petch grain boundary strengthening, continuous cooling transformation (CCT), lever rule phase fraction calculation, and Arrhenius metal diffusion:
+```doom
+use metallurgy
+
+yield_stress = hall_petch_yield_stress(base_stress_mpa=70.0, ky=0.74, grain_diameter_um=16.0)
+say "Polycrystalline Yield Strength:", yield_stress, "MPa"
+```
+
+### 62. Chronometry & Relativistic Timekeeping (`use chronometry`)
+High-precision atomic clock drift, Allan deviation frequency stability, leap second synchronization, and GPS gravitational time dilation:
+```doom
+use chronometry
+
+time_dilation = calculate_gravitational_time_dilation(mass_kg=5.972e24, radius_m=6.371e6, altitude_m=20200e3)
+say "GPS Satellite Gravitational Clock Offset:", time_dilation * 1e9, "ns/day"
+```
+
+### 63. Systems Ecology & Ecosystem Dynamics (`use ecology`)
+Lotka-Volterra predator-prey differential equations, Shannon-Wiener ecological biodiversity index, and trophic level Lindeman energy efficiency:
+```doom
+use ecology
+
+species_counts = [120, 85, 45, 20, 10]
+diversity = shannon_diversity_index(species_counts)
+say "Shannon-Wiener Ecological Diversity Index H':", diversity
+```
+
+### 64. Aerospace Engineering & Orbital Trajectories (`use aerospace`)
+Tsiolkovsky ideal rocket equation delta-V, Hohmann orbital transfer delta-V, atmospheric aerodynamic drag, and Prandtl-Glauert compressible flow:
+```doom
+use aerospace
+
+delta_v = tsiolkovsky_rocket_delta_v(isp_seconds=380.0, mass_initial_kg=120000.0, mass_final_kg=14000.0)
+say "Total Stage Delta-V:", delta_v, "m/s"
+```
+
+### 65. Classical Electromagnetics & RF Propagation (`use electromagnetics`)
+Maxwell's equations, RF skin depth attenuation, coaxial cable characteristic impedance, and dipole antenna radiation resistance:
+```doom
+use electromagnetics
+
+z0 = coaxial_cable_impedance(dielectric_constant=2.2, outer_diameter_mm=9.5, inner_diameter_mm=2.9)
+say "RF Coaxial Line Characteristic Impedance Z0:", z0, "Ohms"
+```
+
+### 66. Theoretical Astrophysics & Relativistic Cosmology (`use astrophysics`)
+Schwarzschild black hole event horizon radius, Eddington radiation limit luminosity, Jeans gravitational collapse mass, and cosmological redshift:
+```doom
+use astrophysics
+
+r_sch = schwarzschild_radius(mass_kg=1.989e30 * 10)  # 10 Solar Masses
+say "10 Solar-Mass Black Hole Event Horizon Radius:", r_sch / 1000.0, "km"
+```
+
+### 67. Combustion Science & Flame Kinetics (`use combustion`)
+Fuel-air equivalence ratio ($\phi$), stoichiometric air-fuel ratio, adiabatic flame temperature, and heat release rate:
+```doom
+use combustion
+
+phi = calculate_equivalence_ratio(fuel_mass=1.0, air_mass=14.7, stoich_air_fuel_ratio=14.7)
+say "Combustion Equivalence Ratio:", phi, " (1.0 = Stoichiometric)"
+```
+
+### 68. Pharmacokinetics & Drug Clearance (`use pharmacology`)
+One-compartment pharmacokinetic volume of distribution ($V_d$), hepatic/renal elimination clearance, elimination half-life, and Michaelis-Menten drug kinetics:
+```doom
+use pharmacology
+
+half_life = calculate_elimination_half_life(clearance_l_hr=4.5, volume_distribution_l=50.0)
+say "Drug Plasma Elimination Half-Life t1/2:", half_life, "hours"
+```
+
+### 69. Mathematical Cartography & Geodesy (`use cartography`)
+WGS-84 ellipsoidal distance, Universal Transverse Mercator (UTM) projection coordinates, Great Circle navigation bearing, and grid convergence:
+```doom
+use cartography
+
+dist_km = haversine_distance_km(lat1=40.7128, lon1=-74.0060, lat2=51.5074, lon2=-0.1278)
+say "Great Circle Flight Distance (NYC to London):", dist_km, "km"
+```
+
+### 70. Structural Engineering & Mechanics of Materials (`use structural`)
+Euler column buckling critical load, simply supported beam mid-span deflection, Mohr's circle principal stresses, and member slenderness ratio:
+```doom
+use structural
+
+critical_load = euler_column_buckling_load(elastic_modulus_gpa=200.0, moment_inertia_cm4=1200.0, length_m=4.5, k_effective=1.0)
+say "Euler Critical Buckling Load:", critical_load / 1000.0, "kN"
+```
+
+### 71. X-Ray Crystallography & Diffraction (`use crystallography`)
+Bragg's law diffraction angle, Miller indices $(hkl)$ interplanar spacing, unit cell lattice volume, and Scherrer crystallite size formula:
+```doom
+use crystallography
+
+theta = bragg_diffraction_angle(wavelength_angstrom=1.5406, d_spacing_angstrom=2.82)
+say "Bragg Diffraction Peak Angle 2-Theta:", theta * 2, "degrees"
+```
+
+### 72. Physical Oceanography & Hydrodynamics (`use oceanography`)
+UNESCO-80 seawater density equation of state, Ekman spiral surface transport, geostrophic current velocity, and hydrostatic pressure depth:
+```doom
+use oceanography
+
+density = calculate_seawater_density(salinity_psu=35.0, temp_c=12.0, pressure_dbar=100.0)
+say "In-Situ Seawater Density:", density, "kg/m^3"
+```
+
+### 73. Microeconomic Theory & Market Equilibria (`use microecon`)
+Price elasticity of demand (PED), consumer and producer surplus, Cournot duopoly reaction curves, and monopoly deadweight loss:
+```doom
+use microecon
+
+elasticity = calculate_price_elasticity(q1=1000, q2=850, p1=20.0, p2=25.0)
+say "Price Elasticity of Demand (PED):", elasticity
+```
+
+### 74. Flight Mechanics & Aviation Operations (`use aviation`)
+True Airspeed (TAS) vs Calibrated Airspeed, aircraft lift coefficient ($C_L$), multi-engine climb gradient, and banked stall speed:
+```doom
+use aviation
+
+stall_speed = calculate_banked_stall_speed(vs0_knots=55.0, bank_angle_deg=45.0)
+say "Stall Speed in 45-degree Steep Turn:", stall_speed, "knots"
+```
+
+### 75. Nuclear Physics & Reactor Neutronics (`use nuclear`)
+Radioactive isotope decay rate, four-factor reactor formula ($k_{	ext{eff}}$), mass defect binding energy, and thermal neutron diffusion length:
+```doom
+use nuclear
+
+remaining = radioactive_decay_remaining(initial_mass_g=100.0, half_life_years=30.17, elapsed_years=60.34)
+say "Cesium-137 Remaining Mass:", remaining, "grams"
+```
+
+### 76. Biomechanics & Human Movement Analysis (`use biomechanics`)
+Anatomical joint moment and torque, muscle moment arm, Ground Reaction Force (GRF) vertical impulse, and angular momentum:
+```doom
+use biomechanics
+
+torque = calculate_joint_torque(force_n=450.0, moment_arm_m=0.045)
+say "Ankle Plantarflexion Moment Torque:", torque, "N*m"
+```
+
+### 77. Modern Control Systems & State Estimation (`use control`)
+State-space linear system modeling $(\dot{x} = Ax + Bu)$, Kalman state observer, controllability matrix rank, and pole placement:
+```doom
+use control
+
+pid = pid_controller(kp=2.5, ki=0.5, kd=0.1, setpoint=100.0)
+u = pid_update(pid, measurement=92.0, dt=0.05)
+say "PID Actuator Control Output:", u
+```
+
+### 78. Mathematical Epidemiology & Disease Dynamics (`use epidemiology`)
+Kermack-McKendrick SIR compartmental differential equations, basic reproduction number ($R_0$), and herd immunity threshold:
+```doom
+use epidemiology
+
+r0 = calculate_basic_reproduction_number(contact_rate=0.4, infectious_period_days=5.0)
+hit = calculate_herd_immunity_threshold(r0)
+say "Basic Reproduction Number R0:", r0
+say "Target Herd Immunity Threshold:", hit * 100, "%"
+```
+
+### 79. Advanced Materials Science & Fracture Mechanics (`use materials`)
+Stress-strain Hooke's modulus, Griffith crack propagation fracture toughness, thermal expansion mismatch stress, and creep strain rate:
+```doom
+use materials
+
+k1c = calculate_fracture_toughness(stress_mpa=250.0, crack_length_mm=2.5, geometry_factor=1.12)
+say "Stress Intensity Factor K_IC:", k1c, "MPa*m^0.5"
+```
+
+### 80. Precision Agronomy & Crop Modeling (`use agronomy`)
+FAO-56 Penman-Monteith reference evapotranspiration ($ET_0$), Growing Degree Days (GDD) thermal accumulation, and soil water availability:
+```doom
+use agronomy
+
+gdd = calculate_growing_degree_days(t_max_c=28.0, t_min_c=14.0, t_base_c=10.0)
+say "Daily Accumulated Growing Degree Days (GDD):", gdd, "degree-days"
+```
+
 
 ---
 

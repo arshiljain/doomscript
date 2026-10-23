@@ -427,7 +427,7 @@ save rev_trend to "revenue.html" with width=1200, height=600
 
 ## Documentation & Complete Reference Manual
 
-For the complete, exhaustive guide covering all syntax rules, 41 embedded domains, conversational inquiries, superlatives, quantifiers, adverbials, story-driven entities, and algorithmic benchmarks, see:
+For the complete, exhaustive guide covering all syntax rules, 80 embedded computational domains, conversational inquiries, superlatives, quantifiers, adverbials, story-driven entities, and algorithmic benchmarks, see:
 
 📖 **[Complete DoomScript Documentation & Reference Manual (documentation.md)](documentation.md)**
 
@@ -439,7 +439,7 @@ DoomScript is tested against rigorous corpus benchmarks, full regression suites,
 - **Test Suite**: 1,492+ automated unit & integration tests passing (100% pass rate)
 - **Beginner UX Benchmark**: 150 / 150 intuitive phrasings passing (0 Python leaks)
 - **Corpus Pass Rate**: 200 / 200 sentences (100.0%)
-- **Domain Coverage**: 41 embedded domain libraries (`use <domain>`)
+- **Domain Coverage**: 80 embedded computational domain libraries (`use <domain>`)
 - **Compilation Speed**: Standalone LALR disk table caching (`cache=True`) and high-capacity regex cache delivering sub-5ms compilations
 
 Run tests locally:
@@ -450,6 +450,104 @@ python run_corpus.py --fail-under 98
 ```
 
 ---
+
+---
+
+## The 4 Phases of Natural English Thought-to-Code
+
+DoomScript's parser and AST compilation engine support natural, fluent English thought-to-code paradigms across four major dimensions:
+
+### 1. Fluent Expression Chaining & Preposition Flexibility
+- **Pipe Operator (`|>`)**: Compose operations naturally from left to right without nested parentheses or intermediate temporary variables:
+  ```doom
+  set words to ["alpha", "beta", "gamma", "delta"]
+  words |> take 2 |> join with " / " into short_label
+  # Result: "alpha / beta"
+  
+  set nums to [10, 20, 30, 40, 50]
+  set top_three to nums |> drop 1 |> take 3 |> sorted descending
+  # Result: [40, 30, 20]
+  ```
+- **Article Tolerance (`the`, `a`, `an`)**: Optional articles are gracefully accepted before variables, queries, and loops:
+  ```doom
+  set the total to 500
+  the subtotal is 250
+  add 50 to the total
+  set count to the count of the items
+  for each item in the items:
+      say the item
+  ```
+- **Preposition Flexibility**: Interchangable prepositions across common idioms:
+  ```doom
+  take 2 from words into first_two
+  drop 2 from words into last_two
+  join first_two by " + " into joined
+  split "one,two,three" with "," into parts
+  ```
+
+### 2. Units, Currencies & Magnitude Scale Arithmetic
+- **Currency Prefixes**: Directly write monetary values with commas:
+  ```doom
+  set unit_price to $1,250.50
+  set tax_rate to 15%
+  set subtotal to unit_price * 10
+  set discount to 10% of subtotal
+  ```
+- **Magnitude Suffixes**: Express human scales directly:
+  ```doom
+  set valuation to 2.5 million       # 2,500,000.0
+  set monthly_active_users to 500k   # 500,000
+  set national_debt to 10 billion    # 10,000,000,000.0
+  ```
+- **Postfix Conditionals (`unless`, `only if`)**: Guard statements intuitively without extra indentation blocks:
+  ```doom
+  say "Operation aborted" unless is_authenticated
+  send_push_notification() only if battery_level > 20
+  ```
+
+### 3. Multi-Field Sorting, Grouping & Natural Projections
+- **Multi-Field Sorting**: Order complex collections with mixed ascending and descending keys:
+  ```doom
+  sort employees by department ascending and tenure descending into ranked_team
+  sort transactions by customer, amount desc into sorted_tx
+  ```
+- **Multi-Key Group Aggregations**: Group by multiple categorical dimensions while computing totals, averages, minimums, or maximums:
+  ```doom
+  group sales by region and quarter calculating total revenue into quarterly_summary
+  group tickets by category, priority calculating average response_time into triage_metrics
+  ```
+- **Natural Field Access with `of`**: Read object attributes and record fields in conversational order:
+  ```doom
+  set user_name to name of user
+  set order_status to status of order
+  set book_author to author of book
+  ```
+
+### 4. Background Concurrency & Pure-English OOP
+- **Asynchronous Background Execution**: Run long-running tasks in worker threads without blocking:
+  ```doom
+  run in background heavy_analytics(dataset) into analytics_job
+  # Continue doing other interactive work...
+  wait for analytics_job into final_report
+  wait for all tasks in background_jobs into results
+  ```
+- **Pure-English Entity & OOP Modeling**: Declare schemas and methods without Python `self` or `__init__`:
+  ```doom
+  a Customer has name, email, balance = 0.0
+  
+  create a Customer with name "Alice", email "alice@corp.com" into vip
+  say vip's name
+  change vip's balance to $500.00
+  ```
+- **Scope-Aware Comparison & Ambiguity Warnings**:
+  In DoomScript, writing `if status is "active":` compares equality. When writing `if x is word:`, the compiler checks if `word` is a declared variable in scope; if so, it performs a value comparison; otherwise it tests an entity property, and emits an empathetic warning if ambiguous.
+- **Python Module Interoperability**:
+  Seamlessly bring in external Python libraries:
+  ```doom
+  use python module math as m
+  from python module json use loads
+  say m.sqrt(144)
+  ```
 
 ## Execution Model & Security Boundary
 

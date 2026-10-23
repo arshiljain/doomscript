@@ -88,9 +88,9 @@ CORE_KEYWORDS: Set[str] = {
 }
 
 BUILTIN_FUNCS: Set[str] = {
-    "len", "print", "range", "range_inclusive", "abs", "min", "max", "sum",
-    "int", "float", "str", "bool", "list", "dict", "set", "tuple", "open",
-    "input", "all", "any", "sorted", "reversed", "round"
+    "say", "print", "round", "abs", "min", "max", "sum",
+    "int", "float", "str", "bool", "list", "dict", "set", "tuple",
+    "all", "any", "sorted", "reversed", "count_of"
 }
 
 DOMAIN_VOCABULARY: Set[str] = {

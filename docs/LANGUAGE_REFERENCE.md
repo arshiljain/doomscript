@@ -54,6 +54,23 @@ DoomScript permits multiple natural English phrasings for the same intent, but e
 44. [How do I manage INI, JSON, and ENV configuration? (Phase 23)](#44-how-do-i-manage-ini-json-and-env-configuration-phase-23)
 45. [How do I benchmark and profile script latency? (Phase 24)](#45-how-do-i-benchmark-and-profile-script-latency-phase-24)
 46. [How do I pack standalone zero-dependency executables? (Phase 25)](#46-how-do-i-pack-standalone-zero-dependency-executables-phase-25)
+47. [How do I manage processes, system resources & file locks? (Phases 26-32)](#47-how-do-i-manage-processes-system-resources--file-locks-phases-26-32)
+48. [How do I resolve DNS, ping hosts & manage cookie jars? (Phases 33-40)](#48-how-do-i-resolve-dns-ping-hosts--manage-cookie-jars-phases-33-40)
+49. [How do I compress data, create archives & calculate checksums? (Phases 41-48)](#49-how-do-i-compress-data-create-archives--calculate-checksums-phases-41-48)
+50. [How do I compute vector math, statistics & financial loans? (Phases 49-56)](#50-how-do-i-compute-vector-math-statistics--financial-loans-phases-49-56)
+51. [How do I build reactive event buses, priority queues & circuit breakers? (Phases 57-64)](#51-how-do-i-build-reactive-event-buses-priority-queues--circuit-breakers-phases-57-64)
+52. [How do I generate SVG graphics & calculate record diffs? (Phases 65-72)](#52-how-do-i-generate-svg-graphics--calculate-record-diffs-phases-65-72)
+53. [How do I build AI Agents, RAG indexes & conversation memory? (Phases 73-80)](#53-how-do-i-build-ai-agents-rag-indexes--conversation-memory-phases-73-80)
+54. [How do I sign JWTs, hash passwords & mask PII? (Phases 81-88)](#54-how-do-i-sign-jwts-hash-passwords--mask-pii-phases-81-88)
+55. [How do I generate container configurations & export Prometheus metrics? (Phases 89-95)](#55-how-do-i-generate-container-configurations--export-prometheus-metrics-phases-89-95)
+56. [How do I invoke C libraries (FFI) & minify DoomScript source? (Phases 96-100)](#56-how-do-i-invoke-c-libraries-ffi--minify-doomscript-source-phases-96-100)
+57. [How do I chain operations with the pipe operator (`|>`)?](#57-how-do-i-chain-operations-with-the-pipe-operator-)
+58. [How do I use currency symbols, magnitude scales, and percentage literals?](#58-how-do-i-use-currency-symbols-magnitude-scales-and-percentage-literals)
+59. [How do I sort and group collections by multiple fields?](#59-how-do-i-sort-and-group-collections-by-multiple-fields)
+60. [How do I access fields naturally with `of`?](#60-how-do-i-access-fields-naturally-with-of)
+61. [How do I write postfix conditionals (`unless`, `only if`)?](#61-how-do-i-write-postfix-conditionals-unless-only-if)
+62. [How do I execute background tasks and synchronize threads in plain English?](#62-how-do-i-execute-background-tasks-and-synchronize-threads-in-plain-english)
+63. [How do I import Python modules and resolve scope-aware comparisons?](#63-how-do-i-import-python-modules-and-resolve-scope-aware-comparisons)
 
 ---
 
@@ -1112,3 +1129,132 @@ say compact_code
 
 
 
+
+---
+
+## 57. How do I chain operations with the pipe operator (`|>`)?
+The pipe operator `|>` allows natural, left-to-right processing pipelines without nesting function calls:
+```doomscript
+set words to ["apple", "banana", "cherry", "date", "elderberry"]
+
+# Take, sort, and join in a single fluent flow
+words |> take 3 |> sorted |> join with " / " into top_label
+say top_label
+# Output: "apple / banana / cherry"
+
+# Numeric processing pipeline
+set numbers to [10, 50, 20, 80, 30]
+set clean_top to numbers |> drop 1 |> take 3 |> sorted descending
+say clean_top
+# Output: [50, 30, 20]
+```
+
+---
+
+## 58. How do I use currency symbols, magnitude scales, and percentage literals?
+DoomScript parses common business, financial, and metric numerical representations directly:
+```doomscript
+# Currency literals with automatic comma removal
+set unit_price to $1,250.50
+set euro_total to €99.99
+set pound_fee to £45.00
+
+# Magnitude scale suffixes
+set company_valuation to 2.5 million   # 2,500,000.0
+set active_users to 500k               # 500,000
+set national_debt to 10 billion        # 10,000,000,000.0
+
+# Percentage literals and contextual calculations
+set tax_rate to 15%                    # Evaluates to 0.15
+set subtotal to unit_price * 10
+set discount to 10% of subtotal        # Evaluates to 1,250.05
+```
+
+---
+
+## 59. How do I sort and group collections by multiple fields?
+DoomScript supports multi-field sorting and multi-key group aggregations directly in plain English:
+```doomscript
+set employees to [
+    {"dept": "Engineering", "tenure": 3, "name": "Alice"},
+    {"dept": "Support", "tenure": 5, "name": "Bob"},
+    {"dept": "Engineering", "tenure": 8, "name": "Charlie"},
+    {"dept": "Support", "tenure": 2, "name": "David"}
+]
+
+# Multi-field sorting with mixed ascending/descending directions
+sort employees by dept ascending and tenure descending into ranked
+
+# Multi-key grouping with aggregations (sum, total, avg, max, min, count)
+group employees by dept calculating average tenure into dept_averages
+say dept_averages
+```
+
+---
+
+## 60. How do I access fields naturally with `of`?
+Read attributes or dictionary fields using natural English prepositional order:
+```doomscript
+a User has name, status, age
+create a User with name "Alice", status "active", age 30 into u
+
+# Prepositional access: <field> of <object>
+set user_name to name of u
+set user_status to status of u
+
+# Possessive access: <object>'s <field>
+say u's name
+say u's age
+```
+
+---
+
+## 61. How do I write postfix conditionals (`unless`, `only if`)?
+Simplify simple guard conditions without wrapping statements in indented multi-line blocks:
+```doomscript
+# Guard with 'unless' (executes if condition is false)
+say "Operation cancelled" unless is_authenticated
+
+# Guard with 'only if' (executes if condition is true)
+send_sms_notification() only if alert_enabled
+give back false unless user_has_permission
+```
+
+---
+
+## 62. How do I execute background tasks and synchronize threads in plain English?
+Execute CPU-heavy or I/O-bound tasks in the background without complex threading primitives:
+```doomscript
+to analyze_large_dataset with data:
+    # Processing...
+    give back summary_metrics
+
+# Spawn in background worker
+run in background analyze_large_dataset(records) into analysis_task
+
+say "Background worker started. Doing other work..."
+
+# Wait for task completion and retrieve result
+wait for analysis_task into final_summary
+
+# Wait for multiple concurrent tasks
+wait for all tasks in [task_a, task_b] into batch_results
+```
+
+---
+
+## 63. How do I import Python modules and resolve scope-aware comparisons?
+DoomScript provides full Python ecosystem interoperability and scope-aware comparison safeguards:
+```doomscript
+# 1. Native Python module import
+use python module math as m
+from python module json use loads, dumps
+
+say m.sqrt(256)     # 16.0
+
+# 2. Scope-Aware Comparisons vs Entity Properties
+# If 'status' is a declared variable: 'x is status' checks equality (==).
+# If 'active' is not a variable: 'x is active' checks entity property status.
+# If an identifier could be ambiguous, the compiler outputs a non-fatal warning:
+# "warning: 'status' is also a variable in scope. To compare values, use 'is {status}'."
+```

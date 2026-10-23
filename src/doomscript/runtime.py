@@ -1290,6 +1290,96 @@ def ds_coalesce(val, default):
     return default if val is None else val
 
 
+class DoomTask:
+    def __init__(self, future=None):
+        self._future = future
+        self.is_done = False
+        self.result = None
+        self.error = None
+
+    def wait(self, timeout=None):
+        if self._future:
+            try:
+                self.result = self._future.result(timeout=timeout)
+                self.is_done = True
+                return self.result
+            except Exception as e:
+                self.error = e
+                self.is_done = True
+                raise e
+        return self.result
+
+
+def ds_run_background(action_fn):
+    """Executes action_fn in a background worker thread."""
+    import concurrent.futures
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(action_fn)
+    return DoomTask(future)
+
+
+def ds_wait_tasks(tasks, timeout=None):
+    """Waits for a list of background tasks to complete."""
+    res = []
+    for t in tasks:
+        if isinstance(t, DoomTask):
+            res.append(t.wait(timeout=timeout))
+        elif hasattr(t, "result"):
+            res.append(t.result(timeout=timeout))
+    return res
+
+
+def ds_sorted_by_multi(coll, sort_specs):
+    """Sorts collection by multiple fields: sort_specs = [('field', is_desc), ...]"""
+    from functools import cmp_to_key
+    def compare_items(a, b):
+        for field, desc in sort_specs:
+            va = a.get(field) if isinstance(a, dict) else getattr(a, field, None)
+            vb = b.get(field) if isinstance(b, dict) else getattr(b, field, None)
+            if va != vb:
+                if va is None:
+                    return 1 if not desc else -1
+                if vb is None:
+                    return -1 if not desc else 1
+                try:
+                    if desc:
+                        return -1 if va > vb else 1
+                    else:
+                        return 1 if va > vb else -1
+                except Exception:
+                    pass
+        return 0
+    return sorted(coll, key=cmp_to_key(compare_items))
+
+
+def ds_group_by_multi(collection, group_keys, agg_op, agg_field):
+    """Groups collection by multiple keys and aggregates a field."""
+    groups = {}
+    for item in collection:
+        key_vals = tuple(item.get(k) if isinstance(item, dict) else getattr(item, k, None) for k in group_keys)
+        if key_vals not in groups:
+            groups[key_vals] = []
+        groups[key_vals].append(item)
+
+    out = []
+    for key_vals, items in groups.items():
+        row = dict(zip(group_keys, key_vals))
+        vals = [it.get(agg_field) if isinstance(it, dict) else getattr(it, agg_field, 0) for it in items]
+        vals = [v for v in vals if isinstance(v, (int, float))]
+        if agg_op in ("sum", "total"):
+            row[f"total_{agg_field}"] = sum(vals) if vals else 0
+        elif agg_op in ("avg", "average", "mean"):
+            row[f"avg_{agg_field}"] = (sum(vals) / len(vals)) if vals else 0
+        elif agg_op in ("max", "highest", "maximum"):
+            row[f"max_{agg_field}"] = max(vals) if vals else 0
+        elif agg_op in ("min", "lowest", "minimum"):
+            row[f"min_{agg_field}"] = min(vals) if vals else 0
+        elif agg_op in ("count", "length"):
+            row["count"] = len(items)
+        out.append(row)
+    return out
+
+
 def ds_sorted_by(collection, key: str, reverse: bool = False, descending: bool = None):
     """Returns a sorted list of dicts/Records/objects by key attribute."""
     if descending is not None:
@@ -1811,6 +1901,10 @@ def ds_none_negative(collection):
 
 def ds_none_positive(collection):
     return all(x <= 0 for x in collection)
+
+
+def ds_all_zero(collection):
+    return all(x == 0 for x in collection)
 
 
 def sort_records(collection, field: str, descending: bool = False):

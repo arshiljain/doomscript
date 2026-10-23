@@ -628,6 +628,219 @@ def normalize_units(text: str) -> str:
 # STATEMENT NORMALIZATION PIPELINE
 # ---------------------------------------------------------------------------
 
+
+# ---------------------------------------------------------------------------
+# PHASE A-D DESUGARING HELPERS
+# ---------------------------------------------------------------------------
+
+RESERVED_OF_PROPS: Set[str] = {
+    "first", "last", "count", "length", "sum", "average", "avg", "mean",
+    "median", "variance", "stdev", "min", "max", "highest", "lowest",
+    "keys", "values", "items", "item", "element", "member", "all", "any",
+    "none", "each", "both", "either", "neither", "one", "many",
+    "type", "percent", "square_root", "sqrt",
+    "absolute", "abs", "reverse", "reversed", "unique", "take", "drop",
+    "head", "tail", "uppercase", "lowercase", "trim", "strip", "pairs",
+    "list", "dictionary", "set", "tuple", "number", "text", "boolean"
+}
+
+
+def desugar_pipe(code: str) -> str:
+    """Desugars pipeline chaining |> into nested calls or assignments."""
+    if "|>" not in code:
+        return code
+    into_m = re.search(r"\binto\s+([A-Za-z_]\w*)\s*$", code, re.IGNORECASE)
+    set_m = re.match(r"^\s*set\s+([A-Za-z_]\w*)\s+to\s+(.+)$", code, re.IGNORECASE)
+    target = None
+    if set_m:
+        target = set_m.group(1).strip()
+        pipe_part = set_m.group(2).strip()
+    elif into_m:
+        target = into_m.group(1).strip()
+        pipe_part = code[:into_m.start()].strip()
+    else:
+        pipe_part = code.strip()
+
+    segments = [s.strip() for s in pipe_part.split("|>")]
+    curr = segments[0]
+    for seg in segments[1:]:
+        m_take = re.match(r"^take\s+(\d+|[A-Za-z_]\w*)(?:\s+(?:items|from))?$", seg, re.IGNORECASE)
+        m_drop = re.match(r"^drop\s+(\d+|[A-Za-z_]\w*)(?:\s+(?:items|from))?$", seg, re.IGNORECASE)
+        m_sort_by = re.match(r"^(?:sort|sorted)\s+by\s+([A-Za-z_]\w*)(?:\s+(descending|desc|ascending|asc))?$", seg, re.IGNORECASE)
+        m_sort = re.match(r"^(?:sort|sorted)(?:\s+(descending|desc|ascending|asc))?$", seg, re.IGNORECASE)
+        m_join = re.match(r"^join(?:\s+(?:with|by))?\s+(.+)$", seg, re.IGNORECASE)
+        m_uniq = re.match(r"^unique(?:\s+items)?$", seg, re.IGNORECASE)
+        m_upper = re.match(r"^(?:uppercase|upper)$", seg, re.IGNORECASE)
+        m_lower = re.match(r"^(?:lowercase|lower)$", seg, re.IGNORECASE)
+        m_trim = re.match(r"^trim$", seg, re.IGNORECASE)
+        m_count = re.match(r"^(?:count|length)$", seg, re.IGNORECASE)
+        m_rev = re.match(r"^(?:reverse|reversed)$", seg, re.IGNORECASE)
+        m_flat = re.match(r"^flatten$", seg, re.IGNORECASE)
+
+        if m_take:
+            curr = f"ds_take({curr}, {m_take.group(1)})"
+        elif m_drop:
+            curr = f"ds_drop({curr}, {m_drop.group(1)})"
+        elif m_sort_by:
+            rev = "True" if m_sort_by.group(2) and m_sort_by.group(2).lower() in ("desc", "descending") else "False"
+            curr = f"ds_sorted_by({curr}, '{m_sort_by.group(1)}', reverse={rev})"
+        elif m_sort:
+            rev = "True" if m_sort.group(1) and m_sort.group(1).lower() in ("desc", "descending") else "False"
+            curr = f"sorted({curr}, reverse={rev})"
+        elif m_join:
+            curr = f"ds_join({curr}, {m_join.group(1)})"
+        elif m_uniq:
+            curr = f"list(dict.fromkeys({curr}))"
+        elif m_upper:
+            curr = f"ds_uppercase({curr})"
+        elif m_lower:
+            curr = f"ds_lowercase({curr})"
+        elif m_trim:
+            curr = f"ds_trim({curr})"
+        elif m_count:
+            curr = f"len({curr})"
+        elif m_rev:
+            curr = f"ds_reversed({curr})"
+        elif m_flat:
+            curr = f"ds_flatten({curr})"
+        else:
+            curr = f"{seg}({curr})"
+
+    if target:
+        return f"set {target} to {curr}"
+    return curr
+
+
+def desugar_articles(masked: str) -> str:
+    """Tolerates optional English articles the, a, an before identifiers and clauses."""
+    masked = re.sub(r"^\s*set\s+the\s+([A-Za-z_]\w*)\s+to\b", r"set \1 to", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*the\s+([A-Za-z_]\w*)\s+(?:is|=)\s+(?!even\b|odd\b|positive\b|negative\b|zero\b|empty\b|not\b)(.+)$", r"set \1 to \2", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bto\s+the\s+([A-Za-z_]\w*)\b", r"to \1", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bfrom\s+the\s+([A-Za-z_]\w*)\b", r"from \1", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bby\s+the\s+([A-Za-z_]\w*)\b", r"by \1", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bin\s+the\s+([A-Za-z_]\w*)\b", r"in \1", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\bof\s+the\s+([A-Za-z_]\w*)\b", r"of \1", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*the\s+(count|length|first|last|sum|average|mean|median|min|max|highest|lowest)\s+of\b", r"\1 of", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"^\s*(?:say|print)\s+the\s+([A-Za-z_]\w*)\b", r"say \1", masked, flags=re.IGNORECASE)
+    masked = re.sub(r"\b(if|unless|while|until)\s+the\s+([A-Za-z_]\w*)\b", r"\1 \2", masked, flags=re.IGNORECASE)
+    return masked
+
+
+def desugar_currency_and_scale(text: str) -> str:
+    """Normalizes currency symbols, magnitude suffixes (k, million, billion), and percentage literals."""
+    text = re.sub(r"[\$€£](\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)", lambda m: m.group(1).replace(",", ""), text)
+    text = re.sub(r"\b(\d+(?:\.\d+)?)\s*(?:million|mil)\b", lambda m: str(float(m.group(1)) * 1_000_000), text, flags=re.IGNORECASE)
+    text = re.sub(r"\b(\d+(?:\.\d+)?)\s*billion\b", lambda m: str(float(m.group(1)) * 1_000_000_000), text, flags=re.IGNORECASE)
+    text = re.sub(r"(?<![A-Za-z_])(\d+(?:\.\d+)?)k\b", lambda m: str(int(float(m.group(1)) * 1_000)), text, flags=re.IGNORECASE)
+    text = re.sub(r"(?<![A-Za-z_])(\d+(?:\.\d+)?)%(?!\s+of\b)", r"(\1 / 100.0)", text)
+    return text
+
+
+def desugar_prepositions(text: str) -> str:
+    """Normalizes preposition flexibility across take/drop/join/split."""
+    text = re.sub(r"\btake\s+(\d+|[A-Za-z_]\w*)(?:\s+items)?\s+of\s+([A-Za-z_]\w*)\b", r"take \1 items from \2", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bdrop\s+(\d+|[A-Za-z_]\w*)(?:\s+items)?\s+of\s+([A-Za-z_]\w*)\b", r"drop \1 items from \2", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bjoin\s+([A-Za-z_]\w*)\s+by\s+(.+?)(?=\s+into\b|\s*$)", r"join \1 with \2", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bsplit\s+(.+?)\s+with\s+(.+?)(?=\s+into\b|\s*$)", r"split \1 by \2", text, flags=re.IGNORECASE)
+    return text
+
+
+def desugar_multi_sort(code: str) -> str:
+    """Desugars multi-field sorting into ds_sorted_by_multi."""
+    m = re.match(r"^\s*sort\s+([A-Za-z_]\w*)\s+by\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", code, re.IGNORECASE)
+    if not m:
+        return code
+    coll = m.group(1)
+    spec_str = m.group(2)
+    target = m.group(3)
+    if ' and ' not in spec_str and ',' not in spec_str:
+        return code
+    parts = [p.strip() for p in re.split(r",|\band\b", spec_str) if p.strip()]
+    specs = []
+    for p in parts:
+        words = p.split()
+        field = words[0]
+        desc = "False"
+        if len(words) > 1 and words[1].lower() in ("desc", "descending", "down"):
+            desc = "True"
+        specs.append(f'("{field}", {desc})')
+    specs_lit = "[" + ", ".join(specs) + "]"
+    return f"set {target} to ds_sorted_by_multi({coll}, {specs_lit})"
+
+
+def desugar_multi_group(code: str) -> str:
+    """Desugars multi-key grouping with aggregation into ds_group_by_multi."""
+    m = re.match(
+        r"^\s*group\s+([A-Za-z_]\w*)\s+by\s+(.+?)\s+calculating\s+(sum|total|avg|average|mean|max|highest|min|lowest|count)\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)\s*$",
+        code,
+        re.IGNORECASE
+    )
+    if not m:
+        return code
+    coll = m.group(1)
+    keys_str = m.group(2)
+    agg_op = m.group(3).lower()
+    agg_field = m.group(4)
+    target = m.group(5)
+    keys = [k.strip() for k in re.split(r",|\band\b", keys_str) if k.strip()]
+    keys_lit = "[" + ", ".join(f'"{k}"' for k in keys) + "]"
+    return f'set {target} to ds_group_by_multi({coll}, {keys_lit}, "{agg_op}", "{agg_field}")'
+
+
+def desugar_background(code: str) -> str:
+    """Desugars background execution and task synchronization."""
+    m1 = re.match(r"^\s*run\s+in\s+background\s+(.+?)\s+into\s+([A-Za-z_]\w*)\s*$", code, re.IGNORECASE)
+    if m1:
+        action = m1.group(1).strip()
+        task = m1.group(2).strip()
+        return f"set {task} to ds_run_background(lambda: {action})"
+    m2 = re.match(r"^\s*wait\s+for\s+all\s+tasks\s+in\s+([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)\s*$", code, re.IGNORECASE)
+    if m2:
+        return f"set {m2.group(2).strip()} to ds_wait_tasks({m2.group(1).strip()})"
+    m3 = re.match(r"^\s*wait\s+for\s+all\s+tasks\s+in\s+([A-Za-z_]\w*)\s*$", code, re.IGNORECASE)
+    if m3:
+        return f"ds_wait_tasks({m3.group(1).strip()})"
+    m4 = re.match(r"^\s*wait\s+for\s+(?:task\s+)?([A-Za-z_]\w*)\s+into\s+([A-Za-z_]\w*)\s*$", code, re.IGNORECASE)
+    if m4:
+        return f"set {m4.group(2).strip()} to {m4.group(1).strip()}.wait()"
+    m5 = re.match(r"^\s*wait\s+for\s+(?:task\s+)?([A-Za-z_]\w*)\s*$", code, re.IGNORECASE)
+    if m5 and m5.group(1).lower() not in ("all", "until"):
+        return f"{m5.group(1).strip()}.wait()"
+    return code
+
+
+def desugar_field_access(text: str) -> str:
+    """Desugars natural field access <prop> of <target> into <target>.<prop>."""
+    def repl(m):
+        prop = m.group(1)
+        target = m.group(2)
+        if prop.lower() in RESERVED_OF_PROPS:
+            return m.group(0)
+        return f"{target}.{prop}"
+    pat = r"(?<!\bfirst\s)(?<!\blast\s)(?<!\bitem\s)(?<!\bitems\s)\b([A-Za-z_]\w*)\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|\[[^\]]+\])*)\b"
+    return re.sub(pat, repl, text, flags=re.IGNORECASE)
+
+
+def desugar_multi_subject_predicates(masked: str) -> str:
+    """Desugars multi-subject agreement (all of, any of, none of) for collections and list literals."""
+    target_pat = r"(\[[^\]]+\]|[A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])*)"
+    masked = re.sub(rf"\ball\s+of\s+{target_pat}\s+(?:is|are)\s+positive\b", r"ds_all_positive(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(rf"\ball\s+of\s+{target_pat}\s+(?:is|are)\s+negative\b", r"ds_all_negative(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(rf"\ball\s+of\s+{target_pat}\s+(?:is|are)\s+even\b", r"ds_all_even(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(rf"\ball\s+of\s+{target_pat}\s+(?:is|are)\s+odd\b", r"ds_all_odd(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(rf"\ball\s+of\s+{target_pat}\s+(?:is|are)\s+zero\b", r"ds_all_zero(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(rf"\bany\s+of\s+{target_pat}\s+(?:is|are)\s+positive\b", r"ds_any_positive(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(rf"\bany\s+of\s+{target_pat}\s+(?:is|are)\s+negative\b", r"ds_any_negative(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(rf"\bany\s+of\s+{target_pat}\s+(?:is|are)\s+even\b", r"ds_any_even(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(rf"\bany\s+of\s+{target_pat}\s+(?:is|are)\s+odd\b", r"ds_any_odd(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(rf"\bany\s+of\s+{target_pat}\s+(?:is|are)\s+zero\b", r"ds_any_zero(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(rf"\bnone\s+of\s+{target_pat}\s+(?:is|are)\s+positive\b", r"ds_none_positive(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(rf"\bnone\s+of\s+{target_pat}\s+(?:is|are)\s+negative\b", r"ds_none_negative(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(rf"\bnone\s+of\s+{target_pat}\s+(?:is|are)\s+zero\b", r"ds_none_zero(\1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(rf"\bnone\s+of\s+{target_pat}\s+(?:is|are)\s+even\b", r"all(_x % 2 != 0 for _x in \1)", masked, flags=re.IGNORECASE)
+    masked = re.sub(rf"\bnone\s+of\s+{target_pat}\s+(?:is|are)\s+odd\b", r"all(_x % 2 == 0 for _x in \1)", masked, flags=re.IGNORECASE)
+    return masked
+
 def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> str:
     """Normalizes a single statement (without comments or leading indent)."""
     text = stmt.strip()
@@ -651,6 +864,16 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         w1_lower = w1.lower()
         if w1_lower in STATEMENT_START_KEYWORDS and w1 != w1_lower:
             masked = w1_lower + first_word_m.group(2)
+
+    # Early desugaring: Pipe operator, articles, currency/scale, prepositions, background, multi-sort, multi-group, field access
+    masked = desugar_pipe(masked)
+    masked = desugar_articles(masked)
+    masked = desugar_currency_and_scale(masked)
+    masked = desugar_prepositions(masked)
+    masked = desugar_background(masked)
+    masked = desugar_multi_sort(masked)
+    masked = desugar_multi_group(masked)
+    masked = desugar_field_access(masked)
 
     # Units of measurement normalization (numbers with units, conversions, currency)
     # Paradigm 36: Relative Time Offsets (before and after units normalization)
@@ -768,23 +991,8 @@ def normalize_statement_text(stmt: str, scope: ScopeTracker, line_num: int) -> s
         flags=re.IGNORECASE
     )
 
-    # Quantifiers: all of <x> are positive/negative/even/odd
-    masked = re.sub(r"\ball\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+are\s+positive\b", r"ds_all_positive(\1)", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\ball\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+are\s+negative\b", r"ds_all_negative(\1)", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\ball\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+are\s+even\b", r"ds_all_even(\1)", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\ball\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+are\s+odd\b", r"ds_all_odd(\1)", masked, flags=re.IGNORECASE)
-
-    # Quantifiers: any of <x> is positive/negative/even/odd/zero
-    masked = re.sub(r"\bany\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+is\s+positive\b", r"ds_any_positive(\1)", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\bany\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+is\s+negative\b", r"ds_any_negative(\1)", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\bany\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+is\s+even\b", r"ds_any_even(\1)", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\bany\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+is\s+odd\b", r"ds_any_odd(\1)", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\bany\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+is\s+zero\b", r"ds_any_zero(\1)", masked, flags=re.IGNORECASE)
-
-    # Quantifiers: none of <x> is positive/negative/even/odd/zero
-    masked = re.sub(r"\bnone\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+is\s+positive\b", r"ds_none_positive(\1)", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\bnone\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+is\s+negative\b", r"ds_none_negative(\1)", masked, flags=re.IGNORECASE)
-    masked = re.sub(r"\bnone\s+of\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|'s\s+[A-Za-z_]\w*|\[[^\]]+\])?)\s+is\s+zero\b", r"ds_none_zero(\1)", masked, flags=re.IGNORECASE)
+    # Quantifiers & multi-subject predicates
+    masked = desugar_multi_subject_predicates(masked)
 
     _reserved_query_words = {
         'and', 'or', 'not', 'is', 'in', 'true', 'false', 'none', 'item', 'x',
@@ -3649,6 +3857,24 @@ def normalize_with_map(source: str) -> Tuple[str, Dict[int, int]]:
             if not code_no_comment:
                 break
             masked_inline, inline_strings = mask_strings(code_no_comment)
+            # Postfix conditionals: <stmt> unless <cond>  /  <stmt> only if <cond>
+            if not masked_inline.endswith(":") and not masked_inline.lower().startswith(("if ", "unless ", "while ", "repeat ", "for ", "class ", "def ", "to ", "return ", "yield ")):
+                m_unl = re.match(r"^(.+?)\s+unless\s+([^\s].*)$", masked_inline, re.IGNORECASE)
+                if m_unl:
+                    stmt_sub = m_unl.group(1).strip()
+                    cond_sub = m_unl.group(2).strip()
+                    masked_inline = f"unless {cond_sub}: {stmt_sub}"
+                    code_no_comment = unmask_strings(masked_inline, inline_strings)
+                    masked_inline, inline_strings = mask_strings(code_no_comment)
+                else:
+                    m_oif = re.match(r"^(.+?)\s+only\s+if\s+([^\s].*)$", masked_inline, re.IGNORECASE)
+                    if m_oif:
+                        stmt_sub = m_oif.group(1).strip()
+                        cond_sub = m_oif.group(2).strip()
+                        masked_inline = f"if {cond_sub}: {stmt_sub}"
+                        code_no_comment = unmask_strings(masked_inline, inline_strings)
+                        masked_inline, inline_strings = mask_strings(code_no_comment)
+
             inline_m = re.match(
                 r"^(if\s+.+?|unless\s+.+?|while\s+.+?|until\s+.+?|repeat\s+.+?\s+times|for\s+(?:each\s+)?[A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*\s+in\s+[^:]+)\s*:\s*([^\s#].+)$",
                 masked_inline,
